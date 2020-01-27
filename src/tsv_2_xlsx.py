@@ -69,9 +69,7 @@ for x in sys.argv[1:]:
        dcol_beg = int(data[drw][2])
        drow_end = int(data[drw][3])
        if drow_end == -1:
-          for i in range(len(data)):
-              if i <= drow_beg:
-                 continue
+          for i in range(drow_beg, len(data)):
               drow_end = i
               if len(data[i]) < dcol_beg:
                  break
