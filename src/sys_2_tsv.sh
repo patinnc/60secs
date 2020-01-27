@@ -79,8 +79,23 @@ for i in $FILES; do
         }
      }
      END{
+trows++; printf("\t$ uptime\n") > NFL;
+trows++; printf("\t23:51:26 up 21:31, 1 user, load average: 30.02, 26.43, 19.02\n") > NFL;
+trows++; printf("\tThis is a quick way to view the load averages, which indicate the number of tasks (processes) wanting to\n") > NFL;
+trows++; printf("\trun. On Linux systems, these numbers include processes wanting to run on CPU, as well as processes\n") > NFL;
+trows++; printf("\tblocked in uninterruptible I/O (usually disk I/O). This gives a high level idea of resource load (or demand), but\n") > NFL;
+trows++; printf("\tcan\x27t be properly understood without other tools. Worth a quick look only.\n") > NFL;
+trows++; printf("\tThe three numbers are exponentially damped moving sum averages with a 1 minute, 5 minute, and 15\n") > NFL;
+trows++; printf("\tminute constant. The three numbers give us some idea of how load is changing over time. For example, if\n") > NFL;
+trows++; printf("\tyou\x27ve been asked to check a problem server, and the 1 minute value is much lower than the 15 minute\n") > NFL;
+trows++; printf("\tvalue, then you might have logged in too late and missed the issue.\n") > NFL;
+trows++; printf("\tIn the example above, the load averages show a recent increase, hitting 30 for the 1 minute value, compared\n") > NFL;
+trows++; printf("\tto 19 for the 15 minute value. That the numbers are this large means a lot of something: probably CPU\n") > NFL;
+trows++; printf("\tdemand; vmstat or mpstat will confirm, which are commands 3 and 4 in this sequence.\n") > NFL;
+trows++; printf("\n") > NFL;
+
        printf("title\tuptime\tsheet\tuptime\ttype\tline\n") > NFL;
-       printf("hdrs\t2\t0\t%d\t2\n", mx+1) > NFL;
+       printf("hdrs\t%d\t0\t%d\t2\n", trows+2, trows+mx+1) > NFL;
        for (i=1; i <= mx; i++) {
           printf("%s\n", sv[i]) > NFL;
        }
@@ -134,8 +149,37 @@ for i in $FILES; do
         #printf("\n") > NFL;
      }
      END{
+trows=0;
+trows++; printf("\tShort for virtual memory stat, vmstat(8) is a commonly available tool (first created for BSD decades ago). It\n") > NFL;
+trows++; printf("\tprints a summary of key server statistics on each line.\n") > NFL;
+trows++; printf("\tvmstat was run with an argument of 1, to print one second summaries. The first line of output (in this version\n") > NFL;
+trows++; printf("\tof vmstat) has some columns that show the average since boot, instead of the previous second. For now,\n") > NFL;
+trows++; printf("\tskip the first line, unless you want to learn and remember which column is which.\n") > NFL;
+trows++; printf("\tColumns to check:\n") > NFL;
+trows++; printf("\tr: Number of processes running on CPU and waiting for a turn. This provides a better signal than\n") > NFL;
+trows++; printf("\tload averages for determining CPU saturation, as it does not include I/O. To interpret: an \"r\" value\n") > NFL;
+trows++; printf("\tgreater than the CPU count is saturation.\n") > NFL;
+trows++; printf("\tfree: Free memory in kilobytes. If there are too many digits to count, you have enough free\n") > NFL;
+trows++; printf("\tmemory. The \"free -m\" command, included as command 7, better explains the state of free\n") > NFL;
+trows++; printf("\tmemory.\n") > NFL;
+trows++; printf("\tsi, so: Swap-ins and swap-outs. If these are non-zero, you\x27re out of memory.\n") > NFL;
+
+trows++; printf("\tus, sy, id, wa, st: These are breakdowns of CPU time, on average across all CPUs. They are\n") > NFL;
+trows++; printf("\tuser time, system time (kernel), idle, wait I/O, and stolen time (by other guests, or with Xen, the\n") > NFL;
+trows++; printf("\tguest\x27s own isolated driver domain).\n") > NFL;
+trows++; printf("\tThe CPU time breakdowns will confirm if the CPUs are busy, by adding user + system time. A constant\n") > NFL;
+trows++; printf("\tdegree of wait I/O points to a disk bottleneck; this is where the CPUs are idle, because tasks are blocked\n") > NFL;
+trows++; printf("\twaiting for pending disk I/O. You can treat wait I/O as another form of CPU idle, one that gives a clue as to\n") > NFL;
+trows++; printf("\twhy they are idle.\n") > NFL;
+trows++; printf("\tSystem time is necessary for I/O processing. A high system time average, over 20%, can be interesting to\n") > NFL;
+trows++; printf("\texplore further: perhaps the kernel is processing the I/O inefficiently.\n") > NFL;
+trows++; printf("\tIn the above example, CPU time is almost entirely in user-level, pointing to application level usage instead.\n") > NFL;
+trows++; printf("\tThe CPUs are also well over 90%% utilized on average. This isn\x27t necessarily a problem; check for the degree\n") > NFL;
+trows++; printf("\tof saturation using the \"r\" column.\n") > NFL;
+trows++; printf("\t\n") > NFL;
+
        printf("title\tvmstat\tsheet\tvmstat\ttype\tline\n") > NFL;
-       printf("hdrs\t2\t0\t%d\t%d\n", mx+1, col_mx) > NFL;
+       printf("hdrs\t%d\t0\t%d\t%d\n", 2+trows, mx+1+trows, col_mx) > NFL;
        for (i=1; i <= mx; i++) {
           printf("%s\n", sv[i]) > NFL;
        }
@@ -196,11 +240,15 @@ for i in $FILES; do
      END{
         #printf("grp_mx= %d\n", grp_mx) > NFL;
         row=-1;
+trows++; printf("This command prints CPU time breakdowns per CPU, which can be used to check for an imbalance. A\n") > NFL;
+trows++; printf("single hot CPU can be evidence of a single-threaded application.\n") > NFL;
+trows++; printf("\n") > NFL;
+
 	for (g=1; g <= grp_mx; g++) {
           row++;
           printf("title\tmpstat cpu= %s\tsheet\tmpstat\ttype\tline\n", grp_nm[g]) > NFL;
           row++;
-          printf("hdrs\t%d\t%d\t%d\t%d\n", row+1, 1, 1+row+grp_row[g], hdr_mx-1) > NFL;
+          printf("hdrs\t%d\t%d\t%d\t%d\n", trows+row+1, 1, trows+1+row+grp_row[g], hdr_mx-1) > NFL;
           tab="";
           for (i=1; i <= hdr_mx; i++) {
             printf("%s%s", tab, hdrs[i]) > NFL;
@@ -246,6 +294,7 @@ for i in $FILES; do
         grp_mx=0;
         hdr_mx=0;
         chart=typ;
+        did_notes=0;
       }
       function bar_data(row, arr_in, arr_mx, title, hdr, mx_lines) {
        srt_lst="";
@@ -321,6 +370,15 @@ for i in $FILES; do
      }
      END{
        row = -1;
+
+trows++; printf("\tpidstat is a little like top\x27s per-process summary, but prints a rolling summary instead of clearing the screen.\n") > NFL;
+trows++; printf("\tThis can be useful for watching patterns over time, and also recording what you saw (copy-n-paste) into a\n") > NFL;
+trows++; printf("\trecord of your investigation.\n") > NFL;
+trows++; printf("\tThe above example identifies two java processes as responsible for consuming CPU. The %%CPU column is\n") > NFL;
+trows++; printf("\tthe total across all CPUs; 1591%% shows that that java processes is consuming almost 16 CPUs.\n") > NFL;
+
+       row += trows;
+
        row = bar_data(row, sv_cpu, mx_cpu, chart " %CPU", sv_cpu[1], 40);
        ++row;
        printf("\n") > NFL;
@@ -449,6 +507,28 @@ for i in $FILES; do
      }
      END{
        row = -1;
+trows++; printf("\tThis is a great tool for understanding block devices (disks), both the workload applied and the resulting\n") > NFL;
+trows++; printf("\tperformance. Look for:\n") > NFL;
+trows++; printf("\tr/s, w/s, rkB/s, wkB/s: These are the delivered reads, writes, read Kbytes, and write Kbytes per\n") > NFL;
+trows++; printf("\tsecond to the device. Use these for workload characterization. A performance problem may\n") > NFL;
+trows++; printf("\tsimply be due to an excessive load applied.\n") > NFL;
+trows++; printf("\tawait: The average time for the I/O in milliseconds. This is the time that the application suffers,\n") > NFL;
+trows++; printf("\tas it includes both time queued and time being serviced. Larger than expected average times can\n") > NFL;
+trows++; printf("\tbe an indicator of device saturation, or device problems.\n") > NFL;
+trows++; printf("\tavgqu-sz: The average number of requests issued to the device. Values greater than 1 can be\n") > NFL;
+trows++; printf("\tevidence of saturation (although devices can typically operate on requests in parallel, especially\n") > NFL;
+trows++; printf("\tvirtual devices which front multiple back-end disks.)\n") > NFL;
+trows++; printf("\t%%util: Device utilization. This is really a busy percent, showing the time each second that the\n") > NFL;
+trows++; printf("\tdevice was doing work. Values greater than 60%% typically lead to poor performance (which\n") > NFL;
+trows++; printf("\tshould be seen in await), although it depends on the device. Values close to 100%% usually\n") > NFL;
+trows++; printf("\tindicate saturation.\n") > NFL;
+trows++; printf("\tIf the storage device is a logical disk device fronting many back-end disks, then 100%% utilization may just\n") > NFL;
+trows++; printf("\tmean that some I/O is being processed 100%% of the time, however, the back-end disks may be far from\n") > NFL;
+trows++; printf("\tsaturated, and may be able to handle much more work.\n") > NFL;
+trows++; printf("\tBear in mind that poor performing disk I/O isn\x27t necessarily an application issue. Many techniques are\n") > NFL;
+trows++; printf("\ttypically used to perform I/O asynchronously, so that the application doesn\x27t block and suffer the latency\n") > NFL;
+trows++; printf("\tdirectly (e.g., read-ahead for reads, and buffering for writes).\n") > NFL;
+row += trows;
        row = line_data(row, sv_cpu, mx_cpu, chart " %CPU", sv_cpu[1]);
        ++row;
        printf("\n") > NFL;
@@ -570,6 +650,14 @@ for i in $FILES; do
      }
      END{
        row = -1;
+trows++; printf("\tUse this tool to check network interface throughput: rxkB/s and txkB/s, as a measure of workload, and also\n") > NFL;
+trows++; printf("\tto check if any limit has been reached. In the above example, eth0 receive is reaching 22 Mbytes/s, which is\n") > NFL;
+trows++; printf("\t176 Mbits/sec (well under, say, a 1 Gbit/sec limit).\n") > NFL;
+trows++; printf("\tThis version also has %%ifutil for device utilization (max of both directions for full duplex), which is something\n") > NFL;
+trows++; printf("\twe also use Brendan\x27s nicstat tool to measure. And like with nicstat, this is hard to get right, and seems to\n") > NFL;
+trows++; printf("\tnot be working in this example (0.00).\n") > NFL;
+trows++; printf("\t\n") > NFL;
+row+= trows;
        for (ii=1; ii <= mx_dev; ii++) {
           if (io_nonzero[ii] == 0) {
              ++row;
@@ -694,6 +782,19 @@ for i in $FILES; do
      }
      END{
        row = -1;
+trows++; printf("\tThis is a summarized view of some key TCP metrics. These include:\n") > NFL;
+trows++; printf("\tactive/s: Number of locally-initiated TCP connections per second (e.g., via connect()).\n") > NFL;
+trows++; printf("\tpassive/s: Number of remotely-initiated TCP connections per second (e.g., via accept()).\n") > NFL;
+trows++; printf("\tretrans/s: Number of TCP retransmits per second.\n") > NFL;
+trows++; printf("\tThe active and passive counts are often useful as a rough measure of server load: number of new accepted\n") > NFL;
+trows++; printf("\tconnections (passive), and number of downstream connections (active). It might help to think of active as\n") > NFL;
+trows++; printf("\toutbound, and passive as inbound, but this isn\x27t strictly true (e.g., consider a localhost to localhost\n") > NFL;
+trows++; printf("\tconnection).\n") > NFL;
+trows++; printf("\tRetransmits are a sign of a network or server issue; it may be an unreliable network (e.g., the public\n") > NFL;
+trows++; printf("\tInternet), or it may be due a server being overloaded and dropping packets. The example above shows just\n") > NFL;
+trows++; printf("\tone new TCP connection per-second.\n") > NFL;
+trows++; printf("\t\n") > NFL;
+row += trows;
        ttl=chart " tcp";
        row = line_data(row, sv_io, mx_io, ttl, sv_io[1]);
        ++row;
