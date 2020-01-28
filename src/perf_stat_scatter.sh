@@ -4,8 +4,76 @@
 # arg2 (optional) is specint .log
 # for example:
 # ../perf_stat_scatter.sh B20a_specint_prf/prf_data_specint.txt B20a_specint_prf/20-01-15_130627_specint/result/CPU2017.001.log  > tmp.tsv
+FILES=
+SPECINT_LOG=
+CHART_IN=
+SHEET_IN=
 
-awk -v chrt="perf_stat" 'BEGIN{
+while getopts "hvc:f:s:l:" opt; do
+  case ${opt} in
+    c )
+      CHART_IN=$OPTARG
+      ;;
+    s )
+      SHEET_IN=$OPTARG
+      ;;
+    f )
+      if [ "$OPTARG" == "" ]; then
+         echo "option -f requires a filename arg"
+         exit
+      fi
+      if [ ! -e $OPTARG ]; then
+         echo "option \"-f $OPTARG\" didn't find file $OPTARG"
+         exit
+      fi
+      FILES="$FILES $OPTARG"
+      ;;
+    l )
+      if [ "$OPTARG" == "" ]; then
+         echo "option -l requires a filename arg"
+         exit
+      fi
+      if [ ! -e $OPTARG ]; then
+         echo "option \"-l $OPTARG\" didn't find file $OPTARG"
+         exit
+      fi
+      SPECINT_LOG=$OPTARG
+      ;;
+    v )
+      VERBOSE=$((VERBOSE+1))
+      ;;
+    h )
+      echo "$0 split perf stat data files into columns"
+      echo "Usage: $0 [-h] -f perf_stat_txt_file [ -f ...] [ -s sheetname ] [ -c chart_name ] [ -l specInt_logfile ] [-v]"
+      echo "   -f perf_stat_txt_file  perf stat data file"
+      echo "      currently only 1 '-f filename' option is supported"
+      echo "   -c chart title. Used by tsv_2_xlsx.py"
+      echo "   -s sheet_name.  Used by tsv_2_xlsx.py. string has to comply with Excel sheet name rules"
+      echo "   -l SpecInt CPU2017 log (like result/CPU2017.001.log)"
+      echo "   -v verbose mode"
+      exit
+      ;;
+    : )
+      echo "Invalid option: $OPTARG requires an argument" 1>&2
+      ;;
+    \? )
+      echo "Invalid option: $OPTARG" 1>&2
+      ;;
+  esac
+done
+shift $((OPTIND -1))
+
+CHART="perf stat"
+if [ "$CHART_IN" != "" ]; then
+  CHART=$CHART_IN
+fi
+
+SHEET="perf stat"
+if [ "$SHEET_IN" != "" ]; then
+  SHEET=$SHEET_IN
+fi
+
+awk -v chrt="$CHART" -v sheet="$SHEET" 'BEGIN{
      row=0;
      evt_idx=-1;
      months="  JanFebMarAprMayJunJulAugSepOctNovDec";
@@ -253,7 +321,7 @@ awk -v chrt="perf_stat" 'BEGIN{
      rows=1;
      printf("\n");
      rows++;
-     printf("title\t%s\tchart\t%s\ttype\tline\n", chrt, chrt);
+     printf("title\t%s\tsheet\t%s\ttype\tline\n", chrt, sheet);
      printf("hdrs\t%d\t%d\t%d\t%d\n", rows+1, 4, -1, evt_idx+extra_cols+4);
 #title	sar network IFACE dev eth0	sheet	sar network IFACE	type	line
 #hdrs	8	0	68	8
@@ -350,5 +418,5 @@ awk -v chrt="perf_stat" 'BEGIN{
        }
        printf("\n");
      }
-   }' $1 $2
+   }' $FILES $SPECINT_LOG
 
