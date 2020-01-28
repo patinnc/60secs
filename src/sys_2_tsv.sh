@@ -809,7 +809,7 @@ row += trows;
  fi
   if [[ $i == *"_perf_stat.txt"* ]]; then
     echo "do perf_stat data"
-    $SCR_DIR/perf_stat_scatter.sh $i > $i.tsv
+    $SCR_DIR/perf_stat_scatter.sh -f $i > $i.tsv
    SHEETS="$SHEETS $i.tsv"
  fi
 done
