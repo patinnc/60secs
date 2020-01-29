@@ -1,10 +1,10 @@
 #!/bin/bash
 #
 # see http://www.brendangregg.com/Articles/Netflix_Linux_Perf_Analysis_60s.pdf
-# usage $0 -h for help info
+# usage arg1 
 
 WAIT=60
-TASKS=("uptime" "dmesg" "vmstat" "mpstat" "pidstat" "iostat" "free" "sar_dev" "sar_tcp" "top" "perf")
+TASKS=("uptime" "dmesg" "vmstat" "mpstat" "pidstat" "iostat" "free" "sar_dev" "sar_tcp" "top" "perf" "interrupts")
 j=0
 for i in ${TASKS[@]}; do
   j=$((j+1))
@@ -277,6 +277,26 @@ for TSK in `seq $TB $TE`; do
     kill -2 $PRF_PID
   fi
 
+  if [ "$TSK" == "11" ]; then
+    echo "do cat /proc/interrupts for $WAIT secs"
+    FL=sys_${FLNUM}_interrupts.txt
+    rm $FL
+    j=0
+    for i in `seq 1 $WAIT`; do
+      #echo "i= $i of $WAIT"
+      printf "\rinterrupts i= %d of %d" $i $WAIT
+      DT=`date +%s.%N`
+      echo "==beg $j date $DT" >> $FL
+      cat /proc/interrupts >> $FL
+      j=$((j+$INTRVL))
+      if [ $j -ge $WAIT ]; then
+        break
+      fi
+      sleep $INTRVL
+    done
+    printf "\n"
+  fi
+  
   if [ $VERBOSE -gt 0 ]; then
     if [ "$FL" != "" ]; then
     echo "cat $FL"
