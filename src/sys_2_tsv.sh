@@ -811,7 +811,123 @@ row += trows;
     echo "do perf_stat data"
     $SCR_DIR/perf_stat_scatter.sh -f $i > $i.tsv
    SHEETS="$SHEETS $i.tsv"
- fi
+  fi
+  if [[ $i == *"_interrupts.txt"* ]]; then
+    echo "do interrupts"
+# ==beg 0 date 1580278735.829557760
+#            CPU0       CPU1       CPU2       CPU3       CPU4       CPU5       CPU6       CPU7       CPU8       CPU9       CPU10      CPU11      CPU12      CPU13      CPU14      CPU15      CPU16      CPU17      CPU18      CPU19      CPU20      CPU21      CPU22      CPU23      CPU24      CPU25      CPU26      CPU27      CPU28      CPU29      CPU30      CPU31      
+#   0:        101          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0  IR-IO-APIC    2-edge      timer
+#   3:          2          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0  IR-IO-APIC    3-edge    
+
+    awk '
+     BEGIN{beg=1;col_mx=-1;mx=0}
+     /^==beg /{
+       FNM=ARGV[ARGIND];
+       NFL=FNM ".tsv";
+       row = $2;
+       tm = $4;
+       getline;
+       hdr_line = $0;
+       n = split($0, hdr_cols_arr);
+       hdr_cols = NF;
+       next;
+     }
+     { # has to be an interrupt line
+        nm = $1;
+        if (intr_arr[nm] != nm) {
+           intr_num++;
+           intr_arr[nm] = nm;
+           intr_arr_nms[intr_num] = nm;
+           intr_arr_num[nm] = intr_num;
+        }
+        inum = intr_arr_num[nm];
+        for (i=1; i <= NF; i++) {
+          sv[row,inum,i] = $i;
+        }
+        sv_col[row,inum] = NF;
+        if ( intr_arr_lng_nms[inum] == "" && NF > (hdr_cols+1) ) {
+           for (i=hdr_cols+2; i <= NF; i++) {
+             intr_arr_lng_nms[inum] = intr_arr_lng_nms[inum] " " $i;
+           }
+        }
+        if (NF > (hdr_cols+1)) {
+          sv_col[row,inum] = hdr_cols+1;
+        }
+     }
+     END{
+       for (i=1; i <= intr_num; i++) {
+         ck_no_chg[i] = 0;
+       }
+       for (r=1; r <= row; r++) {
+         for (i=1; i <= intr_num; i++) {
+            jmx = sv_col[r,i];
+            sum = 0;
+            for (j=2; j <= jmx; j++) {
+               sum += sv[r,i,j];
+            }
+            sum_arr[r,i] = sum;
+         }
+       }
+       
+       for (r=1; r <= row; r++) {
+          for (i=1; i <= intr_num; i++) {
+             val = sum_arr[r,i];
+             if (r == 1) {
+                val = 0;
+             } else {
+                val -= sum_arr[r-1,i];
+             }
+             ck_no_chg[i] += val;
+          }
+       }
+       drop_cols = 0;
+       for (i=1; i <= intr_num; i++) {
+         if (ck_no_chg[i] == 0) {
+            drop_cols++;
+         }
+       }
+       trows=0;
+       printf("title\tinterrupts\tsheet\tinterrupts\ttype\tline\n") > NFL;
+       printf("hdrs\t%d\t0\t%d\t%d\n", 2+trows, -1, intr_num-drop_cols) > NFL;
+       tab="";
+       for (i=1; i <= intr_num; i++) {
+          if (ck_no_chg[i] == 0) {
+            continue;
+          }
+          printf("%s%s", tab, intr_arr_nms[i]) > NFL;
+          if (intr_arr_lng_nms[i] != "") {
+             printf(" %s", intr_arr_lng_nms[i]) > NFL;
+          }
+          tab="\t";
+       }
+       trows=2;
+       printf("\ttotal\n") > NFL;
+       
+       for (r=1; r <= row; r++) {
+          tab="";
+          total=0;
+          for (i=1; i <= intr_num; i++) {
+             if (ck_no_chg[i] == 0) {
+               continue;
+             }
+             val = sum_arr[r,i];
+             if (r == 1) {
+                val = 0;
+             } else {
+                val -= sum_arr[r-1,i];
+             }
+             printf("%s%d", tab, val) > NFL;
+             tab="\t";
+             total += val;
+          }
+          trows++;
+          printf("\t%d\n", total) > NFL;
+       }
+       close(NFL);
+   }
+   ' $i
+   SHEETS="$SHEETS $i.tsv"
+  fi
 done
 if [ "$SHEETS" != "" ]; then
    echo "python $SCR_DIR/tsv_2_xlsx.py $SHEETS"
