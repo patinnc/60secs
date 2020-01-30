@@ -8,14 +8,25 @@ FILES=
 SPECINT_LOG=
 CHART_IN=
 SHEET_IN=
+OPTIONS=
 
-while getopts "hvc:f:s:l:" opt; do
+while getopts "hvc:f:o:s:l:" opt; do
   case ${opt} in
     c )
       CHART_IN=$OPTARG
       ;;
     s )
       SHEET_IN=$OPTARG
+      ;;
+    o )
+      if [[ $OPTARG == *"dont_sum_sockets"* ]]; then
+        OPTIONS=$OPTARG
+      else
+        if [ "$OPTARG" != "" ]; then
+          echo "sorry but only -o option supported now is '-o dont_sum_sockets'. You entered -o $OPTARG"
+          exit
+        fi
+      fi
       ;;
     f )
       if [ "$OPTARG" == "" ]; then
@@ -48,6 +59,7 @@ while getopts "hvc:f:s:l:" opt; do
       echo "   -f perf_stat_txt_file  perf stat data file"
       echo "      currently only 1 '-f filename' option is supported"
       echo "   -c chart title. Used by tsv_2_xlsx.py"
+      echo "   -o options_str  Currently only option is \"dont_sum_sockets\" to not sum S0 & S1 to the system"
       echo "   -s sheet_name.  Used by tsv_2_xlsx.py. string has to comply with Excel sheet name rules"
       echo "   -l SpecInt CPU2017 log (like result/CPU2017.001.log)"
       echo "   -v verbose mode"
@@ -73,7 +85,8 @@ if [ "$SHEET_IN" != "" ]; then
   SHEET=$SHEET_IN
 fi
 
-awk -v chrt="$CHART" -v sheet="$SHEET" 'BEGIN{
+
+awk -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" 'BEGIN{
      row=0;
      evt_idx=-1;
      months="  JanFebMarAprMayJunJulAugSepOctNovDec";
@@ -180,12 +193,21 @@ awk -v chrt="$CHART" -v sheet="$SHEET" 'BEGIN{
    if (evt == "") {
      next;
    }
+   if (options != "" && index(options, "dont_sum_sockets") > 0) {
+      evt = evt " " skt;
+   }
    tmr=arr[7];
    #cyc=arr[7];
    pct=arr[8];
    if ( ck_row[ts,skt] != ts","skt) {
       row++;
       ck_row[ts,skt] = ts","skt;
+   }
+   if ( skts[skt] != skt) {
+     skts[skt] = skt;
+     skt_idx++;
+     skt_num[skt]=skt_idx;
+     skt_lkup[skt_idx]=skt;
    }
    if ( evts[evt] != evt) {
      evts[evt] = evt;
@@ -248,7 +270,7 @@ awk -v chrt="$CHART" -v sheet="$SHEET" 'BEGIN{
 
      kmx = 4;
      got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-     got_lkfor[kmx,2]=2; # num of fields to look for
+     got_lkfor[kmx,2]=3; # num of fields to look for
      got_lkfor[kmx,3]=1.0e-9; # a factor
      got_lkfor[kmx,4]="div2"; # operation x/y/z
      got_lkfor[kmx,5]=1; # instances
@@ -278,6 +300,45 @@ awk -v chrt="$CHART" -v sheet="$SHEET" 'BEGIN{
      lkfor[kmx,2]="interval";
      nwfor[kmx,1]="QPI_BW (GB/sec)";
 
+     if (options != "" && index(options, "dont_sum_sockets") > 0) {
+       kmx_nw = kmx;
+       for (k=1; k <= kmx; k++) { 
+          got_it=0;
+          for (kk=1; kk <= got_lkfor[k,2]; kk++) {
+             if (lkfor[k,kk] != "interval" && lkfor[k,kk] != "instances") {
+               got_it = 1;
+               break;
+             }
+          }
+          if (got_it == 1) {
+            for (sk=2; sk <= skt_idx; sk++) {
+              #skt_lkup[skt_idx]=skt;
+              kmx_nw++;
+              got_lkfor[kmx_nw,1]= got_lkfor[k,1];
+              got_lkfor[kmx_nw,2]= got_lkfor[k,2];
+              got_lkfor[kmx_nw,3]= got_lkfor[k,3];
+              got_lkfor[kmx_nw,4]= got_lkfor[k,4];
+              got_lkfor[kmx_nw,5]= got_lkfor[k,5];
+              for (kk=1; kk <= got_lkfor[k,2]; kk++) {
+                 if (lkfor[k,kk] != "interval" && lkfor[k,kk] != "instances") {
+                   lkfor[kmx_nw,kk]=lkfor[k,kk] " " skt_lkup[sk];
+                 } else {
+                   lkfor[kmx_nw,kk]=lkfor[k,kk];
+                 }
+              }
+              nwfor[kmx_nw,1]=nwfor[k,1] " " skt_lkup[sk];
+            }
+            for (kk=1; kk <= got_lkfor[k,2]; kk++) {
+               if (lkfor[k,kk] != "interval" && lkfor[k,kk] != "instances") {
+                 lkfor[k,kk]=lkfor[k,kk] " S0";
+               }
+            }
+            nwfor[k,1]=nwfor[k,1] " S0";
+          }
+       }
+       kmx = kmx_nw;
+     }
+
      for(i=0; i <= evt_idx; i++) {
        for (k=1; k <= kmx; k++) { 
          for (j=1; j <= got_lkfor[k,2]; j++) { 
@@ -304,7 +365,7 @@ awk -v chrt="$CHART" -v sheet="$SHEET" 'BEGIN{
          #    got_lkfor[k,1]++;
          #}
        }
-       if (got_lkfor[k,1] > 0) {
+       if (got_lkfor[k,1] == got_lkfor[k,2]) {
           extra_cols++;
        }
      }
@@ -314,7 +375,7 @@ awk -v chrt="$CHART" -v sheet="$SHEET" 'BEGIN{
        printf("\t%s", evt_inst[i]);
      }
      for (k=1; k <= kmx; k++) { 
-       if (got_lkfor[k,1] > 0) {
+       if (got_lkfor[k,1] == got_lkfor[k,2]) {
           printf("\t%s", got_lkfor[k,5]);
        }
      }
@@ -330,7 +391,7 @@ awk -v chrt="$CHART" -v sheet="$SHEET" 'BEGIN{
        printf("\t%s", evt_lkup[i]);
      }
      for (k=1; k <= kmx; k++) { 
-       if (got_lkfor[k,1] > 0) {
+       if (got_lkfor[k,1] == got_lkfor[k,2]) {
           printf("\t%s", nwfor[k,1]);
        }
      }
@@ -339,16 +400,16 @@ awk -v chrt="$CHART" -v sheet="$SHEET" 'BEGIN{
      ts_prev = 0.0;
      for(i=1; i <= row; i++) {
        if (sv[i,2] == "S0" && i < row) {
-         # sum each evt to s0 for now
-         for(ii=i+1; ii <= row; ii++) {
-           if (sv[ii,1] != sv[i,1]) { 
-              epoch_next=sv[ii,0];
-              break;
+           # sum each evt to s0 for now
+           for(ii=i+1; ii <= row; ii++) {
+             if (sv[ii,1] != sv[i,1]) { 
+                epoch_next=sv[ii,0];
+                break;
+             }
+             for(j=0; j <= evt_idx; j++) {
+                sv[i,3+j] += sv[ii,3+j];
+             }
            }
-           for(j=0; j <= evt_idx; j++) {
-              sv[i,3+j] += sv[ii,3+j];
-           }
-         }
        }
        if (sv[i,2] != "S0") {
          continue;
