@@ -10,10 +10,13 @@ DIR=
 SHEETS=
 SCR_DIR=`dirname $0`
 
-while getopts "hd:vm:p:r:s:t:" opt; do
+while getopts "hd:vm:o:p:r:s:t:" opt; do
   case ${opt} in
     d )
       DIR=$OPTARG
+      ;;
+    o )
+      OPTIONS=$OPTARG
       ;;
     v )
       VERBOSE=$((VERBOSE+1))
@@ -22,6 +25,7 @@ while getopts "hd:vm:p:r:s:t:" opt; do
       echo "$0 split data files into columns"
       echo "Usage: $0 [-h] -d sys_data_dir [-v]"
       echo "   -d dir containing sys_XX_* files created by 60secs.sh"
+      echo "   -o options   currently only '-o dont_sum_sockets' is supported to not sum the perf stat per socket events to the system"
       echo "   -v verbose mode"
       exit
       ;;
@@ -809,7 +813,7 @@ row += trows;
  fi
   if [[ $i == *"_perf_stat.txt"* ]]; then
     echo "do perf_stat data"
-    $SCR_DIR/perf_stat_scatter.sh -f $i > $i.tsv
+    $SCR_DIR/perf_stat_scatter.sh -o "$OPTIONS"  -f $i > $i.tsv
    SHEETS="$SHEETS $i.tsv"
   fi
   if [[ $i == *"_interrupts.txt"* ]]; then
