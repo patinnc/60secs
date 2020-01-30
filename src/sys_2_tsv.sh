@@ -9,14 +9,22 @@
 DIR=
 SHEETS=
 SCR_DIR=`dirname $0`
+IMAGE_STR=
+XLSX_FILE="chart_line.xlsx"
 
-while getopts "hd:vm:o:p:r:s:t:" opt; do
+while getopts "hvd:o:i:x:" opt; do
   case ${opt} in
     d )
       DIR=$OPTARG
       ;;
+    i )
+      IMAGE_STR=$OPTARG
+      ;;
     o )
       OPTIONS=$OPTARG
+      ;;
+    x )
+      XLSX_FILE=$OPTARG
       ;;
     v )
       VERBOSE=$((VERBOSE+1))
@@ -25,7 +33,13 @@ while getopts "hd:vm:o:p:r:s:t:" opt; do
       echo "$0 split data files into columns"
       echo "Usage: $0 [-h] -d sys_data_dir [-v]"
       echo "   -d dir containing sys_XX_* files created by 60secs.sh"
+      echo "   -i \"image_file_name_str\" this option is passed to tsv_2_xlsx.py to identify image files to be inserted into the xlsx"
+      echo "      For instance '-i \"*.png\"'. Note the dbl quotes around the glob. This keeps the cmdline from expanding the files. python will expand the glob."
       echo "   -o options   currently only '-o dont_sum_sockets' is supported to not sum the perf stat per socket events to the system"
+      echo "      this optional option is passed to perf_stat_scatter.sh"
+      echo "      default is to sum the per socket events to the system level"
+      echo "   -x xlsx_filename  This is passed to tsv_2_xlsx.py as the name of the xlsx. (you need to add the .xlsx)"
+      echo "      The default is chart_line.xlsx"
       echo "   -v verbose mode"
       exit
       ;;
@@ -935,6 +949,6 @@ row += trows;
 done
 if [ "$SHEETS" != "" ]; then
    echo "python $SCR_DIR/tsv_2_xlsx.py $SHEETS"
-   python $SCR_DIR/tsv_2_xlsx.py $SHEETS
+   python $SCR_DIR/tsv_2_xlsx.py -o $XLSX_FILE -i "$IMAGE_STR" $SHEETS
 fi
 
