@@ -242,13 +242,14 @@ awk -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" 'BEGIN{
      got_lkfor[kmx,3]=64e-9; # a factor
      got_lkfor[kmx,4]="sum"; # operation
      got_lkfor[kmx,5]=1; # instances
+     got_lkfor[kmx,6]="div_by_interval"; # 
      lkfor[kmx,1]="unc0_read_write";
      lkfor[kmx,2]="unc1_read_write";
      lkfor[kmx,3]="unc2_read_write";
      lkfor[kmx,4]="unc3_read_write";
-     nwfor[kmx,1]="unc_read_write (GB/interval)";
+     nwfor[kmx,1]="unc_read_write (GB/s)";
 
-     kmx = 2;
+     kmx++;
      got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
      got_lkfor[kmx,2]=2; # num of fields to look for
      got_lkfor[kmx,3]=1000.0; # a factor
@@ -258,7 +259,7 @@ awk -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" 'BEGIN{
      lkfor[kmx,2]="instructions";
      nwfor[kmx,1]="LLC-misses PKI";
 
-     kmx = 3;
+     kmx++;
      got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
      got_lkfor[kmx,2]=2; # num of fields to look for
      got_lkfor[kmx,3]=1.0; # a factor
@@ -268,36 +269,25 @@ awk -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" 'BEGIN{
      lkfor[kmx,2]="cycles";
      nwfor[kmx,1]="IPC";
 
-     kmx = 4;
-     got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-     got_lkfor[kmx,2]=3; # num of fields to look for
-     got_lkfor[kmx,3]=1.0e-9; # a factor
-     got_lkfor[kmx,4]="div2"; # operation x/y/z
-     got_lkfor[kmx,5]=1; # instances
-     lkfor[kmx,1]="cycles";
-     lkfor[kmx,2]="interval";
-     lkfor[kmx,3]="instances";  # get the instances from the first lkfor event
-     nwfor[kmx,1]="avg_freq (GHz)";
-
-     kmx = 5;
-     got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-     got_lkfor[kmx,2]=2; # num of fields to look for
-     got_lkfor[kmx,3]=64.0e-9; # a factor
-     got_lkfor[kmx,4]="div"; # operation x/y/z
-     got_lkfor[kmx,5]=1; # instances
-     lkfor[kmx,1]="unc_read_write";
-     lkfor[kmx,2]="interval";
-     nwfor[kmx,1]="Mem_bw (GB/s)";
-     kmx--; # drop this one for now. It depends on a computed kmx formula... I dont have the timing right yet.
-
      kmx++;
      got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
      got_lkfor[kmx,2]=2; # num of fields to look for
-     got_lkfor[kmx,3]=1e-9; # a factor
-     got_lkfor[kmx,4]="div"; # operation
+     got_lkfor[kmx,3]=1.0e-9; # a factor
+     got_lkfor[kmx,4]="div"; # operation x/y/z
      got_lkfor[kmx,5]=1; # instances
+     got_lkfor[kmx,6]="div_by_interval"; # 
+     lkfor[kmx,1]="cycles";
+     lkfor[kmx,2]="instances";  # get the instances from the first lkfor event
+     nwfor[kmx,1]="avg_freq (GHz)";
+
+     kmx++;
+     got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+     got_lkfor[kmx,2]=1; # num of fields to look for
+     got_lkfor[kmx,3]=1e-9; # a factor
+     got_lkfor[kmx,4]="sum"; # operation
+     got_lkfor[kmx,5]=1; # instances
+     got_lkfor[kmx,6]="div_by_interval"; # 
      lkfor[kmx,1]="qpi_data_bandwidth_tx";
-     lkfor[kmx,2]="interval";
      nwfor[kmx,1]="QPI_BW (GB/sec)";
 
      if (options != "" && index(options, "dont_sum_sockets") > 0) {
@@ -319,6 +309,7 @@ awk -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" 'BEGIN{
               got_lkfor[kmx_nw,3]= got_lkfor[k,3];
               got_lkfor[kmx_nw,4]= got_lkfor[k,4];
               got_lkfor[kmx_nw,5]= got_lkfor[k,5];
+              got_lkfor[kmx_nw,6]= got_lkfor[k,6];
               for (kk=1; kk <= got_lkfor[k,2]; kk++) {
                  if (lkfor[k,kk] != "interval" && lkfor[k,kk] != "instances") {
                    lkfor[kmx_nw,kk]=lkfor[k,kk] " " skt_lkup[sk];
@@ -444,26 +435,26 @@ awk -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" 'BEGIN{
              if (lkup[k,2] == j) { denom[k] = sv[i,3+j]; }
              if (lkup[k,1] == -1) { numer[k] = interval; }
              if (lkup[k,2] == -1) { denom[k] = interval; }
-           }
-           if (got_lkfor[k,4] == "div2") {
-             if (lkup[k,1] == j) { numer[k] = sv[i,3+j]; }
-             if (lkup[k,2] == j) { denom[k] = sv[i,3+j]; }
-             if (lkup[k,1] == -1) { numer[k] = interval; }
-             if (lkup[k,2] == -1) { denom[k] = interval; }
-             if (lkup[k,3] == -2) { aaa=lkup[k,1];denom2[k] = evt_inst[aaa];}
+             if (lkup[k,1] == -2) { numer[k] = evt_inst[lkup[k,1]]; }
+             if (lkup[k,2] == -2) { denom[k] = evt_inst[lkup[k,1]]; }
            }
          }
        }
        for (k=1; k <= kmx; k++) { 
+         prt_it=0;
          if (got_lkfor[k,4] == "div" && got_lkfor[k,1] == got_lkfor[k,2]) {
-           printf("\t%s", numer[k]/denom[k] * got_lkfor[k,3]);
-         }
-         if (got_lkfor[k,4] == "div2" && got_lkfor[k,1] == got_lkfor[k,2]) {
-             aaa=lkup[k,1];denom2[k] = evt_inst[aaa];
-           printf("\t%s", (numer[k]/denom[k]/denom2[k]) * got_lkfor[k,3]);
+           val = numer[k]/denom[k] * got_lkfor[k,3];
+           prt_it=1;
          }
          if (got_lkfor[k,4] == "sum" && got_lkfor[k,1] > 0) {
-           printf("\t%s", sum[k] * got_lkfor[k,3]);
+           val = sum[k] * got_lkfor[k,3];
+           prt_it=1;
+         }
+         if (prt_it == 1) {
+           if (got_lkfor[k,6] == "div_by_interval") {
+              val = val / interval;
+           }
+           printf("\t%s", val);
          }
        }
        if (st_mx > 0 && i < row && sv[i,0]+0.0 > 0 && st_sv[1,2]+0.0 > 0.0) {
