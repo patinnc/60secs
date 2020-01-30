@@ -6,13 +6,38 @@
 #
 # need to install xlsxwriter in python
 # pip install xlsxwriter
-# python tsv_2_xlsx.py t sys_00_uptime.txt.tsv sys_01_dmesg.txt.tsv sys_02_vmstat.txt.tsv sys_03_mpstat.txt.tsv sys_04_pidstat.txt.tsv sys_05_iostat.txt.tsv sys_06_free.txt.tsv sys_07_sar_dev.txt.tsv sys_08_sar_tcp.txt.tsv sys_09_top.txt.tsv sys_10_perf_stat.txt.tsv
+# old: python tsv_2_xlsx.py sys_00_uptime.txt.tsv sys_01_dmesg.txt.tsv sys_02_vmstat.txt.tsv sys_03_mpstat.txt.tsv sys_04_pidstat.txt.tsv sys_05_iostat.txt.tsv sys_06_free.txt.tsv sys_07_sar_dev.txt.tsv sys_08_sar_tcp.txt.tsv sys_09_top.txt.tsv sys_10_perf_stat.txt.tsv
+# python tsv_2_xlsx.py -o tst.xlsx -i "*.png" sys_*.txt.tsv
+#   The optional '-i "*.png"' image file glob is in dbl quotes so it won't get expanded on the command line.
+#   The glob gets expanded in the script. If you don't enclose the glob in quotes then only 1 image file name gets passed to the -i option and the rest get treated as tsv files.
+
 
 import xlsxwriter
 import csv
+import getopt
 import sys
+import glob
 
-workbook = xlsxwriter.Workbook('chart_line.xlsx')
+options, remainder = getopt.getopt(sys.argv[1:], 'i:o:v', ['images=', 
+                                                         'output=',
+                                                         'verbose',
+                                                         ])
+output_filename = 'chart_line.xlsx'
+verbose = False
+image_files=[]
+
+print 'OPTIONS   :', options
+
+for opt, arg in options:
+    if opt in ('-i', '--images'):
+        for x in glob.glob(arg):
+           image_files.append(x)
+    elif opt in ('-o', '--output'):
+        output_filename = arg
+    elif opt in ('-v', '--verbose'):
+        verbose = True
+
+workbook = xlsxwriter.Workbook(output_filename)
 
 def is_number(s):
     try:
@@ -21,7 +46,8 @@ def is_number(s):
     except ValueError:
         return False
 
-for x in sys.argv[1:]:
+#for x in sys.argv[1:]:
+for x in remainder:
    
    data = []
    with open(x) as tsv:
@@ -116,6 +142,15 @@ for x in sys.argv[1:]:
        chart1.set_title ({'name': title})
        chart1.set_style(10)
        worksheet.insert_chart(hrow_beg, hcol_end, chart1, {'x_offset': 25, 'y_offset': 10})
+
+if len(image_files) > 0:
+   rw = len(image_files)
+   cl = 0
+   worksheet = workbook.add_worksheet('images')
+   for x in image_files:
+       worksheet.insert_image(rw, cl, x)
+       rw = rw - 1
+       cl = cl + 1
 
 workbook.close()
     
