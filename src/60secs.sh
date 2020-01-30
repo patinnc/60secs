@@ -19,14 +19,22 @@ VERBOSE=0
 INTRVL=1
 TSK_IN=
 WAIT_IN=
+PERF_BIN=perf
 
-while getopts "hvd:i:t:" opt; do
+while getopts "hvd:i:p:t:" opt; do
   case ${opt} in
     d )
       WAIT_IN=$OPTARG
       ;;
     i )
       INTERVAL=$OPTARG
+      ;;
+    p )
+      if [ "$OPTARG" != "" -a ! -x $OPTARG ]; then
+        echo "didn't find perf binary. You entered \"-p $OPTARG\""
+        exit
+      fi
+      PERF_BIN=$OPTARG
       ;;
     t )
       if [ "$OPTARG" == "all" ]; then
@@ -39,7 +47,7 @@ while getopts "hvd:i:t:" opt; do
       VERBOSE=$((VERBOSE+1))
       ;;
     h )
-echo "usage: $0 -t task_num|task_name -d seconds_to_run -i sample_interval_in_secs"
+echo "usage: $0 -t task_num|task_name -d seconds_to_run -i sample_interval_in_secs [ -p full_path_of_perf_binary ]"
 echo "task_num is 0 to $TLAST or -1 for all tasks"
 echo "seconds_to_run is how long you want each task to monitor the system. Defaults is $WAIT seconds."
 echo "data collected once a second till for $WAIT seconds."
@@ -53,6 +61,8 @@ echo "task_names are: ${TASKS[@]}"
       echo "      default is $WAIT seconds"
       echo "   -i interval in seconds between data collection"
       echo "      default is $INTRVL seconds"
+      echo "   -p full_path_to_perf_binary  the perf binary might not be in the path so use this option to specify it"
+      echo "      default is 'perf'"
       echo "   -v verbose mode. display each file after creating it."
       exit
       ;;
@@ -270,8 +280,8 @@ for TSK in `seq $TB $TE`; do
     IMC3_RDWR="uncore_imc_3/name='unc3_read_write',umask=0x0f,event=0x04/"
     EVT=$IMC0_RDWR,$IMC1_RDWR,$IMC2_RDWR,$IMC3_RDWR,qpi_data_bandwidth_tx
     EVT=instructions,cycles,ref-cycles,$EVT,LLC-load-misses
-    echo do: perf stat -x ";"  --per-socket -a -I $ms -o $FL -e $EVT
-    perf stat -x ";"  --per-socket -a -I $ms -o $FL -e $EVT &
+    echo do: $PERF_BIN stat -x ";"  --per-socket -a -I $ms -o $FL -e $EVT
+    $PERF_BIN stat -x ";"  --per-socket -a -I $ms -o $FL -e $EVT &
     PRF_PID=$!
     sleep $WAIT
     kill -2 $PRF_PID
