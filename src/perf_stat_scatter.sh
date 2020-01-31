@@ -22,9 +22,13 @@ while getopts "hvc:f:o:s:l:" opt; do
       if [[ $OPTARG == *"dont_sum_sockets"* ]]; then
         OPTIONS=$OPTARG
       else
+        if [[ $OPTARG == *"chart_new"* ]]; then
+           OPTIONS=$OPTARG
+        else
         if [ "$OPTARG" != "" ]; then
           echo "sorry but only -o option supported now is '-o dont_sum_sockets'. You entered -o $OPTARG"
           exit
+        fi
         fi
       fi
       ;;
@@ -374,7 +378,11 @@ awk -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" 'BEGIN{
      printf("\n");
      rows++;
      printf("title\t%s\tsheet\t%s\ttype\tline\n", chrt, sheet);
-     printf("hdrs\t%d\t%d\t%d\t%d\n", rows+1, 4, -1, evt_idx+extra_cols+4);
+     bcol = 4;
+     if (options != "" && index(options, "chart_new") > 0 && extra_cols > 0) {
+       bcol += evt_idx;
+     }
+     printf("hdrs\t%d\t%d\t%d\t%d\n", rows+1, bcol+1, -1, evt_idx+extra_cols+4);
 #title	sar network IFACE dev eth0	sheet	sar network IFACE	type	line
 #hdrs	8	0	68	8
      printf("epoch\tts\tskt\tinterval");
