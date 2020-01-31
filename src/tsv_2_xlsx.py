@@ -103,7 +103,7 @@ for x in remainder:
        dcol_end = int(data[drw][4])+1
        for i in range(drow_end-drow_beg+1):
            for h in range(hcol_end):
-               if (h >= hcol_beg):
+               if (h >= 0):
                    is_num = is_number(data[i+drow_beg][h])
                    if is_num:
                       data[i+drow_beg][h] = float(data[i+drow_beg][h])
