@@ -11,8 +11,9 @@ SHEETS=
 SCR_DIR=`dirname $0`
 IMAGE_STR=
 XLSX_FILE="chart_line.xlsx"
+PFX=
 
-while getopts "hvd:o:i:x:" opt; do
+while getopts "hvd:o:p:i:x:" opt; do
   case ${opt} in
     d )
       DIR=$OPTARG
@@ -23,6 +24,9 @@ while getopts "hvd:o:i:x:" opt; do
     o )
       OPTIONS=$OPTARG
       ;;
+    p )
+      PFX=$OPTARG
+      ;;
     x )
       XLSX_FILE=$OPTARG
       ;;
@@ -31,7 +35,7 @@ while getopts "hvd:o:i:x:" opt; do
       ;;
     h )
       echo "$0 split data files into columns"
-      echo "Usage: $0 [-h] -d sys_data_dir [-v]"
+      echo "Usage: $0 [-h] -d sys_data_dir [-v] [ -p prefix ]"
       echo "   -d dir containing sys_XX_* files created by 60secs.sh"
       echo "   -i \"image_file_name_str\" this option is passed to tsv_2_xlsx.py to identify image files to be inserted into the xlsx"
       echo "      For instance '-i \"*.png\"'. Note the dbl quotes around the glob. This keeps the cmdline from expanding the files. python will expand the glob."
@@ -45,6 +49,7 @@ while getopts "hvd:o:i:x:" opt; do
       echo "      default is to sum the per socket events to the system level and chart all the events"
       echo "   -x xlsx_filename  This is passed to tsv_2_xlsx.py as the name of the xlsx. (you need to add the .xlsx)"
       echo "      The default is chart_line.xlsx"
+      echo "   -p prefix   string to be prefixed to each sheet name"
       echo "   -v verbose mode"
       exit
       ;;
@@ -74,7 +79,7 @@ for i in $FILES; do
  echo $i
   if [[ $i == *"_uptime.txt"* ]]; then
     echo "do uptime"
-    awk '
+    awk -v pfx="$PFX" '
       BEGIN{beg=1;mx=0}
       function ltrim(s) { sub(/^[ \t\r\n]+/, "", s); return s }
       function rtrim(s) { sub(/[ \t\r\n,]+$/, "", s); return s }
@@ -135,7 +140,7 @@ trows++; printf("\n") > NFL;
 # 4  0      0 1319472 842316 44802156    0    0     0    12 20779 58660 14  1 85  0  0
 # 2  0      0 1384300 842320 44802160    0    0     0   356 17266 81860 11  1 88  0  0
 
-    awk '
+    awk -v pfx="$PFX" '
      BEGIN{beg=1;col_mx=-1;mx=0}
      /^procs/{
        next;
@@ -218,7 +223,7 @@ trows++; printf("\t\n") > NFL;
 #12:01:02 AM    0   10.10    4.04    2.02    0.00    0.00    0.00    0.00    0.00    0.00   83.84
 #12:01:02 AM    1    1.03    6.19    2.06    0.00    0.00    0.00    0.00    0.00    0.00   90.72
 
-    awk '
+    awk -v pfx="$PFX" '
      BEGIN{beg=1;
         grp_mx=0;
         hdr_mx=0;
@@ -312,7 +317,7 @@ trows++; printf("\n") > NFL;
 #Average:        0     38184      64      70  collector
 #Average:      112     43282      17      80  muttley-active
 #Average:    100001     51570      18     776  m3collector
-    awk -v typ="pidstat" '
+    awk -v pfx="$PFX" -v typ="pidstat" '
      BEGIN{beg=1;
         grp_mx=0;
         hdr_mx=0;
@@ -428,7 +433,7 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
 #dm-0              0.00     0.00  567.00    0.00  7100.00     0.00    25.04     0.06    0.11    0.11    0.00   0.11   6.40
 
     echo "do iostat"
-    awk -v typ="iostat" '
+    awk -v pfx="$PFX" -v typ="iostat" '
      BEGIN{beg=1;
         grp_mx=0;
         hdr_mx=0;
@@ -589,7 +594,7 @@ row += trows;
 #12:05:00 AM        lo   1251.00   1251.00    259.82    259.82      0.00      0.00      0.00      0.00
 #12:05:00 AM      ifb0      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00
     echo "do sar_dev"
-    awk -v typ="sar network IFACE" '
+    awk -v pfx="$PFX" -v typ="sar network IFACE" '
      BEGIN{beg=1;
         grp_mx=0;
         hdr_mx=0;
@@ -712,7 +717,7 @@ row+= trows;
  fi
   if [[ $i == *"_sar_tcp.txt"* ]]; then
     echo "do sar_tcp"
-    awk -v typ="sar tcp stats" '
+    awk -v pfx="$PFX" -v typ="sar tcp stats" '
      BEGIN{beg=1;
         grp_mx=0;
         hdr_mx=0;
@@ -832,7 +837,7 @@ row += trows;
  fi
   if [[ $i == *"_perf_stat.txt"* ]]; then
     echo "do perf_stat data"
-    $SCR_DIR/perf_stat_scatter.sh -o "$OPTIONS"  -f $i > $i.tsv
+    $SCR_DIR/perf_stat_scatter.sh -p "$PFX" -o "$OPTIONS"  -f $i > $i.tsv
    SHEETS="$SHEETS $i.tsv"
   fi
   if [[ $i == *"_interrupts.txt"* ]]; then
@@ -842,7 +847,7 @@ row += trows;
 #   0:        101          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0  IR-IO-APIC    2-edge      timer
 #   3:          2          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0  IR-IO-APIC    3-edge    
 
-    awk '
+    awk -v pfx="$PFX" '
      BEGIN{beg=1;col_mx=-1;mx=0}
      /^==beg /{
        FNM=ARGV[ARGIND];
@@ -954,6 +959,6 @@ row += trows;
 done
 if [ "$SHEETS" != "" ]; then
    echo "python $SCR_DIR/tsv_2_xlsx.py $SHEETS"
-   python $SCR_DIR/tsv_2_xlsx.py -o $XLSX_FILE -i "$IMAGE_STR" $SHEETS
+   python $SCR_DIR/tsv_2_xlsx.py -p "$PFX" -o $XLSX_FILE -i "$IMAGE_STR" $SHEETS
 fi
 
