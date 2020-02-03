@@ -8,12 +8,16 @@ FILES=
 SPECINT_LOG=
 CHART_IN=
 SHEET_IN=
+PFX_IN=
 OPTIONS=
 
-while getopts "hvc:f:o:s:l:" opt; do
+while getopts "hvc:f:o:p:s:l:" opt; do
   case ${opt} in
     c )
       CHART_IN=$OPTARG
+      ;;
+    p )
+      PFX_IN=$OPTARG
       ;;
     s )
       SHEET_IN=$OPTARG
@@ -59,11 +63,12 @@ while getopts "hvc:f:o:s:l:" opt; do
       ;;
     h )
       echo "$0 split perf stat data files into columns"
-      echo "Usage: $0 [-h] -f perf_stat_txt_file [ -f ...] [ -s sheetname ] [ -c chart_name ] [ -l specInt_logfile ] [-v]"
+      echo "Usage: $0 [-h] -f perf_stat_txt_file [ -f ...] [ -s sheetname ] [ -p prefix ] [ -c chart_name ] [ -l specInt_logfile ] [-v]"
       echo "   -f perf_stat_txt_file  perf stat data file"
       echo "      currently only 1 '-f filename' option is supported"
       echo "   -c chart title. Used by tsv_2_xlsx.py"
       echo "   -o options_str  Currently only option is \"dont_sum_sockets\" to not sum S0 & S1 to the system"
+      echo "   -p prefix_str.  prefix each sheet name with this string."
       echo "   -s sheet_name.  Used by tsv_2_xlsx.py. string has to comply with Excel sheet name rules"
       echo "   -l SpecInt CPU2017 log (like result/CPU2017.001.log)"
       echo "   -v verbose mode"
@@ -90,7 +95,7 @@ if [ "$SHEET_IN" != "" ]; then
 fi
 
 
-awk -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" 'BEGIN{
+awk -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" 'BEGIN{
      row=0;
      evt_idx=-1;
      months="  JanFebMarAprMayJunJulAugSepOctNovDec";
@@ -377,7 +382,7 @@ awk -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" 'BEGIN{
      rows=1;
      printf("\n");
      rows++;
-     printf("title\t%s\tsheet\t%s\ttype\tline\n", chrt, sheet);
+     printf("title\t%s\tsheet\t%s%s\ttype\tline\n", chrt, pfx, sheet);
      bcol = 4;
      if (options != "" && index(options, "chart_new") > 0 && extra_cols > 0) {
        bcol += evt_idx;
