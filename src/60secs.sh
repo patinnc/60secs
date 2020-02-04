@@ -160,11 +160,26 @@ echo "count= $COUNT for interval= $INTRVL and wait= $WAIT"
 lscpu > lscpu.log
 
 echo "going to do task $TB to $TE"
+
+LOG=60secs.log
+if [ -e $LOG ]; then
+  rm $LOG
+fi
+
+NANO=".%N"
+tdte=`date "+${NANO}"`
+if [ "$tdte" == ".N" ]; then
+ NANO=
+fi
  
 for TSK in `seq $TB $TE`; do
   echo "doing $TSK ${TASKS[$TSK]}"
   FLNUM=$(printf "%02d" $TSK)
   #echo FLNUM= $FLNUM
+  dt=`TZ=":US/Pacific" date`
+  dte=`date "+%s${NANO}"`
+  echo "date= $dt $dte"
+  echo "start $TSK ${TASKS[$TSK]} at $dt $dte" >> $LOG
   FL=
 
   if [ "$TSK" == "0" ]; then
