@@ -157,6 +157,8 @@ if [ $COUNT -lt 1 ]; then
 fi
 echo "count= $COUNT for interval= $INTRVL and wait= $WAIT"
 
+lscpu > lscpu.log
+
 echo "going to do task $TB to $TE"
  
 for TSK in `seq $TB $TE`; do
