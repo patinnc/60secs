@@ -54,9 +54,10 @@ else:
    fl_opt = 0
    fl_options.append([])
    for i in range(len(sys.argv)):
-       fl_options.append([sys.argv[i]])
+       fl_options[fl_opt].append(sys.argv[i])
 
 for fo in range(len(fl_options)):
+   print "fo= ", fo
    #options, remainder = getopt.getopt(sys.argv[1:], 'i:o:p:v', ['images=',
    options, remainder = getopt.getopt(fl_options[fo][1:], 'i:o:p:v', ['images=',
                                                             'output=',
