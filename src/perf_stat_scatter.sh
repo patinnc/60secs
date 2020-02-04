@@ -94,8 +94,14 @@ if [ "$SHEET_IN" != "" ]; then
   SHEET=$SHEET_IN
 fi
 
+if [ -e "lscpu.log" ]; then
+ TSC_FREQ=`cat lscpu.log |awk '/Model name/{for (i=1;i<=NF;i++){pos=index($i, "GHz");if (pos > 0){print substr($i,1,pos-1);}}}'`
+else
+ # didn't collect lscpu.log for most of the data
+ TSC_FREQ="2.1"
+fi
 
-awk -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" 'BEGIN{
+awk -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" 'BEGIN{
      row=0;
      evt_idx=-1;
      months="  JanFebMarAprMayJunJulAugSepOctNovDec";
@@ -281,10 +287,21 @@ awk -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" 'B
      kmx++;
      got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
      got_lkfor[kmx,2]=2; # num of fields to look for
+     got_lkfor[kmx,3]=100.0/(tsc_freq*1.0e9); # a factor
+     got_lkfor[kmx,4]="div"; # operation x/y
+     got_lkfor[kmx,5]=1; # instances
+     #got_lkfor[kmx,6]=""; # 
+     lkfor[kmx,1]="ref-cycles";
+     lkfor[kmx,2]="instances";  # get the instances from the first lkfor event
+     nwfor[kmx,1]="%not_halted";
+
+     kmx++;
+     got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+     got_lkfor[kmx,2]=2; # num of fields to look for
      got_lkfor[kmx,3]=1.0e-9; # a factor
      got_lkfor[kmx,4]="div"; # operation x/y/z
      got_lkfor[kmx,5]=1; # instances
-     got_lkfor[kmx,6]="div_by_interval"; # 
+     got_lkfor[kmx,6]="div_by_non_halted_interval"; # 
      lkfor[kmx,1]="cycles";
      lkfor[kmx,2]="instances";  # get the instances from the first lkfor event
      nwfor[kmx,1]="avg_freq (GHz)";
@@ -319,6 +336,8 @@ awk -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" 'B
               got_lkfor[kmx_nw,4]= got_lkfor[k,4];
               got_lkfor[kmx_nw,5]= got_lkfor[k,5];
               got_lkfor[kmx_nw,6]= got_lkfor[k,6];
+              got_lkfor[kmx_nw,7]= sk; # skt_idx
+              got_lkfor[kmx_nw,8]= nwfor[k,1]; # save off original result name so we only have to ck 1 name
               for (kk=1; kk <= got_lkfor[k,2]; kk++) {
                  if (lkfor[k,kk] != "interval" && lkfor[k,kk] != "instances") {
                    lkfor[kmx_nw,kk]=lkfor[k,kk] " " skt_lkup[sk];
@@ -330,10 +349,12 @@ awk -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" 'B
             }
             for (kk=1; kk <= got_lkfor[k,2]; kk++) {
                if (lkfor[k,kk] != "interval" && lkfor[k,kk] != "instances") {
-                 lkfor[k,kk]=lkfor[k,kk] " S0";
+                   lkfor[k,kk]=lkfor[k,kk] " " skt_lkup[1];
                }
             }
-            nwfor[k,1]=nwfor[k,1] " S0";
+            got_lkfor[k,7]= 1; # skt idx
+            got_lkfor[k,8]= nwfor[k,1]; # save off original result name so we only have to ck 1 name
+            nwfor[k,1]=nwfor[k,1] " " skt_lkup[1];
           }
        }
        kmx = kmx_nw;
@@ -453,12 +474,14 @@ awk -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" 'B
            }
          }
        }
+       for (sk=1; sk <= skt_idx; sk++) { not_halted_fctr[sk] = 0.0; }
        for (k=1; k <= kmx; k++) { 
          prt_it=0;
          if (got_lkfor[k,4] == "div" && got_lkfor[k,1] == got_lkfor[k,2]) {
            val = numer[k]/denom[k] * got_lkfor[k,3];
            prt_it=1;
          }
+
          if (got_lkfor[k,4] == "sum" && got_lkfor[k,1] > 0) {
            val = sum[k] * got_lkfor[k,3];
            prt_it=1;
@@ -466,6 +489,17 @@ awk -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" 'B
          if (prt_it == 1) {
            if (got_lkfor[k,6] == "div_by_interval") {
               val = val / interval;
+           }
+           if (got_lkfor[k,6] == "div_by_non_halted_interval") {
+              sk = got_lkfor[k,7];
+              nhf = not_halted_fctr[sk];
+             #printf("a sk= %d, nhf= %f\n", sk, not_halted_fctr[sk]) > "/dev/stderr";
+              val = val / (interval*nhf);
+           }
+           if (got_lkfor[k,8] == "%not_halted") {
+             sk = got_lkfor[k,7];
+             not_halted_fctr[sk] = val/100.0;
+             #printf("b sk= %d, nhf= %f\n", sk, not_halted_fctr[sk]) > "/dev/stderr";
            }
            printf("\t%s", val);
          }
