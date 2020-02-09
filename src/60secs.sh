@@ -20,9 +20,21 @@ INTRVL=1
 TSK_IN=
 WAIT_IN=
 PERF_BIN=perf
+BKGRND=0
+WAIT_AT_END=0
+CURL_AT_END=0
 
-while getopts "hvd:i:p:t:" opt; do
+while getopts "hvbcwd:i:p:t:" opt; do
   case ${opt} in
+    b )
+      BKGRND=1
+      ;;
+    c )
+      CURL_AT_END=1
+      ;;
+    w )
+      WAIT_AT_END=1
+      ;;
     d )
       WAIT_IN=$OPTARG
       ;;
@@ -47,7 +59,7 @@ while getopts "hvd:i:p:t:" opt; do
       VERBOSE=$((VERBOSE+1))
       ;;
     h )
-echo "usage: $0 -t task_num|task_name -d seconds_to_run -i sample_interval_in_secs [ -p full_path_of_perf_binary ]"
+echo "usage: $0 -t task_num|task_name[,taskname[...]] [ -b ] -d seconds_to_run -i sample_interval_in_secs [ -p full_path_of_perf_binary ]"
 echo "task_num is 0 to $TLAST or -1 for all tasks"
 echo "seconds_to_run is how long you want each task to monitor the system. Defaults is $WAIT seconds."
 echo "data collected once a second till for $WAIT seconds."
@@ -57,7 +69,13 @@ echo "task_names are: ${TASKS[@]}"
       echo "      Enter '-t all' for all tasks"
       echo "      Valid task_num range is 0 to $TLAST"
       echo "      default is no task"
-      echo "   -d duration of each monitoring task in seconds"
+      echo "   -b start the jobs in the backgroup not waiting for each job to finish"
+      echo "      The default is to not start the jobs the background (so start the 1st task, wait for it to finish, start the next task, etc)"
+      echo "      uptime, dmesg, and interrupts can't run in the background currently. They will block if you select them"
+      echo "   -w If you run background mode, this option waits for the duration after the background jobs are started."
+      echo "   -c use this option to run /root/do_curl.sh at the end"
+      echo "   -d time_in_seconds duration of each monitoring task in seconds"
+      echo "      You can append an 'm' to specify the duration in minutes (like '-d 10m' which sets the duration to 600 seconds)"
       echo "      default is $WAIT seconds"
       echo "   -i interval in seconds between data collection"
       echo "      default is $INTRVL seconds"
@@ -87,29 +105,51 @@ if [ "$TSK_IN" == "-1" ]; then
   TSK=$TSK_IN
 fi
 
-j=0
+jmx=0
+t=0
+TSK_LST=()
+TSK_NUM=()
 for i in ${TASKS[@]}; do
-  if [ "$TSK_IN" == "$i" ]; then
-    TSK=$j
-    printf "You selected task_name $i which is task_num $j\n"
+  if [[ $TSK_IN == *"$i"* ]]; then
+    TSK=$i
+    TSK_LST[$jmx]=$i
+    TSK_NUM[$jmx]=$t
+    printf "You selected task_name $i\n"
+    jmx=$((jmx+1))
+    #break
+  fi
+  if [ "$TSK_IN" == "-1" ]; then
+    TSK=$i
+    TSK_LST[$jmx]=$i
+    TSK_NUM[$jmx]=$t
+    printf "You selected task_name $i by -t -1\n"
+    jmx=$((jmx+1))
+    #break
+  fi
+  if [ "$TSK_IN" == "$t" ]; then
+    TSK=$i
+    TSK_LST[$jmx]=$i
+    TSK_NUM[$jmx]=$t
+    printf "You selected task_name $i which is task_num $t\n"
     break
   fi
-  if [ "$TSK_IN" == "$j" ]; then
-    TSK=$j
-    printf "You selected task_name $i which is task_num $j\n"
-    break
-  fi
-  j=$((j+1))
+  t=$((t+1))
 done
 
-if [ "$TSK" == "" ]; then
+if [ $jmx -eq 0 ]; then
   echo "you entered invalid task name or number $TSK_IN"
   echo "valid task_num is 0 to $TLAST"
   echo "valid task_names: ${TASKS[@]}"
   exit
+else
+  jmx=$((jmx-1))
 fi
 
 if [ "$WAIT_IN" != "" ]; then
+  RESP=`echo $WAIT_IN | sed 's/m//i'`
+  if [ "$RESP" != "$WAIT_IN" ]; then
+    WAIT_IN=$((RESP*60))
+  fi
   re='^[0-9]+$'
   if ! [[ $WAIT_IN =~ $re ]] ; then
      echo "error: duration -d $WAIT_IN is not a number" >&2; exit 1
@@ -139,16 +179,8 @@ if [ "$TSK" == "-1" ]; then
  TB=0
  TE=$TLAST
 else
- if [ $TSK -gt $TLAST ]; then
-   echo "max task is $TLAST. You entered $TSK. Bye"
-   exit
- fi
- if [ $TSK -lt 0 ]; then
-   echo "min task is 0. You entered $TSK. Bye"
-   exit
- fi
- TB=$TSK
- TE=$TSK
+ TB=0
+ TE=$jmx
 fi
 
 COUNT=$(($WAIT/$INTRVL))
@@ -172,20 +204,25 @@ if [ "$tdte" == ".N" ]; then
  NANO=
 fi
  
-for TSK in `seq $TB $TE`; do
-  echo "doing $TSK ${TASKS[$TSK]}"
-  FLNUM=$(printf "%02d" $TSK)
+for TSKj in `seq $TB $TE`; do
+  TSK=${TSK_LST[$TSKj]}
+  TSKNUM=${TSK_NUM[$TSKj]}
+  echo "doing $TSK ${TSK_LST[$TSKj]}"
+  FLNUM=$(printf "%02d" $TSKNUM)
   #echo FLNUM= $FLNUM
   dt=`TZ=":US/Pacific" date`
+  dtc=`date`
   dte=`date "+%s${NANO}"`
   echo "date= $dt $dte"
-  echo "start $TSK ${TASKS[$TSK]} at $dt $dte" >> $LOG
+  echo "start $TSK at $dtc $dte" >> $LOG
   FL=
 
-  if [ "$TSK" == "0" ]; then
+  if [[ $TSK == *"uptime"* ]]; then
     echo "do uptime for $WAIT secs"
     FL=sys_${FLNUM}_uptime.txt
-    rm $FL
+    if [ -e $FL ]; then
+      rm $FL
+    fi
     j=0
     for i in `seq 1 $WAIT`; do
       #echo "i= $i of $WAIT"
@@ -200,7 +237,7 @@ for TSK in `seq $TB $TE`; do
     printf "\n"
   fi
   
-  if [ "$TSK" == "1" ]; then
+  if [[ $TSK == *"dmesg"* ]]; then
     echo "dmesg: waiting $WAIT secs and doing dmesg"
     FL=sys_${FLNUM}_dmesg.txt
     #dmesg |tail > $FL
@@ -230,84 +267,143 @@ for TSK in `seq $TB $TE`; do
     printf "\ncurrent timestamp for dmesg= $BEG\nwait for $WAIT seconds\n" >> $FL
   fi
   
-  if [ "$TSK" == "2" ]; then
+  if [[ $TSK == *"vmstat"* ]]; then
     echo "do vmstat $INTRVL $COUNT"
     FL=sys_${FLNUM}_vmstat.txt
-    rm $FL
-    vmstat $INTRVL $COUNT > $FL
+    if [ -e $FL ]; then
+      rm $FL
+    fi
+    if [ "$BKGRND" == "0" ]; then
+      vmstat $INTRVL $COUNT > $FL
+    else
+      vmstat $INTRVL $COUNT > $FL &
+      TSK_PID[$TSKj]=$!
+    fi
   fi
   
-  if [ "$TSK" == "3" ]; then
+  if [[ $TSK == *"mpstat"* ]]; then
     echo "do mpstat ­P ALL $INTRVL $COUNT"
     FL=sys_${FLNUM}_mpstat.txt
-    rm $FL
-    mpstat -P ALL $INTRVL $COUNT > $FL
+    if [ -e $FL ]; then
+      rm $FL
+    fi
+    if [ "$BKGRND" == "0" ]; then
+      mpstat -P ALL $INTRVL $COUNT > $FL
+    else
+      mpstat -P ALL $INTRVL $COUNT > $FL &
+      TSK_PID[$TSKj]=$!
+    fi
   fi
   
-  if [ "$TSK" == "4" ]; then
-    echo "do pidstat -wuv $INTRVL $COUNT"
+  if [[ $TSK == *"pidstat"* ]]; then
+    echo "do pidstat -du $INTRVL $COUNT"
     FL=sys_${FLNUM}_pidstat.txt
-    rm $FL
-    pidstat -wuv $INTRVL $COUNT > $FL
+    if [ -e $FL ]; then
+      rm $FL
+    fi
+    if [ "$BKGRND" == "0" ]; then
+      pidstat -du $INTRVL $COUNT > $FL
+    else
+      pidstat -du $INTRVL $COUNT > $FL &
+      TSK_PID[$TSKj]=$!
+    fi
   fi
   
-  if [ "$TSK" == "5" ]; then
+  if [[ $TSK == *"iostat"* ]]; then
     echo "do iostat -xtz $INTRVL $COUNT"
     FL=sys_${FLNUM}_iostat.txt
-    rm $FL
-    iostat -xtz $INTRVL $COUNT > $FL
+    if [ -e $FL ]; then
+      rm $FL
+    fi
+    if [ "$BKGRND" == "0" ]; then
+      iostat -xtz $INTRVL $COUNT > $FL
+    else
+      iostat -xtz $INTRVL $COUNT > $FL &
+      TSK_PID[$TSKj]=$!
+    fi
   fi
   
-  if [ "$TSK" == "6" ]; then
+  if [[ $TSK == *"free"* ]]; then
     echo "do free -m -s $INTRVL -c $COUNT"
     FL=sys_${FLNUM}_free.txt
-    rm $FL
-    free -m -s $INTRVL -c $COUNT > $FL
+    if [ -e $FL ]; then
+      rm $FL
+    fi
+    if [ "$BKGRND" == "0" ]; then
+      free -m -s $INTRVL -c $COUNT > $FL
+    else
+      free -m -s $INTRVL -c $COUNT > $FL &
+      TSK_PID[$TSKj]=$!
+    fi
   fi
   
-  if [ "$TSK" == "7" ]; then
+  if [[ $TSK == *"sar_dev"* ]]; then
     echo "do sar -n DEV $INTRVL $COUNT"
     FL=sys_${FLNUM}_sar_dev.txt
-    rm $FL
-    sar -n DEV $INTRVL $COUNT > $FL
+    if [ -e $FL ]; then
+      rm $FL
+    fi
+    if [ "$BKGRND" == "0" ]; then
+      sar -n DEV $INTRVL $COUNT > $FL
+    else
+      sar -n DEV $INTRVL $COUNT > $FL &
+      TSK_PID[$TSKj]=$!
+    fi
   fi
   
-  if [ "$TSK" == "8" ]; then
+  if [[ $TSK == *"sar_tcp"* ]]; then
     echo "do sar -n TCP,ETCP $INTRVL $COUNT"
     FL=sys_${FLNUM}_sar_tcp.txt
-    rm $FL
-    sar -n TCP,ETCP $INTRVL $COUNT > $FL
+    if [ -e $FL ]; then
+      rm $FL
+    fi
+    if [ "$BKGRND" == "0" ]; then
+      sar -n TCP,ETCP $INTRVL $COUNT > $FL
+    else
+      sar -n TCP,ETCP $INTRVL $COUNT > $FL &
+      TSK_PID[$TSKj]=$!
+    fi
   fi
   
-  if [ "$TSK" == "9" ]; then
+  if [[ $TSK == *"top"* ]]; then
     echo "do top -b -d $INTRVL -n $COUNT"
     FL=sys_${FLNUM}_top.txt
-    rm $FL
-    top -b -d $INTRVL -n $COUNT > $FL
+    if [ -e $FL ]; then
+      rm $FL
+    fi
+    if [ "$BKGRND" == "0" ]; then
+      top -b -d $INTRVL -n $COUNT > $FL
+    else
+      top -b -d $INTRVL -n $COUNT > $FL &
+      TSK_PID[$TSKj]=$!
+    fi
   fi
   
-  if [ "$TSK" == "10" ]; then
+  if [[ $TSK == *"perf"* ]]; then
     FL=sys_${FLNUM}_perf_stat.txt
-    rm $FL
+    if [ -e $FL ]; then
+      rm $FL
+    fi
     ms=$(($INTRVL*1000))
     echo "do perf stat for $WAIT secs"
     IMC0_RDWR="uncore_imc_0/name='unc0_read_write',umask=0x0f,event=0x04/"
     IMC1_RDWR="uncore_imc_1/name='unc1_read_write',umask=0x0f,event=0x04/"
     IMC2_RDWR="uncore_imc_2/name='unc2_read_write',umask=0x0f,event=0x04/"
     IMC3_RDWR="uncore_imc_3/name='unc3_read_write',umask=0x0f,event=0x04/"
-    EVT=$IMC0_RDWR,$IMC1_RDWR,$IMC2_RDWR,$IMC3_RDWR,qpi_data_bandwidth_tx
+    EVT=$IMC0_RDWR,$IMC1_RDWR,$IMC2_RDWR,$IMC3_RDWR,qpi_data_bandwidth_tx,qpi_ctl_bandwidth_tx
     EVT=instructions,cycles,ref-cycles,$EVT,LLC-load-misses
     echo do: $PERF_BIN stat -x ";"  --per-socket -a -I $ms -o $FL -e $EVT
-    $PERF_BIN stat -x ";"  --per-socket -a -I $ms -o $FL -e $EVT &
+    $PERF_BIN stat -x ";"  --per-socket -a -I $ms -o $FL -e $EVT sleep $WAIT &
+    TSK_PID[$TSKj]=$!
     PRF_PID=$!
-    sleep $WAIT
-    kill -2 $PRF_PID
   fi
 
-  if [ "$TSK" == "11" ]; then
+  if [[ $TSK == *"interrupts"* ]]; then
     echo "do cat /proc/interrupts for $WAIT secs"
     FL=sys_${FLNUM}_interrupts.txt
-    rm $FL
+    if [ -e $FL ]; then
+      rm $FL
+    fi
     j=0
     for i in `seq 1 $WAIT`; do
       #echo "i= $i of $WAIT"
@@ -333,4 +429,27 @@ for TSK in `seq $TB $TE`; do
   fi
 
 done
+
+if [ "$BKGRND" == "1" ]; then
+  PID_LST=
+  CMA=
+  for TSKj in `seq $TB $TE`; do
+    TSK=${TSK_LST[$TSKj]}
+    TSKPID=${TSK_PID[$TSKj]}
+    PID_LST="${PID_LST}${CMA}$TSKPID"
+    CMA=","
+  done
+  echo "PIDs started= $PID_LST"
+  echo "watch -n1 \"ps -f -p $PID_LST\""
+  echo "watch -n1 \"ps -f -p $PID_LST\"" > watch.log
+fi
+if [ "$WAIT_AT_END" == "1" ]; then
+  echo "waiting for $WAIT seconds"
+  sleep $WAIT
+fi
+if [ "$CURL_AT_END" == "1" ]; then
+  MINUTES=$((WAIT*60))
+  echo "running /root/do_curl.sh $MINUTES"
+  /root/do_curl.sh $MINUTES
+fi
 
