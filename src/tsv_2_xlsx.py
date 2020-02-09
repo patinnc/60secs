@@ -115,6 +115,7 @@ for fo in range(len(fl_options)):
                     sheet_nm = data[i][3]
                  if len(data[i]) >= 6:
                     ch_type = data[i][5]
+                    ch[0].append(ch_type)
               if j == 0 and data[i][j] == "hdrs":
                  print("got hdrs for x= %s\n" % (x))
                  ch.append(["hdrs", i])
@@ -131,6 +132,8 @@ for fo in range(len(fl_options)):
           print("got chrt[%d] for x= %s\n" % (c, x))
           title_rw = ch_arr[c][0][1]
           title_cl = ch_arr[c][0][2]
+          if len(ch_arr[c][0]) > 3:
+             ch_type = ch_arr[c][0][3]
           drw  = ch_arr[c][1][1]
           hrow_beg = int(data[drw][1])
           hcol_beg = int(data[drw][2])
@@ -142,13 +145,19 @@ for fo in range(len(fl_options)):
           if drow_end == -1:
              for i in range(drow_beg, len(data)):
                  drow_end = i
-                 if len(data[i]) < dcol_beg:
+                 if len(data[i]) == 0:
                     break
              data[drw][3] = str(drow_end)
           dcol_end = int(data[drw][4])+1
+          mx = drow_end+1
+          if mx > len(data):
+             print("dude, mx= ", mx, ", len(data)= ", len(data))
+        
           for i in range(drow_end-drow_beg+1):
               for h in range(hcol_end):
-                  if (h >= 0):
+                  if (len(data[i+drow_beg]) > h):
+                      if h >= len(data[i+drow_beg]):
+                         print("dude, idx= ", i+drow_beg, ", h= ", h, ", len(data[idx])= ", len(data[i+drow_beg]), " drow: ", data[i+drow_beg])
                       is_num = is_number(data[i+drow_beg][h])
                       if is_num:
                          data[i+drow_beg][h] = float(data[i+drow_beg][h])
@@ -159,6 +168,8 @@ for fo in range(len(fl_options)):
       for c in range(chrts):
           title_rw = ch_arr[c][0][1]
           title_cl = ch_arr[c][0][2]
+          if len(ch_arr[c][0]) > 3:
+             ch_type = ch_arr[c][0][3]
           title = data[title_rw][title_cl+1]
           drw  = ch_arr[c][1][1]
           hrow_beg = int(data[drw][1])
@@ -169,21 +180,34 @@ for fo in range(len(fl_options)):
           dcol_beg = int(data[drw][2])
           drow_end = int(data[drw][3])
           dcol_end = int(data[drw][4])+1
+          use_cats = False
+          if len(data[drw]) > 5:
+             dcol_cat = int(data[drw][5])
+             use_cats = True
           headings = []
           for h in range(hcol_end):
               if (h >= hcol_beg):
                  headings.append(data[hrow_beg][h])
           #worksheet.write_row(hrow_beg, hcol_beg, headings, bold)
           print ("sheet= %s ch= %d hro= %d hc= %d hce= %d, dr= %d, dre= %d" % (sheet_nm, c, hrow_beg, hcol_beg, hcol_end, drow_beg, drow_end))
-          chart1 = workbook.add_chart({'type': ch_type})
+          if ch_type == "scatter_straight":
+             chart1 = workbook.add_chart({'type': 'scatter', 'subtype': 'straight'})
+          else:
+             chart1 = workbook.add_chart({'type': ch_type})
           # Configure the first series.
           for h in range(hcol_end):
               if (h >= hcol_beg):
-                  #    'categories': '=Sheet1!$A$2:$A$7',
-                  chart1.add_series({
-                      'name':       [wrksh_nm, hrow_beg, h],
-                      'values':     [wrksh_nm, drow_beg, h, drow_end, h],
-                  })
+                  if use_cats:
+                     chart1.add_series({
+                         'name':       [wrksh_nm, hrow_beg, h],
+                         'categories': [wrksh_nm, drow_beg, dcol_cat, drow_end, dcol_cat],
+                         'values':     [wrksh_nm, drow_beg, h, drow_end, h],
+                     })
+                  else:
+                     chart1.add_series({
+                         'name':       [wrksh_nm, hrow_beg, h],
+                         'values':     [wrksh_nm, drow_beg, h, drow_end, h],
+                     })
           chart1.set_title ({'name': title})
           chart1.set_style(10)
           worksheet.insert_chart(hrow_beg, hcol_end, chart1, {'x_offset': 25, 'y_offset': 10})
