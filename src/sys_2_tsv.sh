@@ -73,6 +73,7 @@ if [ ! -d $DIR ]; then
 fi
 echo "dir= $DIR"
 
+BEG=`cat $DIR/60secs.log | awk '{n=split($0, arr);printf("%s\n", arr[n]);exit;}'`
 FILES=`ls -1 $DIR/sys_*_*.txt`
 #echo "FILES = $FILES"
 for i in $FILES; do
@@ -317,12 +318,62 @@ trows++; printf("\n") > NFL;
 #Average:        0     38184      64      70  collector
 #Average:      112     43282      17      80  muttley-active
 #Average:    100001     51570      18     776  m3collector
-    awk -v pfx="$PFX" -v typ="pidstat" '
+#aaaa
+    awk -v ts_beg="$BEG" -v pfx="$PFX" -v typ="pidstat" '
      BEGIN{beg=1;
         grp_mx=0;
         hdr_mx=0;
         chart=typ;
         did_notes=0;
+        tm_rw = 0;
+        tm_beg += 0;
+        epoch_init = 0;
+        num_cpus = 0;
+        num_cpus_pct = 0;
+      }
+      function dt_to_epoch(hhmmss, amp) {
+         # the epoch seconds from the date time info in the file is local time,not UTC.
+         # so just use the calc"d epoch seconds to calc the elapsed seconds since the start.
+         # THe real timestamp is the input ts_beg + elapsed_seconds.
+         # hhmmss fmt= hh:mm:ss (w leading 0
+         if (dt_beg["yy"] == "") {
+            return 0.0;
+         }
+         dt_tm["hh"] = substr(hhmmss,1,2) + 0;
+         dt_tm["mm"] = substr(hhmmss,4,2) + 0;
+         dt_tm["ss"] = substr(hhmmss,7,2) + 0;
+         if (ampm == "PM" && dt_tm["hh"] < 12) {
+            dt_tm["hh"] += 12;
+         }
+         dt_str = dt_beg["yy"] " " dt_beg["mm"] " " dt_beg["dd"] " " dt_tm["hh"] " " dt_tm["mm"] " " dt_tm["ss"];
+         #printf("dt_str= %s\n", dt_str) > "/dev/stderr";
+         epoch = mktime(dt_str);
+         #printf("epoch= %s offset= %s\n", epoch, offset);
+         if (epoch_init == 0) {
+             epoch_init = epoch;
+         }
+         epoch = ts_beg + (epoch - epoch_init + 1); # the plus 1 assumes a 1 second interval.
+         return epoch;
+      }
+      function sort_data(arr_in, arr_mx, mx_lines) {
+       srt_lst="";
+       for (i=1; i <= arr_mx; i++) {
+           srt_lst=srt_lst "" arr_in[i] "\n";
+       }
+       cmd = "printf \"" srt_lst "\" | sort -t '\t' -r -n -k 1";
+       #printf("cmd= %s\n", cmd);
+       #printf("======== end cmd=========\n");
+       nf_mx=0;
+       while ( ( cmd | getline result ) > 0 ) {
+         n = split(result, marr, "\t");
+         sv_nf[++nf_mx] = marr[2];
+         printf("asv_nf[%d]= %s\n", nf_mx, result);
+         if (nf_mx > mx_lines) {
+           break;
+         }
+       } 
+       close(cmd)
+       return nf_mx;
       }
       function bar_data(row, arr_in, arr_mx, title, hdr, mx_lines) {
        srt_lst="";
@@ -346,7 +397,7 @@ trows++; printf("\n") > NFL;
        printf("title\t%s\tsheet\t%s\ttype\tcolumn\n", title, chart) > NFL;
        ++row;
        n = split(hdr, arr, "\t");
-       printf("hdrs\t%d\t%d\t%d\t%d\n", row+1, 0, 1+row+nf_mx, n-1) > NFL;
+       printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", row+1, 0, -1, n-2, n-1) > NFL;
        ++row;
        printf("%s\n", hdr) > NFL;
        for (i=1; i <= nf_mx; i++) {
@@ -356,6 +407,9 @@ trows++; printf("\n") > NFL;
        return row;
      }
      {
+	FNM=ARGV[ARGIND];
+        NFL=FNM ".tsv";
+        NFLA=FNM ".all.tsv";
         str="";
         tab="";
         for (i=1; i <= NF; i++) {
@@ -363,11 +417,56 @@ trows++; printf("\n") > NFL;
           tab = "\t";
         }
         sv[++sv_mx] = str;
+        if (NR == 1) {
+          for (i=1; i <= NF; i++) {
+             if (match($i, /^[0-9][0-9]\/[0-9][0-9]\/[0-9][0-9][0-9][0-9]/)) {
+                dt_beg["yy"] = substr($i, 7);
+                dt_beg["mm"] = substr($i, 1, 2);
+                dt_beg["dd"] = substr($i, 4, 2);
+                printf("beg_date= mm.dd.yyyy %s.%s.%s\n", dt_beg["mm"], dt_beg["dd"], dt_beg["yy"]) > "/dev/stderr";
+                #break;
+             }
+             if (i == NF && $i == "CPU)") {
+                num_cpus = substr(fld_prv, 2)+0;
+                num_cpus_pct = num_cpus * 100.0;
+             }
+             fld_prv = $i;
+          }
+          next;
+        }
+        if (NF == 0) {
+           area="cpu";
+           next;
+        }
+        if ($2 == "AM" || $2 == "PM") {
+           if (index($0, "%CPU") > 1) {
+              area="cpu";
+              epoch = dt_to_epoch($1, $2);
+              tm_rw = tm_rw+1;
+              tm_arr[tm_rw] = epoch;
+              next;
+           }
+           if ( area == "cpu") {
+             nm  = $10 " " $4; # process_name + pid
+             if (nm in nm_arr) {
+                ;
+             } else {
+               nm_idx++
+               nm_arr[nm] = nm_idx;
+               nm_lkup[nm_idx] = nm;
+               nm_tot[nm_idx] = 0;
+             }
+             nmi = nm_arr[nm];
+             pct = $8+0; # %cpu
+             if (pct > num_cpus_pct) {
+               pct = 0;
+             }
+             pid[tm_rw,nmi] = pct;
+             nm_tot[nmi] += pct;
+           }
+        }
      }
      /^Average:/{
-	FNM=ARGV[ARGIND];
-        NFL=FNM ".tsv";
-        NFLA=FNM ".all.tsv";
         if (index($0, "%CPU") > 1) {
           area="cpu"; 
           mx_cpu=1;
@@ -395,6 +494,7 @@ trows++; printf("\n") > NFL;
         if (area == "threads") {
           sv_threads[++mx_threads]=sprintf("%s\t%s\t%s", $4, $5, $6 " " $3);
         }
+        next;
      }
      END{
        row = -1;
@@ -406,6 +506,35 @@ trows++; printf("\tThe above example identifies two java processes as responsibl
 trows++; printf("\tthe total across all CPUs; 1591%% shows that that java processes is consuming almost 16 CPUs.\n") > NFL;
 
        row += trows;
+       for (k=1; k <= nm_idx; k++) {
+          my_cpu[k]=sprintf("%d\t%s", nm_tot[k], nm_lkup[k]);
+       }
+       my_nms = sort_data(my_cpu, nm_idx, 20);
+       for (k=1; k <= my_nms; k++) {
+         my_order[k] = sv_nf[k];
+       }
+       ++row;
+       printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", "pid_stat %CPU by proc", "pat") > NFL;
+       ++row;
+       #n = split(hdr, arr, "\t");
+       printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", row+1, 2, -1, my_nms+1, 1) > NFL;
+       ++row;
+       printf("TS\trel_t") > NFL;
+       for (k=1; k <= my_nms; k++) {
+          printf("\t%s", my_order[k]) > NFL;
+       }
+       printf("\n") > NFL;
+       for (j=1; j <= tm_rw; j++) {
+          printf("%d\t%d", tm_arr[j], tm_arr[j]-ts_beg) > NFL;
+          for (k=1; k <= my_nms; k++) {
+             nmi = nm_arr[my_order[k]];
+             printf("\t%d", pid[j,nmi]) > NFL;
+          }
+          ++row;
+         printf("\n") > NFL;
+       }
+       ++row;
+       printf("\n") > NFL;
 
        row = bar_data(row, sv_cpu, mx_cpu, chart " %CPU", sv_cpu[1], 40);
        ++row;
@@ -594,7 +723,7 @@ row += trows;
 #12:05:00 AM        lo   1251.00   1251.00    259.82    259.82      0.00      0.00      0.00      0.00
 #12:05:00 AM      ifb0      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00
     echo "do sar_dev"
-    awk -v pfx="$PFX" -v typ="sar network IFACE" '
+    awk -v ts_beg="$BEG" -v pfx="$PFX" -v typ="sar network IFACE" '
      BEGIN{beg=1;
         grp_mx=0;
         hdr_mx=0;
@@ -602,18 +731,45 @@ row += trows;
         mx_cpu=0;
         mx_io=0;
         mx_dev=0;
+        epoch_init = 0;
       }
-      function line_data(row, arr_in, arr_mx, title, hdr) {
+      function dt_to_epoch(hhmmss, amp) {
+         # the epoch seconds from the date time info in the file is local time,not UTC.
+         # so just use the calc"d epoch seconds to calc the elapsed seconds since the start.
+         # THe real timestamp is the input ts_beg + elapsed_seconds.
+         # hhmmss fmt= hh:mm:ss (w leading 0
+         if (dt_beg["yy"] == "") {
+            return 0.0;
+         }
+         dt_tm["hh"] = substr(hhmmss,1,2) + 0;
+         dt_tm["mm"] = substr(hhmmss,4,2) + 0;
+         dt_tm["ss"] = substr(hhmmss,7,2) + 0;
+         if (ampm == "PM" && dt_tm["hh"] < 12) {
+            dt_tm["hh"] += 12;
+         }
+         dt_str = dt_beg["yy"] " " dt_beg["mm"] " " dt_beg["dd"] " " dt_tm["hh"] " " dt_tm["mm"] " " dt_tm["ss"];
+         #printf("dt_str= %s\n", dt_str) > "/dev/stderr";
+         epoch = mktime(dt_str);
+         #printf("epoch= %s offset= %s\n", epoch, offset);
+         if (epoch_init == 0) {
+             epoch_init = epoch;
+         }
+         epoch = ts_beg + (epoch - epoch_init + 1); # the plus 1 assumes a 1 second interval.
+         return epoch;
+      }
+# abcd
+
+      function line_data(row, arr_in, arr_mx, title, hdr, tmarr_in) {
        ++row;
-       printf("title\t%s\tsheet\t%s\ttype\tline\n", title, chart) > NFL;
+       printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", title, chart) > NFL;
        ++row;
        n = split(hdr, arr, "\t");
-       printf("hdrs\t%d\t%d\t%d\t%d\n", row+1, 0, row+arr_mx, n-1) > NFL;
+       printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", row+1, 3, row+arr_mx, n+1, 1) > NFL;
        ++row;
-       printf("%s\n", hdr) > NFL;
+       printf("TS\tts_offset\t%s\n", hdr) > NFL;
        for (i=2; i <= arr_mx; i++) {
          ++row;
-         printf("%s\n", arr_in[i]) > NFL;
+         printf("%d\t%d\t%s\n", tmarr_in[i], tmarr_in[i]-ts_beg, arr_in[i]) > NFL;
        }
        return row;
      }
@@ -621,12 +777,26 @@ row += trows;
         FNM=ARGV[ARGIND];
         NFL=FNM ".tsv";
         NFLA=FNM ".all.tsv";
+        if (NR == 1) {
+          for (i=1; i <= NF; i++) {
+             if (match($i, /^[0-9][0-9]\/[0-9][0-9]\/[0-9][0-9][0-9][0-9]/)) {
+                dt_beg["yy"] = substr($i, 7);
+                dt_beg["mm"] = substr($i, 1, 2);
+                dt_beg["dd"] = substr($i, 4, 2);
+                printf("beg_date= mm.dd.yyyy %s.%s.%s\n", dt_beg["mm"], dt_beg["dd"], dt_beg["yy"]) > "/dev/stderr";
+                break;
+             }
+          }
+          next;
+        }
      }
      /^Average:/ {
         # could make a bar chart of this but...
         next;
      }
      / rxpck\/s /{
+        # 01:08:50 AM
+        #printf("epoch= %d\n", epoch) > "/dev/stderr";
         if (mx_io == 0) {
           mx_io=1;
           sv_io[mx_io]="";
@@ -649,6 +819,7 @@ row += trows;
         }
         str="";
         tab="";
+        epoch = dt_to_epoch($1, $2);
         got_nonzero = 0;
         for (i=3; i <= NF; i++) {
           str = str "" sprintf("%s%s", tab, $i);
@@ -671,6 +842,7 @@ row += trows;
               io_nonzero[dev_id] = 1;
            }
            sv_io[++mx_io] = str;
+           sv_tm[mx_io] = epoch;
            sv_io_dev_ids[mx_io] = $3;
         }
         sv[++sv_mx] = str;
@@ -701,9 +873,10 @@ row+= trows;
           for (jj=2; jj <= mx_io; jj++) {
              if (sv_io_dev_ids[jj] == dev_lst[ii]) {
                 narr[++mx_arr] = sv_io[jj];
+                tmarr[mx_arr] = sv_tm[jj];
              }
           }
-          row = line_data(row, narr, mx_arr, ttl, narr[1]);
+          row = line_data(row, narr, mx_arr, ttl, narr[1], tmarr);
           ++row;
           printf("\n") > NFL;
        }
@@ -717,7 +890,7 @@ row+= trows;
  fi
   if [[ $i == *"_sar_tcp.txt"* ]]; then
     echo "do sar_tcp"
-    awk -v pfx="$PFX" -v typ="sar tcp stats" '
+    awk -v ts_beg="$BEG" -v pfx="$PFX" -v typ="sar tcp stats" '
      BEGIN{beg=1;
         grp_mx=0;
         hdr_mx=0;
@@ -726,18 +899,46 @@ row+= trows;
         mx_io=0;
         mx_io1=0;
         mx_dev=0;
+        epoch_init = 0;
+        ts_beg += 0;
+      }
+# efg
+      function dt_to_epoch(hhmmss, amp, all) {
+         # the epoch seconds from the date time info in the file is local time,not UTC.
+         # so just use the calc"d epoch seconds to calc the elapsed seconds since the start.
+         # THe real timestamp is the input ts_beg + elapsed_seconds.
+         # hhmmss fmt= hh:mm:ss (w leading 0
+         if (dt_beg["yy"] == "") {
+            return 0.0;
+         }
+         dt_tm["hh"] = substr(hhmmss,1,2) + 0;
+         dt_tm["mm"] = substr(hhmmss,4,2) + 0;
+         dt_tm["ss"] = substr(hhmmss,7,2) + 0;
+         if (ampm == "PM" && dt_tm["hh"] < 12) {
+            dt_tm["hh"] += 12;
+         }
+         dt_str = dt_beg["yy"] " " dt_beg["mm"] " " dt_beg["dd"] " " dt_tm["hh"] " " dt_tm["mm"] " " dt_tm["ss"];
+         #printf("dt_str= %s\n", dt_str) > "/dev/stderr";
+         epoch = mktime(dt_str);
+         #printf("epoch= %s offset= %s\n", epoch, offset);
+         if (epoch_init == 0) {
+             printf("dt_str= %s, all= %s\n", dt_str, all) > "/dev/stderr";
+             epoch_init = epoch;
+         }
+         epoch = ts_beg + (epoch - epoch_init + 1); # the plus 1 assumes a 1 second interval.
+         return epoch;
       }
       function line_data(row, arr_in, arr_mx, title, hdr) {
        ++row;
-       printf("title\t%s\tsheet\t%s\ttype\tline\n", title, chart) > NFL;
+       printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", title, chart) > NFL;
        ++row;
        n = split(hdr, arr, "\t");
-       printf("hdrs\t%d\t%d\t%d\t%d\n", row+1, 0, row+arr_mx, n-1) > NFL;
+       printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", row+1, 2, row+arr_mx, n+1, 1) > NFL;
        ++row;
-       printf("%s\n", hdr) > NFL;
+       printf("TS\tts_rel\t%s\n", hdr) > NFL;
        for (i=2; i <= arr_mx; i++) {
          ++row;
-         printf("%s\n", arr_in[i]) > NFL;
+         printf("%d\t%d\t%s\n", sv_tm[i], sv_tm[i]-ts_beg, arr_in[i]) > NFL;
        }
        return row;
      }
@@ -745,6 +946,18 @@ row+= trows;
         FNM=ARGV[ARGIND];
         NFL=FNM ".tsv";
         NFLA=FNM ".all.tsv";
+        if (NR == 1) {
+          for (i=1; i <= NF; i++) {
+             if (match($i, /^[0-9][0-9]\/[0-9][0-9]\/[0-9][0-9][0-9][0-9]/)) {
+                dt_beg["yy"] = substr($i, 7);
+                dt_beg["mm"] = substr($i, 1, 2);
+                dt_beg["dd"] = substr($i, 4, 2);
+                #printf("beg_date= mm.dd.yyyy %s.%s.%s\n", dt_beg["mm"], dt_beg["dd"], dt_beg["yy"]) > "/dev/stderr";
+                break;
+             }
+          }
+          next;
+        }
      }
 #12:05:59 AM  active/s passive/s    iseg/s    oseg/s
 #12:06:00 AM    118.00      2.00   1200.00   1473.00
@@ -789,6 +1002,7 @@ row+= trows;
           sv[++sv_mx] = $0;
           next;
         }
+        epoch = dt_to_epoch($1, $2, $0);
         str="";
         tab="";
         if (area=="io1") {
@@ -805,6 +1019,7 @@ row+= trows;
         if (area == "io1") {
            sv_io[mx_io] = str;
         }
+        sv_tm[mx_io] = epoch;
         sv[++sv_mx] = str;
         next;
      }
@@ -837,7 +1052,7 @@ row += trows;
  fi
   if [[ $i == *"_perf_stat.txt"* ]]; then
     echo "do perf_stat data"
-    $SCR_DIR/perf_stat_scatter.sh -p "$PFX" -o "$OPTIONS"  -f $i > $i.tsv
+    $SCR_DIR/perf_stat_scatter.sh -b $BEG -p "$PFX" -o "$OPTIONS"  -f $i > $i.tsv
    SHEETS="$SHEETS $i.tsv"
   fi
   if [[ $i == *"_interrupts.txt"* ]]; then
@@ -957,6 +1172,18 @@ row += trows;
    SHEETS="$SHEETS $i.tsv"
   fi
 done
+tst_files="RPS.log response_time.log"
+for f in $tst_files; do
+  if [ -e $f ]; then
+     $SCR_DIR/resp_2_tsv.sh $f
+     SHEETS="$SHEETS $f.tsv"
+  fi
+done
+GC_FILE=gc.log.0.current
+if [ -e $GC_FILE ]; then
+  $SCR_DIR/java_gc_log_2_tsv.sh $GC_FILE > $GC_FILE.tsv
+  SHEETS="$SHEETS $GC_FILE.tsv"
+fi
 if [ "$SHEETS" != "" ]; then
    echo "python $SCR_DIR/tsv_2_xlsx.py $SHEETS"
    python $SCR_DIR/tsv_2_xlsx.py -p "$PFX" -o $XLSX_FILE -i "$IMAGE_STR" $SHEETS
