@@ -10,9 +10,13 @@ CHART_IN=
 SHEET_IN=
 PFX_IN=
 OPTIONS=
+BEG=
 
-while getopts "hvc:f:o:p:s:l:" opt; do
+while getopts "hvb:c:f:o:p:s:l:" opt; do
   case ${opt} in
+    b )
+      BEG=$OPTARG
+      ;;
     c )
       CHART_IN=$OPTARG
       ;;
@@ -101,11 +105,12 @@ else
  TSC_FREQ="2.1"
 fi
 
-awk -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" 'BEGIN{
+awk -v ts_beg="$BEG" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" 'BEGIN{
      row=0;
      evt_idx=-1;
      months="  JanFebMarAprMayJunJulAugSepOctNovDec";
      date_str="";
+     ts_beg += 0.0;
      st_beg=0; 
      st_mx=0;
      ts_prev = 0.0;
@@ -403,15 +408,15 @@ awk -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHA
      rows=1;
      printf("\n");
      rows++;
-     printf("title\t%s\tsheet\t%s%s\ttype\tline\n", chrt, pfx, sheet);
+     printf("title\t%s\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, pfx, sheet);
      bcol = 4;
      if (options != "" && index(options, "chart_new") > 0 && extra_cols > 0) {
        bcol += evt_idx;
      }
-     printf("hdrs\t%d\t%d\t%d\t%d\n", rows+1, bcol+1, -1, evt_idx+extra_cols+4);
+     printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", rows+1, bcol+1, -1, evt_idx+extra_cols+4, 2);
 #title	sar network IFACE dev eth0	sheet	sar network IFACE	type	line
 #hdrs	8	0	68	8
-     printf("epoch\tts\tskt\tinterval");
+     printf("epoch\tts\trel_ts\tinterval");
      for(i=0; i <= evt_idx; i++) {
        printf("\t%s", evt_lkup[i]);
      }
@@ -441,7 +446,11 @@ awk -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHA
        }
        interval = sv[i,1] - ts_prev;
        ts_prev = sv[i,1]
-       printf("%.4f\t%s\t%s\t%.4f", sv[i,0], sv[i,1], sv[i,2], interval);
+       use_epoch = sv[i,0];
+       if (ts_beg > 0.0) {
+          use_epoch = ts_beg + sv[i,1];
+       }
+       printf("%.4f\t%s\t%s\t%.4f", use_epoch, sv[i,1], sv[i,1], interval);
        for (k=1; k <= kmx; k++) { 
          sum[k]=0.0;
          numer[k]=0.0;
