@@ -12,6 +12,7 @@
 #   The glob gets expanded in the script. If you don't enclose the glob in quotes then only 1 image file name gets passed to the -i option and the rest get treated as tsv files.
 
 
+from __future__ import print_function
 import xlsxwriter
 import csv
 import getopt
@@ -24,9 +25,10 @@ closed_wkbk = False
 
 options_filename = ""
 
-options, remainder = getopt.getopt(sys.argv[1:], 'f:i:o:p:v', ['file=', 'images=',
+options, remainder = getopt.getopt(sys.argv[1:], 'f:i:o:p:s:v', ['file=', 'images=',
                                                          'output=',
                                                          'prefix=',
+                                                         'size=',
                                                          'verbose',
                                                          ])
 for opt, arg in options:
@@ -57,18 +59,21 @@ else:
        fl_options[fl_opt].append(sys.argv[i])
 
 for fo in range(len(fl_options)):
-   print "fo= ", fo
+   print("fo= ", fo)
    #options, remainder = getopt.getopt(sys.argv[1:], 'i:o:p:v', ['images=',
-   options, remainder = getopt.getopt(fl_options[fo][1:], 'i:o:p:v', ['images=',
+   options, remainder = getopt.getopt(fl_options[fo][1:], 'i:o:p:s:v', ['images=',
                                                             'output=',
                                                             'prefix=',
+                                                            'size=',
                                                             'verbose',
                                                             ])
    verbose = False
    image_files=[]
    prefix = ""
+   ch_size = [1.0, 1.0, 15.0]
    
-   print 'OPTIONS   :', options
+   print('OPTIONS   :', options)
+   ch_array = []
    
    for opt, arg in options:
        if opt in ('-i', '--images'):
@@ -78,6 +83,19 @@ for fo in range(len(fl_options)):
            output_filename = arg
        elif opt in ('-p', '--prefix'):
            prefix = arg
+       elif opt in ('-s', '--size'):
+           # chart size width,height in 'excel 2007 pixels' which apparently aren't exactly pixels
+           ch_tsize = arg.split(",")
+           if len(ch_tsize) == 0:
+              print("tsv_2_xlsx.py: sorry but the option '-s %s' seems invalid. Need something like '-s 2,2'. Bye." % (arg), file=sys.stderr)
+           if len(ch_tsize) == 1:
+              ch_size[0] = float(ch_tsize[0])
+              ch_size[1] = float(ch_tsize[0])
+           if len(ch_tsize) >= 2:
+              ch_size[0] = float(ch_tsize[0])
+              ch_size[1] = float(ch_tsize[1])
+           if len(ch_tsize) == 3:
+              ch_size[2] = float(ch_tsize[2])
        elif opt in ('-v', '--verbose'):
            verbose = True
    
@@ -120,8 +138,8 @@ for fo in range(len(fl_options)):
                  print("got hdrs for x= %s\n" % (x))
                  ch.append(["hdrs", i])
                  ch_arr.append(ch)
-              print data[i][j],
-          print
+              print(data[i][j])
+          print("")
       
       print("sheet_nm= %s\n" % (sheet_nm))
       wrksh_nm = sheet_nm
@@ -189,7 +207,7 @@ for fo in range(len(fl_options)):
               if (h >= hcol_beg):
                  headings.append(data[hrow_beg][h])
           #worksheet.write_row(hrow_beg, hcol_beg, headings, bold)
-          print ("sheet= %s ch= %d hro= %d hc= %d hce= %d, dr= %d, dre= %d" % (sheet_nm, c, hrow_beg, hcol_beg, hcol_end, drow_beg, drow_end))
+          print("sheet= %s ch= %d hro= %d hc= %d hce= %d, dr= %d, dre= %d" % (sheet_nm, c, hrow_beg, hcol_beg, hcol_end, drow_beg, drow_end))
           if ch_type == "scatter_straight":
              chart1 = workbook.add_chart({'type': 'scatter', 'subtype': 'straight'})
           else:
@@ -210,8 +228,24 @@ for fo in range(len(fl_options)):
                      })
           chart1.set_title ({'name': title})
           chart1.set_style(10)
-          worksheet.insert_chart(hrow_beg, hcol_end, chart1, {'x_offset': 25, 'y_offset': 10})
-   
+          ch_opt = {'x_offset': 25, 'y_offset': 10}
+          if len(ch_size) >= 2:
+             ch_opt = {'x_offset': 25, 'y_offset': 10, 'x_scale': ch_size[0], 'y_scale': ch_size[1]}
+             #chart1.set_size(ch_size)
+          #rc = worksheet.insert_chart(hrow_beg+1, 0, chart1, {'x_offset': 25, 'y_offset': 10})
+          ch_top_at_row = hrow_beg+1
+          ch_left_at_col = 0
+          if len(ch_array) > 0:
+             ch_ln_prev = len(ch_array)-1
+             if ch_array[ch_ln_prev][0] == sheet_nm:
+                ch_top_at_row = ch_array[ch_ln_prev][1] + int(ch_size[2]*ch_size[1])
+                ch_left_at_col = ch_array[ch_ln_prev][2] + 0
+          rc = worksheet.insert_chart(ch_top_at_row, ch_left_at_col, chart1, ch_opt)
+          if rc == -1:
+             print("insert chart failed for sheet= %s, chart= %s, row_beg= %d hcol_end= %d\n" % (sheet_nm, title, hrow_beg, hcol_end), file=sys.stderr)
+          ch_array.append([sheet_nm, ch_top_at_row, ch_left_at_col])
+
+
    if len(image_files) > 0:
       rw = len(image_files)
       cl = 0
