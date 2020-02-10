@@ -330,6 +330,7 @@ trows++; printf("\n") > NFL;
         epoch_init = 0;
         num_cpus = 0;
         num_cpus_pct = 0;
+        tot_first=1;
       }
       function dt_to_epoch(hhmmss, amp) {
          # the epoch seconds from the date time info in the file is local time,not UTC.
@@ -367,7 +368,7 @@ trows++; printf("\n") > NFL;
        while ( ( cmd | getline result ) > 0 ) {
          n = split(result, marr, "\t");
          sv_nf[++nf_mx] = marr[2];
-         printf("asv_nf[%d]= %s\n", nf_mx, result);
+         #printf("asv_nf[%d]= %s, m1= %s m2= %s\n", nf_mx, result, marr[1], marr[2]) > "/dev/stderr";
          if (nf_mx > mx_lines) {
            break;
          }
@@ -446,11 +447,27 @@ trows++; printf("\n") > NFL;
               tm_arr[tm_rw] = epoch;
               next;
            }
-           if ( area == "cpu") {
+           if (index($0, " kB_rd/s ") > 1) {
+              area="io";
+              epoch = dt_to_epoch($1, $2);
+              tm_rw_io = tm_rw_io+1;
+              tm_arr_io[tm_rw_io] = epoch;
+              next;
+           }
+           if ( area == "cpu" && $1 != "Average:") {
              nm  = $10 " " $4; # process_name + pid
              if (nm in nm_arr) {
                 ;
              } else {
+               if (tot_first == 1) {
+                 tot_first = 0;
+                 nmt = "__tot__";
+                 nm_idx++
+                 nm_arr[nmt] = nm_idx;
+                 nm_lkup[nm_idx] = nmt;
+                 nm_tot[nm_idx] = 0;
+                 nm_tot_io[nm_idx] = 0;
+               }
                nm_idx++
                nm_arr[nm] = nm_idx;
                nm_lkup[nm_idx] = nm;
@@ -463,6 +480,38 @@ trows++; printf("\n") > NFL;
              }
              pid[tm_rw,nmi] = pct;
              nm_tot[nmi] += pct;
+           }
+           if ( area == "io" && $1 != "Average:") {
+             nm  = $9 " " $4; # process_name + pid
+             if (nm in nm_arr) {
+                ;
+             } else {
+               if (tot_first == 1) {
+                 tot_first = 0;
+                 nmt = "__tot__";
+                 nm_idx++
+                 nm_arr[nmt] = nm_idx;
+                 nm_lkup[nm_idx] = nmt;
+                 nm_tot[nm_idx] = 0;
+                 nm_tot_io[nm_idx] = 0;
+               }
+               nm_idx++
+               nm_arr[nm] = nm_idx;
+               nm_lkup[nm_idx] = nm;
+               nm_tot_io[nm_idx] = 0;
+             }
+             nmi = nm_arr[nm];
+             kbr = $5+0; # kBread/s
+             kbw = $6+0; # kBwrite/s
+             if ((kbr + kbw) < 20.0e6) { # pidstat has some bogus numbers at times
+             pid_io[tm_rw_io,nmi,"rd"] = kbr;
+             pid_io[tm_rw_io,nmi,"wr"] = kbw;
+             nm_tot_io[nmi] += kbr+kbw;
+             nmi = nm_arr[nmt];
+             pid_io[tm_rw_io,nmi,"rd"] += kbr;
+             pid_io[tm_rw_io,nmi,"wr"] += kbw;
+             nm_tot_io[nmi] += kbr+kbw;
+             }
            }
         }
      }
@@ -536,15 +585,51 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
        ++row;
        printf("\n") > NFL;
 
-       row = bar_data(row, sv_cpu, mx_cpu, chart " %CPU", sv_cpu[1], 40);
+       # IO segment
+       for (k=1; k <= nm_idx; k++) {
+          my_cpu[k]=sprintf("%f\t%s", nm_tot_io[k], nm_lkup[k]);
+          #printf("my_cpu[%d]= %s\n", k, my_cpu[k]) > "/dev/stderr";
+       }
+       my_nms = sort_data(my_cpu, nm_idx, 20);
+       for (k=1; k <= my_nms; k++) {
+         my_order[k] = sv_nf[k];
+       }
+       ++row;
+       printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", "pid_stat IO (MB/s) by proc. Seems too high", "pat") > NFL;
+       ++row;
+       #n = split(hdr, arr, "\t");
+       printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", row+1, 2, -1, my_nms+1, 1) > NFL;
+       ++row;
+       printf("TS\trel_t") > NFL;
+       for (k=1; k <= my_nms; k++) {
+          printf("\t%s", my_order[k]) > NFL;
+       }
+       printf("\n") > NFL;
+       for (j=1; j <= tm_rw_io; j++) {
+          printf("%d\t%d", tm_arr_io[j], tm_arr_io[j]-ts_beg) > NFL;
+          for (k=1; k <= my_nms; k++) {
+             nmi = nm_arr[my_order[k]];
+             printf("\t%f", (pid_io[j,nmi,"rd"]+pid_io[j,nmi,"wr"])/1024.0) > NFL;
+          }
+          ++row;
+         printf("\n") > NFL;
+       }
        ++row;
        printf("\n") > NFL;
-       row = bar_data(row, sv_cs, mx_cs, chart " CSWTCH", sv_cs[1], 40);
+
+       row = bar_data(row, sv_cpu, mx_cpu, chart " average %CPU", sv_cpu[1], 40);
        ++row;
        printf("\n") > NFL;
-       row = bar_data(row, sv_threads, mx_threads, chart " threads, fd", sv_threads[1], 40);
-       ++row;
-       printf("\n") > NFL;
+       if (mx_cs > 0) {
+         row = bar_data(row, sv_cs, mx_cs, chart " CSWTCH", sv_cs[1], 40);
+         ++row;
+         printf("\n") > NFL;
+       }
+       if (mx_threads > 0) {
+         row = bar_data(row, sv_threads, mx_threads, chart " threads, fd", sv_threads[1], 40);
+         ++row;
+         printf("\n") > NFL;
+       }
        for (i=1; i <= sv_mx; i++) {
           printf("%s\n", sv[i]) > NFL;
        }
@@ -1186,6 +1271,7 @@ if [ -e $GC_FILE ]; then
 fi
 if [ "$SHEETS" != "" ]; then
    echo "python $SCR_DIR/tsv_2_xlsx.py $SHEETS"
-   python $SCR_DIR/tsv_2_xlsx.py -p "$PFX" -o $XLSX_FILE -i "$IMAGE_STR" $SHEETS
+   # default chart size is pretty small, scale chart size x,y by 2 each. def 1,1 seems to be about 15 rows high (on my MacBook)
+   python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" -o $XLSX_FILE -i "$IMAGE_STR" $SHEETS
 fi
 
