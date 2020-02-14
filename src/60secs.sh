@@ -390,7 +390,8 @@ for TSKj in `seq $TB $TE`; do
     IMC1_RDWR="uncore_imc_1/name='unc1_read_write',umask=0x0f,event=0x04/"
     IMC2_RDWR="uncore_imc_2/name='unc2_read_write',umask=0x0f,event=0x04/"
     IMC3_RDWR="uncore_imc_3/name='unc3_read_write',umask=0x0f,event=0x04/"
-    EVT=$IMC0_RDWR,$IMC1_RDWR,$IMC2_RDWR,$IMC3_RDWR,qpi_data_bandwidth_tx,qpi_ctl_bandwidth_tx
+    IMC4_RDWR="uncore_imc_4/name='unc4_read_write',umask=0x0f,event=0x04/"
+    EVT=$IMC0_RDWR,$IMC1_RDWR,$IMC2_RDWR,$IMC3_RDWR,$IMC4_RDWR,qpi_data_bandwidth_tx,qpi_ctl_bandwidth_tx
     EVT=instructions,cycles,ref-cycles,$EVT,LLC-load-misses
     echo do: $PERF_BIN stat -x ";"  --per-socket -a -I $ms -o $FL -e $EVT
     $PERF_BIN stat -x ";"  --per-socket -a -I $ms -o $FL -e $EVT sleep $WAIT &
