@@ -3,8 +3,9 @@
 # see http://www.brendangregg.com/Articles/Netflix_Linux_Perf_Analysis_60s.pdf
 # usage arg1 
 
+SCR_DIR=`dirname "$(readlink -f "$0")"`
 WAIT=60
-TASKS=("uptime" "dmesg" "vmstat" "mpstat" "pidstat" "iostat" "free" "sar_dev" "sar_tcp" "top" "perf" "interrupts")
+TASKS=("uptime" "dmesg" "vmstat" "mpstat" "pidstat" "iostat" "free" "sar_dev" "sar_tcp" "top" "perf" "interrupts" "nicstat" "flamegraph")
 j=0
 for i in ${TASKS[@]}; do
   j=$((j+1))
@@ -23,14 +24,18 @@ PERF_BIN=perf
 BKGRND=0
 WAIT_AT_END=0
 CURL_AT_END=0
+CONTAINER=
 
-while getopts "hvbcwd:i:p:t:" opt; do
+while getopts "hvbcwC:d:i:p:t:" opt; do
   case ${opt} in
     b )
       BKGRND=1
       ;;
     c )
       CURL_AT_END=1
+      ;;
+    C )
+      CONTAINER=$OPTARG
       ;;
     w )
       WAIT_AT_END=1
@@ -59,11 +64,11 @@ while getopts "hvbcwd:i:p:t:" opt; do
       VERBOSE=$((VERBOSE+1))
       ;;
     h )
-echo "usage: $0 -t task_num|task_name[,taskname[...]] [ -b ] -d seconds_to_run -i sample_interval_in_secs [ -p full_path_of_perf_binary ]"
-echo "task_num is 0 to $TLAST or -1 for all tasks"
-echo "seconds_to_run is how long you want each task to monitor the system. Defaults is $WAIT seconds."
-echo "data collected once a second till for $WAIT seconds."
-echo "task_names are: ${TASKS[@]}"
+      echo "usage: $0 -t task_num|task_name[,taskname[...]] [ -b ] -d seconds_to_run -i sample_interval_in_secs [ -p full_path_of_perf_binary ]"
+      echo "task_num is 0 to $TLAST or -1 for all tasks"
+      echo "seconds_to_run is how long you want each task to monitor the system. Defaults is $WAIT seconds."
+      echo "data collected once a second till for $WAIT seconds."
+      echo "task_names are: ${TASKS[@]}"
       echo "   -t task_num or task_name"
       echo "      The task names: ${TASKS[@]}"
       echo "      Enter '-t all' for all tasks"
@@ -71,9 +76,9 @@ echo "task_names are: ${TASKS[@]}"
       echo "      default is no task"
       echo "   -b start the jobs in the backgroup not waiting for each job to finish"
       echo "      The default is to not start the jobs the background (so start the 1st task, wait for it to finish, start the next task, etc)"
-      echo "      uptime, dmesg, and interrupts can't run in the background currently. They will block if you select them"
       echo "   -w If you run background mode, this option waits for the duration after the background jobs are started."
-      echo "   -c use this option to run /root/do_curl.sh at the end"
+      echo "   -c use this option to run ${SCR_DIR}/do_curl.sh at the end"
+      echo "   -C container ID to pass to ${SCR_DIR}/do_curl.sh and/or flamegraph script"
       echo "   -d time_in_seconds duration of each monitoring task in seconds"
       echo "      You can append an 'm' to specify the duration in minutes (like '-d 10m' which sets the duration to 600 seconds)"
       echo "      default is $WAIT seconds"
@@ -103,6 +108,16 @@ fi
 
 if [ "$TSK_IN" == "-1" ]; then
   TSK=$TSK_IN
+fi
+if [ "$CONTAINER" != "" ]; then
+  RESP=`docker ps | awk -v cntr="$CONTAINER" 'BEGIN{rc=0;}{if ($1 == cntr) {rc=1;}} END{printf("%d\n", rc);}'`
+  echo "got docker cntr= $RESP"
+  if [ "$RESP" == "1" ]; then
+    echo "got match on docker cntr= $CONTAINER"
+  else
+    echo "missed match on docker cntr= $CONTAINER"
+    exit
+  fi
 fi
 
 jmx=0
@@ -135,6 +150,7 @@ for i in ${TASKS[@]}; do
   fi
   t=$((t+1))
 done
+
 
 if [ $jmx -eq 0 ]; then
   echo "you entered invalid task name or number $TSK_IN"
@@ -204,6 +220,75 @@ if [ "$tdte" == ".N" ]; then
  NANO=
 fi
  
+GOT_ERR=0
+RESP=`which lscpu | wc -l | sed 's/ //g'`
+if [ "$RESP" == "0" ]; then
+   echo "lscpu not found. You need to install lscpu: sudo apt-get install lscpu" 1>&2
+   GOT_ERR=1
+fi
+
+for TSKj in `seq $TB $TE`; do
+  TSK=${TSK_LST[$TSKj]}
+  TSKNUM=${TSK_NUM[$TSKj]}
+  echo "checking $TSK ${TSK_LST[$TSKj]}"
+  if [[ $TSK == *"sar"* ]]; then
+     RESP=`which sar | wc -l | sed 's/ //g'`
+     if [ "$RESP" == "0" ]; then
+        echo "sar not found. You need to install sar: sudo apt-get install sysstat" 1>&2
+        GOT_ERR=1
+     fi
+  fi
+  if [[ $TSK == *"perf"* ]]; then
+     RESP=`which $PERF_BIN | wc -l | sed 's/ //g'`
+     if [ "$RESP" == "0" ]; then
+        echo "perf binary \"$PERF_BIN\" not found. Either install it or use the cmdline option -p /path_to/perf_binary" 1>&2
+        GOT_ERR=1
+     else
+        echo "which prf wc -l resp= \"$RESP\""
+     fi
+  fi
+  if [[ $TSK == *"flamegraph"* ]]; then
+     if [ "$CONTAINER" == "" ]; then
+        echo "flamegraph option requires a container ID. run 'docker ps' to get IDs and add option '-C containerID'" 1>&2
+        GOT_ERR=1
+     fi
+  fi
+  if [[ $TSK == *"nicstat"* ]]; then
+     RESP=`which nicstat | wc -l | sed 's/ //g'`
+     if [ "$RESP" == "0" ]; then
+        echo "nicstat not found. You need to install nicstat: sudo apt-get install nicstat" 1>&2
+        GOT_ERR=1
+     fi
+  fi
+  if [[ $TSK == *"mpstat"* ]]; then
+     RESP=`which mpstat | wc -l | sed 's/ //g'`
+     if [ "$RESP" == "0" ]; then
+        echo "mpstat not found. You need to install mpstat: sudo apt-get install mpstat" 1>&2
+        GOT_ERR=1
+     fi
+  fi
+  if [[ $TSK == *"vmstat"* ]]; then
+     RESP=`which vmstat | wc -l | sed 's/ //g'`
+     if [ "$RESP" == "0" ]; then
+        echo "vmstat not found. You need to install vmstat: sudo apt-get install vmstat" 1>&2
+        GOT_ERR=1
+     fi
+  fi
+  if [[ $TSK == *"pidstat"* ]]; then
+     RESP=`which pidstat | wc -l | sed 's/ //g'`
+     if [ "$RESP" == "0" ]; then
+        echo "pidstat not found. You need to install pidstat: sudo apt-get install pidstat" 1>&2
+        GOT_ERR=1
+     fi
+  fi
+done
+if [ "$GOT_ERR" == "1" ]; then
+  echo "fix errors please" 1>&2
+  exit
+fi
+
+NEED_TO_END_FLAMEGRAPH=0
+
 for TSKj in `seq $TB $TE`; do
   TSK=${TSK_LST[$TSKj]}
   TSKNUM=${TSK_NUM[$TSKj]}
@@ -224,6 +309,9 @@ for TSKj in `seq $TB $TE`; do
       rm $FL
     fi
     j=0
+    if [ "$BKGRND" == "1" ]; then
+      FL_UPTM=$FL
+    else
     for i in `seq 1 $WAIT`; do
       #echo "i= $i of $WAIT"
       printf "\ri= %d of %d" $i $WAIT
@@ -235,6 +323,7 @@ for TSKj in `seq $TB $TE`; do
       sleep $INTRVL
     done
     printf "\n"
+    fi
   fi
   
   if [[ $TSK == *"dmesg"* ]]; then
@@ -244,6 +333,10 @@ for TSKj in `seq $TB $TE`; do
     echo "wait for $WAIT seconds"
     BEG=`cat /proc/uptime | awk '{printf("%.0f\n", $1+0);}'`
     dmesg |tail > $FL
+    if [ "$BKGRND" == "1" ]; then
+      FL_DMSG=$FL
+      BEG_DMSG=$BEG
+    else
     echo "wait for $WAIT seconds. Will look for lines after current timestamp $BEG"
     sleep $WAIT
     dmesg >> $FL
@@ -265,6 +358,7 @@ for TSKj in `seq $TB $TE`; do
      ' $FL
     fi
     printf "\ncurrent timestamp for dmesg= $BEG\nwait for $WAIT seconds\n" >> $FL
+    fi
   fi
   
   if [[ $TSK == *"vmstat"* ]]; then
@@ -399,6 +493,21 @@ for TSKj in `seq $TB $TE`; do
     PRF_PID=$!
   fi
 
+  if [[ $TSK == *"flamegraph"* ]]; then
+    FL=sys_${FLNUM}_flamegraph.txt
+    if [ -e $FL ]; then
+      rm $FL
+    fi
+    echo ${SCR_DIR}/gen_flamegraph_for_java_in_container.sh $CONTAINER start
+    ${SCR_DIR}/gen_flamegraph_for_java_in_container.sh $CONTAINER start
+    if [ "$BKGRND" == "0" ]; then
+      sleep $WAIT
+      ${SCR_DIR}/gen_flamegraph_for_java_in_container.sh $CONTAINER stop
+    else
+      NEED_TO_END_FLAMEGRAPH=1
+    fi
+  fi
+
   if [[ $TSK == *"interrupts"* ]]; then
     echo "do cat /proc/interrupts for $WAIT secs"
     FL=sys_${FLNUM}_interrupts.txt
@@ -406,6 +515,9 @@ for TSKj in `seq $TB $TE`; do
       rm $FL
     fi
     j=0
+    if [ "$BKGRND" == "1" ]; then
+      FL_INT=$FL
+    else
     for i in `seq 1 $WAIT`; do
       #echo "i= $i of $WAIT"
       printf "\rinterrupts i= %d of %d" $i $WAIT
@@ -419,6 +531,21 @@ for TSKj in `seq $TB $TE`; do
       sleep $INTRVL
     done
     printf "\n"
+    fi
+  fi
+  if [[ $TSK == *"nicstat"* ]]; then
+    echo "do nicstat -ntuxp $INTRVL $COUNT"
+    FL=sys_${FLNUM}_nicstat.txt
+    if [ -e $FL ]; then
+      rm $FL
+    fi
+    nicstat -ntux > $FL.hdr
+    if [ "$BKGRND" == "0" ]; then
+      nicstat -ntuxp $INTRVL $COUNT > $FL
+    else
+      nicstat -ntuxp $INTRVL $COUNT > $FL &
+      TSK_PID[$TSKj]=$!
+    fi
   fi
   
   if [ $VERBOSE -gt 0 ]; then
@@ -446,11 +573,40 @@ if [ "$BKGRND" == "1" ]; then
 fi
 if [ "$WAIT_AT_END" == "1" ]; then
   echo "waiting for $WAIT seconds"
-  sleep $WAIT
+  #sleep $WAIT
+  j=0
+  for i in `seq 1 $WAIT`; do
+    #echo "i= $i of $WAIT"
+    printf "\ri= %d of %d" $i $WAIT
+    if [ "$FL_UPTM" != "" ]; then
+       uptime >> $FL_UPTM
+    fi
+    if [ "$FL_INT" != "" ]; then
+      DT=`date +%s.%N`
+      echo "==beg $j date $DT" >> $FL_INT
+      cat /proc/interrupts >> $FL_INT
+    fi
+    j=$((j+$INTRVL))
+    if [ $j -ge $WAIT ]; then
+      break
+    fi
+    sleep $INTRVL
+  done
+  if [ "$FL_DMSG" != "" ]; then
+    dmesg >> $FL_DMSG
+  fi
+  if [ "$NEED_TO_END_FLAMEGRAPH" == "1" ]; then
+     ${SCR_DIR}/gen_flamegraph_for_java_in_container.sh $CONTAINER stop
+     NEED_TO_END_FLAMEGRAPH=0
+  fi
 fi
 if [ "$CURL_AT_END" == "1" ]; then
   MINUTES=$((WAIT*60))
-  echo "running /root/do_curl.sh $MINUTES"
-  /root/do_curl.sh $MINUTES
+  echo "running ${SCR_DIR}/do_curl.sh $MINUTES"
+  ${SCR_DIR}/do_curl.sh $MINUTES $CONTAINER
+fi
+if [ "$NEED_TO_END_FLAMEGRAPH" == "1" ]; then
+  echo "flamegraph profiling is still running. You'll need to do cmd below manually"
+  echo ${SCR_DIR}/gen_flamegraph_for_java_in_container.sh $CONTAINER stop
 fi
 
