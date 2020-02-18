@@ -1256,6 +1256,86 @@ row += trows;
    ' $i
    SHEETS="$SHEETS $i.tsv"
   fi
+#02:53:57    InKB   OutKB   InSeg  OutSeg Reset  AttF %ReTX InConn OutCon Drops
+#TCP         0.00    0.00  6570.7  8893.4   161  23.2 0.000   6.10    117  0.00
+#02:53:57                    InDG   OutDG     InErr  OutErr
+#UDP                       2940.3  2952.9     11.53    0.00
+#02:53:57      RdKB    WrKB   RdPkt   WrPkt   IErr  OErr  Coll  NoCP Defer  %Util
+#eth0        2833.9  4123.3  4266.9  5099.8   0.00  0.00  0.00  0.00  0.00   0.14
+#1581994437:TCP:0.000:0.000:6570.7:8893.4:160.7:23.16:0.000:6.102:117.5:0.000
+#1581994437:UDP:2940.3:2952.9:11.53:0.000
+#1581994437:eth0:2833.9:4123.3:4266.9:5099.8:0.14:0.01:0.00:0.00:0.00:0.00:0.00
+
+  if [[ $i == *"_nicstat.txt"* ]]; then
+    echo "do nicstat"
+    awk -v beg_ts="$BEG" -v pfx="$PFX" '
+     BEGIN{
+        beg_ts += 0.0;
+     }
+     {
+        FNM=ARGV[ARGIND];
+        if (index(FNM, ".txt.hdr") > 0) {
+          if (match($1, /^[0-9][0-9]:[0-9][0-9]:[0-9][0-9]/)) {
+            # hdr row
+            for (i=1; i <= NF; i++) {
+              cols[i]=$i;
+            }
+            next;
+          } else {
+            idx = ++hdr_typs;
+            hdr_typ[idx] = $1
+            hdr_str[$1] = idx;
+            hdr[idx,1] = $1;
+            hdr_mx[idx] = NF;
+            hdr_row[idx] = 0;
+            for (j=2; j <= NF; j++) {
+               hdr[idx,j] = cols[j];
+            }
+          }
+        } else {
+          NFL = FNM ".tsv";
+          n   = split($0, arr, ":");
+          ts  = arr[1];
+          typ = arr[2];
+          idx = hdr_str[typ];
+          rw = ++hdr_row[idx];
+          ts_row[idx,rw] = ts;
+          for (j=3; j <= n; j++) {
+            data[idx,rw,j-2] = arr[j];
+          }
+       }
+     }
+     END{
+       row=-1;
+       for (i=1; i <= hdr_typs; i++) {
+           row++;
+           printf("title\tnicstat %s\tsheet\tnicstat %s\ttype\tscatter_straight\n", hdr_typ[i], hdr_typ[i]) > NFL;
+           row++;
+           printf("hdrs\t%d\t3\t%d\t%d\t2\n", 1+row, -1, hdr_mx[i]+1) > NFL;
+           printf("type\tTimeStamp\tRel_TS") > NFL;
+           for (j=2; j <= hdr_mx[i]; j++) {
+             printf("\t%s", hdr[i,j]) > NFL;
+           }
+           row++;
+           printf("\n") > NFL;
+           for (rw=1; rw <= hdr_row[i]; rw++) {
+              ts_diff = ts_row[i,rw]-beg_ts;
+              if (ts_diff < 0.0) {continue;}
+              printf("%s\t%.0f\t%.3f", hdr_typ[i], ts_row[i,rw], ts_row[i,rw]-beg_ts) > NFL;
+              for (k=1; k <= hdr_mx[i]; k++) {
+                 printf("\t%s", data[i,rw,k]) > NFL;
+              }
+              row++;
+              printf("\n") > NFL;
+           }
+           row++;
+           printf("\n") > NFL;
+       }
+       close(NFL);
+   }
+   ' $i.hdr $i
+   SHEETS="$SHEETS $i.tsv"
+  fi
 done
 tst_files="RPS.log response_time.log"
 for f in $tst_files; do
