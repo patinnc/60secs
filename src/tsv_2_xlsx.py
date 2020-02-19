@@ -18,6 +18,7 @@ import csv
 import getopt
 import sys
 import glob
+import os
 
 output_filename = 'chart_line.xlsx'
 opened_wkbk = False
@@ -37,11 +38,14 @@ for opt, arg in options:
 
 opt_fl = []
 fl_options = []
+file_list1 = []
+
 if options_filename != "":
    opt_fl = []
    with open(options_filename) as tsv:
        for line in csv.reader(tsv, dialect="excel-tab"):
            opt_fl.append(line)
+
 if len(opt_fl) > 0:
    fl_opt = 0
    fl_options.append([sys.argv[0]])
@@ -50,6 +54,10 @@ if len(opt_fl) > 0:
           fl_opt = fl_opt + 1
           fl_options.append([sys.argv[0]])
           continue
+       if len(opt_fl[i]) == 1:
+          print("path? try= ", opt_fl[i][0])
+          base = os.path.basename(opt_fl[i][0])
+          file_list1.append({"fl_opt":fl_opt, "flnm":opt_fl[i][0], "base":base, "done":0})
        for j in range(len(opt_fl[i])):
            fl_options[fl_opt].append(opt_fl[i][j])
 else:
@@ -58,7 +66,26 @@ else:
    for i in range(len(sys.argv)):
        fl_options[fl_opt].append(sys.argv[i])
 
-for fo in range(len(fl_options)):
+
+file_list = sorted(file_list1, key=lambda x: (x["base"], x["fl_opt"]))
+#print(file_list)
+
+fake_file_list = len(file_list)
+if fake_file_list == 0:
+   file_list.append([])
+
+prefix_dict = {}
+
+for fn in range(len(file_list)):
+ #if fake_file_list > 0:
+   #print("fn= ", fn, " file_list= ",file_list[fn])
+ for fo2 in range(len(fl_options)):
+   fo = fo2
+   if fake_file_list > 0:
+      fo = file_list[fn]["fl_opt"]
+   #if fake_file_list > 0 and fo != file_list[fn]["fl_opt"]:
+   #   print("skip fo= ", fo, ", fn= ", fn, " file_list= ",file_list[fn])
+   #   continue
    print("fo= ", fo)
    #options, remainder = getopt.getopt(sys.argv[1:], 'i:o:p:v', ['images=',
    options, remainder = getopt.getopt(fl_options[fo][1:], 'i:o:p:s:v', ['images=',
@@ -83,6 +110,7 @@ for fo in range(len(fl_options)):
            output_filename = arg
        elif opt in ('-p', '--prefix'):
            prefix = arg
+           prefix_dict[fo] = prefix
        elif opt in ('-s', '--size'):
            # chart size width,height in 'excel 2007 pixels' which apparently aren't exactly pixels
            ch_tsize = arg.split(",")
@@ -110,13 +138,27 @@ for fo in range(len(fl_options)):
        except ValueError:
            return False
    
+   if fake_file_list > 0:
+      remainder = [file_list[fn]["flnm"]]
+
+   #print("file list remainder= ", remainder)
    for x in remainder:
       
+      do_it = True
+      if fake_file_list > 0:
+         for ck in range(len(file_list)):
+             if file_list[ck]["flnm"] == x:
+                if file_list[ck]["done"] == 1:
+                   do_it = False
+                else:
+                   file_list[ck]["done"] = 1
+         if do_it == False:
+            continue
+
       data = []
       with open(x) as tsv:
           for line in csv.reader(tsv, dialect="excel-tab"):
               data.append(line)
-      #print data
       
       chrts = 0
       ch_arr = []
@@ -138,11 +180,15 @@ for fo in range(len(fl_options)):
                  print("got hdrs for x= %s\n" % (x))
                  ch.append(["hdrs", i])
                  ch_arr.append(ch)
-              print(data[i][j])
+              #print(data[i][j])
           print("")
       
+      prefix = prefix_dict[fo]
+      print("prefix2= ", prefix, ", fo= ", fo, ", file_list[",fn,"]= ", file_list[fn], ", x= ",x)
       print("sheet_nm= %s\n" % (sheet_nm))
       wrksh_nm = sheet_nm
+      if len(prefix) > 0:
+         wrksh_nm = sheet_nm + "_" + prefix
       worksheet = workbook.add_worksheet(wrksh_nm)
       bold = workbook.add_format({'bold': 1})
    
