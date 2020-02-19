@@ -1137,7 +1137,8 @@ row += trows;
  fi
   if [[ $i == *"_perf_stat.txt"* ]]; then
     echo "do perf_stat data"
-    $SCR_DIR/perf_stat_scatter.sh -b $BEG -p "$PFX" -o "$OPTIONS"  -f $i > $i.tsv
+    #$SCR_DIR/perf_stat_scatter.sh -b $BEG -p "$PFX" -o "$OPTIONS"  -f $i > $i.tsv
+    $SCR_DIR/perf_stat_scatter.sh -b $BEG  -o "$OPTIONS"  -f $i > $i.tsv
    SHEETS="$SHEETS $i.tsv"
   fi
   if [[ $i == *"_interrupts.txt"* ]]; then
@@ -1350,6 +1351,13 @@ GC_FILE=gc.log.0.current
 if [ -e $GC_FILE ]; then
   $SCR_DIR/java_gc_log_2_tsv.sh $GC_FILE > $GC_FILE.tsv
   SHEETS="$SHEETS $GC_FILE.tsv"
+fi
+JAVA_COL=java.collapsed
+if [ -e $JAVA_COL ]; then
+  echo "do flamegraph.pl" 1>&2
+  cat $JAVA_COL | perl $SCR_DIR/../flamegraph/flamegraph.pl > java.svg
+  echo "do svg_to_html.sh " 1>&2
+  $SCR_DIR/svg_to_html.sh -r 1 -d . -f java.svg > java.html
 fi
 if [ "$SHEETS" != "" ]; then
    echo "python $SCR_DIR/tsv_2_xlsx.py $SHEETS"
