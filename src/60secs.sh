@@ -659,7 +659,7 @@ if [ "$WAIT_AT_END" == "1" ]; then
   fi
 fi
 if [ "$CURL_AT_END" == "1" ]; then
-  MINUTES=$((WAIT*60))
+  MINUTES=`awk -v secs="$WAIT" 'BEGIN{printf("%.0f\n", 1.0+(secs/60.0)); exit;}'`
   echo "running ${SCR_DIR}/do_curl.sh $MINUTES"
   ${SCR_DIR}/do_curl.sh $MINUTES $CONTAINER
 fi
