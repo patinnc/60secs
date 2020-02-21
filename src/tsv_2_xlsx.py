@@ -75,6 +75,7 @@ if fake_file_list == 0:
    file_list.append([])
 
 prefix_dict = {}
+img_added = []
 
 for fn in range(len(file_list)):
  #if fake_file_list > 0:
@@ -295,11 +296,14 @@ for fn in range(len(file_list)):
    if len(image_files) > 0:
       rw = len(image_files)
       cl = 0
-      worksheet = workbook.add_worksheet(prefix+'images')
-      for x in image_files:
-          worksheet.insert_image(rw, cl, x)
-          rw = rw - 1
-          cl = cl + 1
+      wks_nm = prefix+'_images'
+      if not wks_nm in img_added:
+         worksheet = workbook.add_worksheet(wks_nm)
+         img_added.append(wks_nm)
+         for x in image_files:
+            worksheet.insert_image(rw, cl, x)
+            rw = rw - 1
+            cl = cl + 1
    
 if closed_wkbk == False:
     workbook.close()
