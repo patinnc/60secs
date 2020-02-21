@@ -25,27 +25,27 @@ else
   echo "missed match on docker cntr= $CNTR"
 fi
 
-RESP=$(docker exec -t -i  $CNTR /bin/bash -c "ps -ef |grep java |grep -v grep |grep gmatch")
+RESP=$(docker exec -t  $CNTR /bin/bash -c "ps -ef |grep java |grep -v grep |grep gmatch")
 echo "java str= $RESP"
 JPID=`echo $RESP | awk '{print $2}'`
 echo "java str= $JPID"
 
 if [ "$ACT" == "start" ]; then
   docker cp ${SCR_DIR}/java_profiling.tar.gz $CNTR:/tmp
-  docker exec -t -i  $CNTR /bin/bash -c "cd /tmp && tar xzvf java_profiling.tar.gz"
-  #docker exec -t -i  $CNTR /bin/bash -c "cd /tmp/profile/ && ./profiler.sh collect -e itimer -d 20 -f /tmp/t.dat -o collapsed $JPID"
-  echo docker exec -t -i  $CNTR /bin/bash -c "cd /tmp/profile/ && ./profiler.sh start -i 10ms -e itimer $JPID"
-       docker exec -t -i  $CNTR /bin/bash -c "cd /tmp/profile/ && ./profiler.sh start -i 10ms -e itimer $JPID"
+  docker exec -t $CNTR /bin/bash -c "cd /tmp && tar xzvf java_profiling.tar.gz"
+  #docker exec -t $CNTR /bin/bash -c "cd /tmp/profile/ && ./profiler.sh collect -e itimer -d 20 -f /tmp/t.dat -o collapsed $JPID"
+  echo docker exec -t $CNTR /bin/bash -c "cd /tmp/profile/ && ./profiler.sh start -i 10ms -e itimer $JPID"
+       docker exec -t $CNTR /bin/bash -c "cd /tmp/profile/ && ./profiler.sh start -i 10ms -e itimer $JPID"
   echo "profiling started and will continue until you do 'stop' cmd:"
   DRY_RUN=1
 fi
 
-echo docker exec -t -i  $CNTR /bin/bash -c "cd /tmp/profile/ && ./profiler.sh stop -f /tmp/java.collapsed -o collapsed $JPID"
+echo docker exec -t $CNTR /bin/bash -c "cd /tmp/profile/ && ./profiler.sh stop -f /tmp/java.collapsed -o collapsed $JPID"
 
 if [ "$ACT" == "stop" ]; then
   if [ "$DRY_RUN" != "1" ]; then
-     docker exec -t -i  $CNTR /bin/bash -c "cd /tmp/profile/ && ./profiler.sh stop -f /tmp/java.collapsed -o collapsed $JPID"
-     docker exec -t -i  $CNTR /bin/bash -c "cd /tmp && ls -ltr"
+     docker exec -t $CNTR /bin/bash -c "cd /tmp/profile/ && ./profiler.sh stop -f /tmp/java.collapsed -o collapsed $JPID"
+     docker exec -t $CNTR /bin/bash -c "cd /tmp && ls -ltr"
      docker cp $CNTR:/tmp/java.collapsed .
      ls -l java.collapsed
   fi
