@@ -73,6 +73,15 @@ if [ ! -d $DIR ]; then
 fi
 echo "dir= $DIR"
 
+TDIR=$DIR
+if [ "$TDIR" == "." ]; then
+  TDIR=${PWD##*/}  
+fi
+RPS=`echo $TDIR | sed 's/rps_v/rpsv/' | sed 's/rps.*_.*/rps/' | sed 's/.*_//'`
+RPS="${RPS}"
+FCTR=`echo $RPS | sed 's/rps//'`
+printf "RPS= %s\n", $RPS > "/dev/stderr"
+
 BEG=`cat $DIR/60secs.log | awk '{n=split($0, arr);printf("%s\n", arr[n]);exit;}'`
 FILES=`ls -1 $DIR/sys_*_*.txt`
 #echo "FILES = $FILES"
@@ -456,9 +465,7 @@ trows++; printf("\n") > NFL;
            }
            if ( area == "cpu" && $1 != "Average:") {
              nm  = $10 " " $4; # process_name + pid
-             if (nm in nm_arr) {
-                ;
-             } else {
+             if (!(nm in nm_arr)) {
                if (tot_first == 1) {
                  tot_first = 0;
                  nmt = "__tot__";
@@ -483,9 +490,7 @@ trows++; printf("\n") > NFL;
            }
            if ( area == "io" && $1 != "Average:") {
              nm  = $9 " " $4; # process_name + pid
-             if (nm in nm_arr) {
-                ;
-             } else {
+             if (!(nm in nm_arr)) {
                if (tot_first == 1) {
                  tot_first = 0;
                  nmt = "__tot__";
@@ -1355,9 +1360,10 @@ fi
 JAVA_COL=java.collapsed
 if [ -e $JAVA_COL ]; then
   echo "do flamegraph.pl" 1>&2
-  cat $JAVA_COL | perl $SCR_DIR/../flamegraph/flamegraph.pl > java.svg
+  cat $JAVA_COL | perl $SCR_DIR/../flamegraph/flamegraph.pl --title "Flamegraph $RPS" > java.svg
   echo "do svg_to_html.sh " 1>&2
   $SCR_DIR/svg_to_html.sh -r 1 -d . -f java.svg > java.html
+  inkscape -z  -w 2400 -j --export-file=java.png  java.svg
 fi
 if [ "$SHEETS" != "" ]; then
    echo "python $SCR_DIR/tsv_2_xlsx.py $SHEETS"
