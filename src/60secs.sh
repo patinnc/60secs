@@ -5,7 +5,7 @@
 
 SCR_DIR=`dirname "$(readlink -f "$0")"`
 WAIT=60
-TASKS=("uptime" "dmesg" "vmstat" "mpstat" "pidstat" "iostat" "free" "sar_dev" "sar_tcp" "top" "perf" "interrupts" "nicstat" "flamegraph")
+TASKS=("uptime" "dmesg" "vmstat" "mpstat" "pidstat" "iostat" "free" "nicstat" "sar_dev" "sar_tcp" "top" "perf" "sched_switch" "interrupts" "flamegraph")
 j=0
 for i in ${TASKS[@]}; do
   j=$((j+1))
@@ -25,8 +25,9 @@ BKGRND=0
 WAIT_AT_END=0
 CURL_AT_END=0
 CONTAINER=
+EXCLUDE=
 
-while getopts "hvbcwC:d:i:p:t:" opt; do
+while getopts "hvbcwC:d:i:p:t:x:" opt; do
   case ${opt} in
     b )
       BKGRND=1
@@ -45,6 +46,9 @@ while getopts "hvbcwC:d:i:p:t:" opt; do
       ;;
     i )
       INTERVAL=$OPTARG
+      ;;
+    x )
+      EXCLUDE=$OPTARG
       ;;
     p )
       if [ "$OPTARG" != "" -a ! -x $OPTARG ]; then
@@ -73,7 +77,11 @@ while getopts "hvbcwC:d:i:p:t:" opt; do
       echo "      The task names: ${TASKS[@]}"
       echo "      Enter '-t all' for all tasks"
       echo "      Valid task_num range is 0 to $TLAST"
+      echo "      Enter either the number or the task name in a comma separated list"
       echo "      default is no task"
+      echo "   -x task_num or task_name"
+      echo "      A list of tasks to be excluded. top and interrupts are not too useful to me"
+      echo "      Have to enter the task name, not number"
       echo "   -b start the jobs in the backgroup not waiting for each job to finish"
       echo "      The default is to not start the jobs the background (so start the 1st task, wait for it to finish, start the next task, etc)"
       echo "   -w If you run background mode, this option waits for the duration after the background jobs are started."
@@ -287,11 +295,27 @@ if [ "$GOT_ERR" == "1" ]; then
   exit
 fi
 
+if [ "$EXCLUDE" != "" ]; then
+  IFS=',' read -r -a ex_arr <<< "$EXCLUDE"
+fi
+
 NEED_TO_END_FLAMEGRAPH=0
+NEED_PERF_SCRIPT=0
 
 for TSKj in `seq $TB $TE`; do
   TSK=${TSK_LST[$TSKj]}
   TSKNUM=${TSK_NUM[$TSKj]}
+  skip_it=0
+  for skp in "${ex_arr[@]}"; do
+    if [ "$skp" == "$TSK" ]; then
+      echo "skip task $TSK due to -x $EXCLUDE"
+      skip_it=1
+      break
+    fi
+  done
+  if [ "$skip_it" == "1" ]; then
+    continue
+  fi
   echo "doing $TSK ${TSK_LST[$TSKj]}"
   FLNUM=$(printf "%02d" $TSKNUM)
   #echo FLNUM= $FLNUM
@@ -493,16 +517,31 @@ for TSKj in `seq $TB $TE`; do
     PRF_PID=$!
   fi
 
+  if [[ $TSK == *"sched_switch"* ]]; then
+    FL=sys_${FLNUM}_sched_switch.dat
+    if [ -e $FL ]; then
+      rm $FL
+    fi
+    ms=$(($INTRVL*1000))
+    echo "do perf stat for $WAIT secs"
+    EVT="sched:sched_switch"
+    echo $PERF_BIN record -k CLOCK_MONOTONIC  -a -o $FL -e $EVT sleep $WAIT
+         $PERF_BIN record -k CLOCK_MONOTONIC  -a -o $FL -e $EVT sleep $WAIT &
+    TSK_PID[$TSKj]=$!
+    PRF2_PID=$!
+    NEED_PERF_SCRIPT=$FL
+  fi
+
   if [[ $TSK == *"flamegraph"* ]]; then
     FL=sys_${FLNUM}_flamegraph.txt
     if [ -e $FL ]; then
       rm $FL
     fi
     echo ${SCR_DIR}/gen_flamegraph_for_java_in_container.sh $CONTAINER start
-    ${SCR_DIR}/gen_flamegraph_for_java_in_container.sh $CONTAINER start
+    ${SCR_DIR}/gen_flamegraph_for_java_in_container.sh $CONTAINER start &> gen_fl_start.log
     if [ "$BKGRND" == "0" ]; then
       sleep $WAIT
-      ${SCR_DIR}/gen_flamegraph_for_java_in_container.sh $CONTAINER stop
+      ${SCR_DIR}/gen_flamegraph_for_java_in_container.sh $CONTAINER stop &> gen_fl_stop.log
     else
       NEED_TO_END_FLAMEGRAPH=1
     fi
@@ -596,8 +635,27 @@ if [ "$WAIT_AT_END" == "1" ]; then
     dmesg >> $FL_DMSG
   fi
   if [ "$NEED_TO_END_FLAMEGRAPH" == "1" ]; then
-     ${SCR_DIR}/gen_flamegraph_for_java_in_container.sh $CONTAINER stop
+     ${SCR_DIR}/gen_flamegraph_for_java_in_container.sh $CONTAINER stop &> gen_fl_stop.log
      NEED_TO_END_FLAMEGRAPH=0
+  fi
+  if [ "$CURL_AT_END" == "1" ]; then
+    # put the do_curl here too so it gets done before the perf script (which can take awhile)
+    MINUTES=`awk -v secs="$WAIT" 'BEGIN{printf("%.0f\n", 1.0+(secs/60.0)); exit;}'`
+    echo "running ${SCR_DIR}/do_curl.sh $MINUTES"
+    ${SCR_DIR}/do_curl.sh $MINUTES $CONTAINER
+    CURL_AT_END=0
+  fi
+  if [ "$NEED_PERF_SCRIPT" != "" ]; then
+     echo "waiting for perf pid $PRF2_PID to finish"
+     wait $PRF2_PID
+     Fopts=" -F comm,tid,pid,time,cpu,period,event,ip,sym,dso,symoff,trace,flags,callindent"
+     Fopts=" -F comm,tid,pid,time,cpu,period,event,trace"
+     echo $PERF_BIN script -I --header -i $NEED_PERF_SCRIPT $Fopts --ns _ $NEED_PERF_SCRIPT.txt
+          $PERF_BIN script -I --header -i $NEED_PERF_SCRIPT -F comm,tid,pid,time,cpu,period,event,trace --ns > $NEED_PERF_SCRIPT.txt
+     NOW=`date +%s.%N`
+     GETTIME=`awk '/^now/ {printf("%.9f\n", 1.0e-9 * $3); exit}' /proc/timer_list`
+     echo "NOW_UTC= $NOW" > clocks.log
+     echo "NOW_MONO= $GETTIME" >> clocks.log
   fi
 fi
 if [ "$CURL_AT_END" == "1" ]; then
