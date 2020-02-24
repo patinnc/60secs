@@ -24,8 +24,15 @@ PERF_BIN=perf
 BKGRND=0
 WAIT_AT_END=0
 CURL_AT_END=0
+DO_SCHED_SWITCH=0
+DO_FLAMEGRAPH=0
 CONTAINER=
 EXCLUDE=
+RUN_CMDS_LOG=run.log
+myArgs="$((($#)) && printf ' %q' "$@")"
+tstmp=`date "+%Y%m%d_%H%M%S"`
+ts_beg=`date "+%s.%N"`
+echo "$tstmp start $myArgs"  >> $RUN_CMDS_LOG
 
 while getopts "hvbcwC:d:i:p:t:x:" opt; do
   case ${opt} in
@@ -58,10 +65,29 @@ while getopts "hvbcwC:d:i:p:t:x:" opt; do
       PERF_BIN=$OPTARG
       ;;
     t )
+      if [ "$OPTARG" == "allx" ]; then
+        DO_SCHED_SWITCH=1
+        TSK_IN="-1"
+      fi
+      if [ "$OPTARG" == "ally" ]; then
+        DO_FLAMEGRAPH=1
+        TSK_IN="-1"
+      fi
+      if [ "$OPTARG" == "allxy" ]; then
+        DO_FLAMEGRAPH=1
+        DO_SCHED_SWITCH=1
+        TSK_IN="-1"
+      fi
       if [ "$OPTARG" == "all" ]; then
         TSK_IN="-1"
       else
         TSK_IN=$OPTARG
+         if [ "$OPTARG" == "sched_switch" ]; then
+           DO_SCHED_SWITCH=1
+         fi
+         if [ "$OPTARG" == "flamegraph" ]; then
+           DO_FLAMEGRAPH=1
+         fi
       fi
       ;;
     v )
@@ -75,7 +101,12 @@ while getopts "hvbcwC:d:i:p:t:x:" opt; do
       echo "task_names are: ${TASKS[@]}"
       echo "   -t task_num or task_name"
       echo "      The task names: ${TASKS[@]}"
-      echo "      Enter '-t all' for all tasks"
+      echo "      Enter '-t all' for all tasks except flamegraph and sched_switch (sched_switch which can write 100s of MBs of data per 10 sec interval... so it has more overhead)"
+      echo "      Enter '-t allx' for all tasks and sched_switch"
+      echo "         allx also runs sched_switch (which can write 100s of MBs of data per 10 sec interval... so it has more overhead)"
+      echo "      Enter '-t ally' for all tasks and flamegraphs"
+      echo "         ally also runs flamegraph callstack sampling on java in a container (so it has more overhead)"
+      echo "      Enter '-t allxy' for all tasks and sched_switch and flamegraphs"
       echo "      Valid task_num range is 0 to $TLAST"
       echo "      Enter either the number or the task name in a comma separated list"
       echo "      default is no task"
@@ -108,6 +139,7 @@ while getopts "hvbcwC:d:i:p:t:x:" opt; do
   esac
 done
 shift $((OPTIND -1))
+
 
 if [ "$TSK_IN" == "" ]; then
   echo "You must enter arg1: '-t task_num|task_name' where all (all tasks) or a task_number (0-$TLAST) or a task_name"
@@ -158,6 +190,7 @@ for i in ${TASKS[@]}; do
   fi
   t=$((t+1))
 done
+
 
 
 if [ $jmx -eq 0 ]; then
@@ -222,6 +255,8 @@ if [ -e $LOG ]; then
   rm $LOG
 fi
 
+CPU_DECODE=`${SCR_DIR}/decode_intel_fam_mod.sh`
+
 NANO=".%N"
 tdte=`date "+${NANO}"`
 if [ "$tdte" == ".N" ]; then
@@ -256,9 +291,11 @@ for TSKj in `seq $TB $TE`; do
      fi
   fi
   if [[ $TSK == *"flamegraph"* ]]; then
+     if [ "$DO_FLAMEGRAPH" == "1" ]; then
      if [ "$CONTAINER" == "" ]; then
         echo "flamegraph option requires a container ID. run 'docker ps' to get IDs and add option '-C containerID'" 1>&2
         GOT_ERR=1
+     fi
      fi
   fi
   if [[ $TSK == *"nicstat"* ]]; then
@@ -300,7 +337,7 @@ if [ "$EXCLUDE" != "" ]; then
 fi
 
 NEED_TO_END_FLAMEGRAPH=0
-NEED_PERF_SCRIPT=0
+NEED_PERF_SCRIPT=
 
 for TSKj in `seq $TB $TE`; do
   TSK=${TSK_LST[$TSKj]}
@@ -504,12 +541,22 @@ for TSKj in `seq $TB $TE`; do
     fi
     ms=$(($INTRVL*1000))
     echo "do perf stat for $WAIT secs"
+    if [ "$CPU_DECODE" == "Braswell" -o "$CPU_DECODE" == "Haswell" ]; then
     IMC0_RDWR="uncore_imc_0/name='unc0_read_write',umask=0x0f,event=0x04/"
     IMC1_RDWR="uncore_imc_1/name='unc1_read_write',umask=0x0f,event=0x04/"
     IMC2_RDWR="uncore_imc_2/name='unc2_read_write',umask=0x0f,event=0x04/"
     IMC3_RDWR="uncore_imc_3/name='unc3_read_write',umask=0x0f,event=0x04/"
     IMC4_RDWR="uncore_imc_4/name='unc4_read_write',umask=0x0f,event=0x04/"
     EVT=$IMC0_RDWR,$IMC1_RDWR,$IMC2_RDWR,$IMC3_RDWR,$IMC4_RDWR,qpi_data_bandwidth_tx,qpi_ctl_bandwidth_tx
+    fi
+    if [ "$CPU_DECODE" == "Cascade Lake" -o "$CPU_DECODE" == "Skylake" ]; then
+    IMC0_RDWR="uncore_imc_0/name='unc0_read_write',umask=0x0f,event=0x04/"
+    IMC1_RDWR="uncore_imc_1/name='unc1_read_write',umask=0x0f,event=0x04/"
+    IMC2_RDWR="uncore_imc_2/name='unc2_read_write',umask=0x0f,event=0x04/"
+    IMC3_RDWR="uncore_imc_3/name='unc3_read_write',umask=0x0f,event=0x04/"
+    IMC4_RDWR="uncore_imc_4/name='unc4_read_write',umask=0x0f,event=0x04/"
+    EVT=$IMC0_RDWR,$IMC1_RDWR,$IMC2_RDWR,$IMC3_RDWR,$IMC4_RDWR
+    fi
     EVT=instructions,cycles,ref-cycles,$EVT,LLC-load-misses
     echo do: $PERF_BIN stat -x ";"  --per-socket -a -I $ms -o $FL -e $EVT
     $PERF_BIN stat -x ";"  --per-socket -a -I $ms -o $FL -e $EVT sleep $WAIT &
@@ -518,21 +565,24 @@ for TSKj in `seq $TB $TE`; do
   fi
 
   if [[ $TSK == *"sched_switch"* ]]; then
-    FL=sys_${FLNUM}_sched_switch.dat
-    if [ -e $FL ]; then
-      rm $FL
+    if [ "$DO_SCHED_SWITCH" == "1" ]; then
+      FL=sys_${FLNUM}_sched_switch.dat
+      if [ -e $FL ]; then
+        rm $FL
+      fi
+      ms=$(($INTRVL*1000))
+      echo "do perf stat for $WAIT secs"
+      EVT="sched:sched_switch"
+      echo $PERF_BIN record -k CLOCK_MONOTONIC  -a -o $FL -e $EVT sleep $WAIT
+           $PERF_BIN record -k CLOCK_MONOTONIC  -a -o $FL -e $EVT sleep $WAIT &
+      TSK_PID[$TSKj]=$!
+      PRF2_PID=$!
+      NEED_PERF_SCRIPT=$FL
     fi
-    ms=$(($INTRVL*1000))
-    echo "do perf stat for $WAIT secs"
-    EVT="sched:sched_switch"
-    echo $PERF_BIN record -k CLOCK_MONOTONIC  -a -o $FL -e $EVT sleep $WAIT
-         $PERF_BIN record -k CLOCK_MONOTONIC  -a -o $FL -e $EVT sleep $WAIT &
-    TSK_PID[$TSKj]=$!
-    PRF2_PID=$!
-    NEED_PERF_SCRIPT=$FL
   fi
 
   if [[ $TSK == *"flamegraph"* ]]; then
+    if [ "$DO_FLAMEGRAPH" == "1" ]; then
     FL=sys_${FLNUM}_flamegraph.txt
     if [ -e $FL ]; then
       rm $FL
@@ -544,6 +594,7 @@ for TSKj in `seq $TB $TE`; do
       ${SCR_DIR}/gen_flamegraph_for_java_in_container.sh $CONTAINER stop &> gen_fl_stop.log
     else
       NEED_TO_END_FLAMEGRAPH=1
+    fi
     fi
   fi
 
@@ -667,4 +718,8 @@ if [ "$NEED_TO_END_FLAMEGRAPH" == "1" ]; then
   echo "flamegraph profiling is still running. You'll need to do cmd below manually"
   echo ${SCR_DIR}/gen_flamegraph_for_java_in_container.sh $CONTAINER stop
 fi
+tstmp=`date "+%Y%m%d_%H%M%S"`
+ts_end=`date "+%s.%N"`
+ts_elap=`awk -v ts_beg="$ts_beg" -v ts_end="$ts_end" 'BEGIN{printf("%f\n", (ts_end+0.0)-(ts_beg+0.0));exit;}'`
+echo "$tstmp end elapsed_secs $ts_elap"  >> $RUN_CMDS_LOG
 
