@@ -7,14 +7,22 @@ CFG_DIR=
 echo "args= $*"
 DURA=1m
 PREFIX_DIR=0
+TASK_IN=
+ADD_IN=
 
-while getopts "hPc:d:p:" opt; do
+while getopts "hPa:c:d:p:t:" opt; do
   case ${opt} in
+    a )
+      ADD_IN=$OPTARG
+      ;;
     c )
       CFG_DIR=$OPTARG
       ;;
     d )
       DURA=$OPTARG
+      ;;
+    t )
+      TASK_IN=$OPTARG
       ;;
     P )
       PREFIX_DIR=1
@@ -58,10 +66,20 @@ pushd $result
 
 CNTNR=`docker ps | grep gmat | awk '{print $1;exit}'`
 
+TASK=all
+if [ "$TASK_IN" != "" ]; then
+  TASK=$TASK_IN
+fi
+
+ADD=
+if [ "$ADD_IN" != "" ]; then
+  ADD=" -a $ADD_IN "
+fi
+
 if [ "$CNTNR" != "" ]; then
-$SCR_DIR/60secs.sh -t all -x top,interrupts -b -w -c -d $DURA -i 1 -p $SCR_DIR/perf -C $CNTNR
+$SCR_DIR/60secs.sh -t $TASK -x top,interrupts -b -w -c -d $DURA -i 1 -p $SCR_DIR/perf -C $CNTNR $ADD
 else
-$SCR_DIR/60secs.sh -t all -x top,interrupts -b -w -c -d $DURA -i 1 -p $SCR_DIR/perf
+$SCR_DIR/60secs.sh -t $TASK -x top,interrupts -b -w -c -d $DURA -i 1 -p $SCR_DIR/perf $ADD
 fi
 
 popd
