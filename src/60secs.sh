@@ -34,8 +34,11 @@ tstmp=`date "+%Y%m%d_%H%M%S"`
 ts_beg=`date "+%s.%N"`
 echo "$tstmp start $myArgs"  >> $RUN_CMDS_LOG
 
-while getopts "hvbcwC:d:i:p:t:x:" opt; do
+while getopts "hvbcwa:C:d:i:p:t:x:" opt; do
   case ${opt} in
+    a )
+      ADD_IN=$OPTARG
+      ;;
     b )
       BKGRND=1
       ;;
@@ -65,27 +68,15 @@ while getopts "hvbcwC:d:i:p:t:x:" opt; do
       PERF_BIN=$OPTARG
       ;;
     t )
-      if [ "$OPTARG" == "allx" ]; then
-        DO_SCHED_SWITCH=1
-        TSK_IN="-1"
-      fi
-      if [ "$OPTARG" == "ally" ]; then
-        DO_FLAMEGRAPH=1
-        TSK_IN="-1"
-      fi
-      if [ "$OPTARG" == "allxy" ]; then
-        DO_FLAMEGRAPH=1
-        DO_SCHED_SWITCH=1
-        TSK_IN="-1"
-      fi
-      if [ "$OPTARG" == "all" ]; then
+      TMPARG=$OPTARG
+      if [ "$TMPARG" == "all" ]; then
         TSK_IN="-1"
       else
-        TSK_IN=$OPTARG
-         if [ "$OPTARG" == "sched_switch" ]; then
+        TSK_IN=$TMPARG
+         if [ "$TMPARG" == "sched_switch" ]; then
            DO_SCHED_SWITCH=1
          fi
-         if [ "$OPTARG" == "flamegraph" ]; then
+         if [ "$TMPARG" == "flamegraph" ]; then
            DO_FLAMEGRAPH=1
          fi
       fi
@@ -102,14 +93,12 @@ while getopts "hvbcwC:d:i:p:t:x:" opt; do
       echo "   -t task_num or task_name"
       echo "      The task names: ${TASKS[@]}"
       echo "      Enter '-t all' for all tasks except flamegraph and sched_switch (sched_switch which can write 100s of MBs of data per 10 sec interval... so it has more overhead)"
-      echo "      Enter '-t allx' for all tasks and sched_switch"
-      echo "         allx also runs sched_switch (which can write 100s of MBs of data per 10 sec interval... so it has more overhead)"
-      echo "      Enter '-t ally' for all tasks and flamegraphs"
-      echo "         ally also runs flamegraph callstack sampling on java in a container (so it has more overhead)"
-      echo "      Enter '-t allxy' for all tasks and sched_switch and flamegraphs"
       echo "      Valid task_num range is 0 to $TLAST"
       echo "      Enter either the number or the task name in a comma separated list"
       echo "      default is no task"
+      echo "   -a flamegraph and/or sched_switch"
+      echo "      if you do '-t all' flamegraph and sched_switch are not run"
+      echo "      Use this option to add flamegraph and or sched_switch"
       echo "   -x task_num or task_name"
       echo "      A list of tasks to be excluded. top and interrupts are not too useful to me"
       echo "      Have to enter the task name, not number"
@@ -140,6 +129,14 @@ while getopts "hvbcwC:d:i:p:t:x:" opt; do
 done
 shift $((OPTIND -1))
 
+if [ "$ADD_IN" != "" ]; then
+  if [[ $ADD_IN == *"flamegraph"* ]]; then
+     DO_FLAMEGRAPH=1
+  fi
+  if [[ $ADD_IN == *"sched_switch"* ]]; then
+     DO_SCHED_SWITCH=1
+  fi
+fi
 
 if [ "$TSK_IN" == "" ]; then
   echo "You must enter arg1: '-t task_num|task_name' where all (all tasks) or a task_number (0-$TLAST) or a task_name"
@@ -541,7 +538,7 @@ for TSKj in `seq $TB $TE`; do
     fi
     ms=$(($INTRVL*1000))
     echo "do perf stat for $WAIT secs"
-    if [ "$CPU_DECODE" == "Braswell" -o "$CPU_DECODE" == "Haswell" ]; then
+    if [ "$CPU_DECODE" == "Broadwell" -o "$CPU_DECODE" == "Haswell" ]; then
     IMC0_RDWR="uncore_imc_0/name='unc0_read_write',umask=0x0f,event=0x04/"
     IMC1_RDWR="uncore_imc_1/name='unc1_read_write',umask=0x0f,event=0x04/"
     IMC2_RDWR="uncore_imc_2/name='unc2_read_write',umask=0x0f,event=0x04/"
