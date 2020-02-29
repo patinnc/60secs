@@ -9,7 +9,7 @@ if [ ! -e "$FL" ]; then
   echo "can't find file $FL. Bye"
   exit
 fi
-PRF_FILE="sys_10_perf_stat.txt"
+PRF_FILE=(sys_*_perf_stat.txt)
 if [ ! -e $PRF_FILE ]; then
   echo "sorry but $0 depends (currently) on the $PRF_FILE existing in the cur dir"
   exit
