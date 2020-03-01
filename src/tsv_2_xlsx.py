@@ -244,6 +244,10 @@ for fn in range(len(file_list)):
           drow_beg = int(data[drw][1])+1
           dcol_beg = int(data[drw][2])
           drow_end = int(data[drw][3])
+          if drow_end == -1 or drow_beg >= drow_end:
+             print("no data for chart! sheet_nm= %s, ch_typ= %s, file= %s, drow_beg= %d, drow_end= %d, hcol_beg= %d, hcol_end= %d" % (sheet_nm, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end), file=sys.stderr)
+             # didn't find any data in table
+             continue
           mcol_end = int(data[drw][4])+1
           mcol_num_cols = len(data[drw])
           mcol_list = []
@@ -259,6 +263,8 @@ for fn in range(len(file_list)):
                  if tcol0 > -1 and tcol1 > -1:
                     mcol_list.append([tcol0, tcol1+1])
           else:
+             if hcol_beg < 0 or hcol_end < 0:
+                print("What going on, sheet_nm= %s, ch_typ= %s, file= %s, hcol_beg= %d, hcol_end= %d" % (sheet_nm, ch_type, x, hcol_beg, hcol_end), file=sys.stderr)
              mcol_list.append([hcol_beg, hcol_end])
           print("sheet= %s ch= %d hro= %d hc= %d hce= %d, dr= %d, dre= %d" % (sheet_nm, c, hrow_beg, hcol_beg, hcol_end, drow_beg, drow_end))
           if ch_type == "scatter_straight":
@@ -266,8 +272,15 @@ for fn in range(len(file_list)):
           else:
              chart1 = workbook.add_chart({'type': ch_type})
           # Configure the first series.
+          got_how_many_series_for_chart = 0
           for hh in range(len(mcol_list)):
               for h in range(mcol_list[hh][0], mcol_list[hh][1]):
+                  if h < 0:
+                     print("What going on2, sheet_nm= %s, ch_typ= %s, file= %s, hcol_beg= %d, hcol_end= %d" % (sheet_nm, ch_type, x, hcol_beg, hcol_end), file=sys.stderr)
+                  if drow_beg < 0 or drow_end < 0:
+                     print("What going on3, sheet_nm= %s, ch_typ= %s, file= %s, drow_beg= %d drow_end= %d hcol_beg= %d, hcol_end= %d" % (sheet_nm, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end), file=sys.stderr)
+                     continue
+                  got_how_many_series_for_chart += 1
                   if use_cats:
                      chart1.add_series({
                          'name':       [wrksh_nm, hrow_beg, h],
@@ -279,6 +292,8 @@ for fn in range(len(file_list)):
                          'name':       [wrksh_nm, hrow_beg, h],
                          'values':     [wrksh_nm, drow_beg, h, drow_end, h],
                      })
+          if got_how_many_series_for_chart == 0:
+             print("What going on4, sheet_nm= %s, ch_typ= %s, file= %s, drow_beg= %d drow_end= %d hcol_beg= %d, hcol_end= %d" % (sheet_nm, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end), file=sys.stderr)
           chart1.set_title ({'name': title})
           chart1.set_style(10)
           ch_opt = {'x_offset': 25, 'y_offset': 10}
