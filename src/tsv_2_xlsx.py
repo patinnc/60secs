@@ -244,24 +244,30 @@ for fn in range(len(file_list)):
           drow_beg = int(data[drw][1])+1
           dcol_beg = int(data[drw][2])
           drow_end = int(data[drw][3])
-          dcol_end = int(data[drw][4])+1
+          mcol_end = int(data[drw][4])+1
+          mcol_num_cols = len(data[drw])
+          mcol_list = []
           use_cats = False
-          if len(data[drw]) > 5:
+          if mcol_num_cols > 5 and int(data[drw][5]) > -1:
              dcol_cat = int(data[drw][5])
              use_cats = True
-          headings = []
-          for h in range(hcol_end):
-              if (h >= hcol_beg):
-                 headings.append(data[hrow_beg][h])
-          #worksheet.write_row(hrow_beg, hcol_beg, headings, bold)
+          if mcol_num_cols > 6:
+             for h in range(6, mcol_num_cols, 2):
+                 print("sheet_nm= %s got series[%d] colb= %d cole= %d" % (sheet_nm, len(mcol_list), int(data[drw][h]), int(data[drw][h+1])))
+                 tcol0 = int(data[drw][h])
+                 tcol1 = int(data[drw][h+1])
+                 if tcol0 > -1 and tcol1 > -1:
+                    mcol_list.append([tcol0, tcol1+1])
+          else:
+             mcol_list.append([hcol_beg, hcol_end])
           print("sheet= %s ch= %d hro= %d hc= %d hce= %d, dr= %d, dre= %d" % (sheet_nm, c, hrow_beg, hcol_beg, hcol_end, drow_beg, drow_end))
           if ch_type == "scatter_straight":
              chart1 = workbook.add_chart({'type': 'scatter', 'subtype': 'straight'})
           else:
              chart1 = workbook.add_chart({'type': ch_type})
           # Configure the first series.
-          for h in range(hcol_end):
-              if (h >= hcol_beg):
+          for hh in range(len(mcol_list)):
+              for h in range(mcol_list[hh][0], mcol_list[hh][1]):
                   if use_cats:
                      chart1.add_series({
                          'name':       [wrksh_nm, hrow_beg, h],
