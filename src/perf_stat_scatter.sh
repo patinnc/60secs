@@ -416,13 +416,28 @@ awk -v ts_beg="$BEG" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIO
      printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", rows+1, bcol+1, -1, evt_idx+extra_cols+4, 2);
 #title	sar network IFACE dev eth0	sheet	sar network IFACE	type	line
 #hdrs	8	0	68	8
+     bw_cols_mx = 0;
+     ipc_cols_mx = 0;not_halted
+     unhalted_cols_mx = 0;
      printf("epoch\tts\trel_ts\tinterval");
+     cols = 4;
      for(i=0; i <= evt_idx; i++) {
        printf("\t%s", evt_lkup[i]);
+       cols++;
      }
      for (k=1; k <= kmx; k++) { 
        if (got_lkfor[k,1] == got_lkfor[k,2]) {
           printf("\t%s", nwfor[k,1]);
+          if (index(nwfor[k,1], "GB/s") > 0) {
+            bw_cols[++bw_cols_mx] = cols;
+          }
+          if (index(nwfor[k,1], "not_halted") > 0) {
+            unhalted_cols[++unhalted_cols_mx] = cols;
+          }
+          if (index(nwfor[k,1], "IPC") > 0 || index(nwfor[k,1], "GHz") > 0 || index(nwfor[k,1], "PKI") > 0) {
+            ipc_cols[++ipc_cols_mx] = cols;
+          }
+          cols++;
        }
      }
      printf("\n");
@@ -523,6 +538,30 @@ awk -v ts_beg="$BEG" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIO
                 break;
             }
           }
+       }
+       printf("\n");
+     }
+     if (bw_cols_mx > 0) {
+       printf("\ntitle\t%s mem bw\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, pfx, sheet);
+       printf("hdrs\t%d\t%d\t%d\t%d\t%d", rows+1, bcol+1, -1, evt_idx+extra_cols+4, 2);
+       for (i=1; i <= bw_cols_mx; i++) {
+         printf("\t%d\t%d", bw_cols[i], bw_cols[i]);
+       }
+       printf("\n");
+     }
+     if (ipc_cols_mx > 0) {
+       printf("\ntitle\t%s mem IPC, CPU freq, LLC misses\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, pfx, sheet);
+       printf("hdrs\t%d\t%d\t%d\t%d\t%d", rows+1, bcol+1, -1, evt_idx+extra_cols+4, 2);
+       for (i=1; i <= ipc_cols_mx; i++) {
+         printf("\t%d\t%d", ipc_cols[i], ipc_cols[i]);
+       }
+       printf("\n");
+     }
+     if (unhalted_cols_mx > 0) {
+       printf("\ntitle\t%s %%cpus not halted (running)\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, pfx, sheet);
+       printf("hdrs\t%d\t%d\t%d\t%d\t%d", rows+1, bcol+1, -1, evt_idx+extra_cols+4, 2);
+       for (i=1; i <= unhalted_cols_mx; i++) {
+         printf("\t%d\t%d", unhalted_cols[i], unhalted_cols[i]);
        }
        printf("\n");
      }
