@@ -133,7 +133,7 @@ trows++; printf("\tdemand; vmstat or mpstat will confirm, which are commands 3 a
 trows++; printf("\n") > NFL;
 
        printf("title\tuptime\tsheet\tuptime\ttype\tline\n") > NFL;
-       printf("hdrs\t%d\t0\t%d\t2\n", trows+2, trows+mx+1) > NFL;
+       printf("hdrs\t%d\t0\t%d\t2\t-1\n", trows+2, trows+mx+1) > NFL;
        for (i=1; i <= mx; i++) {
           printf("%s\n", sv[i]) > NFL;
        }
@@ -216,11 +216,66 @@ trows++; printf("\tThe CPUs are also well over 90%% utilized on average. This is
 trows++; printf("\tof saturation using the \"r\" column.\n") > NFL;
 trows++; printf("\t\n") > NFL;
 
-       printf("title\tvmstat\tsheet\tvmstat\ttype\tline\n") > NFL;
-       printf("hdrs\t%d\t0\t%d\t%d\n", 2+trows, mx+1+trows, col_mx) > NFL;
-       for (i=1; i <= mx; i++) {
+       printf("title\tvmstat all\tsheet\tvmstat\ttype\tline\n") > NFL;
+       printf("hdrs\t%d\t0\t%d\t%d\t-1\n", 2+trows, mx+1+trows, col_mx) > NFL;
+       r_col = -1;
+       b_col = -1;
+       us_col = -1;
+       in_col = -1;
+       cs_col = -1;
+       bi_col = -1;
+       bo_col = -1;
+       cache_col = -1;
+       free_col = -1;
+       buff_col = -1;
+       nhdr["r"] = "runnable";
+       nhdr["b"] = "blocked";
+       nhdr["swpd"] = "swapped";
+       nhdr["free"] = "free";
+       nhdr["buff"] = "buffers";
+       nhdr["cache"] = "cached";
+       nhdr["si"] = "mem swapped in/s";
+       nhdr["so"] = "mem swapped out/s";
+       nhdr["in"] = "interrupts/s";
+       nhdr["cs"] = "context switch/s";
+       nhdr["bi"] = "blocks in/s";
+       nhdr["bo"] = "blocks out/s";
+       nhdr["us"] = "%user";
+       nhdr["sy"] = "%system";
+       nhdr["id"] = "%idle";
+       nhdr["wa"] = "%waitingIO";
+       nhdr["st"] = "%stolen";
+        #r b swpd free buff cache si so bi bo in cs us sy id wa st
+       n = split(sv[1], arr, "\t");
+       nwln = "";
+       sep  = "";
+       for (i=1; i <= n; i++) {
+          if (arr[i] == "r")  { r_col  = i-1; }
+          if (arr[i] == "b")  { b_col  = i-1; }
+          if (arr[i] == "us") { us_col = i-1; }
+          if (arr[i] == "in") { in_col = i-1; }
+          if (arr[i] == "cs") { cs_col = i-1; }
+          if (arr[i] == "bi") { bi_col = i-1; }
+          if (arr[i] == "bo") { bo_col = i-1; }
+          if (arr[i] == "cache") { cache_col = i-1; }
+          if (arr[i] == "free")  { free_col  = i-1; }
+          if (arr[i] == "buff")  { buff_col  = i-1; }
+          if (arr[i] in nhdr) { str = nhdr[arr[i]]; } else { str = arr[i]; }
+          nwln = nwln "" sep "" str;
+          sep = "\t";
+       }
+       printf("%s\n", nwln) > NFL;
+       for (i=2; i <= mx; i++) {
           printf("%s\n", sv[i]) > NFL;
        }
+       printf("\ntitle\tvmstat cpu\tsheet\tvmstat\ttype\tline\n") > NFL;
+       printf("hdrs\t%d\t0\t%d\t%d\t-1\t%d\t%d\t%d\t%d\t%d\t%d\n", 2+trows, mx+1+trows, col_mx, r_col, r_col, b_col, b_col, us_col, col_mx) > NFL;
+       printf("\ntitle\tvmstat interrupts & context switches\tsheet\tvmstat\ttype\tline\n") > NFL;
+       printf("hdrs\t%d\t0\t%d\t%d\t-1\t%d\t%d\t%d\t%d\n", 2+trows, mx+1+trows, col_mx, in_col, in_col, cs_col, cs_col) > NFL;
+       printf("\ntitle\tvmstat memory cache, free & buffers\tsheet\tvmstat\ttype\tline\n") > NFL;
+       printf("hdrs\t%d\t0\t%d\t%d\t-1\t%d\t%d\t%d\t%d\t%d\t%d\n", 2+trows, mx+1+trows, col_mx, cache_col, cache_col, free_col, free_col, buff_col, buff_col) > NFL;
+       printf("\ntitle\tvmstat IO blocks in & blocks out\tsheet\tvmstat\ttype\tline\n") > NFL;
+       printf("hdrs\t%d\t0\t%d\t%d\t-1\t%d\t%d\t%d\t%d\n", 2+trows, mx+1+trows, col_mx, bi_col, bi_col, bo_col, bo_col) > NFL;
        close(NFL);}
    ' $i
    SHEETS="$SHEETS $i.tsv"
@@ -233,12 +288,55 @@ trows++; printf("\t\n") > NFL;
 #12:01:02 AM    0   10.10    4.04    2.02    0.00    0.00    0.00    0.00    0.00    0.00   83.84
 #12:01:02 AM    1    1.03    6.19    2.06    0.00    0.00    0.00    0.00    0.00    0.00   90.72
 
-    awk -v pfx="$PFX" '
-     BEGIN{beg=1;
+    awk -v ts_beg="$BEG" -v pfx="$PFX" '
+     BEGIN{
+        beg=1;
         grp_mx=0;
         hdr_mx=0;
+        ts_beg += 0;
+        epoch_init = 0;
+      }
+      function dt_to_epoch(hhmmss, amp) {
+         # the epoch seconds from the date time info in the file is local time,not UTC.
+         # so just use the calc"d epoch seconds to calc the elapsed seconds since the start.
+         # THe real timestamp is the input ts_beg + elapsed_seconds.
+         # hhmmss fmt= hh:mm:ss (w leading 0
+         if (dt_beg["yy"] == "") {
+            return 0.0;
+         }
+         dt_tm["hh"] = substr(hhmmss,1,2) + 0;
+         dt_tm["mm"] = substr(hhmmss,4,2) + 0;
+         dt_tm["ss"] = substr(hhmmss,7,2) + 0;
+         if (ampm == "PM" && dt_tm["hh"] < 12) {
+            dt_tm["hh"] += 12;
+         }
+         dt_str = dt_beg["yy"] " " dt_beg["mm"] " " dt_beg["dd"] " " dt_tm["hh"] " " dt_tm["mm"] " " dt_tm["ss"];
+         #printf("dt_str= %s\n", dt_str) > "/dev/stderr";
+         epoch = mktime(dt_str);
+         #printf("epoch= %s offset= %s\n", epoch, offset);
+         if (epoch_init == 0) {
+             epoch_init = epoch;
+         }
+         epoch = ts_beg + (epoch - epoch_init + 1); # the plus 1 assumes a 1 second interval.
+         return epoch;
       }
      /^Linux/{
+        if (NR == 1) {
+          for (i=1; i <= NF; i++) {
+             if (match($i, /^[0-9][0-9]\/[0-9][0-9]\/[0-9][0-9][0-9][0-9]/)) {
+                dt_beg["yy"] = substr($i, 7);
+                dt_beg["mm"] = substr($i, 1, 2);
+                dt_beg["dd"] = substr($i, 4, 2);
+                printf("beg_date= mm.dd.yyyy %s.%s.%s\n", dt_beg["mm"], dt_beg["dd"], dt_beg["yy"]) > "/dev/stderr";
+                #break;
+             }
+             if (i == NF && $i == "CPU)") {
+                num_cpus = substr(fld_prv, 2)+0;
+                num_cpus_pct = num_cpus * 100.0;
+             }
+             fld_prv = $i;
+          }
+        }
        next;
      }
      {
@@ -248,6 +346,11 @@ trows++; printf("\t\n") > NFL;
         if (NF==0) { next; }
      }
      /%idle/{
+#abcd
+        if (beg == 1 && ($2 == "AM" || $2 == "PM")) {
+           epoch = dt_to_epoch($1, $2);
+           tm_beg = epoch;
+        }
         if (beg == 0) { next; }
         beg = 0;
         for (i=3; i <= NF; i++) {
@@ -260,6 +363,9 @@ trows++; printf("\t\n") > NFL;
         if (index($0, "Average") == 1) {
 		next;
 	}
+        if ($2 == "AM" || $2 == "PM") {
+           epoch = dt_to_epoch($1, $2);
+        }
         if (grps[grp] == "") {
           grps[grp] = ++grp_mx;
           grp_nm[grp_mx] = grp;
@@ -268,6 +374,7 @@ trows++; printf("\t\n") > NFL;
         }
         g = grps[grp];
         rw = ++grp_row[g];
+        tm_rw[rw] = epoch;
         j=0;
         for (i=3; i <= NF; i++) {
           grp_list[g,rw,++j] = $i;
@@ -284,18 +391,20 @@ trows++; printf("\n") > NFL;
 
 	for (g=1; g <= grp_mx; g++) {
           row++;
-          printf("title\tmpstat cpu= %s\tsheet\tmpstat\ttype\tline\n", grp_nm[g]) > NFL;
+          printf("title\tmpstat cpu= %s\tsheet\tmpstat\ttype\tscatter_straight\n", grp_nm[g]) > NFL;
           row++;
-          printf("hdrs\t%d\t%d\t%d\t%d\n", trows+row+1, 1, trows+1+row+grp_row[g], hdr_mx-1) > NFL;
+          printf("hdrs\t%d\t%d\t%d\t%d\t1\n", trows+row+1, 3, trows+1+row+grp_row[g], hdr_mx+1) > NFL;
           tab="";
+          printf("TS\tts_rel\t") > NFL;
           for (i=1; i <= hdr_mx; i++) {
             printf("%s%s", tab, hdrs[i]) > NFL;
             tab="\t";
           }
-           row++;
+          row++;
           printf("\n") > NFL;
           for (r=1; r <= grp_row[g]; r++) {
             tab="";
+            printf("%.3f\t%.4f\t", tm_rw[r], tm_rw[r]-ts_beg) > NFL;
             for (c=1; c <= hdr_mx; c++) {
               printf("%s%s", tab, grp_list[g,r,c]) > NFL;
               tab="\t";
@@ -600,7 +709,7 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
          my_order[k] = sv_nf[k];
        }
        ++row;
-       printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", "pid_stat IO (MB/s) by proc. Seems too high", "pat") > NFL;
+       printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", "pid_stat IO (MB/s) by proc. Proc IO might not get to disk", "pat") > NFL;
        ++row;
        #n = split(hdr, arr, "\t");
        printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", row+1, 2, -1, my_nms+1, 1) > NFL;
@@ -652,26 +761,54 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
 #dm-0              0.00     0.00  567.00    0.00  7100.00     0.00    25.04     0.06    0.11    0.11    0.00   0.11   6.40
 
     echo "do iostat"
-    awk -v pfx="$PFX" -v typ="iostat" '
-     BEGIN{beg=1;
+    awk -v ts_beg="$BEG" -v pfx="$PFX" -v typ="iostat" '
+     BEGIN{
+        beg=1;
         grp_mx=0;
         hdr_mx=0;
         chart=typ;
         mx_cpu=0;
         mx_io=0;
         mx_dev=0;
+        tm_beg = 0;
+        ts_beg += 0;
+        epoch_init = 0;
       }
-      function line_data(row, arr_in, arr_mx, title, hdr) {
+      function dt_to_epoch(hhmmss, amp) {
+         # the epoch seconds from the date time info in the file is local time,not UTC.
+         # so just use the calc"d epoch seconds to calc the elapsed seconds since the start.
+         # THe real timestamp is the input ts_beg + elapsed_seconds.
+         # hhmmss fmt= hh:mm:ss (w leading 0
+         if (dt_beg["yy"] == "") {
+            return 0.0;
+         }
+         dt_tm["hh"] = substr(hhmmss,1,2) + 0;
+         dt_tm["mm"] = substr(hhmmss,4,2) + 0;
+         dt_tm["ss"] = substr(hhmmss,7,2) + 0;
+         if (ampm == "PM" && dt_tm["hh"] < 12) {
+            dt_tm["hh"] += 12;
+         }
+         dt_str = dt_beg["yy"] " " dt_beg["mm"] " " dt_beg["dd"] " " dt_tm["hh"] " " dt_tm["mm"] " " dt_tm["ss"];
+         #printf("dt_str= %s\n", dt_str) > "/dev/stderr";
+         epoch = mktime(dt_str);
+         #printf("epoch= %s offset= %s\n", epoch, offset);
+         if (epoch_init == 0) {
+             epoch_init = epoch;
+         }
+         epoch = ts_beg + (epoch - epoch_init + 1); # the plus 1 assumes a 1 second interval.
+         return epoch;
+      }
+      function line_data(row, arr_in, arr_mx, title, hdr, mytarr) {
        ++row;
-       printf("title\t%s\tsheet\t%s\ttype\tline\n", title, chart) > NFL;
+       printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", title, chart) > NFL;
        ++row;
        n = split(hdr, arr, "\t");
-       printf("hdrs\t%d\t%d\t%d\t%d\n", row+1, 0, row+arr_mx, n-1) > NFL;
+       printf("hdrs\t%d\t%d\t%d\t%d\t1\n", row+1, 2, row+arr_mx, n+1) > NFL;
        ++row;
-       printf("%s\n", hdr) > NFL;
+       printf("TS\tts_rel\t%s\n", hdr) > NFL;
        for (i=2; i <= arr_mx; i++) {
          ++row;
-         printf("%s\n", arr_in[i]) > NFL;
+         printf("%.3f\t%.4f\t%s\n", mytarr[i], mytarr[i]-ts_beg, arr_in[i]) > NFL;
        }
        return row;
      }
@@ -680,6 +817,19 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
         NFL=FNM ".tsv";
         NFLA=FNM ".all.tsv";
      }
+     #02/28/2020 10:34:37 PM
+     #abcd
+     / AM$| PM$/{
+         dt_beg["yy"] = substr($1, 7, 4);
+         dt_beg["mm"] = substr($1, 1, 2);
+         dt_beg["dd"] = substr($1, 4, 2);
+         epoch = dt_to_epoch($2, $3);
+         if (tm_beg == 0) {
+           tm_beg = epoch;
+         }
+         #  printf("iostat beg_date= mm.dd.yyyy %s.%s.%s, epoch= %f\n", dt_beg["mm"], dt_beg["dd"], dt_beg["yy"], epoch) > "/dev/stderr";
+     }
+
      /^avg-cpu:/{
         if (mx_cpu == 0) {
           mx_cpu=1;
@@ -719,6 +869,7 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
                if (got_dev[i] == 1) { continue; }
                ++mx_io;
                sv_io[mx_io]=dev_lst[i];
+               sv_io_tm[mx_io]=epoch;
                sv_io_dev_ids[mx_io] = dev_lst[i];
                for (j=2; j <= sv_io_cols; j++) {
                  sv_io[mx_io]=sv_io[mx_io] "\t0.0";
@@ -736,6 +887,7 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
         }
         if (area == "cpu") {
            sv_cpu[++mx_cpu] = str;
+           sv_cpu_tm[mx_cpu] = epoch;
         }
         if (area == "io") {
            if (!($1 in sv_dev)) {
@@ -747,9 +899,11 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
            dev_id = sv_dev[$1];
            got_dev[dev_id] = 1;
            sv_io[++mx_io] = str;
+           sv_io_tm[mx_io] = epoch;
            sv_io_dev_ids[mx_io] = $1;
         }
         sv[++sv_mx] = str;
+        sv_tm[sv_mx] = epoch;
         next;
      }
      END{
@@ -776,20 +930,23 @@ trows++; printf("\tBear in mind that poor performing disk I/O isn\x27t necessari
 trows++; printf("\ttypically used to perform I/O asynchronously, so that the application doesn\x27t block and suffer the latency\n") > NFL;
 trows++; printf("\tdirectly (e.g., read-ahead for reads, and buffering for writes).\n") > NFL;
 row += trows;
-       row = line_data(row, sv_cpu, mx_cpu, chart " %CPU", sv_cpu[1]);
+       row = line_data(row, sv_cpu, mx_cpu, chart " %CPU", sv_cpu[1], sv_cpu_tm);
        ++row;
        printf("\n") > NFL;
        for (ii=1; ii <= mx_dev; ii++) {
           ttl=chart " dev " dev_lst[ii];
           delete narr;
+          delete tarr;
           narr[1] = sv_io[1];
+          tarr[1] = sv_io_tm[1];
           mx_arr=1;
           for (jj=2; jj <= mx_io; jj++) {
              if (sv_io_dev_ids[jj] == dev_lst[ii]) {
                 narr[++mx_arr] = sv_io[jj];
+                tarr[mx_arr] = sv_io_tm[jj];
              }
           }
-          row = line_data(row, narr, mx_arr, ttl, narr[1]);
+          row = line_data(row, narr, mx_arr, ttl, narr[1], tarr);
           ++row;
           printf("\n") > NFL;
        }
@@ -1140,12 +1297,14 @@ row += trows;
    ' $i
    SHEETS="$SHEETS $i.tsv"
  fi
+
   if [[ $i == *"_perf_stat.txt"* ]]; then
     echo "do perf_stat data"
     #$SCR_DIR/perf_stat_scatter.sh -b $BEG -p "$PFX" -o "$OPTIONS"  -f $i > $i.tsv
     $SCR_DIR/perf_stat_scatter.sh -b $BEG  -o "$OPTIONS"  -f $i > $i.tsv
    SHEETS="$SHEETS $i.tsv"
   fi
+
   if [[ $i == *"_interrupts.txt"* ]]; then
     echo "do interrupts"
 # ==beg 0 date 1580278735.829557760
@@ -1222,7 +1381,7 @@ row += trows;
        }
        trows=0;
        printf("title\tinterrupts\tsheet\tinterrupts\ttype\tline\n") > NFL;
-       printf("hdrs\t%d\t0\t%d\t%d\n", 2+trows, -1, intr_num-drop_cols) > NFL;
+       printf("hdrs\t%d\t0\t%d\t%d\t-1\n", 2+trows, -1, intr_num-drop_cols) > NFL;
        tab="";
        for (i=1; i <= intr_num; i++) {
           if (ck_no_chg[i] == 0) {
