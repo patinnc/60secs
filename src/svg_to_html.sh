@@ -326,6 +326,12 @@ awk -v rps="$RPS" '
     #  printf("</g>\n");
     #}
     got_svg_beg = 0;
+    if (fctr_arr[fl] <= 0.0) {
+       fctr_arr[fl] = 1.0;
+    }
+    if (fctr_arr[fctr_mx] <= 0.0) {
+       fctr_arr[fctr_mx] = 1.0;
+    }
     if (index($0, "<svg ver") == 1) {
        pos = index($0, " width=");
        str = substr($0, pos+7);
