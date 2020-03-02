@@ -592,7 +592,12 @@ trows++; printf("\n") > NFL;
              nmi = nm_arr[nm];
              pct = $8+0; # %cpu
              if (pct > num_cpus_pct) {
-               pct = 0;
+               # it is misleading to set it to 0 as it makes me think the process is blocked and not running in this interval.
+               # The numbers "look like" they could be 1000x too big...this is a real hack
+               npct = pct * 0.001;
+               if (npct > num_cpus_pct) { npct = 0.0; }
+               printf("pidstat: trying to fixup too high %CPU: pct= %f num_cpus_pct= %f, npct= %f, tm_rw= %d, i= %d, pid[%d,%s]= %s, nm= %s\n", pct, num_cpus_pct, npct, tm_rw, i, i,nmi, pid[i,nmi], nm) > "/dev/stderr";
+               pct = npct;
              }
              pid[tm_rw,nmi] = pct;
              nm_tot[nmi] += pct;
