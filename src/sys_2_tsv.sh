@@ -1528,6 +1528,8 @@ if [ -e $JAVA_COL ]; then
   echo "do svg_to_html.sh " 1>&2
   $SCR_DIR/svg_to_html.sh -r 1 -d . -f java.svg > java.html
   inkscape -z  -w 2400 -j --export-file=java.png  java.svg
+  $SCR_DIR/gen_flamegraph_for_java_in_container_function_hotspot.sh $JAVA_COL > $JAVA_COL.tsv
+  SHEETS="$SHEETS $JAVA_COL.tsv"
 fi
 if [ "$SHEETS" != "" ]; then
    echo "python $SCR_DIR/tsv_2_xlsx.py $SHEETS"
