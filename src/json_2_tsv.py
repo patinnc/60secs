@@ -1,3 +1,4 @@
+from __future__ import print_function
 import json
 import sys
 
@@ -19,6 +20,8 @@ if hdr == "" and sys.argv[1].find("RPS") > -1:
 if hdr == "" and sys.argv[1].find("response") > -1:
    hdr="resp_tm"
    cols=4
+if hdr == "" and sys.argv[1].find("latency") > -1:
+   hdr="latency"
 
 
 odata=[]
@@ -26,41 +29,69 @@ k = -1
 targets=0
 target_str=""
 trgt_dict = {}
+trgt_tot  = {}
+trgt_tot_tm  = {}
+trgt_ts   = {}
 trgt_arr  = []
 ts_dict = {}
+lat_tot = 0.0
 rows=0
 for i in range(len(data)):
     #print("i= ", i, ", obj= ", data[i])
     trgt = data[i]['target']
+    if hdr == "latency":
+       trgt = data[i]['tags']['bucket']
+       lwr_bnd = 1
+       mspos = trgt.find("ms")
+       if mspos != -1:
+          lwr_bnd_str = trgt[:mspos]
+          lwr_bnd = int(lwr_bnd_str)
+       trgt_ts[trgt] = lwr_bnd
+       print("target= %s, lwr_bnd= %d" % (trgt, lwr_bnd))
     for j in range(len(data[i]['datapoints'])):
-        if data[i]['datapoints'][j][0] != None and data[i]['datapoints'][j][1] >= beg and data[i]['datapoints'][j][1] <= end:
+        tm = data[i]['datapoints'][j][1]
+        if tm >= beg and tm <= end:
+           if data[i]['datapoints'][j][0] == None:
+              val = 0.0
+           else:
+              val = data[i]['datapoints'][j][0];
            if not trgt in trgt_dict:
               k += 1
               trgt_dict[trgt] = k
+              trgt_tot[trgt] = 0.0
+              trgt_tot_tm[trgt] = 0.0
               trgt_arr.append(trgt)
               rows = -1
            rows += 1
+           if hdr == "latency":
+              trgt_tot[trgt] += val;
+              trgt_tot_tm[trgt] += trgt_ts[trgt]*val;
+              lat_tot += trgt_ts[trgt]*val;
            if k == 0:
-              ts_dict[data[i]['datapoints'][j][1]] = rows
-              odata.append([data[i]['datapoints'][j][1], data[i]['datapoints'][j][1]-beg, data[i]['datapoints'][j][0]])
+              ts_dict[tm] = rows
+              odata.append([tm, tm-beg, val])
            else:
-              if not data[i]['datapoints'][j][1] in ts_dict:
-                 print("need to check your code dude. ts= %s of target %s not in target= %s array\n" % (data[i]['datapoints'][j][1], trgt, trgt_arr[0]))
+              if not tm in ts_dict:
+                 print("need to check your code dude. k= %d ts= %s of target %s not in target= %s array\n" % (k, data[i]['datapoints'][j][1], trgt, trgt_arr[0]), file=sys.stderr)
                  sys.exit(1)
-              rw = ts_dict[data[i]['datapoints'][j][1]]
-              odata[rw].append(data[i]['datapoints'][j][0])
+              rw = ts_dict[tm]
+              if rw >= len(odata):
+                 print("need to check your code dude. rw= %d, len(odata)= %d, k= %d ts= %s of target %s not in target= %s array\n" % (rw, len(odata), k, tm, trgt, trgt_arr[0]), file=sys.stderr)
+
+              odata[rw].append(val)
 
 of = open(flnm+".tsv","w+")
 rw = 0
 of.write("title\t%s\tsheet\t%s\ttype\tscatter_straight\n" % (hdr, hdr))
 rw += 1
-of.write("hdrs\t%d\t%d\t%d\t%d\t1\n" % (rw+1, 2, len(odata)+rw, 1+len(trgt_arr)))
+of.write("hdrs\t%d\t%d\t%d\t%d\t1\n" % (rw+1, 2, len(odata)+rw+1, 1+len(trgt_arr)))
 #hdrs	3	24	-1	35
 rw += 1
 of.write("ts\toffset")
 for j in range(len(trgt_arr)):
     of.write("\t%s" % (trgt_arr[j]))
 of.write("\n")
+rw += 1
 
 for i in range(len(odata)):
     for j in range(len(trgt_arr)):
@@ -69,4 +100,23 @@ for i in range(len(odata)):
         else:
            of.write("\t%f" % (odata[i][2+j]))
     of.write("\n")
+    rw += 1
 
+if hdr != "latency":
+   sys.exit(0)
+
+of.write("\n")
+rw += 1
+of.write("title\t%%total time by response time bucket\tsheet\t%s\ttype\tcolumn\n" % (hdr))
+rw += 1
+of.write("hdrs\t%d\t%d\t%d\t%d\t%d\n" % (rw+1, 3, rw+len(trgt_arr)+1, 3, 4))
+rw += 1
+of.write("%s\t%s\t%s\t%s\t%s\n" % ("Latency", "calls", "tot_time(ms)", "%tot_time", "bucket"))
+rw += 1
+if lat_tot == 0:
+   lat_tot = 1
+for j in range(len(trgt_arr)):
+    trgt = trgt_arr[j]
+    of.write("%d\t%d\t%d\t%.3f\t%s\n" % (trgt_ts[trgt], trgt_tot[trgt], trgt_tot_tm[trgt], 100.0*trgt_tot_tm[trgt]/lat_tot, trgt))
+    rw += 1
+of.write("\n")
