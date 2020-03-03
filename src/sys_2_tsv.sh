@@ -1507,6 +1507,16 @@ row += trows;
    SHEETS="$SHEETS $i.tsv"
   fi
 done
+tst_files="latency_histo.log"
+for f in $tst_files; do
+  if [ -e $f ]; then
+     echo "try latency log $f"
+     $SCR_DIR/resp_2_tsv.sh $f
+     if [ -e $f.tsv ]; then
+     SHEETS="$SHEETS $f.tsv"
+     fi
+  fi
+done
 tst_files="RPS.log response_time.log"
 for f in $tst_files; do
   if [ -e $f ]; then
