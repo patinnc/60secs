@@ -1306,7 +1306,7 @@ row += trows;
   if [[ $i == *"_perf_stat.txt"* ]]; then
     echo "do perf_stat data"
     #$SCR_DIR/perf_stat_scatter.sh -b $BEG -p "$PFX" -o "$OPTIONS"  -f $i > $i.tsv
-    $SCR_DIR/perf_stat_scatter.sh -b $BEG  -o "$OPTIONS"  -f $i > $i.tsv
+    $SCR_DIR/perf_stat_scatter.sh -b "$BEG"  -o "$OPTIONS"  -f $i > $i.tsv
    SHEETS="$SHEETS $i.tsv"
   fi
 
@@ -1510,10 +1510,11 @@ done
 tst_files="latency_histo.log"
 for f in $tst_files; do
   if [ -e $f ]; then
-     echo "try latency log $f"
+     echo "try latency log $f" > /dev/stderr
      $SCR_DIR/resp_2_tsv.sh $f
      if [ -e $f.tsv ]; then
      SHEETS="$SHEETS $f.tsv"
+     echo "got latency log $f.tsv" > /dev/stderr
      fi
   fi
 done
@@ -1542,7 +1543,8 @@ if [ -e $JAVA_COL ]; then
   SHEETS="$SHEETS $JAVA_COL.tsv"
 fi
 if [ "$SHEETS" != "" ]; then
-   echo "python $SCR_DIR/tsv_2_xlsx.py $SHEETS"
+   echo "python $SCR_DIR/tsv_2_xlsx.py $SHEETS" > /dev/stderr
+   echo python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" -o $XLSX_FILE -i "$IMAGE_STR" $SHEETS > /dev/stderr
    # default chart size is pretty small, scale chart size x,y by 2 each. def 1,1 seems to be about 15 rows high (on my MacBook)
    python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" -o $XLSX_FILE -i "$IMAGE_STR" $SHEETS
 fi
