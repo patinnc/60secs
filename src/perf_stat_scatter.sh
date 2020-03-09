@@ -11,8 +11,9 @@ SHEET_IN=
 PFX_IN=
 OPTIONS=
 BEG=
+SUM_FILE=
 
-while getopts "hvb:c:f:o:p:s:l:" opt; do
+while getopts "hvb:c:f:o:p:s:S:l:" opt; do
   case ${opt} in
     b )
       BEG=$OPTARG
@@ -25,6 +26,9 @@ while getopts "hvb:c:f:o:p:s:l:" opt; do
       ;;
     s )
       SHEET_IN=$OPTARG
+      ;;
+    S )
+      SUM_FILE=$OPTARG
       ;;
     o )
       if [[ $OPTARG == *"dont_sum_sockets"* ]]; then
@@ -74,6 +78,7 @@ while getopts "hvb:c:f:o:p:s:l:" opt; do
       echo "   -o options_str  Currently only option is \"dont_sum_sockets\" to not sum S0 & S1 to the system"
       echo "   -p prefix_str.  prefix each sheet name with this string."
       echo "   -s sheet_name.  Used by tsv_2_xlsx.py. string has to comply with Excel sheet name rules"
+      echo "   -S sum_file     Output summary stats to this file"
       echo "   -l SpecInt CPU2017 log (like result/CPU2017.001.log)"
       echo "   -v verbose mode"
       exit
@@ -105,7 +110,8 @@ else
  TSC_FREQ="2.1"
 fi
 
-awk -v ts_beg="$BEG" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" 'BEGIN{
+
+awk -v ts_beg="$BEG" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s/skt},LLC-misses PKI,IPC{InstPerCycle},%not_halted,avg_freq{avg_freq GHz},QPI_BW{QPI_BW GB/s/skt}" 'BEGIN{
      row=0;
      evt_idx=-1;
      months="  JanFebMarAprMayJunJulAugSepOctNovDec";
@@ -114,6 +120,38 @@ awk -v ts_beg="$BEG" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIO
      st_beg=0; 
      st_mx=0;
      ts_prev = 0.0;
+        n_sum = 0;
+       if (sum_file != "" && sum_flds != "") {
+         n_sum = split(sum_flds, sum_arr, ",");
+         for (i_sum=1; i_sum <= n_sum; i_sum++) {
+            sum_type[i_sum] = 0;
+            str = sum_arr[i_sum];
+            pos = index(str, "{");
+            if (pos > 0) {
+               pos1 = index(str, "}");
+               if (pos1 == 0) { pos1= length(str)+1; }
+               sum_prt[i_sum] = substr(str, pos+1, pos1-pos-1);
+               sum_arr[i_sum] = substr(str, 1, pos-1);
+            } else {
+               sum_prt[i_sum] = str;
+            }
+            printf("got sum_arr[%d]= %s, prt= %s\n", i_sum, sum_arr[i_sum], sum_prt[i_sum]) > "/dev/stderr";
+         }
+       }
+  }
+  function do_summary(colms, v, epch, intrvl) {
+     if (n_sum > 0 && hdr_lkup[colms] != -1) {
+        i_sum = hdr_lkup[colms];
+        sum_occ[i_sum] += 1;
+        #printf("colms= %d, v= %f, epch= %f, intrvl= %f, i_sum= %d typ= %d\n", colms, v, epch, intrvl, i_sum, sum_type[i_sum]) >> sum_file;
+        if (sum_type[i_sum] == 1) {
+           if (sum_tmin[i_sum] == 0)   { sum_tmin[i_sum] = epch; sum_tmax[i_sum] = sum_tmin[i_sum]; }
+           if (sum_tmax[i_sum] < epch) { sum_tmax[i_sum] = epch; }
+           sum_tot[i_sum] += v * intrvl;
+        } else {
+           sum_tot[i_sum] += v;
+        }
+     }
   }
   function dt_to_epoch(offset) {
    # started on Tue Dec 10 23:23:30 2019
@@ -396,7 +434,8 @@ awk -v ts_beg="$BEG" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIO
        }
      }
 
-     printf("epoch\tts\tinstances:");
+#abcd
+     printf("epoch\tts\trel_ts\tinstances:");
      for(i=0; i <= evt_idx; i++) {
        printf("\t%s", evt_inst[i]);
      }
@@ -419,15 +458,21 @@ awk -v ts_beg="$BEG" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIO
      bw_cols_mx = 0;
      ipc_cols_mx = 0;not_halted
      unhalted_cols_mx = 0;
+     col_hdr[0] = "epoch";
+     col_hdr[1] = "ts";
+     col_hdr[2] = "rel_ts";
+     col_hdr[3] = "interval";
      printf("epoch\tts\trel_ts\tinterval");
      cols = 4;
      for(i=0; i <= evt_idx; i++) {
        printf("\t%s", evt_lkup[i]);
+       col_hdr[cols] = evt_lkup[i];
        cols++;
      }
      for (k=1; k <= kmx; k++) { 
        if (got_lkfor[k,1] == got_lkfor[k,2]) {
           printf("\t%s", nwfor[k,1]);
+          col_hdr[cols] = nwfor[k,1];
           if (index(nwfor[k,1], "GB/s") > 0) {
             bw_cols[++bw_cols_mx] = cols;
           }
@@ -441,6 +486,21 @@ awk -v ts_beg="$BEG" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIO
        }
      }
      printf("\n");
+     col_hdr_mx = cols;
+     if (n_sum > 0) {
+            for (k=0; k <= col_hdr_mx; k++) {
+              hdr_lkup[k] = -1;
+            }
+            for (k=0; k <= col_hdr_mx; k++) {
+              #printf("ck col_hdr[%d]= %s\n", k, col_hdr[k]) > "/dev/stderr";
+              for (i_sum=1; i_sum <= n_sum; i_sum++) {
+                 if (index(col_hdr[k], sum_arr[i_sum]) > 0) {
+                    hdr_lkup[k] = i_sum;
+                    printf("match col_hdr[%d]= %s with sum_arr[%d]= %s\n", k, col_hdr[k], i_sum, sum_arr[i_sum]) > "/dev/stderr";
+                 }
+              }
+            }
+     }
      epoch_next=0;
      ts_prev = 0.0;
      for(i=1; i <= row; i++) {
@@ -466,6 +526,7 @@ awk -v ts_beg="$BEG" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIO
           use_epoch = ts_beg + sv[i,1];
        }
        printf("%.4f\t%s\t%s\t%.4f", use_epoch, sv[i,1], sv[i,1], interval);
+       cols = 4;
        for (k=1; k <= kmx; k++) { 
          sum[k]=0.0;
          numer[k]=0.0;
@@ -473,6 +534,8 @@ awk -v ts_beg="$BEG" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIO
          for(j=0; j <= evt_idx; j++) {
            if (k == 1) {
              printf("\t%s", sv[i,3+j]);
+             do_summary(cols, sv[i,3+j]+0.0, use_epoch+0.0, interval);
+             cols++;
            }
            if (got_lkfor[k,4] == "sum") {
              for (kk=1; kk <= got_lkfor[k,2]; kk++) { 
@@ -526,6 +589,8 @@ awk -v ts_beg="$BEG" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIO
              #printf("b sk= %d, nhf= %f\n", sk, not_halted_fctr[sk]) > "/dev/stderr";
            }
            printf("\t%s", val);
+           do_summary(cols, val+0.0, use_epoch+0.0, interval);
+           cols++;
          }
        }
        if (st_mx > 0 && i < row && sv[i,0]+0.0 > 0 && st_sv[1,2]+0.0 > 0.0) {
@@ -535,6 +600,8 @@ awk -v ts_beg="$BEG" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIO
           for (ii=1; ii < st_mx; ii++) {
             if (epb <= st_sv[ii,2] && st_sv[ii,2] < epe) {
 		printf("\t%s", st_sv[ii,1]);
+                do_summary(cols, st_sv[ii,1]+0.0, use_epoch+0.0, interval);
+                cols++;
                 break;
             }
           }
@@ -565,5 +632,15 @@ awk -v ts_beg="$BEG" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIO
        }
        printf("\n");
      }
+       if (n_sum > 0) {
+          printf("got perf_stat n_sum= %d\n", n_sum) >> "/dev/stderr";
+          for (i_sum=1; i_sum <= n_sum; i_sum++) {
+             divi = sum_occ[i_sum];
+             if (sum_type[i_sum] == 1) {
+                divi = sum_tmax[i_sum] - sum_tmin[i_sum];
+             }
+             printf("%s\t%s\t%f\n", "perf_stat", sum_prt[i_sum], (divi > 0 ? sum_tot[i_sum]/divi : 0.0)) >> sum_file;
+          }
+       }
    }' $FILES $SPECINT_LOG
 
