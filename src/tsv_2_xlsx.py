@@ -267,6 +267,7 @@ for fn in range(len(file_list)):
                 print("What going on, sheet_nm= %s, ch_typ= %s, file= %s, hcol_beg= %d, hcol_end= %d" % (sheet_nm, ch_type, x, hcol_beg, hcol_end), file=sys.stderr)
              mcol_list.append([hcol_beg, hcol_end])
           print("sheet= %s ch= %d hro= %d hc= %d hce= %d, dr= %d, dre= %d" % (sheet_nm, c, hrow_beg, hcol_beg, hcol_end, drow_beg, drow_end))
+          ch_style = 10
           if ch_type == "scatter_straight":
              chart1 = workbook.add_chart({'type': 'scatter', 'subtype': 'straight'})
           else:
@@ -295,7 +296,7 @@ for fn in range(len(file_list)):
           if got_how_many_series_for_chart == 0:
              print("What going on4, sheet_nm= %s, ch_typ= %s, file= %s, drow_beg= %d drow_end= %d hcol_beg= %d, hcol_end= %d" % (sheet_nm, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end), file=sys.stderr)
           chart1.set_title ({'name': title})
-          chart1.set_style(10)
+          chart1.set_style(ch_style)
           ch_opt = {'x_offset': 25, 'y_offset': 10}
           if len(ch_size) >= 2:
              ch_opt = {'x_offset': 25, 'y_offset': 10, 'x_scale': ch_size[0], 'y_scale': ch_size[1]}
