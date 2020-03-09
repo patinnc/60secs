@@ -12,8 +12,9 @@ SCR_DIR=`dirname $0`
 IMAGE_STR=
 XLSX_FILE="chart_line.xlsx"
 PFX=
+SUM_FILE=
 
-while getopts "hvd:o:p:i:x:" opt; do
+while getopts "hvd:o:p:i:s:x:" opt; do
   case ${opt} in
     d )
       DIR=$OPTARG
@@ -26,6 +27,9 @@ while getopts "hvd:o:p:i:x:" opt; do
       ;;
     p )
       PFX=$OPTARG
+      ;;
+    s )
+      SUM_FILE=$OPTARG
       ;;
     x )
       XLSX_FILE=$OPTARG
@@ -50,6 +54,7 @@ while getopts "hvd:o:p:i:x:" opt; do
       echo "   -x xlsx_filename  This is passed to tsv_2_xlsx.py as the name of the xlsx. (you need to add the .xlsx)"
       echo "      The default is chart_line.xlsx"
       echo "   -p prefix   string to be prefixed to each sheet name"
+      echo "   -s sum_file summary_file"
       echo "   -v verbose mode"
       exit
       ;;
@@ -150,8 +155,29 @@ trows++; printf("\n") > NFL;
 # 4  0      0 1319472 842316 44802156    0    0     0    12 20779 58660 14  1 85  0  0
 # 2  0      0 1384300 842320 44802160    0    0     0   356 17266 81860 11  1 88  0  0
 
-    awk -v pfx="$PFX" '
-     BEGIN{beg=1;col_mx=-1;mx=0}
+    awk -v pfx="$PFX" -v sum_file="$SUM_FILE" -v sum_flds="runnable{vmstat runnable PIDs},interrupts/s,context switch/s,%user,%idle" '
+     BEGIN{beg=1;col_mx=-1;mx=0;
+        n_sum = 0;
+       if (sum_file != "" && sum_flds != "") {
+         n_sum = split(sum_flds, sum_arr, ",");
+         for (i_sum=1; i_sum <= n_sum; i_sum++) {
+            sum_type[i_sum] = 0;
+            str = sum_arr[i_sum];
+            pos = index(str, "{");
+            if (pos > 0) {
+               pos1 = index(str, "}");
+               if (pos1 == 0) { pos1= length(str)+1; }
+               sum_prt[i_sum] = substr(str, pos+1, pos1-pos-1);
+               sum_arr[i_sum] = substr(str, 1, pos-1);
+            } else {
+               sum_prt[i_sum] = str;
+            }
+            if (index(tolower(str), "/s") > 0) {
+               sum_type[i_sum] = 1;
+            }
+         }
+       }
+     }
      /^procs/{
        next;
      }
@@ -261,11 +287,24 @@ trows++; printf("\t\n") > NFL;
           if (arr[i] == "free")  { free_col  = i-1; }
           if (arr[i] == "buff")  { buff_col  = i-1; }
           if (arr[i] in nhdr) { str = nhdr[arr[i]]; } else { str = arr[i]; }
+          for (i_sum=1; i_sum <= n_sum; i_sum++) {
+              if (str == sum_arr[i_sum]) {
+                 sum_lkup[i_sum] = i;
+              }
+          }
           nwln = nwln "" sep "" str;
           sep = "\t";
        }
        printf("%s\n", nwln) > NFL;
        for (i=2; i <= mx; i++) {
+          if (n_sum > 0) {
+            n = split(sv[i], arr, "\t");
+            for (i_sum=1; i_sum <= n_sum; i_sum++) {
+              j = sum_lkup[i_sum];
+              sum_occ[i_sum] += 1;
+              sum_tot[i_sum] += arr[j];
+            }
+          }
           printf("%s\n", sv[i]) > NFL;
        }
        printf("\ntitle\tvmstat cpu\tsheet\tvmstat\ttype\tline\n") > NFL;
@@ -276,7 +315,13 @@ trows++; printf("\t\n") > NFL;
        printf("hdrs\t%d\t0\t%d\t%d\t-1\t%d\t%d\t%d\t%d\t%d\t%d\n", 2+trows, mx+1+trows, col_mx, cache_col, cache_col, free_col, free_col, buff_col, buff_col) > NFL;
        printf("\ntitle\tvmstat IO blocks in & blocks out\tsheet\tvmstat\ttype\tline\n") > NFL;
        printf("hdrs\t%d\t0\t%d\t%d\t-1\t%d\t%d\t%d\t%d\n", 2+trows, mx+1+trows, col_mx, bi_col, bi_col, bo_col, bo_col) > NFL;
-       close(NFL);}
+       close(NFL);
+       if (n_sum > 0) {
+          for (i_sum=1; i_sum <= n_sum; i_sum++) {
+             printf("%s\t%s\t%f\n", "vmstat", sum_prt[i_sum], (sum_occ[i_sum] > 0 ? sum_tot[i_sum]/sum_occ[i_sum] : 0.0)) >> sum_file;
+          }
+       }
+       }
    ' $i
    SHEETS="$SHEETS $i.tsv"
   fi
@@ -346,7 +391,6 @@ trows++; printf("\t\n") > NFL;
         if (NF==0) { next; }
      }
      /%idle/{
-#abcd
         if (beg == 1 && ($2 == "AM" || $2 == "PM")) {
            epoch = dt_to_epoch($1, $2);
            tm_beg = epoch;
@@ -765,8 +809,10 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
 #sda               0.00     0.00  567.00    0.00  7100.00     0.00    25.04     0.06    0.11    0.11    0.00   0.11   6.00
 #dm-0              0.00     0.00  567.00    0.00  7100.00     0.00    25.04     0.06    0.11    0.11    0.00   0.11   6.40
 
+#rkB/s	wkB/s	avgrq-sz	avgqu-sz	await	r_await	w_await	svctm	%util
+
     echo "do iostat"
-    awk -v ts_beg="$BEG" -v pfx="$PFX" -v typ="iostat" '
+    awk -v ts_beg="$BEG" -v pfx="$PFX" -v typ="iostat"  -v sum_file="$SUM_FILE" -v sum_flds="rkB/s{io RdkB/s},wkB/s{io wrkB/s},avgrq-sz{io avg Req_sz},avgqu-sz{io avg que_sz},%util{io %util}" '
      BEGIN{
         beg=1;
         grp_mx=0;
@@ -778,6 +824,26 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
         tm_beg = 0;
         ts_beg += 0;
         epoch_init = 0;
+        n_sum = 0;
+       if (sum_file != "" && sum_flds != "") {
+         n_sum = split(sum_flds, sum_arr, ",");
+         for (i_sum=1; i_sum <= n_sum; i_sum++) {
+            sum_type[i_sum] = 0;
+            str = sum_arr[i_sum];
+            pos = index(str, "{");
+            if (pos > 0) {
+               pos1 = index(str, "}");
+               if (pos1 == 0) { pos1= length(str)+1; }
+               sum_prt[i_sum] = substr(str, pos+1, pos1-pos-1);
+               sum_arr[i_sum] = substr(str, 1, pos-1);
+            } else {
+               sum_prt[i_sum] = str;
+            }
+            if (index(tolower(str), "/s") > 0) {
+               sum_type[i_sum] = 1;
+            }
+         }
+       }
       }
       function dt_to_epoch(hhmmss, amp) {
          # the epoch seconds from the date time info in the file is local time,not UTC.
@@ -823,7 +889,6 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
         NFLA=FNM ".all.tsv";
      }
      #02/28/2020 10:34:37 PM
-     #abcd
      / AM$| PM$/{
          dt_beg["yy"] = substr($1, 7, 4);
          dt_beg["mm"] = substr($1, 1, 2);
@@ -938,6 +1003,16 @@ row += trows;
        row = line_data(row, sv_cpu, mx_cpu, chart " %CPU", sv_cpu[1], sv_cpu_tm);
        ++row;
        printf("\n") > NFL;
+       if (mx_dev > 0 && n_sum > 0) {
+         n = split(sv_io[1], hdr_arr, "\t");
+         for (i=1; i <= n; i++) {
+           for (i_sum=1; i_sum <= n_sum; i_sum++) {
+               if (hdr_arr[i] == sum_arr[i_sum]) {
+                  sum_lkup[i_sum] = i;
+               }
+           }
+         }
+       }
        for (ii=1; ii <= mx_dev; ii++) {
           ttl=chart " dev " dev_lst[ii];
           delete narr;
@@ -949,6 +1024,21 @@ row += trows;
              if (sv_io_dev_ids[jj] == dev_lst[ii]) {
                 narr[++mx_arr] = sv_io[jj];
                 tarr[mx_arr] = sv_io_tm[jj];
+                if (n_sum > 0) {
+                  n = split(sv_io[jj], tst_arr, "\t");
+                  for (i_sum=1; i_sum <= n_sum; i_sum++) {
+                    j = sum_lkup[i_sum];
+                    sum_occ[i_sum] += 1;
+                    if (sum_type[i_sum] == 1) {
+                      if (sum_tmin[i_sum] == 0) { sum_tmin[i_sum] = sv_io_tm[jj]; sum_tmax[i_sum] = sv_io_tm[jj]; }
+                      if (sum_tmax[i_sum] < sv_io_tm[jj]) { sum_tmax[i_sum] = sv_io_tm[jj]; }
+                      if (jj > 2) { intrvl = sv_io_tm[jj] - sv_io_tm[jj-1];} else { intrvl = 1.0; } # a hack for jj=2;
+                      sum_tot[i_sum] += tst_arr[j] * intrvl;
+                    } else {
+                      sum_tot[i_sum] += tst_arr[j];
+                    }
+                  }
+                }
              }
           }
           row = line_data(row, narr, mx_arr, ttl, narr[1], tarr);
@@ -962,6 +1052,16 @@ row += trows;
           printf("%s\n", sv[i]) > NFL;
        }
        close(NFL);
+       if (n_sum > 0) {
+          printf("got iostat n_sum= %d\n", n_sum) >> "/dev/stderr";
+          for (i_sum=1; i_sum <= n_sum; i_sum++) {
+             divi = sum_occ[i_sum];
+             if (sum_type[i_sum] == 1) {
+                divi = sum_tmax[i_sum] - sum_tmin[i_sum];
+             }
+             printf("%s\t%s\t%f\n", "iostat", sum_prt[i_sum], (divi > 0 ? sum_tot[i_sum]/divi : 0.0)) >> sum_file;
+          }
+       }
      }
    ' $i
    SHEETS="$SHEETS $i.tsv"
@@ -1009,7 +1109,6 @@ row += trows;
          epoch = ts_beg + (epoch - epoch_init + 1); # the plus 1 assumes a 1 second interval.
          return epoch;
       }
-# abcd
 
       function line_data(row, arr_in, arr_mx, title, hdr, tmarr_in) {
        ++row;
@@ -1306,7 +1405,8 @@ row += trows;
   if [[ $i == *"_perf_stat.txt"* ]]; then
     echo "do perf_stat data"
     #$SCR_DIR/perf_stat_scatter.sh -b $BEG -p "$PFX" -o "$OPTIONS"  -f $i > $i.tsv
-    $SCR_DIR/perf_stat_scatter.sh -b "$BEG"  -o "$OPTIONS"  -f $i > $i.tsv
+#abcd
+    $SCR_DIR/perf_stat_scatter.sh -b "$BEG"  -o "$OPTIONS"  -f $i -S $SUM_FILE > $i.tsv
    SHEETS="$SHEETS $i.tsv"
   fi
 
@@ -1438,9 +1538,30 @@ row += trows;
 
   if [[ $i == *"_nicstat.txt"* ]]; then
     echo "do nicstat"
-    awk -v beg_ts="$BEG" -v pfx="$PFX" '
+#abcd
+    awk -v beg_ts="$BEG" -v pfx="$PFX" -v sum_file="$SUM_FILE" -v sum_flds="InKB{TCP_RdKB/s},OutKB{TCP_WrKB/s},RdKB{NetDev_RdKB/s},WrKB{NetDev_WrKB/},IErr{NetDev_IErr/s},OErr{NetDev_OErr/s},%Util{NetDev_%Util}" '
      BEGIN{
         beg_ts += 0.0;
+        n_sum = 0;
+       if (sum_file != "" && sum_flds != "") {
+         n_sum = split(sum_flds, sum_arr, ",");
+         for (i_sum=1; i_sum <= n_sum; i_sum++) {
+            sum_type[i_sum] = 1;
+            str = sum_arr[i_sum];
+            pos = index(str, "{");
+            if (pos > 0) {
+               pos1 = index(str, "}");
+               if (pos1 == 0) { pos1= length(str)+1; }
+               sum_prt[i_sum] = substr(str, pos+1, pos1-pos-1);
+               sum_arr[i_sum] = substr(str, 1, pos-1);
+            } else {
+               sum_prt[i_sum] = str;
+            }
+            if (index(str, "%") > 0) {
+               sum_type[i_sum] = 0;
+            }
+         }
+       }
      }
      {
         FNM=ARGV[ARGIND];
@@ -1477,7 +1598,21 @@ row += trows;
      }
      END{
        row=-1;
+#abcd
        for (i=1; i <= hdr_typs; i++) {
+          if (n_sum > 0) {
+            for (k=1; k <= hdr_mx[i]; k++) {
+              hdr_lkup[k] = -1;
+            }
+            for (k=2; k <= hdr_mx[i]; k++) {
+              for (i_sum=1; i_sum <= n_sum; i_sum++) {
+                 if (hdr[i,k] == sum_arr[i_sum]) {
+                    hdr_lkup[k-1] = i_sum;
+                    break; # so if hdr appears more than one in sum_flds, it will be skipped
+                 }
+              }
+            }
+          }
            row++;
            printf("title\tnicstat %s\tsheet\tnicstat %s\ttype\tscatter_straight\n", hdr_typ[i], hdr_typ[i]) > NFL;
            row++;
@@ -1494,6 +1629,18 @@ row += trows;
               printf("%s\t%.0f\t%.3f", hdr_typ[i], ts_row[i,rw], ts_row[i,rw]-beg_ts) > NFL;
               for (k=1; k <= hdr_mx[i]; k++) {
                  printf("\t%s", data[i,rw,k]) > NFL;
+                 if (hdr_lkup[k] != -1) {
+                   i_sum = hdr_lkup[k];
+                   sum_occ[i_sum] += 1;
+                   if (sum_type[i_sum] == 1) {
+                     if (sum_tmin[i_sum] == 0) { sum_tmin[i_sum] = ts_row[i,rw]; sum_tmax[i_sum] = sum_tmin[i_sum]; }
+                     if (sum_tmax[i_sum] < ts_row[i,rw]) { sum_tmax[i_sum] = ts_row[i,rw]; }
+                     if (rw > 1) {intrvl = ts_row[i,rw] - ts_row[i,rw-1]; } else { intrvl = 1.0 };
+                     sum_tot[i_sum] += data[i,rw,k] * intrvl;
+                   } else {
+                     sum_tot[i_sum] += data[i,rw,k];
+                   }
+                 }
               }
               row++;
               printf("\n") > NFL;
@@ -1502,6 +1649,16 @@ row += trows;
            printf("\n") > NFL;
        }
        close(NFL);
+       if (n_sum > 0) {
+          printf("got nicstat n_sum= %d\n", n_sum) >> "/dev/stderr";
+          for (i_sum=1; i_sum <= n_sum; i_sum++) {
+             divi = sum_occ[i_sum];
+             if (sum_type[i_sum] == 1) {
+                divi = sum_tmax[i_sum] - sum_tmin[i_sum];
+             }
+             printf("%s\t%s\t%f\n", "nicstat", sum_prt[i_sum], (divi > 0 ? sum_tot[i_sum]/divi : 0.0)) >> sum_file;
+          }
+       }
    }
    ' $i.hdr $i
    SHEETS="$SHEETS $i.tsv"
