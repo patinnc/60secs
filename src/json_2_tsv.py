@@ -22,7 +22,8 @@ if hdr == "" and sys.argv[1].find("response") > -1:
    cols=4
 if hdr == "" and sys.argv[1].find("latency") > -1:
    hdr="latency"
-
+if hdr == "" and sys.argv[1].find("http-status") > -1:
+   hdr="http_status"
 
 odata=[]
 k = -1
@@ -44,6 +45,9 @@ for i in range(len(data)):
        lwr_bnd = 1
        mspos = trgt.find("ms")
        if mspos != -1:
+          dshpos = trgt.find("-")
+          if dshpos < mspos:
+             mspos=dshpos
           lwr_bnd_str = trgt[:mspos]
           lwr_bnd = int(lwr_bnd_str)
        trgt_ts[trgt] = lwr_bnd
