@@ -1675,6 +1675,18 @@ for f in $tst_files; do
      fi
   fi
 done
+tst_files="http-status.log"
+for f in $tst_files; do
+  if [ -e $f ]; then
+     echo "try http-status log $f" > /dev/stderr
+     $SCR_DIR/resp_2_tsv.sh $f
+     if [ -e $f.tsv ]; then
+     SHEETS="$SHEETS $f.tsv"
+     echo "got http-status log $f.tsv" > /dev/stderr
+     grep title $f.tsv > /dev/stderr
+     fi
+  fi
+done
 tst_files="RPS.log response_time.log"
 for f in $tst_files; do
   if [ -e $f ]; then
