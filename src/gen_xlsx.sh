@@ -1,15 +1,53 @@
 #!/bin/bash
 
-LST="ramp_500-1500rps_onlinemapmatchv2"
-if [ "$1" != "" ]; then
-LST=$1
-fi
-
 #SCR_DIR=`dirname $(readlink -e $0)`
 #SCR_DIR=`dirname $0`
 SCR_DIR=`dirname "$(readlink -f "$0")"`
 SCR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 echo "SCR_DIR= $SCR_DIR" > /dev/stderr
+
+DIR=
+PHASE_FILE=
+XLSX_FILE=
+
+while getopts "hvd:P:x:" opt; do
+  case ${opt} in
+    d )
+      DIR=$OPTARG
+      ;;
+    P )
+      PHASE_FILE=$OPTARG
+      ;;
+    x )
+      XLSX_FILE=$OPTARG
+      ;;
+    v )
+      VERBOSE=$((VERBOSE+1))
+      ;;
+    h )
+      echo "$0 split data files into columns"
+      echo "Usage: $0 [-h] -d sys_data_dir [-v] [ -p prefix ]"
+      echo "   -d dir containing sys_XX_* files created by 60secs.sh"
+      echo "   -P phase_file"
+      echo "   -x xlsx_filename  This is passed to tsv_2_xlsx.py as the name of the xlsx. (you need to add the .xlsx)"
+      echo "      The default is chart_line.xlsx"
+      echo "   -v verbose mode"
+      exit
+      ;;
+    : )
+      echo "Invalid option: $OPTARG requires an argument" 1>&2
+      exit
+      ;;
+    \? )
+      echo "Invalid option: $OPTARG" 1>&2
+      exit
+      ;;
+  esac
+done
+shift $((OPTIND -1))
+
+
+LST=$DIR
 
 CDIR=`pwd`
 ALST=$CDIR/tmp1.jnk
@@ -25,6 +63,8 @@ j=0
 FCTRS=
 SVGS=
 SUM_FILE=sum.tsv
+
+echo "LST= $LST" > /dev/stderr
 
 oIFS=$IFS
 for i in $LST; do
@@ -50,15 +90,27 @@ for i in $LST; do
  FCTR=`echo $RPS | sed 's/rps//'`
  FCTR=`awk -v fctr="$FCTR" 'BEGIN{fctr += 0.0; mby=1.0; if (fctr >= 100.0) {mby=0.001;} if (fctr == 0.0) {fctr=1.0;mby=1.0;} printf("%.3f\n", mby*fctr); exit;}'`
  echo "rps= $RPS, fctr= $FCTR"
- $SCR_DIR/sys_2_tsv.sh -p "$RPS" -d . -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets > tmp.jnk
+ if [ "$XLSX_FILE" != "" ]; then
+   XLS=$XLSX_FILE
+ fi
+ OPT_PH=
+ if [ "$PHASE_FILE" != "" ]; then
+    OPT_PH=" -P $PHASE_FILE "
+ fi
+ $SCR_DIR/sys_2_tsv.sh -p "$RPS" -d . -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets $OPT_PH $> tmp.jnk
+ SM_FL=
+ if [ -e $SUM_FILE ]; then
+   SM_FL=$i/$SUM_FILE
+ fi
  echo -e "-p\t\"$RPS\"" >> $ALST
  echo -e "-s\t2,2" >> $ALST
  echo -e "-i\t\"$i/*.png\"" >> $ALST
  #echo -e "-x\t$i.xlsx" >> $ALST
  #echo -e "-o\tchart_new,dont_sum_sockets" >> $ALST
  popd
- FLS=`ls -1 $i/*txt.tsv`
+ FLS=`ls -1 $SM_FL $i/*txt.tsv`
  echo -e "${FLS}" >> $ALST
+ echo -e "FLS: ${FLS}" > /dev/stderr
  MYA=($i/*log.tsv)
  if [ "${#MYA}" != "0" ]; then
    FLS=`ls -1 $i/*log.tsv`
