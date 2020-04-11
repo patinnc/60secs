@@ -26,8 +26,9 @@ closed_wkbk = False
 
 options_filename = ""
 
-options, remainder = getopt.getopt(sys.argv[1:], 'f:i:o:p:s:v', ['file=', 'images=',
+options, remainder = getopt.getopt(sys.argv[1:], 'f:i:o:P:p:s:v', ['file=', 'images=',
                                                          'output=',
+                                                         'phase=',
                                                          'prefix=',
                                                          'size=',
                                                          'verbose',
@@ -89,12 +90,14 @@ for fn in range(len(file_list)):
    #   continue
    print("fo= ", fo)
    #options, remainder = getopt.getopt(sys.argv[1:], 'i:o:p:v', ['images=',
-   options, remainder = getopt.getopt(fl_options[fo][1:], 'i:o:p:s:v', ['images=',
+   options, remainder = getopt.getopt(fl_options[fo][1:], 'i:o:P:p:s:v', ['images=',
                                                             'output=',
+                                                            'phase=',
                                                             'prefix=',
                                                             'size=',
                                                             'verbose',
                                                             ])
+
    verbose = False
    image_files=[]
    prefix = ""
@@ -102,6 +105,7 @@ for fn in range(len(file_list)):
    
    print('OPTIONS   :', options)
    ch_array = []
+   opt_phase = []
    
    for opt, arg in options:
        if opt in ('-i', '--images'):
@@ -109,6 +113,20 @@ for fn in range(len(file_list)):
               image_files.append(x)
        elif opt in ('-o', '--output'):
            output_filename = arg
+       elif opt in ('-P', '--phase'):
+           phase = arg
+           print("phase file= %s" % (phase), file=sys.stderr)
+           with open(phase) as tsv:
+              for line in csv.reader(tsv, delimiter=' ', dialect="excel-tab"):
+                  line[1] = float(line[1])
+                  if len(line) < 3:
+                     line.append("-1.0")
+                  if len(line[2]) == 0 or line[2] is None:
+                     line[2] = "-1.0"
+                  print("line2= '%s', len(line)= %d" % (line[2], len(line)), file=sys.stderr)
+                  line[2] = float(line[2])
+                  opt_phase.append(line)
+           print("phase= ", opt_phase, file=sys.stderr)
        elif opt in ('-p', '--prefix'):
            prefix = arg
            prefix_dict[fo] = prefix
@@ -142,9 +160,10 @@ for fn in range(len(file_list)):
    if fake_file_list > 0:
       remainder = [file_list[fn]["flnm"]]
 
-   #print("file list remainder= ", remainder)
+   print("file list remainder= ", remainder, file=sys.stderr)
    for x in remainder:
       
+      print("do file= ", x, file=sys.stderr)
       do_it = True
       if fake_file_list > 0:
          for ck in range(len(file_list)):
@@ -227,10 +246,16 @@ for fn in range(len(file_list)):
                       if is_num:
                          data[i+drow_beg][h] = float(data[i+drow_beg][h])
       
+      ph_add = 0
+      ph_done = 0
+      if len(opt_phase) > 0:
+         ph_add = 1
+
       for i in range(len(data)):
-          worksheet.write_row(i, 0, data[i])
+          worksheet.write_row(i, ph_add, data[i])
       
       for c in range(chrts):
+          dcol_cat = -1
           title_rw = ch_arr[c][0][1]
           title_cl = ch_arr[c][0][2]
           if len(ch_arr[c][0]) > 3:
@@ -268,10 +293,29 @@ for fn in range(len(file_list)):
              mcol_list.append([hcol_beg, hcol_end])
           print("sheet= %s ch= %d hro= %d hc= %d hce= %d, dr= %d, dre= %d" % (sheet_nm, c, hrow_beg, hcol_beg, hcol_end, drow_beg, drow_end))
           ch_style = 10
+          chart1 = None
           if ch_type == "scatter_straight":
+             if ph_done == 0 and ph_add == 1 and dcol_cat > 0:
+                ph_done = 1
+                for ii in range(len(data)):
+                    #  'categories': [wrksh_nm, drow_beg, dcol_cat+ph_add, drow_end, dcol_cat+ph_add],
+                    jjj = dcol_cat-1
+                    if len(data[ii]) <  1 or ii <= hrow_beg:
+                      continue
+                    if data[ii][jjj] is None or data[ii][jjj] == '':
+                      continue
+                    tval = data[ii][jjj]
+                    for jj in range(len(opt_phase)):
+                       if tval >= opt_phase[jj][1] and (tval <= opt_phase[jj][2] or opt_phase[jj][2] == -1):
+                          worksheet.write(ii, 0, opt_phase[jj][0])
+                          break
              chart1 = workbook.add_chart({'type': 'scatter', 'subtype': 'straight'})
           else:
-             chart1 = workbook.add_chart({'type': ch_type})
+             if ch_type != "copy":
+                chart1 = workbook.add_chart({'type': ch_type})
+          if ch_type == "copy":
+             print("chart_type= copy", file=sys.stderr)
+             continue
           # Configure the first series.
           got_how_many_series_for_chart = 0
           for hh in range(len(mcol_list)):
@@ -284,14 +328,14 @@ for fn in range(len(file_list)):
                   got_how_many_series_for_chart += 1
                   if use_cats:
                      chart1.add_series({
-                         'name':       [wrksh_nm, hrow_beg, h],
-                         'categories': [wrksh_nm, drow_beg, dcol_cat, drow_end, dcol_cat],
-                         'values':     [wrksh_nm, drow_beg, h, drow_end, h],
+                         'name':       [wrksh_nm, hrow_beg, h+ph_add],
+                         'categories': [wrksh_nm, drow_beg, dcol_cat+ph_add, drow_end, dcol_cat+ph_add],
+                         'values':     [wrksh_nm, drow_beg, h+ph_add, drow_end, h+ph_add],
                      })
                   else:
                      chart1.add_series({
-                         'name':       [wrksh_nm, hrow_beg, h],
-                         'values':     [wrksh_nm, drow_beg, h, drow_end, h],
+                         'name':       [wrksh_nm, hrow_beg, h+ph_add],
+                         'values':     [wrksh_nm, drow_beg, h+ph_add, drow_end, h+ph_add],
                      })
           if got_how_many_series_for_chart == 0:
              print("What going on4, sheet_nm= %s, ch_typ= %s, file= %s, drow_beg= %d drow_end= %d hcol_beg= %d, hcol_end= %d" % (sheet_nm, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end), file=sys.stderr)
