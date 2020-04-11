@@ -3,9 +3,22 @@
 # see http://www.brendangregg.com/Articles/Netflix_Linux_Perf_Analysis_60s.pdf
 # usage arg1 
 
+GOT_QUIT=0
+# function called by trap
+catch_signal() {
+    printf "\rSIGINT caught      "
+    GOT_QUIT=1
+}
+
+trap 'catch_signal' SIGINT
+
+MYBASHPID=$BASHPID
+echo "$BASHPID" > /root/60secs.pid
+
 SCR_DIR=`dirname "$(readlink -f "$0")"`
 WAIT=60
-TASKS=("uptime" "dmesg" "vmstat" "mpstat" "pidstat" "iostat" "free" "nicstat" "sar_dev" "sar_tcp" "top" "perf" "sched_switch" "interrupts" "flamegraph")
+# renamed task 'top' to 'do_top' to avoid conflict with toplev
+TASKS=("uptime" "dmesg" "vmstat" "mpstat" "pidstat" "iostat" "free" "nicstat" "sar_dev" "sar_tcp" "do_top" "perf" "sched_switch" "interrupts" "flamegraph" "toplev" "power")
 j=0
 for i in ${TASKS[@]}; do
   j=$((j+1))
@@ -26,6 +39,8 @@ WAIT_AT_END=0
 CURL_AT_END=0
 DO_SCHED_SWITCH=0
 DO_FLAMEGRAPH=0
+DO_TOPLEV=0
+DO_POWER=0
 CONTAINER=
 EXCLUDE=
 RUN_CMDS_LOG=run.log
@@ -79,6 +94,12 @@ while getopts "hvbcwa:C:d:i:p:t:x:" opt; do
          if [ "$TMPARG" == "flamegraph" ]; then
            DO_FLAMEGRAPH=1
          fi
+         if [[ $TMPARG == *"toplev"* ]]; then
+           DO_TOPLEV=1
+         fi
+         if [[ $TMPARG == *"power"* ]]; then
+           DO_POWER=1
+         fi
       fi
       ;;
     v )
@@ -94,13 +115,14 @@ while getopts "hvbcwa:C:d:i:p:t:x:" opt; do
       echo "      The task names: ${TASKS[@]}"
       echo "      Enter '-t all' for all tasks except flamegraph and sched_switch (sched_switch which can write 100s of MBs of data per 10 sec interval... so it has more overhead)"
       echo "      Valid task_num range is 0 to $TLAST"
+      echo "      Currently toplev and power tasks block and can't be run in the background."
       echo "      Enter either the number or the task name in a comma separated list"
       echo "      default is no task"
       echo "   -a flamegraph and/or sched_switch"
       echo "      if you do '-t all' flamegraph and sched_switch are not run"
       echo "      Use this option to add flamegraph and or sched_switch"
       echo "   -x task_num or task_name"
-      echo "      A list of tasks to be excluded. top and interrupts are not too useful to me"
+      echo "      A list of tasks to be excluded. do_top and interrupts are not too useful to me"
       echo "      Have to enter the task name, not number"
       echo "   -b start the jobs in the backgroup not waiting for each job to finish"
       echo "      The default is to not start the jobs the background (so start the 1st task, wait for it to finish, start the next task, etc)"
@@ -130,6 +152,12 @@ done
 shift $((OPTIND -1))
 
 if [ "$ADD_IN" != "" ]; then
+  if [[ $ADD_IN == *"toplev"* ]]; then
+     DO_TOPLEV=1
+  fi
+  if [[ $ADD_IN == *"power"* ]]; then
+     DO_POWER=1
+  fi
   if [[ $ADD_IN == *"flamegraph"* ]]; then
      DO_FLAMEGRAPH=1
   fi
@@ -137,6 +165,8 @@ if [ "$ADD_IN" != "" ]; then
      DO_SCHED_SWITCH=1
   fi
 fi
+
+echo "DO_TOPLEV= $DO_TOPLEV"
 
 if [ "$TSK_IN" == "" ]; then
   echo "You must enter arg1: '-t task_num|task_name' where all (all tasks) or a task_number (0-$TLAST) or a task_name"
@@ -379,6 +409,9 @@ for TSKj in `seq $TB $TE`; do
         break
       fi
       sleep $INTRVL
+      if [ "$GOT_QUIT" == "1" ]; then
+         break
+      fi
     done
     printf "\n"
     fi
@@ -517,7 +550,7 @@ for TSKj in `seq $TB $TE`; do
     fi
   fi
   
-  if [[ $TSK == *"top"* ]]; then
+  if [[ $TSK == *"do_top"* ]]; then
     echo "do top -b -d $INTRVL -n $COUNT"
     FL=sys_${FLNUM}_top.txt
     if [ -e $FL ]; then
@@ -595,6 +628,64 @@ for TSKj in `seq $TB $TE`; do
     fi
   fi
 
+  if [[ $TSK == *"toplev"* ]]; then
+    if [ "$DO_TOPLEV" == "1" ]; then
+    FL=sys_${FLNUM}_toplev
+    if [ -e $FL.csv ]; then
+      rm $FL.csv
+    fi
+    echo "sysctl kernel.nmi_watchdog=0 && python ${SCR_DIR}/pmu-tools-master/toplev.py -l3  -x, --no-multiplex  -o $FL.csv -v --per-core --nodes +CPU_Utilization  -- sleep $INTRVL"
+          sysctl kernel.nmi_watchdog=0 && python ${SCR_DIR}/pmu-tools-master/toplev.py -l3  -x, --no-multiplex  -o $FL.csv -v --per-core --nodes +CPU_Utilization  -- sleep $INTRVL
+    echo "finished toplev" > /dev/stderr
+    $SCR_DIR/top_lev_flame.sh $FL.csv > $FL.collapsed
+    fi
+    if [ "$DO_TOPLEV" == "1" ]; then
+      echo "=======did toplev ========="
+      #break
+    fi
+  fi
+  if [[ $TSK == *"power"* ]]; then
+    if [ "$DO_POWER" == "1" ]; then
+    FL=sys_${FLNUM}_power.txt
+    if [ -e $FL ]; then
+      rm $FL
+    fi
+    echo "ipmitool sdr"
+    j=0
+    BDT=`date +%s`
+    EDT=$((BDT+$WAIT))
+    if [ "$BKGRND" == "1" ]; then
+      FL_PWR=$FL
+    else
+    for i in `seq 1 $WAIT`; do
+      #echo "i= $i of $WAIT"
+      DT=`date +%s.%N`
+      echo "==beg $j date $DT" >> $FL
+      ipmitool sdr >> $FL
+      CDT=`date +%s`
+      ELAP=$(($CDT-$BDT))
+      j=$((j+$INTRVL))
+      if [ $j -ge $WAIT ]; then
+        break
+      fi
+      if [ $CDT -ge $EDT ]; then
+        break
+      fi
+      printf "\rpower i= %d of %d, elap secs= %d curtm= %d, endtm= %d" $i $WAIT $ELAP $CDT  $EDT
+      sleep $INTRVL
+      if [ "$GOT_QUIT" == "1" ]; then
+         break
+      fi
+    done
+    printf "\n"
+    fi
+    if [ "$DO_POWER" == "1" ]; then
+      echo "=======did power ========="
+      break
+    fi
+    fi
+  fi
+
   if [[ $TSK == *"interrupts"* ]]; then
     echo "do cat /proc/interrupts for $WAIT secs"
     FL=sys_${FLNUM}_interrupts.txt
@@ -614,6 +705,9 @@ for TSKj in `seq $TB $TE`; do
       j=$((j+$INTRVL))
       if [ $j -ge $WAIT ]; then
         break
+      fi
+      if [ "$GOT_QUIT" == "1" ]; then
+         break
       fi
       sleep $INTRVL
     done
@@ -647,21 +741,35 @@ done
 
 if [ "$BKGRND" == "1" ]; then
   PID_LST=
+  PID_LST_NC=
   CMA=
   for TSKj in `seq $TB $TE`; do
     TSK=${TSK_LST[$TSKj]}
     TSKPID=${TSK_PID[$TSKj]}
     PID_LST="${PID_LST}${CMA}$TSKPID"
+    if [ "$TSKPID" != "" ]; then
+      PID_LST_NC="${PID_LST_NC} $TSKPID"
+    fi
     CMA=","
   done
+  PID_LST_NC="${PID_LST_NC}"
   echo "PIDs started= $PID_LST"
+  echo "PIDs started= $PID_LST_NC"
   echo "watch -n1 \"ps -f -p $PID_LST\""
   echo "watch -n1 \"ps -f -p $PID_LST\"" > watch.log
+  echo "PIDS_NC= $PID_LST_NC" >> watch.log
+  echo "PIDS_BSH= $BASHPID" >> watch.log
+  if [ "$PID_LST_NC" != "" ]; then
+    echo "$PID_LST_NC" >> /root/60secs.pid
+  fi
 fi
 if [ "$WAIT_AT_END" == "1" ]; then
   echo "waiting for $WAIT seconds"
   #sleep $WAIT
   j=0
+    BDT=`date +%s`
+    EDT=$((BDT+$WAIT))
+  CK_STOP=/root/60secs.stop
   for i in `seq 1 $WAIT`; do
     #echo "i= $i of $WAIT"
     printf "\ri= %d of %d" $i $WAIT
@@ -673,11 +781,43 @@ if [ "$WAIT_AT_END" == "1" ]; then
       echo "==beg $j date $DT" >> $FL_INT
       cat /proc/interrupts >> $FL_INT
     fi
+    if [ "$FL_PWR" != "" ]; then
+      DT=`date +%s.%N`
+      echo "==beg $j date $DT" >> $FL_PWR
+      ipmitool sdr >> $FL_PWR
+      DT=`date +%s.%N`
+      echo "==end $j date $DT" >> $FL_PWR
+      CDT=`date +%s`
+      ELAP=$(($CDT-$BDT))
+      if [ $CDT -ge $EDT ]; then
+        break
+      fi
+      printf "\rpower i= %d of %d, elap secs= %d curtm= %d, endtm= %d" $i $WAIT $ELAP $CDT  $EDT
+    fi
     j=$((j+$INTRVL))
     if [ $j -ge $WAIT ]; then
       break
     fi
     sleep $INTRVL
+    if [ -e $CK_STOP ]; then
+      CKPID=`cat $CK_STOP`
+      if [ "$CKPID" == "$MYBASHPID" ]; then
+         echo "GOT $CK_STOP with pid $CKPID. Bye" > /dev/stderr
+         GOT_QUIT=1
+      fi
+    fi
+    if [ "$GOT_QUIT" == "1" ]; then
+       echo "quitting loop due signal" > /dev/stderr
+       echo "PID_LST_NC= b${PID_LST_NC}b" > /dev/stderr
+       if [ "$PID_LST_NC" != "" ]; then
+       echo "kill -2 $PID_LST_NC"
+             kill -2 $PID_LST_NC
+       sleep 2
+       echo "kill -9 $PID_LST_NC"
+             kill -9 $PID_LST_NC
+       fi
+       break
+    fi
   done
   if [ "$FL_DMSG" != "" ]; then
     dmesg >> $FL_DMSG
