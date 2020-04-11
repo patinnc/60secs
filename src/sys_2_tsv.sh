@@ -13,8 +13,9 @@ IMAGE_STR=
 XLSX_FILE="chart_line.xlsx"
 PFX=
 SUM_FILE=
+PHASE_FILE=
 
-while getopts "hvd:o:p:i:s:x:" opt; do
+while getopts "hvd:o:P:p:i:s:x:" opt; do
   case ${opt} in
     d )
       DIR=$OPTARG
@@ -27,6 +28,9 @@ while getopts "hvd:o:p:i:s:x:" opt; do
       ;;
     p )
       PFX=$OPTARG
+      ;;
+    P )
+      PHASE_FILE=$OPTARG
       ;;
     s )
       SUM_FILE=$OPTARG
@@ -54,6 +58,7 @@ while getopts "hvd:o:p:i:s:x:" opt; do
       echo "   -x xlsx_filename  This is passed to tsv_2_xlsx.py as the name of the xlsx. (you need to add the .xlsx)"
       echo "      The default is chart_line.xlsx"
       echo "   -p prefix   string to be prefixed to each sheet name"
+      echo "   -P prefix   list of phases for data. fmt is 'phasename beg_time end_time'"
       echo "   -s sum_file summary_file"
       echo "   -v verbose mode"
       exit
@@ -77,6 +82,17 @@ if [ ! -d $DIR ]; then
   exit
 fi
 echo "dir= $DIR"
+
+if [ "$SUM_FILE" != "" ]; then
+  printf "title\tsummary\tsheet\tsummary\ttype\tcopy\n"  > $SUM_FILE;
+  printf "hdrs\t2\t0\t-1\t2\t-1\n" >> $SUM_FILE;
+fi
+
+PH_TM_END=0
+if [ "$PHASE_FILE" != "" ]; then
+  PH_TM_END=`awk '{if ($3 != "") {last= $3;}} END{printf("%s\n", last);}' $PHASE_FILE`
+  echo "PH_TM_END= $PH_TM_END" > /dev/stderr
+fi
 
 TDIR=$DIR
 if [ "$TDIR" == "." ]; then
@@ -142,6 +158,168 @@ trows++; printf("\n") > NFL;
        for (i=1; i <= mx; i++) {
           printf("%s\n", sv[i]) > NFL;
        }
+       close(NFL);
+     }
+   ' $i
+   SHEETS="$SHEETS $i.tsv"
+  fi
+  if [[ $i == *"_power.txt"* ]]; then
+    echo "do power"
+    awk -v ts_beg="$BEG" -v ts_end="$PH_TM_END" -v pfx="$PFX" '
+      BEGIN{beg=1;mx=0; ts_end += 0.0;}
+      function ltrim(s) { sub(/^[ \t\r\n]+/, "", s); return s }
+      function rtrim(s) { sub(/[ \t\r\n,]+$/, "", s); return s }
+      function trim(s) { return rtrim(ltrim(s)); }
+#==beg 0 date 1585614813.506068153
+#NIC_Temp         | 81 degrees C      | ok
+#HSC_Input_Power  | 119.00 Watts      | ok
+#HSC_Output_Power | 119.00 Watts      | ok
+#PDB_HSC_POUT     | 264.00 Watts      | ok
+#P0_Pkg_Power     | 34.00 Watts       | ok
+#P1_Pkg_Power     | 33.00 Watts       | ok
+
+      /^==beg / {
+         tm_bdt = $4 + 0.0;
+         if (ts_end > 0.0 && tm_bdt > ts_end) { exit; }
+      }
+      /^==end / {
+         tm_edt = $4 + 0.0;
+         rw++;
+         tm[rw] = tm_edt;
+      }
+      {
+        n = split($0, arr, "|");
+        for (i=1; i <= n; i++) {
+           arr[i] = trim(arr[i]);
+        }
+        if (arr[3] != "ok") {
+           next;
+        }
+        nn = split(arr[2], va, " ");
+        area = arr[1];
+        typ=0;
+        if ( va[2] == "Watts") {
+          typ=1;
+        }
+        if (va[2] == "degrees" ) {
+          typ=2;
+        }
+        if (va[2] == "RPM" ) {
+          typ=3;
+        }
+        if ( typ > 0) {
+          if (typ==1) {
+          if ((!(area in area1_lkup))) {
+             area1_idx++
+             area1_lkup[area] = area1_idx;
+             area1_list[area1_idx] = area;
+          }
+          i = area1_lkup[area];
+          }
+          if (typ==2) {
+          if ((!(area in area2_lkup))) {
+             area2_idx++
+             area2_lkup[area] = area2_idx;
+             area2_list[area2_idx] = area;
+          }
+          i = area2_lkup[area];
+          }
+          if (typ==3) {
+          if ((!(area in area3_lkup))) {
+             area3_idx++
+             area3_lkup[area] = area3_idx;
+             area3_list[area3_idx] = area;
+          }
+          i = area3_lkup[area];
+          }
+          rows[rw,typ,i] = va[1] + 0.0;
+        }
+	FNM=ARGV[ARGIND];
+        NFL=FNM ".tsv";
+      }
+function columnToLetter(column)
+{
+  letter = "";
+  chr_str="ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  for (j=0; j < length(chr_str); j++) {
+   chr[j] = substr(chr_str, j+1, 1);
+  }
+  
+  c = column;
+  if (column == 0) { return "A";}
+  cpos = 0;
+  while ( column > 0) {
+     c_in= column;
+     res = column / 26;
+     rem = column % 26;
+     column = int(res);
+     cpos++;
+     if (cpos > 1 && rem > 0) { rem--; }
+     letter = chr[rem] "" letter;
+     #printf("col_in= %d, res= %d, rem= %d, col= %d, let= %s\n", c_in, res, rem, column, letter);
+  }
+  return letter;
+}
+
+     END{
+       brw = 6;
+       hdr_mx = area1_idx;
+trows++; printf("\t$ power") > NFL;
+       for (i=2; i <= hdr_mx+area2_idx+area3_idx; i++) {
+         let = columnToLetter(i+1);
+         printf("\t=subtotal(1,%s%d:%s%d)", let, brw, let, brw+rw) > NFL;
+       }
+       printf("\n") > NFL;
+trows++; printf("\t$ power") > NFL;
+       for (i=2; i <= hdr_mx+area2_idx+area3_idx; i++) {
+         let = columnToLetter(i+1);
+         printf("\t=subtotal(4,%s%d:%s%d)", let, brw, let, brw+rw) > NFL;
+       }
+       printf("\n") > NFL;
+
+       trows++;
+       printf("title\tpower\tsheet\tpower\ttype\tscatter_straight\n") > NFL;
+       printf("hdrs\t%d\t%d\t%d\t%d\t1\n", trows+1, 2, -1, area1_idx+1) > NFL;
+       tab="";
+       printf("TS\tts_rel\t") > NFL;
+       for (i=1; i <= hdr_mx; i++) {
+            printf("%s%s", tab, area1_list[i]) > NFL;
+            tab="\t";
+       }
+       for (i=1; i <= area2_idx; i++) {
+            printf("%s%s", tab, area2_list[i]) > NFL;
+            tab="\t";
+       }
+       for (i=1; i <= area3_idx; i++) {
+            printf("%s%s", tab, area3_list[i]) > NFL;
+            tab="\t";
+       }
+       row++;
+       printf("\n") > NFL;
+       for (r=1; r <= rw; r++) {
+          tab="";
+          printf("%.3f\t%.4f\t", tm[r], tm[r]-ts_beg) > NFL;
+          for (c=1; c <= area1_idx; c++) {
+              printf("%s%s", tab, rows[r,1,c]) > NFL;
+              tab="\t";
+          }
+          for (c=1; c <= area2_idx; c++) {
+              printf("%s%s", tab, rows[r,2,c]) > NFL;
+              tab="\t";
+          }
+          for (c=1; c <= area3_idx; c++) {
+              printf("%s%s", tab, rows[r,3,c]) > NFL;
+              tab="\t";
+          }
+          printf("\n") > NFL;
+          row++;
+       }
+       printf("\n") > NFL;
+       printf("title\ttemperature\tsheet\tpower\ttype\tscatter_straight\n") > NFL;
+       printf("hdrs\t%d\t%d\t%d\t%d\t1\n", trows+1, area1_idx+2, -1, area2_idx+area1_idx+1) > NFL;
+       printf("\n") > NFL;
+       printf("title\tFans RPM\tsheet\tpower\ttype\tscatter_straight\n") > NFL;
+       printf("hdrs\t%d\t%d\t%d\t%d\t1\n", trows+1, area1_idx+area2_idx+2, -1, area3_idx+area2_idx+area1_idx+1) > NFL;
        close(NFL);
      }
    ' $i
@@ -341,7 +519,7 @@ trows++; printf("\t\n") > NFL;
         ts_beg += 0;
         epoch_init = 0;
       }
-      function dt_to_epoch(hhmmss, amp) {
+      function dt_to_epoch(hhmmss, ampm) {
          # the epoch seconds from the date time info in the file is local time,not UTC.
          # so just use the calc"d epoch seconds to calc the elapsed seconds since the start.
          # THe real timestamp is the input ts_beg + elapsed_seconds.
@@ -363,6 +541,10 @@ trows++; printf("\t\n") > NFL;
              epoch_init = epoch;
          }
          epoch = ts_beg + (epoch - epoch_init + 1); # the plus 1 assumes a 1 second interval.
+         if ((epoch-ts_beg) < 0.0) {
+            printf("epoch= %f, hhmmss= %s, dt_str= %s ts_beg= %f. epoch-ts_beg= %f ampm= %s bye\n", epoch, hhmmss, dt_str, ts_beg, epoch-ts_beg, ampm) > "/dev/stderr";
+            exit;
+         }
          return epoch;
       }
      /^Linux/{
@@ -494,7 +676,7 @@ trows++; printf("\n") > NFL;
         num_cpus_pct = 0;
         tot_first=1;
       }
-      function dt_to_epoch(hhmmss, amp) {
+      function dt_to_epoch(hhmmss, ampm) {
          # the epoch seconds from the date time info in the file is local time,not UTC.
          # so just use the calc"d epoch seconds to calc the elapsed seconds since the start.
          # THe real timestamp is the input ts_beg + elapsed_seconds.
@@ -845,7 +1027,7 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
          }
        }
       }
-      function dt_to_epoch(hhmmss, amp) {
+      function dt_to_epoch(hhmmss, ampm) {
          # the epoch seconds from the date time info in the file is local time,not UTC.
          # so just use the calc"d epoch seconds to calc the elapsed seconds since the start.
          # THe real timestamp is the input ts_beg + elapsed_seconds.
@@ -1075,7 +1257,7 @@ row += trows;
 #12:05:00 AM        lo   1251.00   1251.00    259.82    259.82      0.00      0.00      0.00      0.00
 #12:05:00 AM      ifb0      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00
     echo "do sar_dev"
-    awk -v ts_beg="$BEG" -v pfx="$PFX" -v typ="sar network IFACE" '
+    awk -v ts_beg="$BEG" -v pfx="$PFX" -v typ="sar network IFACE"  -v sum_file="$SUM_FILE" -v sum_flds="rxkB/s{net rdKB/s},txkB/s{net wrKB/s},%ifutil{net %util}" '
      BEGIN{beg=1;
         grp_mx=0;
         hdr_mx=0;
@@ -1084,8 +1266,28 @@ row += trows;
         mx_io=0;
         mx_dev=0;
         epoch_init = 0;
+        n_sum = 0;
+       if (sum_file != "" && sum_flds != "") {
+         n_sum = split(sum_flds, sum_arr, ",");
+         for (i_sum=1; i_sum <= n_sum; i_sum++) {
+            sum_type[i_sum] = 0;
+            str = sum_arr[i_sum];
+            pos = index(str, "{");
+            if (pos > 0) {
+               pos1 = index(str, "}");
+               if (pos1 == 0) { pos1= length(str)+1; }
+               sum_prt[i_sum] = substr(str, pos+1, pos1-pos-1);
+               sum_arr[i_sum] = substr(str, 1, pos-1);
+            } else {
+               sum_prt[i_sum] = str;
+            }
+            if (index(tolower(str), "/s") > 0) {
+               sum_type[i_sum] = 1;
+            }
+         }
+       }
       }
-      function dt_to_epoch(hhmmss, amp) {
+      function dt_to_epoch(hhmmss, ampm) {
          # the epoch seconds from the date time info in the file is local time,not UTC.
          # so just use the calc"d epoch seconds to calc the elapsed seconds since the start.
          # THe real timestamp is the input ts_beg + elapsed_seconds.
@@ -1110,17 +1312,60 @@ row += trows;
          return epoch;
       }
 
-      function line_data(row, arr_in, arr_mx, title, hdr, tmarr_in) {
+      function line_data(row, arr_in, arr_mx, title, hdr, tmarr_in, dev_str) {
        ++row;
        printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", title, chart) > NFL;
        ++row;
        n = split(hdr, arr, "\t");
        printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", row+1, 3, row+arr_mx, n+1, 1) > NFL;
        ++row;
+       if (n_sum > 0) {
+         nk = split(hdr, hdr_arr, "\t");
+         for (ik=1; ik <= nk; ik++) {
+           for (i_sum=1; i_sum <= n_sum; i_sum++) {
+               if (hdr_arr[ik] == sum_arr[i_sum]) {
+                  sum_lkup[i_sum] = ik;
+               }
+           }
+         }
+       }
        printf("TS\tts_offset\t%s\n", hdr) > NFL;
        for (i=2; i <= arr_mx; i++) {
          ++row;
          printf("%d\t%d\t%s\n", tmarr_in[i], tmarr_in[i]-ts_beg, arr_in[i]) > NFL;
+                if (n_sum > 0) {
+                  n = split(arr_in[i], tst_arr, "\t");
+                  for (i_sum=1; i_sum <= n_sum; i_sum++) {
+                    j = sum_lkup[i_sum];
+                    sum_occ[i_sum] += 1;
+                    if (sum_type[i_sum] == 1) {
+                      if (sum_tmin[i_sum] == 0) { sum_tmin[i_sum] = tmarr_in[i]; sum_tmax[i_sum] = tmarr_in[i]; }
+                      if (sum_tmax[i_sum] < tmarr_in[i]) { sum_tmax[i_sum] = tmarr_in[i]; }
+                      if (i > 2) { intrvl = tmarr_in[i] - tmarr_in[i-1];} else { intrvl = 1.0; } # a hack for jj=2;
+                      sum_tot[i_sum] += tst_arr[j] * intrvl;
+                    } else {
+                      sum_tot[i_sum] += tst_arr[j];
+                    }
+                  }
+                }
+       }
+       if (n_sum > 0) {
+          printf("got sum net IFACE n_sum= %d\n", n_sum) >> "/dev/stderr";
+          for (i_sum=1; i_sum <= n_sum; i_sum++) {
+             divi = sum_occ[i_sum];
+             if (sum_type[i_sum] == 1) {
+                divi = sum_tmax[i_sum] - sum_tmin[i_sum];
+             }
+             printf("%s %s\t%s\t%f\n", "sar_net", dev_str, sum_prt[i_sum], (divi > 0 ? sum_tot[i_sum]/divi : 0.0)) >> sum_file;
+          }
+          for (i_sum=1; i_sum <= n_sum; i_sum++) {
+             sum_occ[i_sum] = 0;
+             if (sum_type[i_sum] == 1) {
+                sum_tmax[i_sum] = 0;
+                sum_tmax[i_sum] = 0;
+                sum_tot[i_sum] = 0;
+             }
+          }
        }
        return row;
      }
@@ -1227,7 +1472,7 @@ row+= trows;
                 tmarr[mx_arr] = sv_tm[jj];
              }
           }
-          row = line_data(row, narr, mx_arr, ttl, narr[1], tmarr);
+          row = line_data(row, narr, mx_arr, ttl, narr[1], tmarr, dev_lst[ii]);
           ++row;
           printf("\n") > NFL;
        }
@@ -1254,7 +1499,7 @@ row+= trows;
         ts_beg += 0;
       }
 # efg
-      function dt_to_epoch(hhmmss, amp, all) {
+      function dt_to_epoch(hhmmss, ampm, all) {
          # the epoch seconds from the date time info in the file is local time,not UTC.
          # so just use the calc"d epoch seconds to calc the elapsed seconds since the start.
          # THe real timestamp is the input ts_beg + elapsed_seconds.
@@ -1711,10 +1956,23 @@ if [ -e $JAVA_COL ]; then
   $SCR_DIR/gen_flamegraph_for_java_in_container_function_hotspot.sh $JAVA_COL > $JAVA_COL.tsv
   SHEETS="$SHEETS $JAVA_COL.tsv"
 fi
+if [ "$SUM_FILE" != "" ]; then
+   SHEETS="$SUM_FILE $SHEETS"
+fi
 if [ "$SHEETS" != "" ]; then
+   OPT_PH=
+   if [ "$PHASE_FILE" != "" ]; then
+     OPT_PH=" -P $PHASE_FILE "
+   fi
    echo "python $SCR_DIR/tsv_2_xlsx.py $SHEETS" > /dev/stderr
-   echo python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" -o $XLSX_FILE -i "$IMAGE_STR" $SHEETS > /dev/stderr
+   echo python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" -o $XLSX_FILE $OPT_PH -i "$IMAGE_STR" $SHEETS > /dev/stderr
    # default chart size is pretty small, scale chart size x,y by 2 each. def 1,1 seems to be about 15 rows high (on my MacBook)
-   python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" -o $XLSX_FILE -i "$IMAGE_STR" $SHEETS
+   python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" -o $XLSX_FILE $OPT_PH -i "$IMAGE_STR" $SHEETS
+   if [ "$DIR" == "." ];then
+     UDIR=`pwd`
+   else
+     UDIR=$DIR
+   fi
+   echo "xls file= $UDIR/$XLSX_FILE" > /dev/stderr
 fi
 
