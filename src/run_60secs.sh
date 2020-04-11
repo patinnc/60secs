@@ -9,8 +9,9 @@ DURA=1m
 PREFIX_DIR=0
 TASK_IN=
 ADD_IN=
+INTRVL=1
 
-while getopts "hPa:c:d:p:t:" opt; do
+while getopts "hPa:c:d:i:p:t:" opt; do
   case ${opt} in
     a )
       ADD_IN=$OPTARG
@@ -20,6 +21,9 @@ while getopts "hPa:c:d:p:t:" opt; do
       ;;
     d )
       DURA=$OPTARG
+      ;;
+    i )
+      INTRVL=$OPTARG
       ;;
     t )
       TASK_IN=$OPTARG
@@ -43,9 +47,11 @@ while getopts "hPa:c:d:p:t:" opt; do
       ;;
     : )
       echo "Invalid option: $OPTARG requires an argument" 1>&2
+      exit
       ;;
     \? )
       echo "Invalid option: $OPTARG" 1>&2
+      exit
       ;;
   esac
 done
@@ -62,6 +68,8 @@ fi
 result="$PROJ_DIR/${extra_dir}"
 mkdir -p $result
 
+echo "using output dir= $result"
+
 pushd $result
 
 CNTNR=`docker ps | grep gmat | awk '{print $1;exit}'`
@@ -77,9 +85,11 @@ if [ "$ADD_IN" != "" ]; then
 fi
 
 if [ "$CNTNR" != "" ]; then
-$SCR_DIR/60secs.sh -t $TASK -x top,interrupts -b -w -c -d $DURA -i 1 -p $SCR_DIR/perf -C $CNTNR $ADD
+echo $SCR_DIR/60secs.sh -t $TASK -x do_top,interrupts -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf -C $CNTNR $ADD
+     $SCR_DIR/60secs.sh -t $TASK -x do_top,interrupts -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf -C $CNTNR $ADD
 else
-$SCR_DIR/60secs.sh -t $TASK -x top,interrupts -b -w -c -d $DURA -i 1 -p $SCR_DIR/perf $ADD
+echo $SCR_DIR/60secs.sh -t $TASK -x do_top,interrupts -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf $ADD
+     $SCR_DIR/60secs.sh -t $TASK -x do_top,interrupts -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf $ADD
 fi
 
 popd
