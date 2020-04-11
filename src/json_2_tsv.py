@@ -97,10 +97,12 @@ for j in range(len(trgt_arr)):
 of.write("\n")
 rw += 1
 
+tm_last = -1.0
 for i in range(len(odata)):
     for j in range(len(trgt_arr)):
         if j == 0:
            of.write("%f\t%f\t%f" % (odata[i][0], odata[i][1], odata[i][2]))
+           tm_last = odata[i][1]
         else:
            of.write("\t%f" % (odata[i][2+j]))
     of.write("\n")
@@ -117,10 +119,30 @@ of.write("hdrs\t%d\t%d\t%d\t%d\t%d\n" % (rw+1, 3, rw+len(trgt_arr)+1, 3, 4))
 rw += 1
 of.write("%s\t%s\t%s\t%s\t%s\n" % ("Latency", "calls", "tot_time(ms)", "%tot_time", "bucket"))
 rw += 1
+tm_tot_lo = 0
+tm_tot_hi = 0
 if lat_tot == 0:
    lat_tot = 1
 for j in range(len(trgt_arr)):
     trgt = trgt_arr[j]
-    of.write("%d\t%d\t%d\t%.3f\t%s\n" % (trgt_ts[trgt], trgt_tot[trgt], trgt_tot_tm[trgt], 100.0*trgt_tot_tm[trgt]/lat_tot, trgt))
+    tm_cur = trgt_ts[trgt]*trgt_tot[trgt]
+    tm_nxt = 0
+    if (j+1) < len(trgt_arr):
+       trgtp1 = trgt_arr[j+1]
+       tm_nxt = trgt_ts[trgtp1]*trgt_tot[trgt]
+    tm_tot_lo = tm_tot_lo + tm_cur
+    tm_tot_hi = tm_tot_hi + tm_nxt
+    of.write("%d\t%d\t%d\t%.3f\t%s\t\t=%d\t=%d\n" % (trgt_ts[trgt], trgt_tot[trgt], trgt_tot_tm[trgt], 100.0*trgt_tot_tm[trgt]/lat_tot, trgt, tm_cur, tm_nxt))
     rw += 1
+of.write("\n")
+tm_tot_lo = tm_tot_lo * 0.001
+tm_tot_hi = tm_tot_hi * 0.001
+of.write("\t\t\t\t\ttm_tot_lo\t=%d\t=%d\ttm_tot_hi\n" % (tm_tot_lo, tm_tot_hi))
+if tm_last > 0.0:
+   tm_tot_lo = tm_tot_lo / tm_last
+   tm_tot_hi = tm_tot_hi / tm_last
+   of.write("\t\t\t\t\ttm_tot_lo/s\t=%f\t=%f\ttm_tot_hi/s\n" % (tm_tot_lo, tm_tot_hi))
+   tm_tot_lo = tm_tot_lo / 32
+   tm_tot_hi = tm_tot_hi / 32
+   of.write("\t\t\t\t32 cpus\tfrac_of_32_cpus_lo\t=%f\t=%f\tfrac_of_32_cpus_hi\n" % (tm_tot_lo, tm_tot_hi))
 of.write("\n")
