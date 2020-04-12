@@ -33,7 +33,7 @@ VERBOSE=0
 INTRVL=1
 TSK_IN=
 WAIT_IN=
-PERF_BIN=perf
+PERF_BIN=
 BKGRND=0
 WAIT_AT_END=0
 CURL_AT_END=0
@@ -151,6 +151,9 @@ while getopts "hvbcwa:C:d:i:p:t:x:" opt; do
 done
 shift $((OPTIND -1))
 
+if [ "$PERF_BIN" == "" ]; then
+  PERF_BIN=$SCR_DIR/perf
+fi
 if [ "$ADD_IN" != "" ]; then
   if [[ $ADD_IN == *"toplev"* ]]; then
      DO_TOPLEV=1
@@ -634,8 +637,8 @@ for TSKj in `seq $TB $TE`; do
     if [ -e $FL.csv ]; then
       rm $FL.csv
     fi
-    echo "sysctl kernel.nmi_watchdog=0 && python ${SCR_DIR}/pmu-tools-master/toplev.py -l3  -x, --no-multiplex  -o $FL.csv -v --per-core --nodes +CPU_Utilization  -- sleep $INTRVL"
-          sysctl kernel.nmi_watchdog=0 && python ${SCR_DIR}/pmu-tools-master/toplev.py -l3  -x, --no-multiplex  -o $FL.csv -v --per-core --nodes +CPU_Utilization  -- sleep $INTRVL
+    echo "sysctl kernel.nmi_watchdog=0 && export PERF=$PERF_BIN && python ${SCR_DIR}/pmu-tools-master/toplev.py -l3  -x, --no-multiplex  -o $FL.csv -v --per-core --nodes +CPU_Utilization  -- sleep $INTRVL"
+          sysctl kernel.nmi_watchdog=0 && export PERF=$PERF_BIN && python ${SCR_DIR}/pmu-tools-master/toplev.py -l3  -x, --no-multiplex  -o $FL.csv -v --per-core --nodes +CPU_Utilization  -- sleep $INTRVL
     echo "finished toplev" > /dev/stderr
     $SCR_DIR/top_lev_flame.sh $FL.csv > $FL.collapsed
     fi
@@ -763,7 +766,7 @@ if [ "$BKGRND" == "1" ]; then
     echo "$PID_LST_NC" >> /root/60secs.pid
   fi
 fi
-if [ "$WAIT_AT_END" == "1" ]; then
+if [ "$WAIT_AT_END" == "1" -a "$PID_LST_NC" != "" ]; then
   echo "waiting for $WAIT seconds"
   #sleep $WAIT
   j=0
