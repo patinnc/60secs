@@ -1356,7 +1356,9 @@ row += trows;
              if (sum_type[i_sum] == 1) {
                 divi = sum_tmax[i_sum] - sum_tmin[i_sum];
              }
+             if (dev_str != "lo") {
              printf("%s %s\t%s\t%f\n", "sar_net", dev_str, sum_prt[i_sum], (divi > 0 ? sum_tot[i_sum]/divi : 0.0)) >> sum_file;
+             }
           }
           for (i_sum=1; i_sum <= n_sum; i_sum++) {
              sum_occ[i_sum] = 0;
@@ -1913,7 +1915,7 @@ tst_files="latency_histo.log"
 for f in $tst_files; do
   if [ -e $f ]; then
      echo "try latency log $f" > /dev/stderr
-     $SCR_DIR/resp_2_tsv.sh $f
+     $SCR_DIR/resp_2_tsv.sh -f $f -s $SUM_FILE
      if [ -e $f.tsv ]; then
      SHEETS="$SHEETS $f.tsv"
      echo "got latency log $f.tsv" > /dev/stderr
@@ -1924,7 +1926,7 @@ tst_files="http-status.log"
 for f in $tst_files; do
   if [ -e $f ]; then
      echo "try http-status log $f" > /dev/stderr
-     $SCR_DIR/resp_2_tsv.sh $f
+     $SCR_DIR/resp_2_tsv.sh -f $f -s $SUM_FILE
      if [ -e $f.tsv ]; then
      SHEETS="$SHEETS $f.tsv"
      echo "got http-status log $f.tsv" > /dev/stderr
@@ -1935,7 +1937,7 @@ done
 tst_files="RPS.log response_time.log"
 for f in $tst_files; do
   if [ -e $f ]; then
-     $SCR_DIR/resp_2_tsv.sh $f
+     $SCR_DIR/resp_2_tsv.sh -f $f -s $SUM_FILE
      if [ -e $f.tsv ]; then
      SHEETS="$SHEETS $f.tsv"
      fi
@@ -1956,6 +1958,18 @@ if [ -e $JAVA_COL ]; then
   $SCR_DIR/gen_flamegraph_for_java_in_container_function_hotspot.sh $JAVA_COL > $JAVA_COL.tsv
   SHEETS="$SHEETS $JAVA_COL.tsv"
 fi
+TOPLEV_COL=(sys_*_toplev.csv)
+if [ -e $TOPLEV_COL ]; then
+  echo "do flamegraph.pl" 1>&2
+  #echo "do toplev % Slots" > /dev/stderr
+  $SCR_DIR/toplev_flame.sh -u "% Slots" -f $TOPLEV_COL > $TOPLEV_COL.collapsed_slots
+  cat $TOPLEV_COL.collapsed_slots | perl $SCR_DIR/../flamegraph/flamegraph.pl --title "Flamegraph toplev $RPS" > toplev_slots.svg
+  echo "do svg_to_html.sh " 1>&2
+  $SCR_DIR/svg_to_html.sh -r 1 -d . -f toplev_slots.svg > toplev_slots.html
+  inkscape -z  -w 2400 -j --export-file=toplev_slots.png  toplev_slots.svg
+  $SCR_DIR/gen_flamegraph_for_java_in_container_function_hotspot.sh $TOPLEV_COL > $TOPLEV_COL.tsv
+  SHEETS="$SHEETS $TOPLEV_COL.tsv"
+fi
 if [ "$SUM_FILE" != "" ]; then
    SHEETS="$SUM_FILE $SHEETS"
 fi
@@ -1973,6 +1987,7 @@ if [ "$SHEETS" != "" ]; then
    else
      UDIR=$DIR
    fi
-   echo "xls file= $UDIR/$XLSX_FILE" > /dev/stderr
+   echo "xls file: " > /dev/stderr
+   echo "$UDIR/$XLSX_FILE" > /dev/stderr
 fi
 
