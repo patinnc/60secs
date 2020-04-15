@@ -1,28 +1,53 @@
 from __future__ import print_function
 import json
+import getopt
 import sys
+import os
 
-flnm=sys.argv[1]
-beg=float(sys.argv[2])
-end=float(sys.argv[3])
+
+options, remainder = getopt.getopt(sys.argv[1:], 'vf:b:e:s:t:', ['verbose', 'file=', 'beg=',
+                                                         'end=',
+                                                         'summary=',
+                                                         'type=',
+                                                         ])
 hdr=""
-if len(sys.argv) >= 5:
-   hdr=sys.argv[4]
+sum_file=""
+
+for opt, arg in options:
+    if opt in ('-f', '--file'):
+        flnm = arg
+    if opt in ('-b', '--beg'):
+        beg = float(arg)
+    if opt in ('-e', '--end'):
+        end = float(arg)
+    if opt in ('-t', '--type'):
+        hdr = arg
+    if opt in ('-s', '--summary'):
+        sum_file = arg
+
+
+
+#flnm=sys.argv[1]
+#beg=float(sys.argv[2])
+#end=float(sys.argv[3])
+#if len(sys.argv) >= 5:
+#   hdr=sys.argv[4]
+
 with open(flnm) as f:
   data = json.load(f)
 # Output: {'name': 'Bob', 'languages': ['English', 'Fench']}
 #print(data)
 print("len= ", len(data))
 
-if hdr == "" and sys.argv[1].find("RPS") > -1:
+if hdr == "" and flnm.find("RPS") > -1:
    hdr="RPS"
    cols=2
-if hdr == "" and sys.argv[1].find("response") > -1:
+if hdr == "" and flnm.find("response") > -1:
    hdr="resp_tm"
    cols=4
-if hdr == "" and sys.argv[1].find("latency") > -1:
+if hdr == "" and flnm.find("latency") > -1:
    hdr="latency"
-if hdr == "" and sys.argv[1].find("http-status") > -1:
+if hdr == "" and flnm.find("http-status") > -1:
    hdr="http_status"
 
 odata=[]
@@ -97,6 +122,12 @@ for j in range(len(trgt_arr)):
 of.write("\n")
 rw += 1
 
+avg_sum=[]
+avg_n=[]
+for j in range(len(trgt_arr)):
+    avg_sum.append(0.0)
+    avg_n.append(0.0)
+    
 tm_last = -1.0
 for i in range(len(odata)):
     for j in range(len(trgt_arr)):
@@ -105,8 +136,23 @@ for i in range(len(odata)):
            tm_last = odata[i][1]
         else:
            of.write("\t%f" % (odata[i][2+j]))
+        avg_sum[j] = avg_sum[j] + odata[i][j+2]
+        avg_n[j] = avg_n[j] + 1.0
     of.write("\n")
     rw += 1
+
+if sum_file != "":
+   sf = open(sum_file,"a+")
+
+http_stat_errs = 0
+if hdr != "latency" and sum_file != "":
+   did_writes = 0
+   for j in range(0, len(trgt_arr)):
+       sf.write("%s\t%s\t=%f\n" % (hdr, trgt_arr[j], avg_sum[j]/avg_n[j]))
+       did_writes = did_writes + 1
+   if hdr == "http_status" and did_writes == 1:
+       sf.write("%s\t%s\t=%f\n" % (hdr, "not 200", 0.0))
+
 
 if hdr != "latency":
    sys.exit(0)
@@ -142,6 +188,8 @@ if tm_last > 0.0:
    tm_tot_lo = tm_tot_lo / tm_last
    tm_tot_hi = tm_tot_hi / tm_last
    of.write("\t\t\t\t\ttm_tot_lo/s\t=%f\t=%f\ttm_tot_hi/s\n" % (tm_tot_lo, tm_tot_hi))
+   sf.write("response_time_est_total\tlo_est/s\t=%f\n" % (tm_tot_lo))
+   sf.write("response_time_est_total\thi_est/s\t=%f\n" % (tm_tot_hi))
    tm_tot_lo = tm_tot_lo / 32
    tm_tot_hi = tm_tot_hi / 32
    of.write("\t\t\t\t32 cpus\tfrac_of_32_cpus_lo\t=%f\t=%f\tfrac_of_32_cpus_hi\n" % (tm_tot_lo, tm_tot_hi))
