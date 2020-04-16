@@ -85,7 +85,8 @@ echo "dir= $DIR"
 
 if [ "$SUM_FILE" != "" ]; then
   printf "title\tsummary\tsheet\tsummary\ttype\tcopy\n"  > $SUM_FILE;
-  printf "hdrs\t2\t0\t-1\t2\t-1\n" >> $SUM_FILE;
+  printf "hdrs\t2\t0\t-1\t3\t-1\n" >> $SUM_FILE;
+  printf "Resource\tTool\tMetric\tValue\tUSE\tComments\n" >> $SUM_FILE;
 fi
 
 PH_TM_END=0
@@ -333,19 +334,29 @@ trows++; printf("\t$ power") > NFL;
 # 4  0      0 1319472 842316 44802156    0    0     0    12 20779 58660 14  1 85  0  0
 # 2  0      0 1384300 842320 44802160    0    0     0   356 17266 81860 11  1 88  0  0
 
-    awk -v pfx="$PFX" -v sum_file="$SUM_FILE" -v sum_flds="runnable{vmstat runnable PIDs},interrupts/s,context switch/s,%user,%idle" '
+    awk -v pfx="$PFX" -v sum_file="$SUM_FILE" -v sum_flds="runnable{vmstat runnable PIDs|OS},interrupts/s{|OS},context switch/s{|OS},%user{|CPU},%idle{|CPU}" '
      BEGIN{beg=1;col_mx=-1;mx=0;
         n_sum = 0;
        if (sum_file != "" && sum_flds != "") {
          n_sum = split(sum_flds, sum_arr, ",");
          for (i_sum=1; i_sum <= n_sum; i_sum++) {
             sum_type[i_sum] = 0;
+            sum_res[i_sum] = "";
             str = sum_arr[i_sum];
             pos = index(str, "{");
             if (pos > 0) {
                pos1 = index(str, "}");
                if (pos1 == 0) { pos1= length(str)+1; }
-               sum_prt[i_sum] = substr(str, pos+1, pos1-pos-1);
+               sum_str = substr(str, pos+1, pos1-pos-1);
+               n_sum2 = split(sum_str, sum_arr2, "|");
+               if (sum_arr2[1] != "") {
+                 sum_prt[i_sum] = sum_arr2[1];
+               } else {
+                 sum_prt[i_sum] = str;
+               }
+               if (sum_arr2[2] != "") {
+                 sum_res[i_sum] = sum_arr2[2];
+               }
                sum_arr[i_sum] = substr(str, 1, pos-1);
             } else {
                sum_prt[i_sum] = str;
@@ -496,7 +507,7 @@ trows++; printf("\t\n") > NFL;
        close(NFL);
        if (n_sum > 0) {
           for (i_sum=1; i_sum <= n_sum; i_sum++) {
-             printf("%s\t%s\t%f\n", "vmstat", sum_prt[i_sum], (sum_occ[i_sum] > 0 ? sum_tot[i_sum]/sum_occ[i_sum] : 0.0)) >> sum_file;
+             printf("%s\t%s\t%s\t%f\n",  sum_res[i_sum], "vmstat", sum_prt[i_sum], (sum_occ[i_sum] > 0 ? sum_tot[i_sum]/sum_occ[i_sum] : 0.0)) >> sum_file;
           }
        }
        }
@@ -994,7 +1005,7 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
 #rkB/s	wkB/s	avgrq-sz	avgqu-sz	await	r_await	w_await	svctm	%util
 
     echo "do iostat"
-    awk -v ts_beg="$BEG" -v pfx="$PFX" -v typ="iostat"  -v sum_file="$SUM_FILE" -v sum_flds="rkB/s{io RdkB/s},wkB/s{io wrkB/s},avgrq-sz{io avg Req_sz},avgqu-sz{io avg que_sz},%util{io %util}" '
+    awk -v ts_beg="$BEG" -v pfx="$PFX" -v typ="iostat"  -v sum_file="$SUM_FILE" -v sum_flds="rkB/s{io RdkB/s|disk},wkB/s{io wrkB/s|disk},avgrq-sz{io avg Req_sz|disk},avgqu-sz{io avg que_sz|disk},%util{io %util|disk}" '
      BEGIN{
         beg=1;
         grp_mx=0;
@@ -1016,7 +1027,16 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
             if (pos > 0) {
                pos1 = index(str, "}");
                if (pos1 == 0) { pos1= length(str)+1; }
-               sum_prt[i_sum] = substr(str, pos+1, pos1-pos-1);
+               sum_str = substr(str, pos+1, pos1-pos-1);
+               n_sum2 = split(sum_str, sum_arr2, "|");
+               if (sum_arr2[1] != "") {
+                 sum_prt[i_sum] = sum_arr2[1];
+               } else {
+                 sum_prt[i_sum] = str;
+               }
+               if (sum_arr2[2] != "") {
+                 sum_res[i_sum] = sum_arr2[2];
+               }
                sum_arr[i_sum] = substr(str, 1, pos-1);
             } else {
                sum_prt[i_sum] = str;
@@ -1241,7 +1261,7 @@ row += trows;
              if (sum_type[i_sum] == 1) {
                 divi = sum_tmax[i_sum] - sum_tmin[i_sum];
              }
-             printf("%s\t%s\t%f\n", "iostat", sum_prt[i_sum], (divi > 0 ? sum_tot[i_sum]/divi : 0.0)) >> sum_file;
+             printf("%s\t%s\t%s\t%f\n", sum_res[i_sum], "iostat", sum_prt[i_sum], (divi > 0 ? sum_tot[i_sum]/divi : 0.0)) >> sum_file;
           }
        }
      }
@@ -1257,7 +1277,7 @@ row += trows;
 #12:05:00 AM        lo   1251.00   1251.00    259.82    259.82      0.00      0.00      0.00      0.00
 #12:05:00 AM      ifb0      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00
     echo "do sar_dev"
-    awk -v ts_beg="$BEG" -v pfx="$PFX" -v typ="sar network IFACE"  -v sum_file="$SUM_FILE" -v sum_flds="rxkB/s{net rdKB/s},txkB/s{net wrKB/s},%ifutil{net %util}" '
+    awk -v ts_beg="$BEG" -v pfx="$PFX" -v typ="sar network IFACE"  -v sum_file="$SUM_FILE" -v sum_flds="rxkB/s{net rdKB/s|network},txkB/s{net wrKB/s|network},%ifutil{net %util|network}" '
      BEGIN{beg=1;
         grp_mx=0;
         hdr_mx=0;
@@ -1276,7 +1296,16 @@ row += trows;
             if (pos > 0) {
                pos1 = index(str, "}");
                if (pos1 == 0) { pos1= length(str)+1; }
-               sum_prt[i_sum] = substr(str, pos+1, pos1-pos-1);
+               sum_str = substr(str, pos+1, pos1-pos-1);
+               n_sum2 = split(sum_str, sum_arr2, "|");
+               if (sum_arr2[1] != "") {
+                 sum_prt[i_sum] = sum_arr2[1];
+               } else {
+                 sum_prt[i_sum] = str;
+               }
+               if (sum_arr2[2] != "") {
+                 sum_res[i_sum] = sum_arr2[2];
+               }
                sum_arr[i_sum] = substr(str, 1, pos-1);
             } else {
                sum_prt[i_sum] = str;
@@ -1357,7 +1386,7 @@ row += trows;
                 divi = sum_tmax[i_sum] - sum_tmin[i_sum];
              }
              if (dev_str != "lo") {
-             printf("%s %s\t%s\t%f\n", "sar_net", dev_str, sum_prt[i_sum], (divi > 0 ? sum_tot[i_sum]/divi : 0.0)) >> sum_file;
+             printf("%s\t%s %s\t%s\t%f\n", sum_res[i_sum], "sar_net", dev_str, sum_prt[i_sum], (divi > 0 ? sum_tot[i_sum]/divi : 0.0)) >> sum_file;
              }
           }
           for (i_sum=1; i_sum <= n_sum; i_sum++) {
@@ -1786,7 +1815,7 @@ row += trows;
   if [[ $i == *"_nicstat.txt"* ]]; then
     echo "do nicstat"
 #abcd
-    awk -v beg_ts="$BEG" -v pfx="$PFX" -v sum_file="$SUM_FILE" -v sum_flds="InKB{TCP_RdKB/s},OutKB{TCP_WrKB/s},RdKB{NetDev_RdKB/s},WrKB{NetDev_WrKB/},IErr{NetDev_IErr/s},OErr{NetDev_OErr/s},%Util{NetDev_%Util}" '
+    awk -v beg_ts="$BEG" -v pfx="$PFX" -v sum_file="$SUM_FILE" -v sum_flds="InKB{TCP_RdKB/s|network},OutKB{TCP_WrKB/s|network},RdKB{NetDev_RdKB/s|network},WrKB{NetDev_WrKB/|network},IErr{NetDev_IErr/s|network},OErr{NetDev_OErr/s|network},%Util{NetDev_%Util|network}" '
      BEGIN{
         beg_ts += 0.0;
         n_sum = 0;
@@ -1799,6 +1828,16 @@ row += trows;
             if (pos > 0) {
                pos1 = index(str, "}");
                if (pos1 == 0) { pos1= length(str)+1; }
+               sum_str = substr(str, pos+1, pos1-pos-1);
+               n_sum2 = split(sum_str, sum_arr2, "|");
+               if (sum_arr2[1] != "") {
+                 sum_prt[i_sum] = sum_arr2[1];
+               } else {
+                 sum_prt[i_sum] = str;
+               }
+               if (sum_arr2[2] != "") {
+                 sum_res[i_sum] = sum_arr2[2];
+               }
                sum_prt[i_sum] = substr(str, pos+1, pos1-pos-1);
                sum_arr[i_sum] = substr(str, 1, pos-1);
             } else {
@@ -1903,7 +1942,7 @@ row += trows;
              if (sum_type[i_sum] == 1) {
                 divi = sum_tmax[i_sum] - sum_tmin[i_sum];
              }
-             printf("%s\t%s\t%f\n", "nicstat", sum_prt[i_sum], (divi > 0 ? sum_tot[i_sum]/divi : 0.0)) >> sum_file;
+             printf("%s\t%s\t%s\t%f\n", sum_res[i_sum], "nicstat", sum_prt[i_sum], (divi > 0 ? sum_tot[i_sum]/divi : 0.0)) >> sum_file;
           }
        }
    }
