@@ -111,7 +111,7 @@ else
 fi
 
 
-awk -v ts_beg="$BEG" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s/skt},LLC-misses PKI,IPC{InstPerCycle},%not_halted,avg_freq{avg_freq GHz},QPI_BW{QPI_BW GB/s/skt}" 'BEGIN{
+awk -v ts_beg="$BEG" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s/skt|memory},LLC-misses PKI{|memory},IPC{InstPerCycle|CPU},%not_halted{|CPU},avg_freq{avg_freq GHz|CPU},QPI_BW{QPI_BW GB/s/skt|memory interconnect}" 'BEGIN{
      row=0;
      evt_idx=-1;
      months="  JanFebMarAprMayJunJulAugSepOctNovDec";
@@ -130,7 +130,16 @@ awk -v ts_beg="$BEG" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIO
             if (pos > 0) {
                pos1 = index(str, "}");
                if (pos1 == 0) { pos1= length(str)+1; }
-               sum_prt[i_sum] = substr(str, pos+1, pos1-pos-1);
+               sum_str = substr(str, pos+1, pos1-pos-1);
+               n_sum2 = split(sum_str, sum_arr2, "|");
+               if (sum_arr2[1] != "") {
+                 sum_prt[i_sum] = sum_arr2[1];
+               } else {
+                 sum_prt[i_sum] = str;
+               }
+               if (sum_arr2[2] != "") {
+                 sum_res[i_sum] = sum_arr2[2];
+               }
                sum_arr[i_sum] = substr(str, 1, pos-1);
             } else {
                sum_prt[i_sum] = str;
@@ -639,7 +648,7 @@ awk -v ts_beg="$BEG" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIO
              if (sum_type[i_sum] == 1) {
                 divi = sum_tmax[i_sum] - sum_tmin[i_sum];
              }
-             printf("%s\t%s\t%f\n", "perf_stat", sum_prt[i_sum], (divi > 0 ? sum_tot[i_sum]/divi : 0.0)) >> sum_file;
+             printf("%s\t%s\t%s\t%f\n", sum_res[i_sum], "perf_stat", sum_prt[i_sum], (divi > 0 ? sum_tot[i_sum]/divi : 0.0)) >> sum_file;
           }
        }
    }' $FILES $SPECINT_LOG
