@@ -145,13 +145,24 @@ if sum_file != "":
    sf = open(sum_file,"a+")
 
 http_stat_errs = 0
-if hdr != "latency" and sum_file != "":
+if hdr == "http_status" and sum_file != "":
    did_writes = 0
+   not_200= 0
+   not_200_str = ""
+   not_200_sep = ""
    for j in range(0, len(trgt_arr)):
-       sf.write("%s\t%s\t=%f\n" % (hdr, trgt_arr[j], avg_sum[j]/avg_n[j]))
-       did_writes = did_writes + 1
-   if hdr == "http_status" and did_writes == 1:
-       sf.write("%s\t%s\t=%f\n" % (hdr, "not 200", 0.0))
+       if trgt_arr[j] != "200":
+          not_200 = not_200  + avg_sum[j]/avg_n[j]
+          not_200_str = not_200_str + not_200_sep + trgt_arr[j]
+          not_200_sep = ", "
+   for j in range(0, len(trgt_arr)):
+       if trgt_arr[j] == "200":
+          sf.write("%s\t%s\t%s\t=%f\n" % ("software successs", hdr, trgt_arr[j], avg_sum[j]/avg_n[j]))
+   sf.write("%s\t%s\t%s\t=%f\n" % ("software errs", hdr, not_200_str, not_200))
+
+if sum_file != "" and hdr != "latency" and hdr != "http_status":
+   for j in range(0, len(trgt_arr)):
+       sf.write("%s\t%s\t%s\t=%f\n" % ("software utilization", hdr, trgt_arr[j], avg_sum[j]/avg_n[j]))
 
 
 if hdr != "latency":
@@ -188,8 +199,8 @@ if tm_last > 0.0:
    tm_tot_lo = tm_tot_lo / tm_last
    tm_tot_hi = tm_tot_hi / tm_last
    of.write("\t\t\t\t\ttm_tot_lo/s\t=%f\t=%f\ttm_tot_hi/s\n" % (tm_tot_lo, tm_tot_hi))
-   sf.write("response_time_est_total\tlo_est/s\t=%f\n" % (tm_tot_lo))
-   sf.write("response_time_est_total\thi_est/s\t=%f\n" % (tm_tot_hi))
+   sf.write("software utilization\tresponse_time_est_total\tlo_est/s\t=%f\n" % (tm_tot_lo))
+   sf.write("software utilization\tresponse_time_est_total\thi_est/s\t=%f\n" % (tm_tot_hi))
    tm_tot_lo = tm_tot_lo / 32
    tm_tot_hi = tm_tot_hi / 32
    of.write("\t\t\t\t32 cpus\tfrac_of_32_cpus_lo\t=%f\t=%f\tfrac_of_32_cpus_hi\n" % (tm_tot_lo, tm_tot_hi))
