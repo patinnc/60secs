@@ -1,6 +1,41 @@
 #!/bin/bash
 
-FL=$1
+while getopts "hvf:b:e:s:" opt; do
+  case ${opt} in
+    f )
+      FILE=$OPTARG
+      ;;
+    b )
+      BEG_IN=$OPTARG
+      ;;
+    e )
+      END_IN=$OPTARG
+      ;;
+    s )
+      SUM_FILE=$OPTARG
+      ;;
+    v )
+      VERBOSE=$((VERBOSE+1))
+      ;;
+    h )
+      echo "$0 split data files into columns"
+      echo "Usage: $0 [-h] -f json_file -t header [ -b beg_timestamp -e end_timestamp ] -s summary_filename [-v]"
+      echo "   -v verbose mode"
+      exit
+      ;;
+    : )
+      echo "Invalid option: $OPTARG requires an argument" 1>&2
+      exit
+      ;;
+    \? )
+      echo "Invalid option: $OPTARG" 1>&2
+      exit
+      ;;
+  esac
+done
+shift $((OPTIND -1))
+
+FL=$FILE
 if [ "$FL" == "" ]; then
   echo "arg1 (path to java gc log file) is missing. Bye"
   exit
@@ -16,7 +51,12 @@ if [ ! -e $PRF_FILE ]; then
 fi
 BEG=`cat 60secs.log | awk '{n=split($0, arr);printf("%s\n", arr[n]);exit;}'`
 DURA=`tail -1 $PRF_FILE | awk '{n=split($0, arr, ";");printf("%s\n", arr[1]);exit;}'`
-END=`awk -v beg="$BEG" -v dura="$DURA" 'BEGIN{printf("%f\n", beg+dura);exit;}'`
+if [ "$END_IN" == "" ]; then
+  END=`awk -v beg="$BEG" -v dura="$DURA" 'BEGIN{printf("%f\n", beg+dura);exit;}'`
+else
+  END=$END_IN
+  echo "============ GC end= $END" > /dev/stderr
+fi
 
 # start perf at Wed Feb  5 22:53:31 PST 2020 1580972011.851953818
 TZ=`tail -1 60secs.log | awk '{printf("%s\n", $8);}'`
