@@ -14,11 +14,15 @@ XLSX_FILE="chart_line.xlsx"
 PFX=
 SUM_FILE=
 PHASE_FILE=
+END_TM=
 
-while getopts "hvd:o:P:p:i:s:x:" opt; do
+while getopts "hvd:e:o:P:p:i:s:x:" opt; do
   case ${opt} in
     d )
       DIR=$OPTARG
+      ;;
+    e )
+      END_TM=$OPTARG
       ;;
     i )
       IMAGE_STR=$OPTARG
@@ -166,8 +170,61 @@ trows++; printf("\n") > NFL;
   fi
   if [[ $i == *"_power.txt"* ]]; then
     echo "do power"
-    awk -v ts_beg="$BEG" -v ts_end="$PH_TM_END" -v pfx="$PFX" '
-      BEGIN{beg=1;mx=0; ts_end += 0.0;}
+    #RESP=`grep "Power Consumption History" $i | wc -l`
+    #if [ "$RESP" != "0" ]; then
+      # delloem format data
+    #else
+      # ipmitool sdr format
+
+    UEND_TM=
+    if [ "$END_TM" != "" ]; then
+      UEND_TM=$END_TM
+    else
+      if [ "$PH_TM_END" == "" ]; then
+        UEND_TM=$PH_TM_END
+      fi
+    fi
+
+    awk -v ts_beg="$BEG" -v ts_end="$UEND_TM" -v pfx="$PFX" -v sum_file="$SUM_FILE" -v sum_flds="avg_60secs{avg_power_60sec_mvg_avg|power},max_60secs{max_power_60sec_mvg_avg|power},min_60secs{min_power_60sec_mvg_avg|power},SysFan_Power{|power},MB_HSC_Pwr_Out{|power},Total_Power{|power},Power_CPU{|power},Power_Memory{|power},PSU0_Input{|power},PSU0_Output{|power},PSU1_Input{|power},PSU1_Output{|power},HSC_Input_Power{|power},HSC_Output_Power{|power},PDB_HSC_POUT{|power},P0_Pkg_Power{|power},P1_Pkg_Power{|power},CPU0_VR0_Pout{|power},CPU0_VR1_Pout{|power},CPU1_VR0_Pout{|power},CPU1_VR1_Pout{|power},PCH_VR_POUT{|power},CPU0_DM_VR0_POUT{|power},CPU0_DM_VR1_POUT{|power},CPU1_DM_VR0_POUT{|power},CPU1_DM_VR1_POUT{|power},PSU0_POUT{|power},PSU1_POUT{|power},PSU0_PIN{|power},PSU1_PIN{|power}" '
+      BEGIN{
+        beg=1;
+        mx=0;
+        rw=1;
+        ts_end += 0.0;
+        delloem=0;
+        area1_idx=0;
+       if (sum_file != "" && sum_flds != "") {
+         n_sum = split(sum_flds, sum_arr, ",");
+         for (i_sum=1; i_sum <= n_sum; i_sum++) {
+            sum_type[i_sum] = 1;
+            str = sum_arr[i_sum];
+            pos = index(str, "{");
+            if (pos > 0) {
+               pos1 = index(str, "}");
+               if (pos1 == 0) { pos1= length(str)+1; }
+               sum_str = substr(str, pos+1, pos1-pos-1);
+               n_sum2 = split(sum_str, sum_arr2, "|");
+               if (sum_arr2[1] != "") {
+                 sum_prt[i_sum] = sum_arr2[1];
+               } else {
+                 #sum_prt[i_sum] = str;
+                 sum_prt[i_sum] = substr(str, 1, pos-1);
+               }
+               if (sum_arr2[2] != "") {
+                 sum_res[i_sum] = sum_arr2[2];
+               }
+               #sum_prt[i_sum] = substr(str, pos+1, pos1-pos-1);
+               sum_arr[i_sum] = substr(str, 1, pos-1);
+            } else {
+               sum_prt[i_sum] = str;
+            }
+            printf("pwr: sum_prt[%d]= %s, sum_res= %s\n", i_sum, sum_prt[i_sum], sum_res[i_sum]) > "/dev/stderr";
+            if (index(str, "%") > 0) {
+               sum_type[i_sum] = 0;
+            }
+         }
+       }
+      }
       function ltrim(s) { sub(/^[ \t\r\n]+/, "", s); return s }
       function rtrim(s) { sub(/[ \t\r\n,]+$/, "", s); return s }
       function trim(s) { return rtrim(ltrim(s)); }
@@ -185,10 +242,37 @@ trows++; printf("\n") > NFL;
       }
       /^==end / {
          tm_edt = $4 + 0.0;
-         rw++;
          tm[rw] = tm_edt;
+         rw++;
+      }
+#Statistic                   Last Minute     Last Hour     Last Day     Last Week
+#Average Power Consumption   137 W           137 W         119 W        119 W   
+#Max Power Consumption       174 W           174 W         174 W        180 W   
+#Min Power Consumption       112 W           112 W         112 W        110 W   
+      /^Power Consumption History/ {
+        delloem=1; 
+      }
+      /^Average Power Consumption|^Max Power Consumption|^Min Power Consumption/ {
+         if ($1 == "Average") { str= "avg"; }
+         if ($1 == "Max")     { str= "max"; }
+         if ($1 == "Min")     { str= "min"; }
+         area = str "_60secs";
+         pwr  = $4;
+         typ=1
+         if (!(area in area1_lkup)) {
+            area1_idx++
+            area1_lkup[area] = area1_idx;
+            area1_list[area1_idx] = area;
+         }
+         i = area1_lkup[area];
+         rows[rw,typ,i] = pwr + 0.0;
       }
       {
+	FNM=ARGV[ARGIND];
+        NFL=FNM ".tsv";
+        if (delloem == 1) {
+          next;
+        }
         n = split($0, arr, "|");
         for (i=1; i <= n; i++) {
            arr[i] = trim(arr[i]);
@@ -263,17 +347,35 @@ function columnToLetter(column)
 }
 
      END{
+       add_col = 1;
+       if (delloem == 1) {
+         rw--;
+         add_col = 0;
+       }
        brw = 6;
+       if (n_sum > 0) {
+            for (k=1; k <= area1_idx; k++) {
+              hdr_lkup[k] = -1;
+            }
+            for (k=1; k <= area1_idx; k++) {
+              for (i_sum=1; i_sum <= n_sum; i_sum++) {
+                 if ( area1_list[k] == sum_arr[i_sum]) {
+                    hdr_lkup[k] = i_sum;
+                    break; # so if hdr appears more than one in sum_flds, it will be skipped
+                 }
+              }
+            }
+       }
        hdr_mx = area1_idx;
 trows++; printf("\t$ power") > NFL;
-       for (i=2; i <= hdr_mx+area2_idx+area3_idx; i++) {
-         let = columnToLetter(i+1);
+       for (i=2; i <= hdr_mx+area2_idx+area3_idx+1; i++) {
+         let = columnToLetter(i+add_col);
          printf("\t=subtotal(1,%s%d:%s%d)", let, brw, let, brw+rw) > NFL;
        }
        printf("\n") > NFL;
 trows++; printf("\t$ power") > NFL;
-       for (i=2; i <= hdr_mx+area2_idx+area3_idx; i++) {
-         let = columnToLetter(i+1);
+       for (i=2; i <= hdr_mx+area2_idx+area3_idx+1; i++) {
+         let = columnToLetter(i+add_col);
          printf("\t=subtotal(4,%s%d:%s%d)", let, brw, let, brw+rw) > NFL;
        }
        printf("\n") > NFL;
@@ -299,10 +401,27 @@ trows++; printf("\t$ power") > NFL;
        printf("\n") > NFL;
        for (r=1; r <= rw; r++) {
           tab="";
+          if (r == 1) {
+             intrvl = tm[r]-ts_beg;
+          } else {
+             intrvl = tm[r]-tm[r-1];
+          }
           printf("%.3f\t%.4f\t", tm[r], tm[r]-ts_beg) > NFL;
           for (c=1; c <= area1_idx; c++) {
               printf("%s%s", tab, rows[r,1,c]) > NFL;
               tab="\t";
+                 if (hdr_lkup[c] != -1) {
+                   i_sum = hdr_lkup[c];
+                   sum_occ[i_sum] += 1;
+                   if (sum_type[i_sum] == 1) {
+                     if (sum_tmin[i_sum] == 0) { sum_tmin[i_sum] = tm[r]; sum_tmax[i_sum] = sum_tmin[i_sum]; }
+                     if (sum_tmax[i_sum] < tm[r]) { sum_tmax[i_sum] = tm[r]; }
+                     if (r > 1) {intrvl = tm[r] - tm[r-1]; } else { intrvl = tm[r]-ts_beg; };
+                     sum_tot[i_sum] += rows[r,1,c] * intrvl;
+                   } else {
+                     sum_tot[i_sum] += rows[r,1,c];
+                   }
+                 }
           }
           for (c=1; c <= area2_idx; c++) {
               printf("%s%s", tab, rows[r,2,c]) > NFL;
@@ -316,12 +435,26 @@ trows++; printf("\t$ power") > NFL;
           row++;
        }
        printf("\n") > NFL;
+       if (area2_idx > 0) {
        printf("title\ttemperature\tsheet\tpower\ttype\tscatter_straight\n") > NFL;
        printf("hdrs\t%d\t%d\t%d\t%d\t1\n", trows+1, area1_idx+2, -1, area2_idx+area1_idx+1) > NFL;
        printf("\n") > NFL;
+       }
+       if (area3_idx > 0) {
        printf("title\tFans RPM\tsheet\tpower\ttype\tscatter_straight\n") > NFL;
        printf("hdrs\t%d\t%d\t%d\t%d\t1\n", trows+1, area1_idx+area2_idx+2, -1, area3_idx+area2_idx+area1_idx+1) > NFL;
+       }
        close(NFL);
+          for (i_sum=1; i_sum <= n_sum; i_sum++) {
+             if (sum_occ[i_sum] == 0) {
+                continue;
+             }
+             divi = sum_occ[i_sum];
+             if (sum_type[i_sum] == 1) {
+                divi = sum_tmax[i_sum] - sum_tmin[i_sum];
+             }
+             printf("%s\t%s\t%s\t%f\n", sum_res[i_sum], "ipmitool", sum_prt[i_sum], (divi > 0 ? sum_tot[i_sum]/divi : 0.0)) >> sum_file;
+          }
      }
    ' $i
    SHEETS="$SHEETS $i.tsv"
@@ -334,9 +467,11 @@ trows++; printf("\t$ power") > NFL;
 # 4  0      0 1319472 842316 44802156    0    0     0    12 20779 58660 14  1 85  0  0
 # 2  0      0 1384300 842320 44802160    0    0     0   356 17266 81860 11  1 88  0  0
 
-    awk -v pfx="$PFX" -v sum_file="$SUM_FILE" -v sum_flds="runnable{vmstat runnable PIDs|OS},interrupts/s{|OS},context switch/s{|OS},%user{|CPU},%idle{|CPU}" '
+    DURA=`awk -v ts_beg="$BEG" -v ts_end="$END_TM" 'BEGIN{ts_beg+=0.0;ts_end+=0.0; if (ts_beg > 0.0 && ts_end > 0.0) {printf("%d\n", ts_end-ts_beg); } else {printf("-1\n");};exit;}'`
+    awk -v pfx="$PFX" -v max_lines="$DURA" -v sum_file="$SUM_FILE" -v sum_flds="runnable{vmstat runnable PIDs|OS},interrupts/s{|OS},context switch/s{|OS},%user{|CPU},%idle{|CPU}" '
      BEGIN{beg=1;col_mx=-1;mx=0;
         n_sum = 0;
+        max_lines += 0;
        if (sum_file != "" && sum_flds != "") {
          n_sum = split(sum_flds, sum_arr, ",");
          for (i_sum=1; i_sum <= n_sum; i_sum++) {
@@ -352,11 +487,13 @@ trows++; printf("\t$ power") > NFL;
                if (sum_arr2[1] != "") {
                  sum_prt[i_sum] = sum_arr2[1];
                } else {
-                 sum_prt[i_sum] = str;
+                 #sum_prt[i_sum] = str;
+                 sum_prt[i_sum] = substr(str, 1, pos-1);
                }
                if (sum_arr2[2] != "") {
                  sum_res[i_sum] = sum_arr2[2];
                }
+               #sum_prt[i_sum] = substr(str, pos+1, pos1-pos-1);
                sum_arr[i_sum] = substr(str, 1, pos-1);
             } else {
                sum_prt[i_sum] = str;
@@ -373,6 +510,9 @@ trows++; printf("\t$ power") > NFL;
      {
 	FNM=ARGV[ARGIND];
         NFL=FNM ".tsv";
+        if (max_lines > 0.0 && mx > max_lines) {
+          exit;
+        }
      }
      /swpd/{
         if (beg == 0) { next; }
@@ -522,12 +662,13 @@ trows++; printf("\t\n") > NFL;
 #12:01:02 AM    0   10.10    4.04    2.02    0.00    0.00    0.00    0.00    0.00    0.00   83.84
 #12:01:02 AM    1    1.03    6.19    2.06    0.00    0.00    0.00    0.00    0.00    0.00   90.72
 
-    awk -v ts_beg="$BEG" -v pfx="$PFX" '
+    awk -v ts_beg="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" '
      BEGIN{
         beg=1;
         grp_mx=0;
         hdr_mx=0;
         ts_beg += 0;
+        ts_end += 0;
         epoch_init = 0;
       }
       function dt_to_epoch(hhmmss, ampm) {
@@ -603,6 +744,9 @@ trows++; printf("\t\n") > NFL;
         if ($2 == "AM" || $2 == "PM") {
            epoch = dt_to_epoch($1, $2);
         }
+        if (ts_end > 0.0 && epoch > ts_end) {
+           next;
+        }
         if (grps[grp] == "") {
           grps[grp] = ++grp_mx;
           grp_nm[grp_mx] = grp;
@@ -674,7 +818,7 @@ trows++; printf("\n") > NFL;
 #Average:      112     43282      17      80  muttley-active
 #Average:    100001     51570      18     776  m3collector
 #aaaa
-    awk -v ts_beg="$BEG" -v pfx="$PFX" -v typ="pidstat" '
+    awk -v ts_beg="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" -v typ="pidstat" '
      BEGIN{beg=1;
         grp_mx=0;
         hdr_mx=0;
@@ -682,6 +826,7 @@ trows++; printf("\n") > NFL;
         did_notes=0;
         tm_rw = 0;
         tm_beg += 0;
+        tm_end += 0;
         epoch_init = 0;
         num_cpus = 0;
         num_cpus_pct = 0;
@@ -807,6 +952,9 @@ trows++; printf("\n") > NFL;
               epoch = dt_to_epoch($1, $2);
               tm_rw_io = tm_rw_io+1;
               tm_arr_io[tm_rw_io] = epoch;
+              next;
+           }
+           if (ts_end > 0.0 && epoch > ts_end) {
               next;
            }
            if ( area == "cpu" && $1 != "Average:") {
@@ -1005,7 +1153,7 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
 #rkB/s	wkB/s	avgrq-sz	avgqu-sz	await	r_await	w_await	svctm	%util
 
     echo "do iostat"
-    awk -v ts_beg="$BEG" -v pfx="$PFX" -v typ="iostat"  -v sum_file="$SUM_FILE" -v sum_flds="rkB/s{io RdkB/s|disk},wkB/s{io wrkB/s|disk},avgrq-sz{io avg Req_sz|disk},avgqu-sz{io avg que_sz|disk},%util{io %util|disk}" '
+    awk -v ts_beg="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" -v typ="iostat"  -v sum_file="$SUM_FILE" -v sum_flds="rkB/s{io RdkB/s|disk},wkB/s{io wrkB/s|disk},avgrq-sz{io avg Req_sz|disk},avgqu-sz{io avg que_sz|disk},%util{io %util|disk}" '
      BEGIN{
         beg=1;
         grp_mx=0;
@@ -1016,6 +1164,7 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
         mx_dev=0;
         tm_beg = 0;
         ts_beg += 0;
+        ts_end += 0;
         epoch_init = 0;
         n_sum = 0;
        if (sum_file != "" && sum_flds != "") {
@@ -1032,11 +1181,13 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
                if (sum_arr2[1] != "") {
                  sum_prt[i_sum] = sum_arr2[1];
                } else {
-                 sum_prt[i_sum] = str;
+                 #sum_prt[i_sum] = str;
+                 sum_prt[i_sum] = substr(str, 1, pos-1);
                }
                if (sum_arr2[2] != "") {
                  sum_res[i_sum] = sum_arr2[2];
                }
+               #sum_prt[i_sum] = substr(str, pos+1, pos1-pos-1);
                sum_arr[i_sum] = substr(str, 1, pos-1);
             } else {
                sum_prt[i_sum] = str;
@@ -1096,6 +1247,9 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
          dt_beg["mm"] = substr($1, 1, 2);
          dt_beg["dd"] = substr($1, 4, 2);
          epoch = dt_to_epoch($2, $3);
+         if (ts_end > 0.0 && epoch > ts_end) {
+              exit;
+         }
          if (tm_beg == 0) {
            tm_beg = epoch;
          }
@@ -1277,11 +1431,13 @@ row += trows;
 #12:05:00 AM        lo   1251.00   1251.00    259.82    259.82      0.00      0.00      0.00      0.00
 #12:05:00 AM      ifb0      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00
     echo "do sar_dev"
-    awk -v ts_beg="$BEG" -v pfx="$PFX" -v typ="sar network IFACE"  -v sum_file="$SUM_FILE" -v sum_flds="rxkB/s{net rdKB/s|network},txkB/s{net wrKB/s|network},%ifutil{net %util|network}" '
+    awk -v ts_beg="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" -v typ="sar network IFACE"  -v sum_file="$SUM_FILE" -v sum_flds="rxkB/s{net rdKB/s|network},txkB/s{net wrKB/s|network},%ifutil{net %util|network}" '
      BEGIN{beg=1;
         grp_mx=0;
         hdr_mx=0;
         chart=typ;
+        ts_beg += 0.0;
+        ts_end += 0.0;
         mx_cpu=0;
         mx_io=0;
         mx_dev=0;
@@ -1301,11 +1457,13 @@ row += trows;
                if (sum_arr2[1] != "") {
                  sum_prt[i_sum] = sum_arr2[1];
                } else {
-                 sum_prt[i_sum] = str;
+                 #sum_prt[i_sum] = str;
+                 sum_prt[i_sum] = substr(str, 1, pos-1);
                }
                if (sum_arr2[2] != "") {
                  sum_res[i_sum] = sum_arr2[2];
                }
+               #sum_prt[i_sum] = substr(str, pos+1, pos1-pos-1);
                sum_arr[i_sum] = substr(str, 1, pos-1);
             } else {
                sum_prt[i_sum] = str;
@@ -1447,6 +1605,9 @@ row += trows;
         str="";
         tab="";
         epoch = dt_to_epoch($1, $2);
+        if (ts_end > 0.0 && epoch > ts_end) {
+          exit;
+        }
         got_nonzero = 0;
         for (i=3; i <= NF; i++) {
           str = str "" sprintf("%s%s", tab, $i);
@@ -1517,7 +1678,7 @@ row+= trows;
  fi
   if [[ $i == *"_sar_tcp.txt"* ]]; then
     echo "do sar_tcp"
-    awk -v ts_beg="$BEG" -v pfx="$PFX" -v typ="sar tcp stats" '
+    awk -v ts_beg="$BEG"  -v ts_end="$END_TM" -v pfx="$PFX" -v typ="sar tcp stats" '
      BEGIN{beg=1;
         grp_mx=0;
         hdr_mx=0;
@@ -1528,6 +1689,7 @@ row+= trows;
         mx_dev=0;
         epoch_init = 0;
         ts_beg += 0;
+        ts_end += 0;
       }
 # efg
       function dt_to_epoch(hhmmss, ampm, all) {
@@ -1630,6 +1792,9 @@ row+= trows;
           next;
         }
         epoch = dt_to_epoch($1, $2, $0);
+        if (ts_end > 0.0 && epoch > ts_end) {
+            exit;
+        }
         str="";
         tab="";
         if (area=="io1") {
@@ -1680,9 +1845,8 @@ row += trows;
 
   if [[ $i == *"_perf_stat.txt"* ]]; then
     echo "do perf_stat data"
-    #$SCR_DIR/perf_stat_scatter.sh -b $BEG -p "$PFX" -o "$OPTIONS"  -f $i > $i.tsv
 #abcd
-    $SCR_DIR/perf_stat_scatter.sh -b "$BEG"  -o "$OPTIONS"  -f $i -S $SUM_FILE > $i.tsv
+    $SCR_DIR/perf_stat_scatter.sh -b "$BEG"  -e "$END_TM"  -o "$OPTIONS"  -f $i -S $SUM_FILE > $i.tsv
    SHEETS="$SHEETS $i.tsv"
   fi
 
@@ -1815,9 +1979,10 @@ row += trows;
   if [[ $i == *"_nicstat.txt"* ]]; then
     echo "do nicstat"
 #abcd
-    awk -v beg_ts="$BEG" -v pfx="$PFX" -v sum_file="$SUM_FILE" -v sum_flds="InKB{TCP_RdKB/s|network},OutKB{TCP_WrKB/s|network},RdKB{NetDev_RdKB/s|network},WrKB{NetDev_WrKB/|network},IErr{NetDev_IErr/s|network},OErr{NetDev_OErr/s|network},%Util{NetDev_%Util|network}" '
+    awk -v beg_ts="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" -v sum_file="$SUM_FILE" -v sum_flds="InKB{TCP_RdKB/s|network},OutKB{TCP_WrKB/s|network},RdKB{NetDev_RdKB/s|network},WrKB{NetDev_WrKB/|network},IErr{NetDev_IErr/s|network},OErr{NetDev_OErr/s|network},%Util{NetDev_%Util|network}" '
      BEGIN{
         beg_ts += 0.0;
+        ts_end += 0.0;
         n_sum = 0;
        if (sum_file != "" && sum_flds != "") {
          n_sum = split(sum_flds, sum_arr, ",");
@@ -1833,12 +1998,13 @@ row += trows;
                if (sum_arr2[1] != "") {
                  sum_prt[i_sum] = sum_arr2[1];
                } else {
-                 sum_prt[i_sum] = str;
+                 #sum_prt[i_sum] = str;
+                 sum_prt[i_sum] = substr(str, 1, pos-1);
                }
                if (sum_arr2[2] != "") {
                  sum_res[i_sum] = sum_arr2[2];
                }
-               sum_prt[i_sum] = substr(str, pos+1, pos1-pos-1);
+               #sum_prt[i_sum] = substr(str, pos+1, pos1-pos-1);
                sum_arr[i_sum] = substr(str, 1, pos-1);
             } else {
                sum_prt[i_sum] = str;
@@ -1910,6 +2076,9 @@ row += trows;
            row++;
            printf("\n") > NFL;
            for (rw=1; rw <= hdr_row[i]; rw++) {
+              if (ts_end > 0.0 && ts_row[i,rw] > ts_end) {
+                continue;
+              }
               ts_diff = ts_row[i,rw]-beg_ts;
               if (ts_diff < 0.0) {continue;}
               printf("%s\t%.0f\t%.3f", hdr_typ[i], ts_row[i,rw], ts_row[i,rw]-beg_ts) > NFL;
@@ -1950,11 +2119,15 @@ row += trows;
    SHEETS="$SHEETS $i.tsv"
   fi
 done
+OPT_END_TM=
+if [ "$END_TM" != "" ]; then
+  OPT_END_TM=" -e $END_TM "
+fi
 tst_files="latency_histo.log"
 for f in $tst_files; do
   if [ -e $f ]; then
      echo "try latency log $f" > /dev/stderr
-     $SCR_DIR/resp_2_tsv.sh -f $f -s $SUM_FILE
+     $SCR_DIR/resp_2_tsv.sh -f $f -s $SUM_FILE $OPT_END_TM
      if [ -e $f.tsv ]; then
      SHEETS="$SHEETS $f.tsv"
      echo "got latency log $f.tsv" > /dev/stderr
@@ -1965,7 +2138,7 @@ tst_files="http-status.log"
 for f in $tst_files; do
   if [ -e $f ]; then
      echo "try http-status log $f" > /dev/stderr
-     $SCR_DIR/resp_2_tsv.sh -f $f -s $SUM_FILE
+     $SCR_DIR/resp_2_tsv.sh -f $f -s $SUM_FILE  $OPT_END_TM
      if [ -e $f.tsv ]; then
      SHEETS="$SHEETS $f.tsv"
      echo "got http-status log $f.tsv" > /dev/stderr
@@ -1976,7 +2149,7 @@ done
 tst_files="RPS.log response_time.log"
 for f in $tst_files; do
   if [ -e $f ]; then
-     $SCR_DIR/resp_2_tsv.sh -f $f -s $SUM_FILE
+     $SCR_DIR/resp_2_tsv.sh -f $f -s $SUM_FILE  $OPT_END_TM
      if [ -e $f.tsv ]; then
      SHEETS="$SHEETS $f.tsv"
      fi
@@ -1984,7 +2157,7 @@ for f in $tst_files; do
 done
 GC_FILE=gc.log.0.current
 if [ -e $GC_FILE ]; then
-  $SCR_DIR/java_gc_log_2_tsv.sh $GC_FILE > $GC_FILE.tsv
+  $SCR_DIR/java_gc_log_2_tsv.sh -f $GC_FILE $OPT_END_TM  > $GC_FILE.tsv
   SHEETS="$SHEETS $GC_FILE.tsv"
 fi
 JAVA_COL=java.collapsed
