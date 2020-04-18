@@ -68,7 +68,11 @@ fi
 if [ "$FORCE_BEG" == "" -o "$FORCE_END" == "" ]; then
   BEG=`cat 60secs.log | awk '{n=split($0, arr);printf("%s\n", arr[n]);exit;}'`
   DURA=`tail -1 $PRF_FILE | awk '{n=split($0, arr, ";");printf("%s\n", arr[1]);exit;}'`
-  END=`awk -v beg="$BEG" -v dura="$DURA" 'BEGIN{printf("%f\n", beg+dura);exit;}'`
+  if [ "$END_IN" != "" ]; then
+    END=$END_IN
+  else
+    END=`awk -v beg="$BEG" -v dura="$DURA" 'BEGIN{printf("%f\n", beg+dura);exit;}'`
+  fi
 else
   BEG=$FORCE_BEG
   END=$FORCE_END
