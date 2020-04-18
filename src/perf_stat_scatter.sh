@@ -12,14 +12,18 @@ PFX_IN=
 OPTIONS=
 BEG=
 SUM_FILE=
+END_TM=
 
-while getopts "hvb:c:f:o:p:s:S:l:" opt; do
+while getopts "hvb:c:e:f:o:p:s:S:l:" opt; do
   case ${opt} in
     b )
       BEG=$OPTARG
       ;;
     c )
       CHART_IN=$OPTARG
+      ;;
+    e )
+      END_TM=$OPTARG
       ;;
     p )
       PFX_IN=$OPTARG
@@ -75,6 +79,7 @@ while getopts "hvb:c:f:o:p:s:S:l:" opt; do
       echo "   -f perf_stat_txt_file  perf stat data file"
       echo "      currently only 1 '-f filename' option is supported"
       echo "   -c chart title. Used by tsv_2_xlsx.py"
+      echo "   -e end_timestamp. drop data after this timestamp"
       echo "   -o options_str  Currently only option is \"dont_sum_sockets\" to not sum S0 & S1 to the system"
       echo "   -p prefix_str.  prefix each sheet name with this string."
       echo "   -s sheet_name.  Used by tsv_2_xlsx.py. string has to comply with Excel sheet name rules"
@@ -111,12 +116,13 @@ else
 fi
 
 
-awk -v ts_beg="$BEG" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s/skt|memory},LLC-misses PKI{|memory},IPC{InstPerCycle|CPU},%not_halted{|CPU},avg_freq{avg_freq GHz|CPU},QPI_BW{QPI_BW GB/s/skt|memory interconnect}" 'BEGIN{
+awk -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s/skt|memory},LLC-misses PKI{|memory},IPC{InstPerCycle|CPU},%not_halted{|CPU},avg_freq{avg_freq GHz|CPU},QPI_BW{QPI_BW GB/s/skt|memory interconnect}" 'BEGIN{
      row=0;
      evt_idx=-1;
      months="  JanFebMarAprMayJunJulAugSepOctNovDec";
      date_str="";
      ts_beg += 0.0;
+     ts_end += 0.0;
      st_beg=0; 
      st_mx=0;
      ts_prev = 0.0;
@@ -135,11 +141,13 @@ awk -v ts_beg="$BEG" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIO
                if (sum_arr2[1] != "") {
                  sum_prt[i_sum] = sum_arr2[1];
                } else {
-                 sum_prt[i_sum] = str;
+                 #sum_prt[i_sum] = str;
+                 sum_prt[i_sum] = substr(str, 1, pos-1);
                }
                if (sum_arr2[2] != "") {
                  sum_res[i_sum] = sum_arr2[2];
                }
+               #sum_prt[i_sum] = substr(str, pos+1, pos1-pos-1);
                sum_arr[i_sum] = substr(str, 1, pos-1);
             } else {
                sum_prt[i_sum] = str;
@@ -533,6 +541,9 @@ awk -v ts_beg="$BEG" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIO
        use_epoch = sv[i,0];
        if (ts_beg > 0.0) {
           use_epoch = ts_beg + sv[i,1];
+       }
+       if (ts_end > 0.0 && use_epoch > ts_end) {
+         continue;
        }
        printf("%.4f\t%s\t%s\t%.4f", use_epoch, sv[i,1], sv[i,1], interval);
        cols = 4;
