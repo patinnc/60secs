@@ -9,11 +9,15 @@ echo "SCR_DIR= $SCR_DIR" > /dev/stderr
 DIR=
 PHASE_FILE=
 XLSX_FILE=
+END_TM=
 
-while getopts "hvd:P:x:" opt; do
+while getopts "hvd:e:P:x:" opt; do
   case ${opt} in
     d )
       DIR=$OPTARG
+      ;;
+    e )
+      END_TM=$OPTARG
       ;;
     P )
       PHASE_FILE=$OPTARG
@@ -31,6 +35,8 @@ while getopts "hvd:P:x:" opt; do
       echo "   -P phase_file"
       echo "   -x xlsx_filename  This is passed to tsv_2_xlsx.py as the name of the xlsx. (you need to add the .xlsx)"
       echo "      The default is chart_line.xlsx"
+      echo "   -e ending_timestamp  cut off data files at this timestamp"
+      echo "      useful for runs that mess up before the expected end time"
       echo "   -v verbose mode"
       exit
       ;;
@@ -97,7 +103,11 @@ for i in $LST; do
  if [ "$PHASE_FILE" != "" ]; then
     OPT_PH=" -P $PHASE_FILE "
  fi
- $SCR_DIR/sys_2_tsv.sh -p "$RPS" -d . -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets $OPT_PH $> tmp.jnk
+ OPT_END_TM=
+ if [ "$END_TM" != "" ]; then
+    OPT_END_TM=" -e $END_TM "
+ fi
+ $SCR_DIR/sys_2_tsv.sh -p "$RPS" -d . $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets $OPT_PH $> tmp.jnk
  SM_FL=
  if [ -e $SUM_FILE ]; then
    SM_FL=$i/$SUM_FILE
