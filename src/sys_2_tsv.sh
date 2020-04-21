@@ -185,7 +185,7 @@ trows++; printf("\n") > NFL;
       fi
     fi
 
-    awk -v ts_beg="$BEG" -v ts_end="$UEND_TM" -v pfx="$PFX" -v sum_file="$SUM_FILE" -v sum_flds="avg_60secs{avg_power_60sec_mvg_avg|power},max_60secs{max_power_60sec_mvg_avg|power},min_60secs{min_power_60sec_mvg_avg|power},SysFan_Power{|power},MB_HSC_Pwr_Out{|power},Total_Power{|power},Power_CPU{|power},Power_Memory{|power},PSU0_Input{|power},PSU0_Output{|power},PSU1_Input{|power},PSU1_Output{|power},HSC_Input_Power{|power},HSC_Output_Power{|power},PDB_HSC_POUT{|power},P0_Pkg_Power{|power},P1_Pkg_Power{|power},CPU0_VR0_Pout{|power},CPU0_VR1_Pout{|power},CPU1_VR0_Pout{|power},CPU1_VR1_Pout{|power},PCH_VR_POUT{|power},CPU0_DM_VR0_POUT{|power},CPU0_DM_VR1_POUT{|power},CPU1_DM_VR0_POUT{|power},CPU1_DM_VR1_POUT{|power},PSU0_POUT{|power},PSU1_POUT{|power},PSU0_PIN{|power},PSU1_PIN{|power}" '
+    awk -v ts_beg="$BEG" -v ts_end="$UEND_TM" -v pfx="$PFX" -v sum_file="$SUM_FILE" -v sum_flds="avg_60secs{avg_power_60sec_mvg_avg|power|%stdev},max_60secs{max_power_60sec_mvg_avg|power},min_60secs{min_power_60sec_mvg_avg|power},SysFan_Power{|power},MB_HSC_Pwr_Out{|power},Total_Power{|power},Power_CPU{|power},Power_Memory{|power},PSU0_Input{|power},PSU0_Output{|power},PSU1_Input{|power},PSU1_Output{|power},HSC_Input_Power{|power},HSC_Output_Power{|power},PDB_HSC_POUT{|power},P0_Pkg_Power{|power},P1_Pkg_Power{|power},CPU0_VR0_Pout{|power},CPU0_VR1_Pout{|power},CPU1_VR0_Pout{|power},CPU1_VR1_Pout{|power},PCH_VR_POUT{|power},CPU0_DM_VR0_POUT{|power},CPU0_DM_VR1_POUT{|power},CPU1_DM_VR0_POUT{|power},CPU1_DM_VR1_POUT{|power},PSU0_POUT{|power},PSU1_POUT{|power},PSU0_PIN{|power},PSU1_PIN{|power},power{power_inst|power|stdev}" '
       BEGIN{
         beg=1;
         mx=0;
@@ -196,7 +196,8 @@ trows++; printf("\n") > NFL;
        if (sum_file != "" && sum_flds != "") {
          n_sum = split(sum_flds, sum_arr, ",");
          for (i_sum=1; i_sum <= n_sum; i_sum++) {
-            sum_type[i_sum] = 1;
+            sum_type[i_sum] = 0;
+            sum_opt[i_sum] = "";
             str = sum_arr[i_sum];
             pos = index(str, "{");
             if (pos > 0) {
@@ -212,6 +213,9 @@ trows++; printf("\n") > NFL;
                }
                if (sum_arr2[2] != "") {
                  sum_res[i_sum] = sum_arr2[2];
+               }
+               if (sum_arr2[3] != "") {
+                 sum_opt[i_sum] = sum_arr2[3];
                }
                #sum_prt[i_sum] = substr(str, pos+1, pos1-pos-1);
                sum_arr[i_sum] = substr(str, 1, pos-1);
@@ -245,6 +249,21 @@ trows++; printf("\n") > NFL;
          tm[rw] = tm_edt;
          rw++;
       }
+      /Instantaneous power reading:/ {
+        delloem=2; 
+         area = "power";
+         pwr  = $4;
+         typ=1
+         if (!(area in area1_lkup)) {
+            area1_idx++
+            area1_lkup[area] = area1_idx;
+            area1_list[area1_idx] = area;
+         }
+         i = area1_lkup[area];
+         rows[rw,typ,i] = pwr + 0.0;
+         next;
+      }
+#    Instantaneous power reading:                   138 Watts
 #Statistic                   Last Minute     Last Hour     Last Day     Last Week
 #Average Power Consumption   137 W           137 W         119 W        119 W   
 #Max Power Consumption       174 W           174 W         174 W        180 W   
@@ -270,7 +289,7 @@ trows++; printf("\n") > NFL;
       {
 	FNM=ARGV[ARGIND];
         NFL=FNM ".tsv";
-        if (delloem == 1) {
+        if (delloem >= 1) {
           next;
         }
         n = split($0, arr, "|");
@@ -348,7 +367,7 @@ function columnToLetter(column)
 
      END{
        add_col = 1;
-       if (delloem == 1) {
+       if (delloem >= 1) {
          rw--;
          add_col = 0;
        }
@@ -412,15 +431,18 @@ trows++; printf("\t$ power") > NFL;
               tab="\t";
                  if (hdr_lkup[c] != -1) {
                    i_sum = hdr_lkup[c];
+#abcd power
                    sum_occ[i_sum] += 1;
                    if (sum_type[i_sum] == 1) {
                      if (sum_tmin[i_sum] == 0) { sum_tmin[i_sum] = tm[r]; sum_tmax[i_sum] = sum_tmin[i_sum]; }
                      if (sum_tmax[i_sum] < tm[r]) { sum_tmax[i_sum] = tm[r]; }
                      if (r > 1) {intrvl = tm[r] - tm[r-1]; } else { intrvl = tm[r]-ts_beg; };
-                     sum_tot[i_sum] += rows[r,1,c] * intrvl;
+                     sum_x = rows[r,1,c] * intrvl;
                    } else {
-                     sum_tot[i_sum] += rows[r,1,c];
+                     sum_x = rows[r,1,c]
                    }
+                   sum_tot[i_sum] += sum_x
+                   sum_x2[i_sum]  += sum_x * sum_x
                  }
           }
           for (c=1; c <= area2_idx; c++) {
@@ -445,15 +467,31 @@ trows++; printf("\t$ power") > NFL;
        printf("hdrs\t%d\t%d\t%d\t%d\t1\n", trows+1, area1_idx+area2_idx+2, -1, area3_idx+area2_idx+area1_idx+1) > NFL;
        }
        close(NFL);
+          tool = "ipmitool";
           for (i_sum=1; i_sum <= n_sum; i_sum++) {
              if (sum_occ[i_sum] == 0) {
                 continue;
              }
-             divi = sum_occ[i_sum];
+             n = sum_occ[i_sum];
              if (sum_type[i_sum] == 1) {
-                divi = sum_tmax[i_sum] - sum_tmin[i_sum];
+                n = sum_tmax[i_sum] - sum_tmin[i_sum];
              }
-             printf("%s\t%s\t%s\t%f\n", sum_res[i_sum], "ipmitool", sum_prt[i_sum], (divi > 0 ? sum_tot[i_sum]/divi : 0.0)) >> sum_file;
+             avg = (n > 0.0 ? sum_tot[i_sum]/n : 0.0);
+             printf("%s\t%s\t%s\t%f\n", sum_res[i_sum], tool, sum_prt[i_sum], avg) >> sum_file;
+#abcd power
+             stdev = 0.0;
+             if (index(sum_opt[i_sum], "stdev") > 0) {
+                if (n > 0.0) {
+                  #     stdev = sqrt((sum_x2 / n) - (mean * mean))
+                  stdev = sqrt((sum_x2[i_sum] / n) - (avg * avg))
+                }
+             }
+             if (index(sum_opt[i_sum], "%stdev") > 0) {
+                printf("%s\t%s\t%s %%stdev\t%f\n",  sum_res[i_sum], tool, sum_prt[i_sum], 100.0*stdev/avg) >> sum_file;
+             }
+             else if (index(sum_opt[i_sum], "stdev") > 0) {
+                printf("%s\t%s\t%s stdev\t%f\n",  sum_res[i_sum], tool, sum_prt[i_sum], stdev) >> sum_file;
+             }
           }
      }
    ' $i
@@ -468,7 +506,7 @@ trows++; printf("\t$ power") > NFL;
 # 2  0      0 1384300 842320 44802160    0    0     0   356 17266 81860 11  1 88  0  0
 
     DURA=`awk -v ts_beg="$BEG" -v ts_end="$END_TM" 'BEGIN{ts_beg+=0.0;ts_end+=0.0; if (ts_beg > 0.0 && ts_end > 0.0) {printf("%d\n", ts_end-ts_beg); } else {printf("-1\n");};exit;}'`
-    awk -v pfx="$PFX" -v max_lines="$DURA" -v sum_file="$SUM_FILE" -v sum_flds="runnable{vmstat runnable PIDs|OS},interrupts/s{|OS},context switch/s{|OS},%user{|CPU},%idle{|CPU}" '
+    awk -v pfx="$PFX" -v max_lines="$DURA" -v sum_file="$SUM_FILE" -v sum_flds="runnable{vmstat runnable PIDs|OS},interrupts/s{|OS},context switch/s{|OS},%user{|CPU},%idle{|CPU|%stdev}" '
      BEGIN{beg=1;col_mx=-1;mx=0;
         n_sum = 0;
         max_lines += 0;
@@ -477,6 +515,7 @@ trows++; printf("\t$ power") > NFL;
          for (i_sum=1; i_sum <= n_sum; i_sum++) {
             sum_type[i_sum] = 0;
             sum_res[i_sum] = "";
+            sum_opt[i_sum] = "";
             str = sum_arr[i_sum];
             pos = index(str, "{");
             if (pos > 0) {
@@ -492,6 +531,9 @@ trows++; printf("\t$ power") > NFL;
                }
                if (sum_arr2[2] != "") {
                  sum_res[i_sum] = sum_arr2[2];
+               }
+               if (sum_arr2[3] != "") {
+                 sum_opt[i_sum] = sum_arr2[3];
                }
                #sum_prt[i_sum] = substr(str, pos+1, pos1-pos-1);
                sum_arr[i_sum] = substr(str, 1, pos-1);
@@ -632,6 +674,8 @@ trows++; printf("\t\n") > NFL;
               j = sum_lkup[i_sum];
               sum_occ[i_sum] += 1;
               sum_tot[i_sum] += arr[j];
+              sum_x2[i_sum] += arr[j]*arr[j];
+
             }
           }
           printf("%s\n", sv[i]) > NFL;
@@ -647,7 +691,23 @@ trows++; printf("\t\n") > NFL;
        close(NFL);
        if (n_sum > 0) {
           for (i_sum=1; i_sum <= n_sum; i_sum++) {
-             printf("%s\t%s\t%s\t%f\n",  sum_res[i_sum], "vmstat", sum_prt[i_sum], (sum_occ[i_sum] > 0 ? sum_tot[i_sum]/sum_occ[i_sum] : 0.0)) >> sum_file;
+             n = sum_occ[i_sum];
+             avg = (n > 0.0 ? sum_tot[i_sum]/n : 0.0);
+             printf("%s\t%s\t%s\t%f\n",  sum_res[i_sum], "vmstat", sum_prt[i_sum], avg) >> sum_file;
+#abcd vmstat
+             stdev = 0.0;
+             if (index(sum_opt[i_sum], "stdev") > 0) {
+                if (n > 0.0) {
+                  #     stdev = sqrt((sum_x2 / n) - (mean * mean))
+                  stdev = sqrt((sum_x2[i_sum] / n) - (avg * avg))
+                }
+             }
+             if (index(sum_opt[i_sum], "%stdev") > 0) {
+                printf("%s\t%s\t%s %%stdev\t%f\n",  sum_res[i_sum], "vmstat", sum_prt[i_sum], 100.0*stdev/avg) >> sum_file;
+             }
+             else if (index(sum_opt[i_sum], "stdev") > 0) {
+                printf("%s\t%s\t%s stdev\t%f\n",  sum_res[i_sum], "vmstat", sum_prt[i_sum], stdev) >> sum_file;
+             }
           }
        }
        }
@@ -1845,7 +1905,6 @@ row += trows;
 
   if [[ $i == *"_perf_stat.txt"* ]]; then
     echo "do perf_stat data"
-#abcd
     $SCR_DIR/perf_stat_scatter.sh -b "$BEG"  -e "$END_TM"  -o "$OPTIONS"  -f $i -S $SUM_FILE > $i.tsv
    SHEETS="$SHEETS $i.tsv"
   fi
@@ -1978,7 +2037,6 @@ row += trows;
 
   if [[ $i == *"_nicstat.txt"* ]]; then
     echo "do nicstat"
-#abcd
     awk -v beg_ts="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" -v sum_file="$SUM_FILE" -v sum_flds="InKB{TCP_RdKB/s|network},OutKB{TCP_WrKB/s|network},RdKB{NetDev_RdKB/s|network},WrKB{NetDev_WrKB/|network},IErr{NetDev_IErr/s|network},OErr{NetDev_OErr/s|network},%Util{NetDev_%Util|network}" '
      BEGIN{
         beg_ts += 0.0;
@@ -2050,7 +2108,6 @@ row += trows;
      }
      END{
        row=-1;
-#abcd
        for (i=1; i <= hdr_typs; i++) {
           if (n_sum > 0) {
             for (k=1; k <= hdr_mx[i]; k++) {
