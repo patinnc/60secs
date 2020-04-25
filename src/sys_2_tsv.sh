@@ -423,6 +423,9 @@ trows++; printf("\t$ power") > NFL;
           if (r == 1) {
              intrvl = tm[r]-ts_beg;
           } else {
+             if (tm[r] == 0) {
+               continue;
+             }
              intrvl = tm[r]-tm[r-1];
           }
           printf("%.3f\t%.4f\t", tm[r], tm[r]-ts_beg) > NFL;
