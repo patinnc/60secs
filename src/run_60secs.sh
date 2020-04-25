@@ -10,8 +10,9 @@ PREFIX_DIR=0
 TASK_IN=
 ADD_IN=
 INTRVL=1
+EXCL=
 
-while getopts "hPa:c:d:i:p:t:" opt; do
+while getopts "hPa:c:d:i:p:t:x:" opt; do
   case ${opt} in
     a )
       ADD_IN=$OPTARG
@@ -33,6 +34,9 @@ while getopts "hPa:c:d:i:p:t:" opt; do
       ;;
     p )
       PROJ_DIR=$OPTARG
+      ;;
+    x )
+      EXCL=$OPTARG
       ;;
     h )
       echo "$0 run compute and disk benchmarks using config files in cfg_dir and put results in results dir"
@@ -84,12 +88,17 @@ if [ "$ADD_IN" != "" ]; then
   ADD=" -a $ADD_IN "
 fi
 
+OPT_EX=" -x do_top,interrupts "
+if [ "$EXCL" != "" ]; then
+  OPT_EX=" -x $EXCL "
+fi
+
 if [ "$CNTNR" != "" ]; then
-echo $SCR_DIR/60secs.sh -t $TASK -x do_top,interrupts -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf -C $CNTNR $ADD
-     $SCR_DIR/60secs.sh -t $TASK -x do_top,interrupts -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf -C $CNTNR $ADD
+echo $SCR_DIR/60secs.sh -t $TASK $OPT_EX -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf -C $CNTNR $ADD
+     $SCR_DIR/60secs.sh -t $TASK $OPT_EX -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf -C $CNTNR $ADD
 else
-echo $SCR_DIR/60secs.sh -t $TASK -x do_top,interrupts -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf $ADD
-     $SCR_DIR/60secs.sh -t $TASK -x do_top,interrupts -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf $ADD
+echo $SCR_DIR/60secs.sh -t $TASK $OPT_EX -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf $ADD
+     $SCR_DIR/60secs.sh -t $TASK $OPT_EX -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf $ADD
 fi
 
 popd
