@@ -640,7 +640,7 @@ for TSKj in `seq $TB $TE`; do
     echo "sysctl kernel.nmi_watchdog=0 && export PERF=$PERF_BIN && python ${SCR_DIR}/pmu-tools-master/toplev.py -l3  -x, --no-multiplex  -o $FL.csv -v --per-core --nodes +CPU_Utilization  -- sleep $INTRVL"
           sysctl kernel.nmi_watchdog=0 && export PERF=$PERF_BIN && python ${SCR_DIR}/pmu-tools-master/toplev.py -l3  -x, --no-multiplex  -o $FL.csv -v --per-core --nodes +CPU_Utilization  -- sleep $INTRVL
     echo "finished toplev" > /dev/stderr
-    $SCR_DIR/top_lev_flame.sh $FL.csv > $FL.collapsed
+    $SCR_DIR/toplev_flame.sh $FL.csv > $FL.collapsed
     fi
     if [ "$DO_TOPLEV" == "1" ]; then
       echo "=======did toplev ========="
