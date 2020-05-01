@@ -2040,7 +2040,7 @@ row += trows;
 
   if [[ $i == *"_nicstat.txt"* ]]; then
     echo "do nicstat"
-    awk -v beg_ts="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" -v sum_file="$SUM_FILE" -v sum_flds="InKB{TCP_RdKB/s|network},OutKB{TCP_WrKB/s|network},RdKB{NetDev_RdKB/s|network},WrKB{NetDev_WrKB/|network},IErr{NetDev_IErr/s|network},OErr{NetDev_OErr/s|network},%Util{NetDev_%Util|network}" '
+    awk -v beg_ts="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" -v sum_file="$SUM_FILE" -v sum_flds="InKB{TCP_RdKB/s|network},OutKB{TCP_WrKB/s|network},RdKB{NetDev_RdKB/s|network},WrKB{NetDev_WrKB/s|network},IErr{NetDev_IErr/s|network},OErr{NetDev_OErr/s|network},%Util{NetDev_%Util|network}" '
      BEGIN{
         beg_ts += 0.0;
         ts_end += 0.0;
@@ -2244,6 +2244,67 @@ if [ -e $TOPLEV_COL ]; then
 fi
 if [ "$SUM_FILE" != "" ]; then
    SHEETS="$SUM_FILE $SHEETS"
+   RESP=`cat $SUM_FILE`
+   echo -e "$RESP" | awk -v sum_file="$SUM_FILE" '
+     BEGIN{
+       ;
+       got_RPS=0;
+       #printf("------do_sum_file= %s\n", sum_file) > "/dev/stderr";
+     }
+     {
+        lns[++lns_mx] = $0;
+        n = split($0, arr, "\t");
+        if (arr[2] == "RPS") {
+          got_RPS=1;
+          RPS = arr[4];
+          if (substr(RPS, 1,1) == "=") {
+            RPS = substr(RPS, 2, length(RPS)) + 0.0;
+          }
+        }
+        #printf("%s\taa\n", $0);
+     }
+     END {
+       beg = 0;
+       for (i=1; i <= lns_mx; i++) {
+        n = split(lns[i], arr, "\t");
+        if (arr[1] == "hdrs") {
+           beg = 1;
+           arr[5] = 7;
+        }
+        if (arr[1] == "Resource") {
+           if (got_RPS == 1) {
+              arr[7] = "Val/1000_requests";
+              n=7;
+              printf("-----got_RPS= %s\n", got_RPS) > "/dev/stderr";
+           }
+        }
+        if (beg == 1) {
+          if (arr[1] != "Resource") {
+          val = arr[4];
+          if (substr(val, 1,1) == "=") {
+            val = substr(val, 2, length(val));
+          }
+          arr[7] = "";
+          if (got_RPS == 1 && RPS > 0.0 && index(arr[3], "/s") > 1) {
+            nval = val / (0.001*RPS);
+            arr[7] = nval;
+            n = 7;
+          }
+          }
+          printf("%s", arr[1]) > sum_file;
+          for(j=2; j <= n; j++) {
+            str = "";
+            if (j==7 && arr[7] != "" && arr[1] != "Resource") { str = "=";}
+            printf("\t%s%s", str, arr[j]) > sum_file;
+          }
+          printf("\n") > sum_file;
+        } else {
+          printf("%s\n", lns[i]) > sum_file;
+        }
+       }
+       #close(sum_file);
+     }
+   ' 
 fi
 if [ "$SHEETS" != "" ]; then
    OPT_PH=
