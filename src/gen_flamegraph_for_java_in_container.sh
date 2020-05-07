@@ -2,21 +2,68 @@
 
 # arg1 is container
 # arg2 is start or stop
-if [ "$1" == "" ]; then
-  echo "1st arg must be container id for java to be profiled"
+CONTAINER_IN=
+EVT_IN=
+ACT_IN=
+
+while getopts "ha:C:E:" opt; do
+  case ${opt} in
+    a )
+      ACT_IN=$OPTARG
+      ;;
+    C )
+      CONTAINER_IN=$OPTARG
+      ;;
+    E )
+      EVT_IN=$OPTARG
+      ;;
+    h )
+      echo "$0 gen flamegraph for java in container"
+      echo "Usage: $0 [-h] -C container -a start|stop [ -E event]"
+      echo "   -a start|stop"
+      echo "     start sampling the java process in containerID"
+      echo "     stop sampling the java process in containerID"
+      echo "   -C containerID_with_java"
+      echo "   -E event_name"
+      echo "     Tested with itimer and lock"
+      echo "     The default is itimer"
+      echo "     Although you can in theory use perf events (like cpu-clock) the permissions on the container block perf events"
+      echo "     This option is optional."
+      exit
+      ;;
+    : )
+      echo "Invalid option: $OPTARG requires an argument" 1>&2
+      ;;
+    \? )
+      echo "Invalid option: $OPTARG" 1>&2
+      ;;
+  esac
+done
+
+
+if [ "$CONTAINER_IN" == "" ]; then
+  echo "-C arg must be container id for java to be profiled"
   docker ps
   exit
 fi
 
-if [ "$2" != "start" -a "$2" != "stop" ]; then
-  echo "2nd arg must be either 'start' or 'stop'"
+if [ "$ACT_IN" != "start" -a "$ACT_IN" != "stop" ]; then
+  echo "-a arg must be either 'start' or 'stop'"
   exit
 fi
 
-SCR_DIR=`dirname "$(readlink -f "$0")"`
-ACT=$2
+if [ "$EVT_IN" != "" -a "$EVT_IN" != "itimer" -a "$EVT_IN" != "lock" ]; then
+  echo "event arg must be -e itimer or -e lock. Got -e $EVT_IN. Bye."
+  exit
+fi
+if [ "$EVT_IN" == "" ]; then
+  EVT_IN="itimer"
+fi
 
-CNTR=$1
+SCR_DIR=`dirname "$(readlink -f "$0")"`
+ACT=$ACT_IN
+CNTR=$CONTAINER_IN
+
 RESP=`docker ps | awk -v cntr="$CNTR" 'BEGIN{rc=0;}{if ($1 == cntr) {rc=1;}} END{printf("%d\n", rc);}'`
 echo "got docker cntr= $RESP"
 if [ "$RESP" == "1" ]; then
@@ -31,11 +78,12 @@ JPID=`echo $RESP | awk '{print $2}'`
 echo "java str= $JPID"
 
 if [ "$ACT" == "start" ]; then
+  EVT=$EVT_IN
   docker cp ${SCR_DIR}/java_profiling.tar.gz $CNTR:/tmp
   docker exec -t $CNTR /bin/bash -c "cd /tmp && tar xzvf java_profiling.tar.gz"
-  #docker exec -t $CNTR /bin/bash -c "cd /tmp/profile/ && ./profiler.sh collect -e itimer -d 20 -f /tmp/t.dat -o collapsed $JPID"
-  echo docker exec -t $CNTR /bin/bash -c "cd /tmp/profile/ && ./profiler.sh start -i 10ms -e itimer $JPID"
-       docker exec -t $CNTR /bin/bash -c "cd /tmp/profile/ && ./profiler.sh start -i 10ms -e itimer $JPID"
+  #docker exec -t $CNTR /bin/bash -c "cd /tmp/profile/ && ./profiler.sh collect -e $EVT -d 20 -f /tmp/t.dat -o collapsed $JPID"
+  echo docker exec -t $CNTR /bin/bash -c "cd /tmp/profile/ && ./profiler.sh start -i 10ms -e $EVT $JPID"
+       docker exec -t $CNTR /bin/bash -c "cd /tmp/profile/ && ./profiler.sh start -i 10ms -e $EVT $JPID"
   echo "profiling started and will continue until you do 'stop' cmd:"
   DRY_RUN=1
 fi
