@@ -11,8 +11,9 @@ TASK_IN=
 ADD_IN=
 INTRVL=1
 EXCL=
+EVT_IN=
 
-while getopts "hPa:c:d:i:p:t:x:" opt; do
+while getopts "hPa:c:d:E:i:p:t:x:" opt; do
   case ${opt} in
     a )
       ADD_IN=$OPTARG
@@ -22,6 +23,9 @@ while getopts "hPa:c:d:i:p:t:x:" opt; do
       ;;
     d )
       DURA=$OPTARG
+      ;;
+    E )
+      EVT_IN=$OPTARG
       ;;
     i )
       INTRVL=$OPTARG
@@ -93,12 +97,17 @@ if [ "$EXCL" != "" ]; then
   OPT_EX=" -x $EXCL "
 fi
 
+OPT_EV=
+if [ "$EVT_IN" != "" ]; then
+  OPT_EV=" -E $EVT_IN "
+fi
+
 if [ "$CNTNR" != "" ]; then
-echo $SCR_DIR/60secs.sh -t $TASK $OPT_EX -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf -C $CNTNR $ADD
-     $SCR_DIR/60secs.sh -t $TASK $OPT_EX -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf -C $CNTNR $ADD
+echo $SCR_DIR/60secs.sh -t $TASK $OPT_EX -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf -C $CNTNR $OPT_EV $ADD
+     $SCR_DIR/60secs.sh -t $TASK $OPT_EX -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf -C $CNTNR $OPT_EV $ADD
 else
-echo $SCR_DIR/60secs.sh -t $TASK $OPT_EX -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf $ADD
-     $SCR_DIR/60secs.sh -t $TASK $OPT_EX -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf $ADD
+echo $SCR_DIR/60secs.sh -t $TASK $OPT_EX -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf $OPT_EV $ADD
+     $SCR_DIR/60secs.sh -t $TASK $OPT_EX -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf $OPT_EV $ADD
 fi
 
 popd
