@@ -43,13 +43,14 @@ DO_TOPLEV=0
 DO_POWER=0
 CONTAINER=
 EXCLUDE=
+EVT_IN=
 RUN_CMDS_LOG=run.log
 myArgs="$((($#)) && printf ' %q' "$@")"
 tstmp=`date "+%Y%m%d_%H%M%S"`
 ts_beg=`date "+%s.%N"`
 echo "$tstmp start $myArgs"  >> $RUN_CMDS_LOG
 
-while getopts "hvbcwa:C:d:i:p:t:x:" opt; do
+while getopts "hvbcwa:C:d:E:i:p:t:x:" opt; do
   case ${opt} in
     a )
       ADD_IN=$OPTARG
@@ -62,6 +63,9 @@ while getopts "hvbcwa:C:d:i:p:t:x:" opt; do
       ;;
     C )
       CONTAINER=$OPTARG
+      ;;
+    E )
+      EVT_IN=$OPTARG
       ;;
     w )
       WAIT_AT_END=1
@@ -134,6 +138,9 @@ while getopts "hvbcwa:C:d:i:p:t:x:" opt; do
       echo "      default is $WAIT seconds"
       echo "   -i interval in seconds between data collection"
       echo "      default is $INTRVL seconds"
+      echo "   -E evt_str   for gen_flamegraph_for_java_in_container.sh"
+      echo "      This is optional. Can be itimer or lock. Used for specifying the event for the flamegraph sampling of java"
+      echo "      default is itimer"
       echo "   -p full_path_to_perf_binary  the perf binary might not be in the path so use this option to specify it"
       echo "      default is 'perf'"
       echo "   -v verbose mode. display each file after creating it."
@@ -620,11 +627,15 @@ for TSKj in `seq $TB $TE`; do
     if [ -e $FL ]; then
       rm $FL
     fi
-    echo ${SCR_DIR}/gen_flamegraph_for_java_in_container.sh $CONTAINER start
-    ${SCR_DIR}/gen_flamegraph_for_java_in_container.sh $CONTAINER start &> gen_fl_start.log
+    OPT_E=
+    if [ "$EVT_IN" != "" ]; then
+      OPT_E=" -E $EVT_IN "
+    fi
+    echo ${SCR_DIR}/gen_flamegraph_for_java_in_container.sh -C $CONTAINER -a start $OPT_E
+         ${SCR_DIR}/gen_flamegraph_for_java_in_container.sh -C $CONTAINER -a start $OPT_E &> gen_fl_start.log
     if [ "$BKGRND" == "0" ]; then
       sleep $WAIT
-      ${SCR_DIR}/gen_flamegraph_for_java_in_container.sh $CONTAINER stop &> gen_fl_stop.log
+      ${SCR_DIR}/gen_flamegraph_for_java_in_container.sh -C $CONTAINER -a stop &> gen_fl_stop.log
     else
       NEED_TO_END_FLAMEGRAPH=1
     fi
@@ -826,7 +837,7 @@ if [ "$WAIT_AT_END" == "1" -a "$PID_LST_NC" != "" ]; then
     dmesg >> $FL_DMSG
   fi
   if [ "$NEED_TO_END_FLAMEGRAPH" == "1" ]; then
-     ${SCR_DIR}/gen_flamegraph_for_java_in_container.sh $CONTAINER stop &> gen_fl_stop.log
+     ${SCR_DIR}/gen_flamegraph_for_java_in_container.sh -C $CONTAINER -a stop &> gen_fl_stop.log
      NEED_TO_END_FLAMEGRAPH=0
   fi
   if [ "$CURL_AT_END" == "1" ]; then
@@ -856,7 +867,7 @@ if [ "$CURL_AT_END" == "1" ]; then
 fi
 if [ "$NEED_TO_END_FLAMEGRAPH" == "1" ]; then
   echo "flamegraph profiling is still running. You'll need to do cmd below manually"
-  echo ${SCR_DIR}/gen_flamegraph_for_java_in_container.sh $CONTAINER stop
+  echo ${SCR_DIR}/gen_flamegraph_for_java_in_container.sh -C $CONTAINER -a stop
 fi
 tstmp=`date "+%Y%m%d_%H%M%S"`
 ts_end=`date "+%s.%N"`
