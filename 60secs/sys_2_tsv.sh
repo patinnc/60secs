@@ -16,7 +16,7 @@ SUM_FILE=
 PHASE_FILE=
 END_TM=
 
-while getopts "hvd:e:o:P:p:i:s:x:" opt; do
+while getopts "hvd:e:o:P:p:i:s:t:x:" opt; do
   case ${opt} in
     d )
       DIR=$OPTARG
@@ -38,6 +38,9 @@ while getopts "hvd:e:o:P:p:i:s:x:" opt; do
       ;;
     s )
       SUM_FILE=$OPTARG
+      ;;
+    t )
+      TOP_DIR=$OPTARG
       ;;
     x )
       XLSX_FILE=$OPTARG
@@ -64,6 +67,7 @@ while getopts "hvd:e:o:P:p:i:s:x:" opt; do
       echo "   -p prefix   string to be prefixed to each sheet name"
       echo "   -P prefix   list of phases for data. fmt is 'phasename beg_time end_time'"
       echo "   -s sum_file summary_file"
+      echo "   -t top_dir  top directory"
       echo "   -v verbose mode"
       exit
       ;;
@@ -2228,6 +2232,15 @@ if [ -e $JAVA_COL ]; then
   $SCR_DIR/svg_to_html.sh -r 1 -d . -f java.svg > java.html
   inkscape -z  -w 2400 -j --export-file=java.png  java.svg
   $SCR_DIR/gen_flamegraph_for_java_in_container_function_hotspot.sh $JAVA_COL > $JAVA_COL.tsv
+  if [ "$SUM_FILE" != "" ]; then
+    SAMPLES=`awk '/__total__/{printf("%s\n", $1);exit;}' $JAVA_COL.tsv`
+    DURA_SECS=`awk '/ start /{for(j=1;j<= NF;j++){if ($(j)=="-d"){b=dura=$(j+1);n=gsub("m", "", dura);c=dura+0.0;if (n>0){c*=60.0;}printf("%.3f\n",c);exit;}}}' run.log`
+    SMP_PER_SEC=`awk -v samples="$SAMPLES" -v dura="$DURA_SECS" 'BEGIN{samples+=0.0;dura+=0.0;if(dura<=0.0){printf("0.0\n");exit;};printf("%f\n", samples/dura);exit}' run.log`
+    echo "====== TOP_DIR= $TOP_DIR" > /dev/stderr
+    FLAME_TYP=`awk -v dir="$TOP_DIR" 'BEGIN{str="itimer";if (index(dir, "lock")>0){str="lock";}}/ start /{for(j=1;j<= NF;j++){if ($(j)=="-E"){str=$(j+1);exit;}}}END{printf("%s\n", str);}' run.log`
+    echo -e "software utilization\tflamegraph\t$FLAME_TYP/s\t=$SMP_PER_SEC" >> $SUM_FILE
+    echo "========flamegraph samples= $SAMPLES, dura_secs= $DURA_SECS FL_TYP= $FLAME_TYP, samples/sec= $SMP_PER_SEC" > /dev/stderr
+  fi
   SHEETS="$SHEETS $JAVA_COL.tsv"
 fi
 TOPLEV_COL=(sys_*_toplev.csv)
