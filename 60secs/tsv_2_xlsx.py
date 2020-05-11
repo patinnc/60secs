@@ -187,7 +187,7 @@ for fn in range(len(file_list)):
       for i in range(len(data)):
           for j in range(len(data[i])):
               if j == 0 and data[i][j] == "title":
-                 print("got title for x= %s\n" % (x))
+                 #print("got title for x= %s\n" % (x))
                  chrts = chrts + 1
                  ch = []
                  ch.append(["title", i, j])
@@ -197,11 +197,11 @@ for fn in range(len(file_list)):
                     ch_type = data[i][5]
                     ch[0].append(ch_type)
               if j == 0 and data[i][j] == "hdrs":
-                 print("got hdrs for x= %s\n" % (x))
+                 #print("got hdrs for x= %s\n" % (x))
                  ch.append(["hdrs", i])
                  ch_arr.append(ch)
               #print(data[i][j])
-          print("")
+          #print("")
       
       prefix = prefix_dict[fo]
       print("prefix2= ", prefix, ", fo= ", fo, ", file_list[",fn,"]= ", file_list[fn], ", x= ",x)
@@ -213,7 +213,7 @@ for fn in range(len(file_list)):
       bold = workbook.add_format({'bold': 1})
    
       for c in range(chrts):
-          print("got chrt[%d] for x= %s\n" % (c, x))
+          #print("got chrt[%d] for x= %s\n" % (c, x))
           title_rw = ch_arr[c][0][1]
           title_cl = ch_arr[c][0][2]
           if len(ch_arr[c][0]) > 3:
