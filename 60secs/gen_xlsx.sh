@@ -11,7 +11,7 @@ PHASE_FILE=
 XLSX_FILE=
 END_TM=
 
-while getopts "hvd:e:P:x:" opt; do
+while getopts "hvd:e:P:x:X:" opt; do
   case ${opt} in
     d )
       DIR=$OPTARG
@@ -25,6 +25,9 @@ while getopts "hvd:e:P:x:" opt; do
     x )
       XLSX_FILE=$OPTARG
       ;;
+    X )
+      AXLSX_FILE=$OPTARG
+      ;;
     v )
       VERBOSE=$((VERBOSE+1))
       ;;
@@ -35,6 +38,7 @@ while getopts "hvd:e:P:x:" opt; do
       echo "   -P phase_file"
       echo "   -x xlsx_filename  This is passed to tsv_2_xlsx.py as the name of the xlsx. (you need to add the .xlsx)"
       echo "      The default is chart_line.xlsx"
+      echo "   -X xlsx_filename  like above but assume path relative to current dir"
       echo "   -e ending_timestamp  cut off data files at this timestamp"
       echo "      useful for runs that mess up before the expected end time"
       echo "   -v verbose mode"
@@ -52,6 +56,21 @@ while getopts "hvd:e:P:x:" opt; do
 done
 shift $((OPTIND -1))
 
+
+
+if [ ! -e $DIR/60secs.log ]; then
+   DIR_ORIG=$DIR
+   RESP=`find $DIR -name 60secs.log | wc -l`
+   if [ "$RESP" == "0" ]; then
+     echo "didn't find 60secs.log file under dir $DIR. Bye"
+     exit
+   fi
+   echo "found $RESP 60secs.log file(s) under dir $DIR. Using the dir of first one if more than one."
+   RESP=`find $DIR -name 60secs.log`
+   echo "found 60secs.log file in dir $RESP"
+   DIR=$(dirname $RESP)
+   echo "using DIR= $DIR, orig DIR= $DIR_ORIG"
+fi
 
 LST=$DIR
 
@@ -99,6 +118,9 @@ for i in $LST; do
  if [ "$XLSX_FILE" != "" ]; then
    XLS=$XLSX_FILE
  fi
+ if [ "$AXLSX_FILE" != "" ]; then
+   XLS=$CDIR/$AXLSX_FILE
+ fi
  OPT_PH=
  if [ "$PHASE_FILE" != "" ]; then
     OPT_PH=" -P $PHASE_FILE "
@@ -107,7 +129,7 @@ for i in $LST; do
  if [ "$END_TM" != "" ]; then
     OPT_END_TM=" -e $END_TM "
  fi
- $SCR_DIR/sys_2_tsv.sh -p "$RPS" -d . $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets $OPT_PH $> tmp.jnk
+ $SCR_DIR/sys_2_tsv.sh -p "$RPS" -d . $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets $OPT_PH -t $DIR $> tmp.jnk
  SM_FL=
  if [ -e $SUM_FILE ]; then
    SM_FL=$i/$SUM_FILE
