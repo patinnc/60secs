@@ -66,7 +66,7 @@ if [ ! -e $DIR/60secs.log ]; then
      exit
    fi
    echo "found $RESP 60secs.log file(s) under dir $DIR. Using the dir of first one if more than one."
-   RESP=`find $DIR -name 60secs.log`
+   RESP=`find $DIR -name 60secs.log | head -1`
    echo "found 60secs.log file in dir $RESP"
    DIR=$(dirname $RESP)
    echo "using DIR= $DIR, orig DIR= $DIR_ORIG"
@@ -129,7 +129,7 @@ for i in $LST; do
  if [ "$END_TM" != "" ]; then
     OPT_END_TM=" -e $END_TM "
  fi
- $SCR_DIR/sys_2_tsv.sh -p "$RPS" -d . $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets $OPT_PH -t $DIR $> tmp.jnk
+ $SCR_DIR/sys_2_tsv.sh -p "$RPS" -d . $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets $OPT_PH -t $DIR &> tmp.jnk
  SM_FL=
  if [ -e $SUM_FILE ]; then
    SM_FL=$i/$SUM_FILE
