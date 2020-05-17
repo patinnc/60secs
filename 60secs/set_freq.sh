@@ -171,6 +171,16 @@ fi
 if [ "$FREQ_IN" == "allcore" ]; then
   ACTION=allcore
 fi
+if [ "$ACTION" == "set" ]; then
+  if [[ $FREQ_IN != "0x"* ]]; then
+    # assume freq in ghz like 2.7 or 3.0
+    FRQ=`awk -v frq="$FREQ_IN" 'BEGIN{val=frq*10.0; printf("0x%x\n", val);exit;}'`
+    if [ "$FRQ" == "0x0" ]; then
+      echo "problems converting -f $FREQ_IN to hex string. got 0x0. Expect a string like -f 2.7. Bye".
+      exit
+    fi
+  fi
+fi
 if [ "$GOV_IN" != "" ]; then
  if [ "$GOV_IN" != "performance" -a "$GOV_IN" != "powersave" -a "$GOV_IN" != "show" ]; then
   echo "arg -g arg must be performance or powersave or show. got -g $GOV_IN. bye"
