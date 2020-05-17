@@ -2225,6 +2225,12 @@ if [ -e $GC_FILE ]; then
   SHEETS="$SHEETS $GC_FILE.tsv"
 fi
 JAVA_COL=java.collapsed
+if [ ! -e $JAVA_COL ]; then
+  JAVA_COL_TR=java.coll_traces
+  if [ -e $JAVA_COL_TR ]; then
+     awk '/^---/{exit;}{printf("%s\n", $0);}' $JAVA_COL_TR > $JAVA_COL
+  fi
+fi
 if [ -e $JAVA_COL ]; then
   echo "do flamegraph.pl" 1>&2
   cat $JAVA_COL | perl $SCR_DIR/../flamegraph/flamegraph.pl --title "Flamegraph $RPS" > java.svg
