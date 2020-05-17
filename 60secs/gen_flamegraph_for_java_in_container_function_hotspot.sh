@@ -72,13 +72,13 @@ gawk '
          printf("%6d\t%s\n", total, "__total__");
      }
      rw++;
-     printf("title\t%s\tsheet\t%s\ttype\tcolumn\n", "top_40_funcs", "top_40_funcs");
+     printf("title\t%s\tsheet\t%s\ttype\tcolumn\n", "top_100_funcs", "top_100_funcs");
      rw++;
      printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", rw+2, 1, -1, 2, 3);
      printf("samples\t%%tot\tcumu %%tot\tfunction\n");
      mx_funcs = hs_mx;
-     if (mx_funcs > 40) {
-       mx_funcs = 40;
+     if (mx_funcs > 100) {
+       mx_funcs = 100;
      }
      for (j=1; j <= mx_funcs; j++) {
        i = dest[j];
