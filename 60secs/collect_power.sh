@@ -1,9 +1,9 @@
 #!/bin/bash
 
-#     ww  ww  qct qct b19a b19a b20b b20b
-HLST="160 240 131 177 137  53   167   55"
-BLST="127 234 182 175 253 191   154  164"
-TLST="w   w   q   q   q   q     w    w"
+#     ww  ww  qct qct b19a b19a b20b b20b b20a b20a
+HLST="160 240 131 177 137  53   167   55  73   74"
+BLST="127 234 182 175 253 191   154  164  64   67"
+TLST="w   w   q   q   q   q     w    w    w    w"
 
 HARR=($(echo "$HLST" | tr ' ' '\n'))
 BARR=($(echo "$BLST" | tr ' ' '\n'))
@@ -15,28 +15,13 @@ HOST_IN=
 DCMI_USE=
 DELLOEM=
 
-while getopts "hvbcDwza:B:H:C:d:i:p:t:x:" opt; do
+while getopts "hvDB:H:d:i:" opt; do
   case ${opt} in
-    a )
-      ADD_IN=$OPTARG
-      ;;
-    b )
-      BKGRND=1
-      ;;
     B )
       BMC=$OPTARG
       ;;
-    c )
-      CURL_AT_END=1
-      ;;
     D )
       DELLOEM=1
-      ;;
-    C )
-      CONTAINER=$OPTARG
-      ;;
-    w )
-      WAIT_AT_END=1
       ;;
     d )
       WAIT_IN=$OPTARG
@@ -47,16 +32,6 @@ while getopts "hvbcDwza:B:H:C:d:i:p:t:x:" opt; do
     H )
       HOST_IN=$OPTARG
       ;;
-    x )
-      EXCLUDE=$OPTARG
-      ;;
-    p )
-      if [ "$OPTARG" != "" -a ! -x $OPTARG ]; then
-        echo "didn't find perf binary. You entered \"-p $OPTARG\""
-        exit
-      fi
-      PERF_BIN=$OPTARG
-      ;;
     v )
       VERBOSE=$((VERBOSE+1))
       ;;
@@ -64,23 +39,9 @@ while getopts "hvbcDwza:B:H:C:d:i:p:t:x:" opt; do
       DCMI_USE=1
       ;;
     h )
-      echo "usage: $0 -t task_num|task_name[,taskname[...]] [ -b ] -d seconds_to_run -i sample_interval_in_secs [ -p full_path_of_perf_binary ]"
-      echo "task_num is 0 to $TLAST or -1 for all tasks"
+      echo "usage: $0 TBD documentation collect power from bmc -i sample_interval_in_secs -d time_to_wait and more"
       echo "seconds_to_run is how long you want each task to monitor the system. Defaults is $WAIT seconds."
       echo "data collected once a second till for $WAIT seconds."
-      echo "task_names are: ${TASKS[@]}"
-      echo "   -t task_num or task_name"
-      echo "      The task names: ${TASKS[@]}"
-      echo "      Enter '-t all' for all tasks except flamegraph and sched_switch (sched_switch which can write 100s of MBs of data per 10 sec interval... so it has more overhead)"
-      echo "      Valid task_num range is 0 to $TLAST"
-      echo "      Enter either the number or the task name in a comma separated list"
-      echo "      default is no task"
-      echo "   -a flamegraph and/or sched_switch"
-      echo "      if you do '-t all' flamegraph and sched_switch are not run"
-      echo "      Use this option to add flamegraph and or sched_switch"
-      echo "   -x task_num or task_name"
-      echo "      A list of tasks to be excluded. top and interrupts are not too useful to me"
-      echo "      Have to enter the task name, not number"
       echo "   -b start the jobs in the backgroup not waiting for each job to finish"
       echo "      The default is to not start the jobs the background (so start the 1st task, wait for it to finish, start the next task, etc)"
       echo "   -w If you run background mode, this option waits for the duration after the background jobs are started."
@@ -202,7 +163,7 @@ if [ "$WAIT_IN" != "" ]; then
 else
   WAIT=60
 fi
-echo "using interval $WAIT seconds"
+echo "using duration $WAIT seconds"
 
 if [ "$INTERVAL" != "" ]; then
   re='^[0-9]+$'
@@ -248,9 +209,6 @@ FLNUM=16
     j=0
     BDT=`date +%s` 
     EDT=$((BDT+$WAIT))
-    if [ "$BKGRND" == "1" ]; then
-      FL_PWR=$FL
-    else
     for i in `seq 1 $WAIT`; do
       #echo "i= $i of $WAIT"
       DT=`date +%s.%N`
@@ -280,7 +238,6 @@ FLNUM=16
       fi
     done 
     printf "\n"
-    fi
     if [ "$DO_POWER" == "1" ]; then
       echo "=======did power ========="
     fi
