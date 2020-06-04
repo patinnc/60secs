@@ -1,17 +1,55 @@
 #!/bin/bash
 
-if [ "$1" == "" ]; then
+while getopts "hf:t:" opt; do
+  case ${opt} in
+    f )
+      FILE_IN=$OPTARG
+      ;;
+    t )
+      TYP_IN=$OPTARG
+      if [ "$TYP_IN" != "time" -a "$TYP_IN" != "count" ]; then
+        echo "must enter -t count or -t time. Got -t $OPTARG. Bye"
+        exit
+      fi
+      ;;
+    h )
+      echo "$0 gen flamegraph hotspots from async-profiler java files"
+      echo "Usage: $0 [-h] -f java.collapsed or java.coll_traces file -t count|time"
+      echo "   -f input collapsed file or collapsed+traces file"
+      echo "   -t count or time. which type of hotspot file to make."
+      echo "      if count then this is usual collapsed file."
+      echo "      if time then look for '--- nanoseconds_per_callstack'"
+      echo "        this format of data is the 'traces' output from the async-profiler"
+      exit
+      ;;
+    : )
+      echo "Invalid option: $OPTARG requires an argument" 1>&2
+      exit
+      ;;
+    \? )
+      echo "Invalid option: $OPTARG" 1>&2
+      exit
+      ;;
+  esac
+done
+
+if [ "$FILE_IN" == "" ]; then
  echo "must enter name of perf flamegraph java.collapsed file"
  exit
 fi
-FL=$1
+if [ "TYP_IN" == "" ]; then
+ echo "must enter -t count or -t time"
+ exit
+fi
+FL=$FILE_IN
 if [ ! -e $FL ]; then
   echo "didn't find file $FL"
   exit
 fi
 
 #grep 98.map prf_trace.txt > tmp.jnk
-gawk '
+gawk -v typ="$TYP_IN" '
+   BEGIN { mx=0; }
    function rindex(str,c)
    {
      return match(str,"\\" c "[^" c "]*$")? RSTART : 0
@@ -33,14 +71,12 @@ gawk '
        else
            return -1
    }
-# below is format for callstack (but java jar is without frames (I think?)
-#java 86998/87788 340730.095902012:        606 LLC-load-misses:
-#            7fe65272a0c9 Lcom/graphhopper/storage/GraphHopperStorage;::getEdgeProps+0xa9 (/tmp/perf-86998.map)
-#            7fc6185e9b68 [unknown] ([unknown])
-# or for sampling hotspot
-#            java 86998/87782 347681.584771998:     250000 cpu-clock:                    7fe6532785a5 Lcom/graphhopper/routing/util/FastestWeighting;::calcWeight+0x265 (/tmp/perf-86998.map)
-#            java 86998/87782 347681.585019181:     250000 cpu-clock:                    7fe653278657 Lcom/graphhopper/routing/util/FastestWeighting;::calcWeight+0x317 (/tmp/perf-86998.map)
    {
+     if (typ == "count") {
+     if ($1 == "---") {
+        # this marks the beginning of the traces section of a combined collapsed and traces file from async profiler
+        exit;
+     }
      i = NF;
      samples = $i;
      n = split($0, arr, ";");
@@ -53,6 +89,41 @@ gawk '
      }
      idx = hs_list[str];
      hs_count[idx] += samples;
+     #printf("%s\n", str);
+     next;
+     }
+   }
+   {
+     if (typ == "time" && $1 != "---") {
+        # this marks the beginning of the traces section of a combined collapsed and traces file from async profiler
+        next;
+     }
+     mx++;
+     tm = $2+0;
+     tm_sv = tm;
+     unit = $3;
+     ln_in = $0;
+     if (unit == "ns") {
+       tm *= 1.0e-9;
+     }
+     if (unit == "us") {
+       tm *= 1.0e-6;
+     }
+     if (unit == "ms") {
+       tm *= 1.0e-3;
+     }
+     samples = $5;
+     getline;
+     str = substr($0, index($0, "]")+2, length($0));
+     #printf("tm= %f secs, %s= %d line= %s\n", tm, unit, tm_sv, ln_in) > "/dev/stderr";
+     if (!(str in hs_list)) {
+       hs_mx++;
+       hs_list[str] = hs_mx;
+       hs_lkup[hs_mx] = str;
+     }
+     idx = hs_list[str];
+     hs_count[idx] += tm;
+     next;
      #printf("%s\n", str);
    }
    END {
@@ -69,13 +140,26 @@ gawk '
          val *= 1e-9;
          printf("%9.3f\t%s\n", val, "__total__");
      } else {
-         printf("%6d\t%s\n", total, "__total__");
+       if (typ == "count") {
+         printf("%d\t%s\tcount\n", total, "__total__");
+       } else {
+         printf("%f\t%s\tseconds\n", total, "__total__");
+       }
      }
      rw++;
-     printf("title\t%s\tsheet\t%s\ttype\tcolumn\n", "top_100_funcs", "top_100_funcs");
+     if (typ == "count") {
+       fmt= "%9d";
+       sheet= "top_100_funcs";
+       col_nm = "samples";
+     } else {
+       fmt= "%16.5f";
+       sheet= "top_100_secs";
+       col_nm = "seconds";
+     }
+     printf("title\t%s\tsheet\t%s\ttype\tcolumn\n", sheet, sheet);
      rw++;
      printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", rw+2, 1, -1, 2, 3);
-     printf("samples\t%%tot\tcumu %%tot\tfunction\n");
+     printf(col_nm "\t%%tot\tcumu %%tot\tfunction\n");
      mx_funcs = hs_mx;
      if (mx_funcs > 100) {
        mx_funcs = 100;
@@ -89,7 +173,7 @@ gawk '
          val *= 1e-9;
          printf("%9.3f\t%7.3f\t%7.3f\t%s\n", val, 100.0*hs_count[i]/total, 100.0*cumu/total, hs_lkup[i]);
        } else {
-         printf("%9d\t%7.3f\t%7.3f\t%s\n", val, 100.0*hs_count[i]/total, 100.0*cumu/total, hs_lkup[i]);
+           printf(fmt "\t%7.3f\t%7.3f\t%s\n", val, 100.0*hs_count[i]/total, 100.0*cumu/total, hs_lkup[i]);
        }
      }
    } 
