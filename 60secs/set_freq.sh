@@ -58,6 +58,7 @@ done
 
 
 
+HST=`hostname`
 NUM_CPUS=`grep processor /proc/cpuinfo | wc -l`
 IPSTATE=/sys/devices/system/cpu/intel_pstate/status
 if [ -e $IPSTATE ]; then
@@ -100,6 +101,12 @@ if [ ! -e $DEV_CPU_MSR ]; then
   fi
 fi
 echo "msr kernel module loaded. $DEV_CPU_MSR exists"
+MSR_0x1ad=`rdmsr -p 0 0x1ad`
+RC=$?
+if [ "$RC" != "0" ]; then
+  echo "MSR 0x1ad= $MSR_0x1ad, rc= $RC"
+  apt-get install msr-tools
+fi
 
 # cascade lake 2nd gen stuff from https://www.intel.com/content/www/us/en/products/docs/processors/xeon/2nd-gen-xeon-scalable-spec-update.html
 # 2nd gen xeon scalable cpus: cascade lake sku is 82xx, 62xx, 52xx, 42xx 32xx W-32xx  from https://www.intel.com/content/www/us/en/products/docs/processors/xeon/2nd-gen-xeon-scalable-spec-update.html
@@ -130,9 +137,17 @@ CPU_NAME=`cat /proc/cpuinfo | awk '
       for(k=1;k <=15;k++) { if (dcd[k,2] == str) {res=dcd[k,1];break;}}
       if (k == 3) {
         # so Cooper Lake/Cascade Lake/SkyLake)
-        if (match(mod_nm, / [86543]2[0-9][0-9]R /) > 0) { res="Cascade Lake Refresh";} else
-        if (match(mod_nm, / [86543]2[0-9][0-9]/) > 0) { res="Cascade Lake";} else
-        if (match(mod_nm, / [86543]1[0-9][0-9]/) > 0) { res="Skylake";}
+        # Gold 5218R
+        echo "mod_nm= $mod_nm"
+        if (match(mod_nm, / [86543]2[0-9][0-9]R /) > 0) {
+           echo "got refresh"
+           if (match(mod_nm, / Gold /) > 0) {
+             res="Cascade Lake Gold Refresh";
+           } else {
+             res="Cascade Lake Refresh";
+           }
+        } else if (match(mod_nm, / [86543]2[0-9][0-9]/) > 0) { res="Cascade Lake";}
+        else if (match(mod_nm, / [86543]1[0-9][0-9]/) > 0) { res="Skylake";}
       }
       return res;
     }
@@ -159,6 +174,10 @@ CPU_NAME=`cat /proc/cpuinfo | awk '
   }
   '`
 
+CPU_VENDOR=`awk '/^vendor_id/ { printf("%s\n", $(NF));exit;}' /proc/cpuinfo`
+CPU_MODEL=`awk '/^model/ { if ($2 == ":") {printf("%s\n", $(NF));exit;}}' /proc/cpuinfo`
+CPU_FAMILY=`awk '/^cpu family/ { printf("%s\n", $(NF));exit;}' /proc/cpuinfo`
+echo "CPU_VENDOR= $CPU_VENDOR CPU_MODEL= $CPU_MODEL CPU_FAMILY= $CPU_FAMILY"
 if [ "$GOV_IN" == "" -a "$FREQ_IN" == "" ]; then
   ACTION=show
 fi
@@ -295,54 +314,67 @@ if [ "$ACTION" == "reset" ]; then
   if [[ $CPU_NAME == *"Skylake"* ]]; then
     # from pfay1testing1td-phx3, a 1TD Dell C6420
     wrmsr --all 0x1ad 0x1818181818181c1e
-  fi
-  if [[ $CPU_NAME == *"Cascade Lake Refresh"* ]]; then
+  elif [[ $CPU_NAME == *"Cascade Lake Gold Refresh"* ]]; then
+    # default from odm-lab
+    # which is 
+    # CPU family:            6
+    # Model:                 85
+    # Model name:            Intel(R) Xeon(R) Gold 5218R CPU @ 2.10GHz
+    wrmsr --all 0x1ad 0x1d1d1d1f23252628
+  elif [[ $CPU_NAME == *"Cascade Lake Refresh"* ]]; then
     # default from odm-lab
     # which is 
     #  CPU family:            6
     #  Model:                 85
     #  Model name:            Intel(R) Xeon(R) Silver 4214R CPU @ 2.40GHz
     wrmsr --all 0x1ad 0x1e1e1e1e1e202123
-  else
-  if [[ $CPU_NAME == *"Cascade"* ]]; then
+  elif [[ $CPU_NAME == *"Cascade"* ]]; then
     # default from u154681-phx4
     # which is 
     #  CPU family:            6
     #  Model:                 85
     #  Model name:            Intel(R) Xeon(R) Silver 4214 CPU @ 2.20GHz
     wrmsr --all 0x1ad 0x1b1b1b1b1b1d1e20
-  fi
-  fi
-  if [[ $CPU_NAME == *"Broadwell"* ]]; then
+  elif [[ $CPU_NAME == *"Broadwell"* ]]; then
+    CKVAL=`rdmsr -0 -p 0 0x1af | awk '{v=substr($0, 1, 2);str="";for(i=1;i<=8;i++){str=str""v;}printf("0x%s", str);}'`
+    #if [ "$CKVAL" == "0x1a1a1a1a1a1a1a1a" ]; then
+    if [ "$NUM_CPUS" == "40" ]; then
+    wrmsr --all 0x1ad 0x1b1c1d1e1f202222
+    wrmsr --all 0x1ae 0x1a1a1a1a1a1a1a1a
+    wrmsr --all 0x1af 0x1a1a1a1a1a1a1a1a
+    else
     wrmsr --all 0x1ad 0x1718191a1b1c1e1e
     wrmsr --all 0x1ae 0x1717171717171717
     wrmsr --all 0x1af 0x1717171717171717
+    fi
     wrmsr --all 0x1ac 0x8000000000000000
   fi
   show_MSRs "after  reset " 
 fi
 
 if [ "$ACTION" == "allcore" ]; then
+  CKVAL=`rdmsr -0 -p 0 0x1ad | awk '{v=substr($0, 1, 2);str="";for(i=1;i<=8;i++){str=str""v;}printf("0x%s", str);}'`
   show_MSRs "before allcore " 
+  #CPU_VENDOR= GenuineIntel CPU_MODEL= 85 CPU_FAMILY= 6
   if [[ $CPU_NAME == *"Skylake"* ]]; then
-    wrmsr --all 0x1ad 0x1818181818181818
-  fi
-  if [[ $CPU_NAME == *"Cascade Lake Refresh"* ]]; then
-    wrmsr --all 0x1ad 0x1e1e1e1e1e1e1e1e
-  else
-  if [[ $CPU_NAME == *"Cascade"* ]]; then
+    wrmsr --all 0x1ad $CKVAL
+  elif [[ $CPU_NAME == *"Cascade Lake Gold Refresh"* ]]; then
+    wrmsr --all 0x1ad $CKVAL
+  elif [[ $CPU_NAME == *"Cascade Lake Refresh"* ]]; then
+    wrmsr --all 0x1ad $CKVAL
+  elif [[ $CPU_NAME == *"Cascade"* ]]; then
     # default from u154681-phx4
     # which is 
     #  CPU family:            6
     #  Model:                 85
     #  Model name:            Intel(R) Xeon(R) Silver 4214 CPU @ 2.20GHz
-    wrmsr --all 0x1ad 0x1b1b1b1b1b1b1b1b
-  fi
-  fi
-  if [[ $CPU_NAME == *"Broadwell"* ]]; then
-    wrmsr --all 0x1ad 0x1717171717171717
-    wrmsr --all 0x1ae 0x1717171717171717
-    wrmsr --all 0x1af 0x1717171717171717
+    wrmsr --all 0x1ad $CKVAL
+  elif [[ $CPU_NAME == *"Broadwell"* ]]; then
+    CKVAL=`rdmsr -0 -p 0 0x1af | awk '{v=substr($0, 1, 2);str="";for(i=1;i<=8;i++){str=str""v;}printf("0x%s", str);}'`
+    echo "CKVAL for msr 0x1af= $CKVAL"
+    wrmsr --all 0x1ad $CKVAL
+    wrmsr --all 0x1ae $CKVAL
+    wrmsr --all 0x1af $CKVAL
     wrmsr --all 0x1ac 0x8000000000000000
   fi
   show_MSRs "after  allcore" 
