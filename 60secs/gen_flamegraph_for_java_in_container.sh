@@ -92,10 +92,10 @@ echo docker exec -t $CNTR /bin/bash -c "cd /tmp/profile/ && ./profiler.sh stop -
 
 if [ "$ACT" == "stop" ]; then
   if [ "$DRY_RUN" != "1" ]; then
-     docker exec -t $CNTR /bin/bash -c "cd /tmp/profile/ && ./profiler.sh stop -f /tmp/java.collapsed -o collapsed $JPID"
+     docker exec -t $CNTR /bin/bash -c "cd /tmp/profile/ && ./profiler.sh stop -f /tmp/java.coll_traces -o collapsed,traces $JPID"
      docker exec -t $CNTR /bin/bash -c "cd /tmp && ls -ltr"
-     docker cp $CNTR:/tmp/java.collapsed .
-     ls -l java.collapsed
+     docker cp $CNTR:/tmp/java.coll_traces .
+     ls -l java.coll_traces
   fi
 fi
 exit
