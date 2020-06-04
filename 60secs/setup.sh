@@ -9,6 +9,7 @@ apt-get -y install util-linux
 apt-get -y install numactl
 apt-get -y install sysstat
 apt-get -y install nicstat
+apt-get -y install jq
 apt-get -y install dmidecode
 ##apt-get -y install cpupower
 ##apt-get -y install linux-cpupower
