@@ -80,3 +80,11 @@ tmp*.jnk
 disk_tst_*
 tst*
 dat.json
+
+#don't want to add these files yet
+do_curl.sh
+do_toplev.py
+flamegraph_utils_v2.tar.gz
+flamegraph_utils_v3.tar.gz
+perf
+
