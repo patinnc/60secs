@@ -313,15 +313,18 @@ awk -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN
     #}
      kmx = 1;
      got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-     got_lkfor[kmx,2]=4; # num of fields to look for
+     got_lkfor[kmx,2]=6; # num of fields to look for
      got_lkfor[kmx,3]=64e-9; # a factor
      got_lkfor[kmx,4]="sum"; # operation
      got_lkfor[kmx,5]=1; # instances
      got_lkfor[kmx,6]="div_by_interval"; # 
+     got_lkfor[kmx,"typ_match"]="require_any"; # 
      lkfor[kmx,1]="unc0_read_write";
      lkfor[kmx,2]="unc1_read_write";
      lkfor[kmx,3]="unc2_read_write";
      lkfor[kmx,4]="unc3_read_write";
+     lkfor[kmx,5]="unc4_read_write";
+     lkfor[kmx,6]="unc5_read_write";
      nwfor[kmx,1]="unc_read_write (GB/s)";
 
      kmx++;
@@ -378,8 +381,21 @@ awk -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN
 
      kmx++;
      got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+     got_lkfor[kmx,2]=3; # num of fields to look for
+     got_lkfor[kmx,3]=8.0e-9; # a factor
+     got_lkfor[kmx,4]="sum"; # operation
+     got_lkfor[kmx,5]=1; # instances
+     got_lkfor[kmx,6]="div_by_interval"; # 
+     got_lkfor[kmx,"typ_match"]="require_any"; # 
+     lkfor[kmx,1]="qpi0_data_bandwidth_tx";
+     lkfor[kmx,2]="qpi1_data_bandwidth_tx";
+     lkfor[kmx,3]="qpi2_data_bandwidth_tx";
+     nwfor[kmx,1]="QPI_BW (GB/sec)";
+
+     kmx++;
+     got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
      got_lkfor[kmx,2]=1; # num of fields to look for
-     got_lkfor[kmx,3]=1e-9; # a factor
+     got_lkfor[kmx,3]=1.0e-9; # a factor
      got_lkfor[kmx,4]="sum"; # operation
      got_lkfor[kmx,5]=1; # instances
      got_lkfor[kmx,6]="div_by_interval"; # 
@@ -406,6 +422,7 @@ awk -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN
               got_lkfor[kmx_nw,4]= got_lkfor[k,4];
               got_lkfor[kmx_nw,5]= got_lkfor[k,5];
               got_lkfor[kmx_nw,6]= got_lkfor[k,6];
+              got_lkfor[kmx_nw,"typ_match"]= got_lkfor[k,"typ_match"];
               got_lkfor[kmx_nw,7]= sk; # skt_idx
               got_lkfor[kmx_nw,8]= nwfor[k,1]; # save off original result name so we only have to ck 1 name
               for (kk=1; kk <= got_lkfor[k,2]; kk++) {
@@ -430,6 +447,12 @@ awk -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN
        kmx = kmx_nw;
      }
 
+     NO_MATCH = -1000;
+     for (k=1; k <= kmx; k++) { 
+         for (j=1; j <= got_lkfor[k,2]; j++) { 
+             lkup[k,j] = NO_MATCH;
+         }
+     }
      for(i=0; i <= evt_idx; i++) {
        for (k=1; k <= kmx; k++) { 
          for (j=1; j <= got_lkfor[k,2]; j++) { 
@@ -456,7 +479,7 @@ awk -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN
          #    got_lkfor[k,1]++;
          #}
        }
-       if (got_lkfor[k,1] == got_lkfor[k,2]) {
+       if (got_lkfor[k,1] == got_lkfor[k,2] || (got_lkfor[k,"typ_match"] == "require_any" && got_lkfor[k,1] > 0)) {
           extra_cols++;
        }
      }
@@ -467,7 +490,7 @@ awk -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN
        printf("\t%s", evt_inst[i]);
      }
      for (k=1; k <= kmx; k++) { 
-       if (got_lkfor[k,1] == got_lkfor[k,2]) {
+       if (got_lkfor[k,1] == got_lkfor[k,2] || (got_lkfor[k,"typ_match"] == "require_any" && got_lkfor[k,1] > 0)) {
           printf("\t%s", got_lkfor[k,5]);
        }
      }
@@ -497,7 +520,7 @@ awk -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN
        cols++;
      }
      for (k=1; k <= kmx; k++) { 
-       if (got_lkfor[k,1] == got_lkfor[k,2]) {
+       if (got_lkfor[k,1] == got_lkfor[k,2] || (got_lkfor[k,"typ_match"] == "require_any" && got_lkfor[k,1] > 0)) {
           printf("\t%s", nwfor[k,1]);
           col_hdr[cols] = nwfor[k,1];
           if (index(nwfor[k,1], "GB/s") > 0) {
@@ -569,6 +592,7 @@ awk -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN
            }
            if (got_lkfor[k,4] == "sum") {
              for (kk=1; kk <= got_lkfor[k,2]; kk++) { 
+               if (lkup[k,kk] == NO_MATCH) { continue; }
                if (lkup[k,kk] == j) {
                  sum[k] += sv[i,3+j];
                }
