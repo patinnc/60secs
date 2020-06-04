@@ -1,0 +1,91 @@
+#!/bin/bash
+# tester for other programs in pmu-tools
+
+. ./cpumap.sh
+set -e
+PERF=${PERF:-perf}
+failed() {
+	echo FAILED
+}
+PATH=$PATH:.
+trap failed ERR 0
+set -x
+
+# XXX cgroup untested
+for args in "" "-A" "--per-socket" "--per-core" "-r2" ; do
+
+# interval-normalize.py
+
+${PERF} stat -I100 $args -a -x, -o x$$.csv sleep 1
+
+$WRAP interval-normalize.py < x$$.csv
+$WRAP interval-normalize.py < x$$.csv > y$$.csv
+
+grep -vq PARSE-ERROR y$$.csv
+for i in branch-misses branches context-switches cycles instructions page-faults ; do
+	grep -q $i y$$.csv
+done
+
+grep -vq PARSE-ERROR x$$.csv
+
+# plot-normalized.py
+$WRAP plot-normalized.py -o x$$-2.png y$$.csv
+
+# interval-plot.py
+$WRAP interval-plot.py x$$.csv -o x$$.png
+
+done
+
+for args in "-l2" "--all -v" "-l3 --single-thread" ; do
+
+FORCEHT=1 $WRAP toplev.py -v --force-cpu ${DCPU:-hsw} --node +CPU_Utilization -I 100 $args -o x$$.csv -x, -a ./workloads/BC1s
+$WRAP interval-normalize.py < x$$.csv
+$WRAP interval-normalize.py < x$$.csv > y$$.csv
+
+grep -vq PARSE-ERROR y$$.csv
+grep Frontend y$$.csv
+
+$WRAP utilized.py x$$.csv -o y$$.csv
+grep Frontend y$$.csv
+
+$WRAP interval-plot.py x$$.csv -o x$$.png
+
+# plot-normalized.py
+$WRAP plot-normalized.py -o x$$-2.png y$$.csv
+
+
+done
+
+# cputop.py
+
+$WRAP cputop.py "socket == 0"
+$WRAP cputop.py "thread == 0 and socket == 0"
+$WRAP cputop.py "thread == 1" offline
+$WRAP cputop.py offline online
+[ $($WRAP cputop.py True | wc -l | cut -d ' ' -f 1) -eq $(getconf _NPROCESSORS_ONLN) ]
+
+# ist-events.py
+
+EVENTMAP=${cpus[hsw]} $WRAP list-events.py > x$$.lst
+[ $(wc -l x$$.lst | cut -d ' ' -f 1) -gt 20 ]
+grep -qi rtm_retired.aborted x$$.lst
+rm x$$.lst
+
+# event-translate.py
+EVENTMAP=${cpus[hsw]} $WRAP event-translate.py r4c9 | grep -q rtm_retired.aborted
+
+# untested: counterdiff.py
+
+# may need network:
+# untested: event_download.py
+
+# need root:
+# untested: msr.py
+# untested: pci.py
+# untested: event-rmap.py
+
+rm -f x$$.csv x$$-2.png y$$.csv
+
+trap "" ERR 0
+
+echo SUCCEEDED

@@ -1,0 +1,10 @@
+#!/bin/sh
+
+awk 'BEGIN {
+	print "extern int f2(void); int func(void) { int i; "
+	for(i = 0; i < 200000; i++) {
+		print "i += f2();"
+	}
+	print "return i;"
+	print "}" } ' |
+clang -O3 -x c -c -o /dev/null -

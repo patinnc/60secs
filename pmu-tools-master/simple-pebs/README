@@ -1,0 +1,59 @@
+
+# simple standalone reference pebs driver
+
+##
+## Note: this is just a reference driver for PEBS on Linux, mainly as a reference
+## for writing new experimential drivers and for porting PEBS code to other
+## operating systems. See it as a code example.
+##
+## The code is written in a way that it should be easy to adapt to other OS.
+##
+## If you just want to use PEBS on Linux the builtin Linux perf
+## support is near always a better choice. All functionality
+## supported by simple pebs is supported by Linux perf in a better way.
+## You may need a recent enough kernel to support your CPU.
+##
+## You'll need to disable Kernel page table isolation with the "nopti" kernel boot
+## option. Otherwise the system will hard crash randomly on module load.
+##
+## CPU hotplug and suspend to ram are not supported on newer kernels.
+##
+## On recent CPUs:
+## Should work on CPUs before Icelake, but may need to add more model numbers
+## to the initialization checker.
+##
+
+PEBS "Precise Event Based Sampling" is a profiling technology in Intel CPUs,
+that uses microcode to do (mostly) precise event samples.
+
+The driver is "free running" and minimizes interrupts, to allow a maximum 
+PEBS frequency. Interrupts are only triggered when the PEBS buffer is full.
+
+This will take over the PEBS hardware from perf and may cause conflicts.
+
+To build user tools use "make user"
+
+sample file format:
+{8 bytes 	ip}
+
+
+simple-pebs.c	Linux simple pebs driver
+dumper.c	Dump samples running from running Linux driver. -b to write binary sample file
+		Most other tools require running dumper first to dump the samples.
+
+samples.c	Decode (ELF symbols) sample from running Linux driver.
+
+histogram.c	Generate histogram from sample file
+
+toperf.c	Generate perf.data from sample file
+
+Equivalent Linux perf command lines:
+
+insmod simple-pebs.ko / dumper -b
+		-> perf record -c 100003 -a r1c2:pp sleep X
+		   (or other event code, see also perf list)
+		   To dump addresses add -d
+
+samples ->	perf script
+
+histogram ->	perf report --stdio

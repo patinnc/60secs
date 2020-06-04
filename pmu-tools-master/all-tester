@@ -1,0 +1,34 @@
+#!/bin/bash
+# one stop shop to test all pmu-tools test suites
+# to run it faster use parallel-tester
+# each line must be self contained!
+
+set -e
+set -x
+
+# test ocperf
+./tester
+WRAP=python3 ./tester
+
+# test toplev
+./tl-tester
+WRAP=python3 ./tl-tester
+MATCH="icl" DCPU="icl --no-group" NOGROUP=1 NORES=1 LOAD=./workloads/BC1s ./tl-tester
+MATCH=snb DCPU=snb ./tl-tester
+MATCH=hsw DCPU=hsw ./tl-tester
+MATCH=slm DCPU=slm NORES=1 NOGROUP=1 LOAD=./workloads/BC1s ./tl-tester
+MATCH=knl DCPU=knl NORES=1 NOGROUP=1 LOAD=./workloads/BC1s ./tl-tester
+
+# test other tools
+./other-tester
+WRAP=python3 ./other-tester
+
+# test jevents
+cd jevents ; make && ./tester ; cd ..
+
+# test perf.data parser
+# this requires construct and pandas and some other libraries
+# XXX check for missing dependencies
+#cd parser
+#tester
+#cd ..
