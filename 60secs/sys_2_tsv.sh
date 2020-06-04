@@ -113,6 +113,55 @@ FCTR=`echo $RPS | sed 's/rps//'`
 printf "RPS= %s\n", $RPS > "/dev/stderr"
 
 BEG=`cat $DIR/60secs.log | awk '{n=split($0, arr);printf("%s\n", arr[n]);exit;}'`
+BEG_ADJ=`cat $DIR/60secs.log | awk '
+   function dt_to_epoch(date_str, offset) {
+   # started on Tue Dec 10 23:23:30 2019
+   # Dec 10 23:23:30 2019
+     if (date_str == "") {
+        return 0.0;
+     }
+     months="  JanFebMarAprMayJunJulAugSepOctNovDec";
+     n=split(date_str, darr, /[ :]+/);
+     #for(i in darr) printf("darr[%d]= %s\n", i,  darr[i]);
+     mnth_num = sprintf("%d", index(months, darr[1])/3);
+     printf("mnth_num= %d\n", mnth_num) > "/dev/stderr";
+     dt_str = darr[6] " " mnth_num " " darr[2] " " darr[3] " " darr[4] " " darr[5];
+     printf("dt_str= %s\n", dt_str) > "/dev/stderr";
+     epoch = mktime(dt_str);
+     printf("epoch= %s offset= %s\n", epoch, offset) > "/dev/stderr";
+     return epoch + offset;
+   }
+   {
+     # start uptime at Mon May 25 01:24:45 UTC 2020 1590369885.689020272
+     # Dec 10 23:23:30 2019
+     epoch_in = $(NF)+0;
+     num_int = sprintf("%d", epoch_in);
+     print ENVIRON["AWKPATH"] > "/dev/stderr";
+     num_dec = epoch_in - num_int;
+     printf("BEG_ADJ: epoch_in= %f num_int= %s, num_dec= %s, in_str= %s\n", epoch_in, num_int, num_dec, $0) > "/dev/stderr";
+     n=split($0, arr);
+     j = 3;
+     if (arr[j] != "at") {
+        for (i=1; i < n; i++) {
+          if (arr[i] == "at") {
+             j = i;
+             break;
+          }
+        }
+     }
+     #          mon           day         time         year
+     date_str = arr[j+2] " " arr[j+3] " " arr[j+4] " " arr[j+6]
+     epoch = dt_to_epoch(date_str, num_dec);
+     dff_secs = epoch_in - epoch;
+     dff_hrs  = dff_secs/3600;
+     printf("epoch %d, epch_in= %d, diff= %f, dff_hrs= %f date_str= %s\n", epoch, epoch_in, dff_secs, dff_hrs, date_str) > "/dev/stderr";
+     printf("%.3f\n", dff_hrs);
+     printf("get back input date? %s\n", strftime("%a %b %e %H:%M:%S %Z %Y", epoch-dff_secs)) > "/dev/stderr";
+     exit;
+    }
+    '`
+echo "awk time offset hours BEG_ADJ= $BEG_ADJ"
+#exit
 FILES=`ls -1 $DIR/sys_*_*.txt`
 #echo "FILES = $FILES"
 for i in $FILES; do
@@ -172,6 +221,7 @@ trows++; printf("\n") > NFL;
    ' $i
    SHEETS="$SHEETS $i.tsv"
   fi
+
   if [[ $i == *"_power.txt"* ]]; then
     echo "do power"
     #RESP=`grep "Power Consumption History" $i | wc -l`
@@ -438,7 +488,6 @@ trows++; printf("\t$ power") > NFL;
               tab="\t";
                  if (hdr_lkup[c] != -1) {
                    i_sum = hdr_lkup[c];
-#abcd power
                    sum_occ[i_sum] += 1;
                    if (sum_type[i_sum] == 1) {
                      if (sum_tmin[i_sum] == 0) { sum_tmin[i_sum] = tm[r]; sum_tmax[i_sum] = sum_tmin[i_sum]; }
@@ -485,7 +534,6 @@ trows++; printf("\t$ power") > NFL;
              }
              avg = (n > 0.0 ? sum_tot[i_sum]/n : 0.0);
              printf("%s\t%s\t%s\t%f\n", sum_res[i_sum], tool, sum_prt[i_sum], avg) >> sum_file;
-#abcd power
              stdev = 0.0;
              if (index(sum_opt[i_sum], "stdev") > 0) {
                 if (n > 0.0) {
@@ -701,7 +749,6 @@ trows++; printf("\t\n") > NFL;
              n = sum_occ[i_sum];
              avg = (n > 0.0 ? sum_tot[i_sum]/n : 0.0);
              printf("%s\t%s\t%s\t%f\n",  sum_res[i_sum], "vmstat", sum_prt[i_sum], avg) >> sum_file;
-#abcd vmstat
              stdev = 0.0;
              if (index(sum_opt[i_sum], "stdev") > 0) {
                 if (n > 0.0) {
@@ -1758,7 +1805,6 @@ row+= trows;
         ts_beg += 0;
         ts_end += 0;
       }
-# efg
       function dt_to_epoch(hhmmss, ampm, all) {
          # the epoch seconds from the date time info in the file is local time,not UTC.
          # so just use the calc"d epoch seconds to calc the elapsed seconds since the start.
@@ -1916,6 +1962,192 @@ row += trows;
    SHEETS="$SHEETS $i.tsv"
   fi
 
+  if [[ $i == *"gmatching_logs.txt" ]]; then
+    echo "do gmatching_logs"
+    echo "+++++++++do gmatching_logs" > /dev/stderr
+    awk -v ts_beg="$BEG"  -v ts_end="$END_TM" -v pfx="$PFX" -v typ="gmatching errs" -v ts_adj_hrs="$BEG_ADJ" '
+     BEGIN{beg=1;
+        chart=typ;
+        mx = 0;
+        epoch_init = 0;
+        ts_beg += 0;
+        ts_end += 0;
+      }
+      function dt_to_epoch(yy, mo, dd, hh, mm, ss, ms, all) {
+         # the epoch seconds from the date time info in the file is local time,not UTC.
+         # so just use the calc"d epoch seconds to calc the elapsed seconds since the start.
+         # THe real timestamp is the input ts_beg + elapsed_seconds.
+         # hhmmss fmt= hh:mm:ss (w leading 0
+         dt_str = yy " " mo " " dd " " hh " " mm " " ss;
+         #printf("dt_str= %s\n", dt_str) > NFL;
+         epoch = mktime(dt_str);
+         #epoch = 1;
+         #epoch += 0.001 * ms;
+         #printf("epoch= %s offset= %s\n", epoch, offset);
+         if (epoch_init == 0) {
+             #printf("dt_str= %s, all= %s\n", dt_str, all) > "/dev/stderr";
+             epoch_init = epoch;
+         }
+         #epoch = (epoch; # the plus 1 assumes a 1 second interval.
+         return epoch;
+      }
+     {
+        FNM=ARGV[ARGIND];
+        NFL=FNM ".tsv";
+        v = substr($0, index($0, "[")+1, length($0));
+        v = substr(v, 1, index(v, "]")-1);
+        yy = substr(v, 1, 4);
+        mo = substr(v, 6, 2);
+        dd = substr(v, 9, 2);
+        hh = substr(v, 12, 2);
+        mm = substr(v, 15, 2);
+        ss = substr(v, 18, 2);
+        ms = substr(v, 21, 3);
+        epoch = dt_to_epoch(yy, mo, dd, hh, mm, ss, 0.0, $0);
+        #printf("epoch[%d]= %s\n", mx, epoch) > NFL;
+        sv_tm[++mx] = epoch;
+     }
+     END{
+       row = 0;
+       row++;
+       printf("title\tlog errors/s vs time\tsheet\tlog errs\ttype\tscatter_straight\n") > NFL;
+       row++;
+       printf("hdrs\t%d\t%d\t-1\t%d\t1\n", row+1, 2, 2) > NFL;
+       row++;
+       printf("TS\tts_rel\tlog_errs/s\n") > NFL;
+       ts_adj = ts_adj_hrs * 3600.0;
+       tmd = sv_tm[mx] - sv_tm[1];
+       printf("------gmathcing_logs: tmd= %f ts_beg= %f, ts_end= %f, ts_diff= %f\n", tmd, ts_beg, ts_end, ts_beg - sv_tm[1] - ts_adj) > "/dev/stderr";
+       for (i=1; i <= tmd; i++) {
+          bkt[i] = 0;
+       }
+       for (i=1; i <= mx; i++) {
+          j = sprintf("%d", sv_tm[i] - epoch_init)+0;
+          bkt[j]++;
+       }
+       sm = 0;
+       for (i=1; i <= tmd; i++) {
+          sm += bkt[i];
+          #if ((i % 10) == 0) {
+          if (i > 10 && ((i % 10) == 0)) {
+            if (((sv_tm[1]+i)-ts_beg+ts_adj) >= 0) {
+            row++;
+            printf("=%.3f\t%.3f\t%.3f\n", (sv_tm[1]+i)+ts_adj, (sv_tm[1]+i)-ts_beg+ts_adj, sm / 10.0) > NFL;
+            }
+            sm = 0;
+          }
+       }
+       printf("\n") > NFL;
+       close(NFL);
+     }
+   ' $i
+   SHEETS="$SHEETS $i.tsv"
+ fi
+  if [[ $i == *"_watch.txt"* ]]; then
+    echo "do watch"
+# ==beg 0 date 1580278735.829557760
+#-rw-r--r-- 1 udocker udocker 17097435 May 24 03:18 /var/log/udocker/gmatching/performance/gmatching/gmatching.log
+
+    awk -v ts_beg="$BEG" -v pfx="$PFX" '
+     BEGIN{
+       beg=1;col_mx=-1;mx=0;
+     }
+     /^==beg /{
+       FNM=ARGV[ARGIND];
+       NFL=FNM ".tsv";
+       tm = $4;
+       sv_tm[++mx]=tm;
+       next;
+     }
+     /^==end /{
+       tm = $4;
+       sv_tm[mx]=tm;
+       next;
+     }
+     { # has to be an ls -l file line
+        sz = $5+0;
+        sv_sz[mx]=sz;
+     }
+     END{
+       row=0;
+       wraps = 0;
+       sz = 0;
+       for (i=2; i <= mx; i++) {
+         sz0 = sv_sz[i-1];
+         sz1 = sv_sz[i];
+         tm0 = sv_tm[i-1];
+         tm1 = sv_tm[i];
+         wraps = 0;
+         if (sz1 < sz0) {
+           wraps += 50*1024*1024;
+         }
+         sz += sz1 - sz0 + wraps;
+         tm = tm1 - tm0;
+       }
+       tm = tm1 - sv_tm[1];
+       MBpSec = 1.0e-6*sz/tm;
+       row++;
+       printf("average MB/s\t%.3f\n", MBpSec) > NFL;
+       row++;
+       printf("title\twatch log file writes (MB/s) vs time\tsheet\twatch\ttype\tscatter_straight\n") > NFL;
+       row++;
+       printf("hdrs\t%d\t%d\t-1\t%d\t1\n", row+1, 2, 2) > NFL;
+       row++;
+       printf("TS\tts_rel\tlog_MB/s\n") > NFL;
+       wraps = 0;
+       for (i=2; i <= mx; i++) {
+         sz0 = sv_sz[i-1];
+         sz1 = sv_sz[i];
+         tm0 = sv_tm[i-1];
+         tm1 = sv_tm[i];
+         wraps = 0.0;
+         if (sz1 < sz0) {
+           wraps += 50*1024*1024;
+         }
+         sz = sz1 - sz0 + wraps;
+         tm = tm1 - tm0;
+         MBpSec = 1.0e-6*sz/tm;
+       row++;
+         printf("=%.4f\t%.3f\t%.3f\n", sv_tm[i], sv_tm[i]-ts_beg, MBpSec) > NFL;
+       }
+       row++;
+       printf("\n") > NFL;
+       row++;
+       printf("title\t10sec moving avg watch log file writes (MB/s) vs time\tsheet\twatch\ttype\tscatter_straight\n") > NFL;
+       row++;
+       printf("hdrs\t%d\t%d\t-1\t%d\t1\n", row+1, 2, 2) > NFL;
+       row++;
+       printf("TS\tts_rel\tlog_sz_KB\n") > NFL;
+       wraps = 0;
+       szsum=0;
+       tmsum=0;
+       itr = 4;
+       for (i=itr; i <= mx; i++) {
+         sz0 = sv_sz[i-1];
+         sz1 = sv_sz[i];
+         tm0 = sv_tm[i-1];
+         tm1 = sv_tm[i];
+         wraps = 0.0;
+         if (sz1 < sz0) {
+           wraps += 50*1024*1024;
+         }
+         sz = sz1 - sz0 + wraps;
+         tm = tm1 - tm0;
+         szsum += sz;
+         tmsum += tm;
+         if (i > itr && ((i % 10) == itr)) {
+           MBpSec = 1.0e-6*szsum/tmsum;
+           szsum=0;
+           tmsum=0;
+           row++;
+           printf("=%.4f\t%.3f\t%.3f\n", sv_tm[i], sv_tm[i]-ts_beg, MBpSec) > NFL;
+         }
+       }
+       close(NFL);
+   }
+   ' $i
+   SHEETS="$SHEETS $i.tsv"
+  fi
   if [[ $i == *"_interrupts.txt"* ]]; then
     echo "do interrupts"
 # ==beg 0 date 1580278735.829557760
@@ -2225,8 +2457,8 @@ if [ -e $GC_FILE ]; then
   SHEETS="$SHEETS $GC_FILE.tsv"
 fi
 JAVA_COL=java.collapsed
+JAVA_COL_TR=java.coll_traces
 if [ ! -e $JAVA_COL ]; then
-  JAVA_COL_TR=java.coll_traces
   if [ -e $JAVA_COL_TR ]; then
      awk '/^---/{exit;}{printf("%s\n", $0);}' $JAVA_COL_TR > $JAVA_COL
   fi
@@ -2237,7 +2469,7 @@ if [ -e $JAVA_COL ]; then
   echo "do svg_to_html.sh " 1>&2
   $SCR_DIR/svg_to_html.sh -r 1 -d . -f java.svg > java.html
   inkscape -z  -w 2400 -j --export-file=java.png  java.svg
-  $SCR_DIR/gen_flamegraph_for_java_in_container_function_hotspot.sh $JAVA_COL > $JAVA_COL.tsv
+  $SCR_DIR/gen_flamegraph_for_java_in_container_function_hotspot.sh -t count -f $JAVA_COL > $JAVA_COL.tsv
   if [ "$SUM_FILE" != "" ]; then
     SAMPLES=`awk '/__total__/{printf("%s\n", $1);exit;}' $JAVA_COL.tsv`
     DURA_SECS=`awk '/ start /{for(j=1;j<= NF;j++){if ($(j)=="-d"){b=dura=$(j+1);n=gsub("m", "", dura);c=dura+0.0;if (n>0){c*=60.0;}printf("%.3f\n",c);exit;}}}' run.log`
@@ -2248,6 +2480,23 @@ if [ -e $JAVA_COL ]; then
     echo "========flamegraph samples= $SAMPLES, dura_secs= $DURA_SECS FL_TYP= $FLAME_TYP, samples/sec= $SMP_PER_SEC" > /dev/stderr
   fi
   SHEETS="$SHEETS $JAVA_COL.tsv"
+fi
+if [ "$JAVA_COL_TR" != "" ]; then
+ if [ -e $JAVA_COL_TR ]; then
+  $SCR_DIR/gen_flamegraph_for_java_in_container_function_hotspot.sh -t time -f $JAVA_COL_TR > $JAVA_COL_TR.tsv
+  if [ "$SUM_FILE" != "" ]; then
+    FLAME_TYP=`awk -v dir="$TOP_DIR" 'BEGIN{str="itimer";if (index(dir, "lock")>0){str="lock";}}/ start /{for(j=1;j<= NF;j++){if ($(j)=="-E"){str=$(j+1);exit;}}}END{printf("%s\n", str);}' run.log`
+    if [ "$FLAME_TYP" == "lock" ]; then
+     LOCK_SECS=`awk '/__total__/{printf("%s\n", $1);exit;}' $JAVA_COL_TR.tsv`
+     DURA_SECS=`awk '/ start /{for(j=1;j<= NF;j++){if ($(j)=="-d"){b=dura=$(j+1);n=gsub("m", "", dura);c=dura+0.0;if (n>0){c*=60.0;}printf("%.3f\n",c);exit;}}}' run.log`
+     SMP_PER_SEC=`awk -v samples="$LOCK_SECS" -v dura="$DURA_SECS" 'BEGIN{samples+=0.0;dura+=0.0;if(dura<=0.0){printf("0.0\n");exit;};printf("%f\n", samples/dura);exit}' run.log`
+     echo "====== TOP_DIR= $TOP_DIR" > /dev/stderr
+     echo -e "software utilization\tflamegraph_secs\tlock_contention_secs/s\t=$SMP_PER_SEC" >> $SUM_FILE
+     echo "========flamegraph samples= $LOCK_SECS, dura_secs= $DURA_SECS FL_TYP= $FLAME_TYP, samples/sec= $SMP_PER_SEC" > /dev/stderr
+    fi
+  fi
+  SHEETS="$SHEETS $JAVA_COL_TR.tsv"
+ fi
 fi
 TOPLEV_COL=(sys_*_toplev.csv)
 if [ -e $TOPLEV_COL ]; then
