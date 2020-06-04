@@ -18,7 +18,7 @@ echo "$BASHPID" > /root/60secs.pid
 SCR_DIR=`dirname "$(readlink -f "$0")"`
 WAIT=60
 # renamed task 'top' to 'do_top' to avoid conflict with toplev
-TASKS=("uptime" "dmesg" "vmstat" "mpstat" "pidstat" "iostat" "free" "nicstat" "sar_dev" "sar_tcp" "do_top" "perf" "sched_switch" "interrupts" "flamegraph" "toplev" "power")
+TASKS=("uptime" "dmesg" "vmstat" "mpstat" "pidstat" "iostat" "free" "nicstat" "sar_dev" "sar_tcp" "do_top" "perf" "sched_switch" "interrupts" "flamegraph" "toplev" "power" "watch")
 j=0
 for i in ${TASKS[@]}; do
   j=$((j+1))
@@ -50,7 +50,7 @@ tstmp=`date "+%Y%m%d_%H%M%S"`
 ts_beg=`date "+%s.%N"`
 echo "$tstmp start $myArgs"  >> $RUN_CMDS_LOG
 
-while getopts "hvbcwa:C:d:E:i:p:t:x:" opt; do
+while getopts "hvbcwa:C:d:E:i:p:t:W:x:" opt; do
   case ${opt} in
     a )
       ADD_IN=$OPTARG
@@ -75,6 +75,10 @@ while getopts "hvbcwa:C:d:E:i:p:t:x:" opt; do
       ;;
     i )
       INTERVAL=$OPTARG
+      ;;
+    W )
+      WATCH_IN="$OPTARG"
+      echo "WATCH_IN $OPTARG" > /dev/stderr
       ;;
     x )
       EXCLUDE=$OPTARG
@@ -143,6 +147,8 @@ while getopts "hvbcwa:C:d:E:i:p:t:x:" opt; do
       echo "      default is itimer"
       echo "   -p full_path_to_perf_binary  the perf binary might not be in the path so use this option to specify it"
       echo "      default is 'perf'"
+      echo "   -W cmd  cmd to execute every -i seconds. Enclose cmd in dbl quotes"
+      echo "      default is to not do a watch cmd"
       echo "   -v verbose mode. display each file after creating it."
       exit
       ;;
@@ -412,7 +418,7 @@ for TSKj in `seq $TB $TE`; do
     else
     for i in `seq 1 $WAIT`; do
       #echo "i= $i of $WAIT"
-      printf "\ri= %d of %d" $i $WAIT
+      printf "i= %d of %d\n" $i $WAIT
       uptime >> $FL
       j=$((j+$INTRVL))
       if [ $j -ge $WAIT ]; then
@@ -580,6 +586,7 @@ for TSKj in `seq $TB $TE`; do
       rm $FL
     fi
     ms=$(($INTRVL*1000))
+    EVT=
     echo "do perf stat for $WAIT secs"
     if [ "$CPU_DECODE" == "Broadwell" -o "$CPU_DECODE" == "Haswell" ]; then
     IMC0_RDWR="uncore_imc_0/name='unc0_read_write',umask=0x0f,event=0x04/"
@@ -587,18 +594,47 @@ for TSKj in `seq $TB $TE`; do
     IMC2_RDWR="uncore_imc_2/name='unc2_read_write',umask=0x0f,event=0x04/"
     IMC3_RDWR="uncore_imc_3/name='unc3_read_write',umask=0x0f,event=0x04/"
     IMC4_RDWR="uncore_imc_4/name='unc4_read_write',umask=0x0f,event=0x04/"
-    EVT=$IMC0_RDWR,$IMC1_RDWR,$IMC2_RDWR,$IMC3_RDWR,$IMC4_RDWR,qpi_data_bandwidth_tx,qpi_ctl_bandwidth_tx
+    EVT=",$IMC0_RDWR,$IMC1_RDWR,$IMC2_RDWR,$IMC3_RDWR,$IMC4_RDWR,qpi_data_bandwidth_tx,qpi_ctl_bandwidth_tx"
     fi
-    if [ "$CPU_DECODE" == "Cascade Lake" -o "$CPU_DECODE" == "Skylake" ]; then
+    if [ "$CPU_DECODE" == "Skylake" ]; then
     IMC0_RDWR="uncore_imc_0/name='unc0_read_write',umask=0x0f,event=0x04/"
     IMC1_RDWR="uncore_imc_1/name='unc1_read_write',umask=0x0f,event=0x04/"
     IMC2_RDWR="uncore_imc_2/name='unc2_read_write',umask=0x0f,event=0x04/"
     IMC3_RDWR="uncore_imc_3/name='unc3_read_write',umask=0x0f,event=0x04/"
     IMC4_RDWR="uncore_imc_4/name='unc4_read_write',umask=0x0f,event=0x04/"
-    EVT=$IMC0_RDWR,$IMC1_RDWR,$IMC2_RDWR,$IMC3_RDWR,$IMC4_RDWR
+    #EVT=$IMC0_RDWR,$IMC1_RDWR,$IMC2_RDWR,$IMC3_RDWR,$IMC4_RDWR
+    EVT=",$IMC0_RDWR,$IMC1_RDWR,$IMC2_RDWR,$IMC3_RDWR,$IMC4_RDWR,qpi_data_bandwidth_tx,qpi_ctl_bandwidth_tx"
     fi
-    EVT=instructions,cycles,ref-cycles,$EVT,LLC-load-misses
-    echo do: $PERF_BIN stat -x ";"  --per-socket -a -I $ms -o $FL -e $EVT
+    if [ "$CPU_DECODE" == "Cascade Lake" ]; then
+    IMC0_RDWR="uncore_imc_0/name='unc0_read_write',umask=0x0f,event=0x04/"
+    IMC1_RDWR="uncore_imc_1/name='unc1_read_write',umask=0x0f,event=0x04/"
+    IMC2_RDWR="uncore_imc_2/name='unc2_read_write',umask=0x0f,event=0x04/"
+    IMC3_RDWR="uncore_imc_3/name='unc3_read_write',umask=0x0f,event=0x04/"
+    IMC4_RDWR=
+    if [ -e /sys/devices/uncore_imc_4 ]; then
+      IMC4_RDWR="uncore_imc_4/name='unc4_read_write',umask=0x0f,event=0x04/"
+    fi
+    IMC5_RDWR=
+    if [ -e /sys/devices/uncore_imc_5 ]; then
+      IMC5_RDWR=",uncore_imc_5/name='unc5_read_write',umask=0x0f,event=0x04/"
+    fi
+    UIP0=
+    UIP1=
+    UIP2=
+    if [ -e /sys/devices/uncore_upi_0 ]; then
+     UPI0=",uncore_upi_0/event=0x02,umask=0x0f,name='qpi_data_bandwidth_tx0'/"
+    fi
+    if [ -e /sys/devices/uncore_upi_1 ]; then
+     UPI1=",uncore_upi_1/event=0x02,umask=0x0f,name='qpi_data_bandwidth_tx1'/"
+    fi
+    if [ -e /sys/devices/uncore_upi_2 ]; then
+     UPI2=",uncore_upi_2/event=0x02,umask=0x0f,name='qpi_data_bandwidth_tx2'/"
+    fi
+    EVT=",$IMC0_RDWR,$IMC1_RDWR,$IMC2_RDWR,$IMC3_RDWR,$IMC4_RDWR${IMC5_RDWR}${UPI0}${UPI1}${UPI2}"
+    fi
+    EVT="instructions,cycles,ref-cycles,LLC-load-misses${EVT}"
+    echo "do: $PERF_BIN stat -x \";\"  --per-socket -a -I $ms -o $FL -e $EVT" > /dev/stderr
+    echo "do: $PERF_BIN stat -x \";\"  --per-socket -a -I $ms -o $FL -e $EVT" 
     $PERF_BIN stat -x ";"  --per-socket -a -I $ms -o $FL -e $EVT sleep $WAIT &
     TSK_PID[$TSKj]=$!
     PRF_PID=$!
@@ -685,7 +721,7 @@ for TSKj in `seq $TB $TE`; do
       if [ $CDT -ge $EDT ]; then
         break
       fi
-      printf "\rpower i= %d of %d, elap secs= %d curtm= %d, endtm= %d" $i $WAIT $ELAP $CDT  $EDT
+      printf "power i= %d of %d, elap secs= %d curtm= %d, endtm= %d\n" $i $WAIT $ELAP $CDT  $EDT
       sleep $INTRVL
       if [ "$GOT_QUIT" == "1" ]; then
          break
@@ -695,6 +731,50 @@ for TSKj in `seq $TB $TE`; do
     fi
     if [ "$DO_POWER" == "1" ]; then
       echo "=======did power ========="
+      break
+    fi
+    fi
+  fi
+  if [[ $TSK == *"watch"* ]]; then
+    if [ "$WATCH_IN" == "null" ]; then
+       WATCH_IN=
+    fi
+    if [ "$WATCH_IN" != "" ]; then
+    FL=sys_${FLNUM}_watch.txt
+    if [ -e $FL ]; then
+      rm $FL
+    fi
+    echo "do watch $WATCH_IN"
+    j=0
+    BDT=`date +%s`
+    EDT=$((BDT+$WAIT))
+    if [ "$BKGRND" == "1" ]; then
+      FL_WATCH=$FL
+    else
+    for i in `seq 1 $WAIT`; do
+      #echo "i= $i of $WAIT"
+      DT=`date +%s.%N`
+      echo "==beg $j date $DT" >> $FL
+      $WATCH_IN >> $FL
+      CDT=`date +%s`
+      ELAP=$(($CDT-$BDT))
+      j=$((j+$INTRVL))
+      if [ $j -ge $WAIT ]; then
+        break
+      fi
+      if [ $CDT -ge $EDT ]; then
+        break
+      fi
+      #printf "\rwatch i= %d of %d, elap secs= %d curtm= %d, endtm= %d" $i $WAIT $ELAP $CDT  $EDT
+      sleep $INTRVL
+      if [ "$GOT_QUIT" == "1" ]; then
+         break
+      fi
+    done
+    printf "\n"
+    fi
+    if [ "$DO_WATCH" == "1" ]; then
+      echo "=======did watch ========="
       break
     fi
     fi
@@ -786,7 +866,7 @@ if [ "$WAIT_AT_END" == "1" -a "$PID_LST_NC" != "" ]; then
   CK_STOP=/root/60secs.stop
   for i in `seq 1 $WAIT`; do
     #echo "i= $i of $WAIT"
-    printf "\ri= %d of %d" $i $WAIT
+    printf "i= %d of %d\n" $i $WAIT
     if [ "$FL_UPTM" != "" ]; then
        uptime >> $FL_UPTM
     fi
@@ -806,7 +886,21 @@ if [ "$WAIT_AT_END" == "1" -a "$PID_LST_NC" != "" ]; then
       if [ $CDT -ge $EDT ]; then
         break
       fi
-      printf "\rpower i= %d of %d, elap secs= %d curtm= %d, endtm= %d" $i $WAIT $ELAP $CDT  $EDT
+      printf "power i= %d of %d, elap secs= %d curtm= %d, endtm= %d\n" $i $WAIT $ELAP $CDT  $EDT
+    fi
+    if [ "$FL_WATCH" != "" ]; then
+      DT=`date +%s.%N`
+      #echo "$WATCH_IN" >> $FL_WATCH
+      echo "==beg $j date $DT" >> $FL_WATCH
+      $WATCH_IN >> $FL_WATCH
+      DT=`date +%s.%N`
+      echo "==end $j date $DT" >> $FL_WATCH
+      CDT=`date +%s`
+      ELAP=$(($CDT-$BDT))
+      if [ $CDT -ge $EDT ]; then
+        break
+      fi
+      #printf "\rwatch i= %d of %d, elap secs= %d curtm= %d, endtm= %d" $i $WAIT $ELAP $CDT  $EDT
     fi
     j=$((j+$INTRVL))
     if [ $j -ge $WAIT ]; then
