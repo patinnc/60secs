@@ -13,7 +13,7 @@ INTRVL=1
 EXCL=
 EVT_IN=
 
-while getopts "hPa:c:d:E:i:p:t:x:" opt; do
+while getopts "hPa:c:d:E:i:p:t:W:x:" opt; do
   case ${opt} in
     a )
       ADD_IN=$OPTARG
@@ -42,6 +42,10 @@ while getopts "hPa:c:d:E:i:p:t:x:" opt; do
     x )
       EXCL=$OPTARG
       ;;
+    W )
+      WATCH_IN="$OPTARG"
+      echo "in $0 getopts: WATCH_IN= $WATCH_IN"
+      ;;
     h )
       echo "$0 run compute and disk benchmarks using config files in cfg_dir and put results in results dir"
       echo "Usage: $0 [-h] [ -p project_dir]"
@@ -51,6 +55,7 @@ while getopts "hPa:c:d:E:i:p:t:x:" opt; do
       echo "     under /project_dir/"
       echo "   -d duration of run in secs. Append 'm' for minutes"
       echo "   -P prefix output dir with timestamp YY-MM-DD_HHMMSS_"
+      echo "   -W watch_cmd"
       exit
       ;;
     : )
@@ -96,6 +101,10 @@ OPT_EX=" -x do_top,interrupts "
 if [ "$EXCL" != "" ]; then
   OPT_EX=" -x $EXCL "
 fi
+echo "in $0: WATCH_IN= $WATCH_IN"
+if [ "$WATCH_IN" == "" ]; then
+  WATCH_IN="null"
+fi
 
 OPT_EV=
 if [ "$EVT_IN" != "" ]; then
@@ -103,11 +112,11 @@ if [ "$EVT_IN" != "" ]; then
 fi
 
 if [ "$CNTNR" != "" ]; then
-echo $SCR_DIR/60secs.sh -t $TASK $OPT_EX -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf -C $CNTNR $OPT_EV $ADD
-     $SCR_DIR/60secs.sh -t $TASK $OPT_EX -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf -C $CNTNR $OPT_EV $ADD
+echo $SCR_DIR/60secs.sh -t $TASK $OPT_EX -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf -C $CNTNR $OPT_EV -W "$WATCH_IN" $ADD
+     $SCR_DIR/60secs.sh -t $TASK $OPT_EX -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf -C $CNTNR $OPT_EV -W "$WATCH_IN" $ADD
 else
-echo $SCR_DIR/60secs.sh -t $TASK $OPT_EX -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf $OPT_EV $ADD
-     $SCR_DIR/60secs.sh -t $TASK $OPT_EX -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf $OPT_EV $ADD
+echo $SCR_DIR/60secs.sh -t $TASK $OPT_EX -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf $OPT_EV -W "$WATCH_IN" $ADD
+     $SCR_DIR/60secs.sh -t $TASK $OPT_EX -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf $OPT_EV -W "$WATCH_IN" $ADD
 fi
 
 popd
