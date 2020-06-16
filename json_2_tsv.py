@@ -5,13 +5,15 @@ import sys
 import os
 
 
-options, remainder = getopt.getopt(sys.argv[1:], 'vf:b:e:s:t:', ['verbose', 'file=', 'beg=',
+options, remainder = getopt.getopt(sys.argv[1:], 'vf:b:e:S:s:t:', ['verbose', 'file=', 'beg=',
                                                          'end=',
+                                                         'Sheet=',
                                                          'summary=',
                                                          'type=',
                                                          ])
 hdr=""
 sum_file=""
+sheet_nm=""
 
 for opt, arg in options:
     if opt in ('-f', '--file'):
@@ -24,6 +26,8 @@ for opt, arg in options:
         hdr = arg
     if opt in ('-s', '--summary'):
         sum_file = arg
+    if opt in ('-S', '--Sheet'):
+        sheet_nm = arg
 
 
 
@@ -59,12 +63,14 @@ trgt_tot  = {}
 trgt_tot_tm  = {}
 trgt_ts   = {}
 trgt_arr  = []
+trgt_arr2 = []
 ts_dict = {}
 lat_tot = 0.0
 rows=0
 for i in range(len(data)):
     #print("i= ", i, ", obj= ", data[i])
     trgt = data[i]['target']
+    trgt_arr2.append(trgt)
     if hdr == "latency":
        trgt = data[i]['tags']['bucket']
        lwr_bnd = 1
@@ -109,9 +115,15 @@ for i in range(len(data)):
 
               odata[rw].append(val)
 
+if hdr == "" and len(trgt_arr2) == 1:
+   hdr = trgt_arr2[0]
+
+if sheet_nm == "" and hdr != "":
+   sheet_nm = hdr
+
 of = open(flnm+".tsv","w+")
 rw = 0
-of.write("title\t%s\tsheet\t%s\ttype\tscatter_straight\n" % (hdr, hdr))
+of.write("title\t%s\tsheet\t%s\ttype\tscatter_straight\n" % (hdr, sheet_nm))
 rw += 1
 of.write("hdrs\t%d\t%d\t%d\t%d\t1\n" % (rw+1, 2, len(odata)+rw+1, 1+len(trgt_arr)))
 #hdrs	3	24	-1	35
