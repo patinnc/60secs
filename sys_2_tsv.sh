@@ -15,9 +15,21 @@ PFX=
 SUM_FILE=
 PHASE_FILE=
 END_TM=
+BEG_TM_IN=
+METRIC_OUT="metric_out"
+METRIC_AVG="metric_out.average"
+SKIP_XLS=0
+MAX_VAL=
+AVERAGE=0
 
-while getopts "hvd:e:o:P:p:i:s:t:x:" opt; do
+while getopts "hvASb:d:e:m:o:P:p:i:s:t:x:" opt; do
   case ${opt} in
+    A )
+      AVERAGE=1
+      ;;
+    b )
+      BEG_TM_IN=$OPTARG
+      ;;
     d )
       DIR=$OPTARG
       ;;
@@ -26,6 +38,9 @@ while getopts "hvd:e:o:P:p:i:s:t:x:" opt; do
       ;;
     i )
       IMAGE_STR=$OPTARG
+      ;;
+    m )
+      MAX_VAL=$OPTARG
       ;;
     o )
       OPTIONS=$OPTARG
@@ -38,6 +53,9 @@ while getopts "hvd:e:o:P:p:i:s:t:x:" opt; do
       ;;
     s )
       SUM_FILE=$OPTARG
+      ;;
+    S )
+      SKIP_XLS=1
       ;;
     t )
       TOP_DIR=$OPTARG
@@ -52,6 +70,8 @@ while getopts "hvd:e:o:P:p:i:s:t:x:" opt; do
       echo "$0 split data files into columns"
       echo "Usage: $0 [-h] -d sys_data_dir [-v] [ -p prefix ]"
       echo "   -d dir containing sys_XX_* files created by 60secs.sh"
+      echo "   -b beg_tm ending timestamp to clip time to"
+      echo "   -e end_tm ending timestamp to clip time to"
       echo "   -i \"image_file_name_str\" this option is passed to tsv_2_xlsx.py to identify image files to be inserted into the xlsx"
       echo "      For instance '-i \"*.png\"'. Note the dbl quotes around the glob. This keeps the cmdline from expanding the files. python will expand the glob."
       echo "   -o perf_stat_scatter_options   options for perf_stat_scatter.sh script"
@@ -64,9 +84,11 @@ while getopts "hvd:e:o:P:p:i:s:t:x:" opt; do
       echo "      default is to sum the per socket events to the system level and chart all the events"
       echo "   -x xlsx_filename  This is passed to tsv_2_xlsx.py as the name of the xlsx. (you need to add the .xlsx)"
       echo "      The default is chart_line.xlsx"
+      echo "   -m max_val  any value in charts > max_val will be replaced with 0.0"
       echo "   -p prefix   string to be prefixed to each sheet name"
       echo "   -P prefix   list of phases for data. fmt is 'phasename beg_time end_time'"
       echo "   -s sum_file summary_file"
+      echo "   -S   skip creating detail xlsx file. Useful for when we are doing multiple directories"
       echo "   -t top_dir  top directory"
       echo "   -v verbose mode"
       exit
@@ -160,9 +182,12 @@ BEG_ADJ=`cat $DIR/60secs.log | awk '
      exit;
     }
     '`
+if [ "$BEG_TM_IN" != "" ]; then
+  BEG=$BEG_TM_IN
+fi
 echo "awk time offset hours BEG_ADJ= $BEG_ADJ"
 #exit
-FILES=`ls -1 $DIR/sys_*_*.txt`
+FILES=`ls -1 $DIR/sys_*_*.txt $DIR/$METRIC_OUT`
 #echo "FILES = $FILES"
 for i in $FILES; do
  echo $i
@@ -219,6 +244,273 @@ trows++; printf("\n") > NFL;
        close(NFL);
      }
    ' $i
+   SHEETS="$SHEETS $i.tsv"
+  fi
+
+  if [[ $i == *"$METRIC_OUT"* ]]; then
+    echo "do itp $DIR $METRIC_OUT $i"
+    ls -l
+#time,metric_CPU operating frequency (in GHz),metric_CPU utilization %,metric_CPU utilization% in kernel mode,metric_CPI,metric_kernel_CPI,metric_L1D MPI (includes data+rfo w/ prefetches),metric_L1D demand data read hits per instr,metric_L1-I code read misses (w/ prefetches) per instr,metric_L2 demand data read hits per instr,metric_L2 MPI (includes code+data+rfo w/ prefetches),metric_L2 demand data read MPI,metric_L2 demand code MPI,metric_LLC code read MPI (demand+prefetch),metric_LLC data read MPI (demand+prefetch),metric_LLC total HITM (per instr),metric_LLC total HIT clean line forwards (per instr),metric_Average LLC data read miss latency (in clks),metric_Average LLC data read miss latency (in ns),metric_Average LLC data read miss latency for LOCAL requests (in ns),metric_Average LLC data read miss latency for REMOTE requests (in ns),metric_ITLB MPI,metric_DTLB load MPI,metric_DTLB 2MB large page load MPI,metric_DTLB store MPI,metric_NUMA %_Reads addressed to local DRAM,metric_NUMA %_Reads addressed to remote DRAM,metric_uncore frequency GHz,metric_package power (watts),metric_DRAM power (watts),metric_memory bandwidth read (MB/sec),metric_memory bandwidth write (MB/sec),metric_memory bandwidth total (MB/sec),metric_UPI Data transmit BW (MB/sec) (only data),metric_UPI Data transmit BW (MB/sec) (includes control),metric_UPI Transmit utilization_% (includes control),metric_IO_bandwidth_disk_or_network_writes (MB/sec),metric_IO_bandwidth_disk_or_network_reads (MB/sec),metric_TMAM_Info_cycles_both_threads_active(%),metric_TMAM_Info_CoreIPC,metric_TMAM_Frontend_Bound(%),metric_TMAM_Bad_Speculation(%),metric_TMAM_Backend_bound(%),metric_TMAM_Retiring(%)
+#1,2.40600733,16.99837547,8.62996838,1.23067363,2.46693285,0.01511105,0.22598270,0.01507297,0.00307467,0.01691751,0.00439661,0.00624014,0.00052181,0.00398891,0.00019856,0.00019378,318.59677510,118.15075255,99.19535669,140.57104104,0.00018185,0.00096670,0.00010964,0.00012614,52.91514060,47.08485940,2.69652768,66.36900000,20.17800000,3714.28599040,1431.27577600,5145.56176640,2554.91950720,3804.67245600,5.94338708,33.62602240,1380.14116480,15.50708414,1.62512623,38.76328927,4.78888272,48.60994847,24.53865285
+    awk -v sum_file="$SUM_FILE" -v metric_file="$METRIC_OUT" -v metric_avg="$METRIC_AVG" -v pfx="$PFX" '
+      BEGIN{
+         beg=1;
+         mx=0
+         fl0=0;
+         smp_intrvl=1.0;
+      }
+      function ltrim(s) { sub(/^[ \t\r\n]+/, "", s); return s }
+      function rtrim(s) { sub(/[ \t\r\n,]+$/, "", s); return s }
+      function trim(s) { return rtrim(ltrim(s)); }
+#title	mpstat cpu= all
+#hdrs	2	1	62	10
+#CPU	%usr	%nice	%sys	%iowait	%irq	%soft	%steal	%guest	%gnice	%idle
+#all	10.66	10.44	3.84	0.22	0.00	0.13	0.00	0.00	0.00	74.72
+
+      {
+	FNM=ARGV[ARGIND];
+        if (index(FNM, "result.csv") > 0) {
+           if (fl0 == 0) {
+            printf("got result.csv= %s\n", FNM) > "/dev/stderr";
+           }
+           if (index($0, "Sampling Interval,") == 1) {
+             n = split($0, arr, ",");
+             smp_intrvl=arr[2];
+           }
+# started on Fri Jun  5 23:17:03 2020 EPOCH 1591399023
+           if (index($0, "# started on ") == 1) {
+             n = split($0, arr, /[ ,]/);
+             ts_mon = arr[5];
+             ts_day = arr[6];
+             ts_time = arr[7];
+             ts_year = arr[8];
+             ts_epoch = arr[10];
+             nextfile;
+           }
+           fl0++;
+           next;
+        }
+        if (index(FNM, metric_avg) > 0) {
+          if (amx == 0) {
+             amx++;
+             ahdr = $0;
+             printf("+++++++avg_hdr= %s\n", ahdr) > "/dev/stderr";
+             next;
+          } else {
+            sv_aln[amx++] = $0;
+          }
+          next;
+        }
+        if (index(FNM, metric_file) > 0) {
+          NFL=FNM ".tsv";
+          if (mx == 0) {
+             mx++;
+             hdr = $0;
+             printf("hdr= %s\n", hdr);
+             next;
+          } else {
+            sv_ln[mx++] = $0;
+          }
+        }
+        next;
+        n = split($0, arr, ",");
+        for (i=1; i <= NF; i++) {
+           if ($i == "average:") {
+                if (beg==1) {
+                   sv[++mx] = "ld_avg_1m\tld_avg_5m\tld_avg_15m"
+                   #printf("ld_avg_1m\tld_avg_5m\tld_avg_15m\n") > NFL;
+                   beg=0;
+                }
+                sv[++mx]=sprintf("%s\t%s\t%s", trim($(i+1)), trim($(i+2)), trim($(i+3)));
+                #printf("%s\t%s\t%s\n", trim($(i+1)), trim($(i+2)), trim($(i+3))) > NFL;
+                break;
+           }
+        }
+     }
+scatter
+     END{
+       trows++;
+       printf("title\titp_metrics\tsheet\titp_metric\ttype\tscatter_straight\n") > NFL;
+       trows++;
+       hn = split(hdr, harr, ",");
+       printf("hdrs\t%d\t%d\t%d\t%d\t1\n", trows, 3, -1, hn+1) > NFL;
+       trows_top = trows;
+       extr_col = 1;
+       printf("TS\tts_rel") > NFL;
+       mb_mx=0;
+       pct_mx=0;
+       lat_mx=0;
+       ghz_mx=0;
+       cpi_mx=0;
+       mpi_mx=0;
+       pwr_mx=0;
+       tmam_mx=0;
+       for (i=1; i <= hn; i++) {
+          printf("\t%s", harr[i]) > NFL;
+          str = tolower(harr[i]);
+          if (index(str, "mb/sec") > 0) {
+             mb_arr[++mb_mx] = i+extr_col;
+             #printf("MB hdr= %s, mx= %d\n", harr[i], mb_arr[mb_mx]) > "/dev/stderr";
+          }
+          if (index(str, "%") > 0 && index(str, "tmam") == 0) {
+             pct_arr[++pct_mx] = i+extr_col;
+          }
+          if (index(str, "latency") > 0) {
+             lat_arr[++lat_mx] = i+extr_col;
+          }
+          if (index(str, "ghz") > 0) {
+             ghz_arr[++ghz_mx] = i+extr_col;
+          }
+          if (index(str, "cpi") > 0) {
+             cpi_arr[++cpi_mx] = i+extr_col;
+          }
+          if (index(str, "watts") > 0) {
+             pwr_arr[++pwr_mx] = i+extr_col;
+          }
+          if (index(str, "mpi") > 0 || index(str, "per instr") > 0) {
+             mpi_arr[++mpi_mx] = i+extr_col;
+          }
+          if (index(str, "tmam") > 0 || index(str, "metric_cpu utilization %") > 0) {
+             tmam_arr[++tmam_mx] = i+extr_col;
+          }
+       }
+       trows++;
+       printf("\n") > NFL;
+       for (i=1; i <= mx; i++) {
+          n = split(sv_ln[i], arr, ",");
+          tm = arr[1]+0.0;
+          tm_off = tm * smp_intrvl;
+          printf("%.3f\t%.3f", ts_epoch + tm_off, tm_off) > NFL;
+          for (j=1; j <= n; j++) {
+            val = arr[j]+0.0;
+            if ((index(harr[j], "MB/s") > 0 && index(harr[j], "metric_IO_bandwidth_disk_or_network_read") == 0) && val > 10000.0) {
+              val = 500.0;
+            }
+            printf("\t%s", val) > NFL;
+          }
+          trows++;
+          printf("\n") > NFL;
+       }
+       trows_bot = trows;
+       trows++;
+       printf("\n") > NFL;
+       if (mb_mx > 0) {
+         trows++;
+         printf("title\tBandwidths\tsheet\titp_metric\ttype\tscatter_straight\n") > NFL;
+         trows++;
+         printf("hdrs\t%d\t%d\t%d\t%d\t1", trows_top, 3, -1, 3) > NFL;
+         for (j=1; j <= mb_mx; j++) {
+             printf("\t%d\t%d", mb_arr[j], mb_arr[j]) > NFL;
+         }
+         trows++;
+         printf("\n") > NFL;
+       }
+       if (tmam_mx > 0) {
+         trows++;
+         printf("title\tTMAM Percentages\tsheet\titp_metric\ttype\tscatter_straight\n") > NFL;
+         trows++;
+         printf("hdrs\t%d\t%d\t%d\t%d\t1", trows_top, 3, -1, 3) > NFL;
+         for (j=1; j <= tmam_mx; j++) {
+             printf("\t%d\t%d", tmam_arr[j], tmam_arr[j]) > NFL;
+         }
+         trows++;
+         printf("\n") > NFL;
+       }
+       if (pct_mx > 0) {
+         trows++;
+         printf("title\tPercentages\tsheet\titp_metric\ttype\tscatter_straight\n") > NFL;
+         trows++;
+         printf("hdrs\t%d\t%d\t%d\t%d\t1", trows_top, 3, -1, 3) > NFL;
+         for (j=1; j <= pct_mx; j++) {
+             printf("\t%d\t%d", pct_arr[j], pct_arr[j]) > NFL;
+         }
+         trows++;
+         printf("\n") > NFL;
+       }
+       if (mpi_mx > 0) {
+         trows++;
+         printf("title\tMPI (miss/instruction) or X per instr\tsheet\titp_metric\ttype\tscatter_straight\n") > NFL;
+         trows++;
+         printf("hdrs\t%d\t%d\t%d\t%d\t1", trows_top, 3, -1, 3) > NFL;
+         for (j=1; j <= mpi_mx; j++) {
+             printf("\t%d\t%d", mpi_arr[j], mpi_arr[j]) > NFL;
+         }
+         trows++;
+         printf("\n") > NFL;
+       }
+       if (lat_mx > 0) {
+         trows++;
+         printf("title\tLatencies\tsheet\titp_metric\ttype\tscatter_straight\n") > NFL;
+         trows++;
+         printf("hdrs\t%d\t%d\t%d\t%d\t1", trows_top, 3, -1, 3) > NFL;
+         for (j=1; j <= lat_mx; j++) {
+             printf("\t%d\t%d", lat_arr[j], lat_arr[j]) > NFL;
+         }
+         trows++;
+         printf("\n") > NFL;
+       }
+       if (ghz_mx > 0) {
+         trows++;
+         printf("title\tFrequencies\tsheet\titp_metric\ttype\tscatter_straight\n") > NFL;
+         trows++;
+         printf("hdrs\t%d\t%d\t%d\t%d\t1", trows_top, 3, -1, 3) > NFL;
+         for (j=1; j <= ghz_mx; j++) {
+             printf("\t%d\t%d", ghz_arr[j], ghz_arr[j]) > NFL;
+         }
+         trows++;
+         printf("\n") > NFL;
+       }
+       if (cpi_mx > 0) {
+         trows++;
+         printf("title\tCPI (clocks/instruction)\tsheet\titp_metric\ttype\tscatter_straight\n") > NFL;
+         trows++;
+         printf("hdrs\t%d\t%d\t%d\t%d\t1", trows_top, 3, -1, 3) > NFL;
+         for (j=1; j <= cpi_mx; j++) {
+             printf("\t%d\t%d", cpi_arr[j], cpi_arr[j]) > NFL;
+         }
+         trows++;
+         printf("\n") > NFL;
+       }
+       if (pwr_mx > 0) {
+         trows++;
+         printf("title\tPower/instruction)\tsheet\titp_metric\ttype\tscatter_straight\n") > NFL;
+         trows++;
+         printf("hdrs\t%d\t%d\t%d\t%d\t1", trows_top, 3, -1, 3) > NFL;
+         for (j=1; j <= pwr_mx; j++) {
+             printf("\t%d\t%d", pwr_arr[j], pwr_arr[j]) > NFL;
+         }
+         trows++;
+         printf("\n") > NFL;
+       }
+       close(NFL);
+       if (amx == 0) {
+         exit;
+       }
+       an = split(ahdr, harr, ",");
+       javg = 0;
+       for (j=1; j <= an; j++) {
+          if (harr[j] == "avg") {
+             javg=j;
+             break;
+          }
+       }
+       if (javg == 0) {
+         exit;
+       }
+       #printf("--------got into metric sum_file= %s\n", sum_file) > "/dev/stderr";
+       lkfor = "metric_";
+       for (j=1; j <= amx; j++) {
+          n = split(sv_aln[j], arr, ",");
+          str = arr[1];
+          if (substr(str, 1, length(lkfor)) == lkfor) {
+             str = substr(str, length(lkfor)+1, length(str));
+          }
+          printf("\titp\t%s\t=%s\n", str, arr[javg]) >> sum_file;
+       }
+       printf("\n") >> sum_file;
+       close(sum_file);
+     }
+   ' $DIR/result.csv $DIR/$METRIC_AVG $i
    SHEETS="$SHEETS $i.tsv"
   fi
 
@@ -1958,7 +2250,7 @@ row += trows;
 
   if [[ $i == *"_perf_stat.txt"* ]]; then
     echo "do perf_stat data"
-    $SCR_DIR/perf_stat_scatter.sh -b "$BEG"  -e "$END_TM"  -o "$OPTIONS"  -f $i -S $SUM_FILE > $i.tsv
+    time $SCR_DIR/perf_stat_scatter.sh -b "$BEG"  -e "$END_TM"  -o "$OPTIONS"  -f $i -S $SUM_FILE > $i.tsv
    SHEETS="$SHEETS $i.tsv"
   fi
 
@@ -2419,6 +2711,7 @@ OPT_END_TM=
 if [ "$END_TM" != "" ]; then
   OPT_END_TM=" -e $END_TM "
 fi
+echo "----------- top_dir= $TOP_DIR ----------" > /dev/stderr
 tst_files="latency_histo.log"
 for f in $tst_files; do
   if [ -e $f ]; then
@@ -2451,6 +2744,11 @@ for f in $tst_files; do
      fi
   fi
 done
+ITP_FILE=$METRIC_OUT.tsv
+if [ -e $ITP_FILE ]; then
+  echo "found itp_file: $ITP_FILE" > /dev/stderr
+  SHEETS="$SHEETS $ITP_FILE"
+fi
 GC_FILE=gc.log.0.current
 if [ -e $GC_FILE ]; then
   $SCR_DIR/java_gc_log_2_tsv.sh -f $GC_FILE $OPT_END_TM  > $GC_FILE.tsv
@@ -2574,21 +2872,27 @@ if [ "$SUM_FILE" != "" ]; then
      }
    ' 
 fi
-if [ "$SHEETS" != "" ]; then
+if [ "$SHEETS" != "" -a "$SKIP_XLS" == "0" ]; then
    OPT_PH=
    if [ "$PHASE_FILE" != "" ]; then
      OPT_PH=" -P $PHASE_FILE "
    fi
-   echo "python $SCR_DIR/tsv_2_xlsx.py $SHEETS" > /dev/stderr
-   echo python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" -o $XLSX_FILE $OPT_PH -i "$IMAGE_STR" $SHEETS > /dev/stderr
-   # default chart size is pretty small, scale chart size x,y by 2 each. def 1,1 seems to be about 15 rows high (on my MacBook)
-   python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" -o $XLSX_FILE $OPT_PH -i "$IMAGE_STR" $SHEETS
-   if [ "$DIR" == "." ];then
-     UDIR=`pwd`
-   else
-     UDIR=$DIR
+   OPT_M=
+   if [ "$MAX_VAL" != "" ]; then
+     OPT_M=" -m $MAX_VAL "
    fi
-   echo "xls file: " > /dev/stderr
-   echo "$UDIR/$XLSX_FILE" > /dev/stderr
+   if [ "$AVERAGE" != "0" ]; then
+     echo "python $SCR_DIR/tsv_2_xlsx.py $SHEETS" > /dev/stderr
+     echo python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" $OPT_M -o $XLSX_FILE $OPT_PH -i "$IMAGE_STR" $SHEETS > /dev/stderr
+     # default chart size is pretty small, scale chart size x,y by 2 each. def 1,1 seems to be about 15 rows high (on my MacBook)
+     python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" $OPT_M -o $XLSX_FILE $OPT_PH -i "$IMAGE_STR" $SHEETS
+     if [ "$DIR" == "." ];then
+       UDIR=`pwd`
+     else
+       UDIR=$DIR
+     fi
+     echo "xls file: " > /dev/stderr
+     echo "$UDIR/$XLSX_FILE" > /dev/stderr
+   fi
 fi
 
