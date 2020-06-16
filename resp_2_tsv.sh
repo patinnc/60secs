@@ -8,8 +8,9 @@ BEG_IN=
 END_IN=
 SUM_FILE=
 TYP_IN=
+SHEET_NM=
 
-while getopts "hvf:b:e:s:" opt; do
+while getopts "hvf:b:e:s:S:" opt; do
   case ${opt} in
     f )
       FILE=$OPTARG
@@ -19,6 +20,9 @@ while getopts "hvf:b:e:s:" opt; do
       ;;
     e )
       END_IN=$OPTARG
+      ;;
+    S )
+      SHEET_NM=$OPTARG
       ;;
     s )
       SUM_FILE=$OPTARG
@@ -68,8 +72,7 @@ fi
 if [ "$FORCE_BEG" == "" -o "$FORCE_END" == "" ]; then
   BEG=`cat 60secs.log | awk '{n=split($0, arr);printf("%s\n", arr[n]);exit;}'`
   DURA=`tail -1 $PRF_FILE | awk '{n=split($0, arr, ";");printf("%s\n", arr[1]);exit;}'`
-  if [ "$END_IN" != "" ]; then
-    END=$END_IN
+  if [ "$END_IN" != "" ]; then END=$END_IN
   else
     END=`awk -v beg="$BEG" -v dura="$DURA" 'BEGIN{printf("%f\n", beg+dura);exit;}'`
   fi
@@ -91,5 +94,10 @@ O_TYP=
 if [ "$TYP" != "" ]; then
   O_TYP=" -t $TYP "
 fi
-python $SCR_DIR/json_2_tsv.py -f $FILE -s $SUM_FILE $O_BEG $O_END $O_TYP
+OPT_SHEET_NM=
+if [ "$SHEET_NM" != "" ]; then
+  OPT_SHEET_NM=" -S $SHEET_NM "
+fi
+echo "python $SCR_DIR/json_2_tsv.py -f $FILE -s $SUM_FILE $O_BEG $O_END $O_TYP $OPT_SHEET_NM " > /dev/stderr
+      python $SCR_DIR/json_2_tsv.py -f $FILE -s $SUM_FILE $O_BEG $O_END $O_TYP $OPT_SHEET_NM
 #python ../json_2_tsv.py response_time.json $BEG $END
