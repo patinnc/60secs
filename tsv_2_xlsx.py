@@ -26,16 +26,41 @@ closed_wkbk = False
 
 options_filename = ""
 
-options, remainder = getopt.getopt(sys.argv[1:], 'f:i:o:P:p:s:v', ['file=', 'images=',
+options, remainder = getopt.getopt(sys.argv[1:], 'Ab:e:f:i:m:o:P:p:s:v', [
+                                                         'average',
+                                                         'begin=',
+                                                         'end=',
+                                                         'file=',
+                                                         'images=',
+                                                         'max=',
                                                          'output=',
                                                          'phase=',
                                                          'prefix=',
                                                          'size=',
                                                          'verbose',
                                                          ])
+sv_remainder = remainder
+do_avg = False
+max_val = 0.0
+ts_beg = -1.0
+ts_end = -1.0
+
+print("remainder files: ", remainder)
+
 for opt, arg in options:
-    if opt in ('-f', '--file'):
+    if opt in ('-A', '--average'):
+        do_avg = True
+    elif opt in ('-b', '--begin'):
+        ts_beg = float(arg)
+    elif opt in ('-e', '--end'):
+        ts_end = float(arg)
+    elif opt in ('-f', '--file'):
         options_filename = arg
+    elif opt in ('-o', '--output'):
+        output_filename = arg
+        #print("output_filename= ", output_filename, file=sys.stderr)
+    elif opt in ('-m', '--max'):
+        max_val = float(arg)
 
 opt_fl = []
 fl_options = []
@@ -55,7 +80,7 @@ if len(opt_fl) > 0:
           fl_opt = fl_opt + 1
           fl_options.append([sys.argv[0]])
           continue
-       if len(opt_fl[i]) == 1:
+       if len(opt_fl[i]) == 1 and opt_fl[i][0][0] != "-":
           print("path? try= ", opt_fl[i][0])
           base = os.path.basename(opt_fl[i][0])
           file_list1.append({"fl_opt":fl_opt, "flnm":opt_fl[i][0], "base":base, "done":0})
@@ -68,8 +93,9 @@ else:
        fl_options[fl_opt].append(sys.argv[i])
 
 
-file_list = sorted(file_list1, key=lambda x: (x["base"], x["fl_opt"]))
-#print(file_list)
+#file_list = sorted(file_list1, key=lambda x: (x["base"], x["fl_opt"]))
+file_list = file_list1
+print(file_list)
 
 fake_file_list = len(file_list)
 if fake_file_list == 0:
@@ -77,20 +103,73 @@ if fake_file_list == 0:
 
 prefix_dict = {}
 img_added = []
+wksheet_nms = {}
 
-for fn in range(len(file_list)):
+fn_bs_data = {}  # file_number basename data 
+fn_bs_lkup = {}
+fn_bs_sum  = {}
+fn_bs_n    = {}
+fn_bs_lkup_mx = -1
+
+#do_avg = False
+#do_avg = True
+
+base_lkup = {}
+base_list = {}
+base_count= {}
+base_done= {}
+base_fl_opt= {}
+base_mx = -1
+
+for fo2 in range(len(fl_options)):
+   fo = fo2
+   print("fo= ", fo)
+   options, remainder = getopt.getopt(fl_options[fo][1:], 'Ai:m:o:P:p:s:v', [
+                                                            'average',
+                                                            'images=',
+                                                            'max=',
+                                                            'output=',
+                                                            'phase=',
+                                                            'prefix=',
+                                                            'size=',
+                                                            'verbose',
+                                                            ])
+   for x in remainder:
+      base = os.path.basename(x)
+      if not base in base_lkup:
+         base_mx += 1
+         base_lkup[base] = base_mx
+         base_list[base_mx] = base
+         base_count[base_mx] = 0
+         base_done[base_mx] = 0
+         base_fl_opt[base_mx] = {}
+         print("adding base_lkup[%s]= %d" % (base, base_mx))
+      base_i = base_lkup[base]
+      base_count[base_i] += 1
+      #base_fl_opt[base_i][fo] = 1
+
+for i in range(base_mx+1):
+    print("base_lkup[%s] = %d, count= %d" % (base_list[i], i, base_count[i]))
+
+for bmi in range(base_mx+1):
+
+ print("doing bmi= %d of %d" % (bmi, base_mx+1))
+ fn_bs_data[bmi] = {}
  #if fake_file_list > 0:
-   #print("fn= ", fn, " file_list= ",file_list[fn])
+   #print("bmi= ", bmi, " file_list= ",file_list[bmi])
  for fo2 in range(len(fl_options)):
    fo = fo2
-   if fake_file_list > 0:
-      fo = file_list[fn]["fl_opt"]
+   #if fake_file_list > 0:
+   #   fo = file_list[fo]["fl_opt"]
    #if fake_file_list > 0 and fo != file_list[fn]["fl_opt"]:
-   #   print("skip fo= ", fo, ", fn= ", fn, " file_list= ",file_list[fn])
+   #   print("skip fo= ", fo, ", fn= ", fn, " file_list= ",file_list[fo])
    #   continue
    print("fo= ", fo)
    #options, remainder = getopt.getopt(sys.argv[1:], 'i:o:p:v', ['images=',
-   options, remainder = getopt.getopt(fl_options[fo][1:], 'i:o:P:p:s:v', ['images=',
+   options, remainder = getopt.getopt(fl_options[fo][1:], 'Ai:m:o:P:p:s:v', [
+                                                            'average',
+                                                            'images=',
+                                                            'max=',
                                                             'output=',
                                                             'phase=',
                                                             'prefix=',
@@ -106,6 +185,8 @@ for fn in range(len(file_list)):
    print('OPTIONS   :', options)
    ch_array = []
    opt_phase = []
+   #do_avg = False
+   do_avg_write = False
    
    for opt, arg in options:
        if opt in ('-i', '--images'):
@@ -113,6 +194,11 @@ for fn in range(len(file_list)):
               image_files.append(x)
        elif opt in ('-o', '--output'):
            output_filename = arg
+           #print("output_filename= ", output_filename, file=sys.stderr)
+       elif opt in ('-m', '--max'):
+           max_val = float(arg)
+       elif opt in ('-A', '--average'):
+           do_avg = True
        elif opt in ('-P', '--phase'):
            phase = arg
            print("phase file= %s" % (phase), file=sys.stderr)
@@ -145,8 +231,10 @@ for fn in range(len(file_list)):
               ch_size[2] = float(ch_tsize[2])
        elif opt in ('-v', '--verbose'):
            verbose = True
+
    
    if opened_wkbk == False:
+       print("+++open workbook output_filename", output_filename)
        workbook = xlsxwriter.Workbook(output_filename)
        opened_wkbk = True
    
@@ -157,31 +245,69 @@ for fn in range(len(file_list)):
        except ValueError:
            return False
    
-   if fake_file_list > 0:
-      remainder = [file_list[fn]["flnm"]]
+#   if fake_file_list > 0:
+#      remainder = [file_list[fo]["flnm"]]
 
-   print("file list remainder= ", remainder, file=sys.stderr)
+   if verbose:
+      print("file list remainder= ", remainder, file=sys.stderr)
+
    for x in remainder:
-      
-      print("do file= ", x, file=sys.stderr)
-      do_it = True
-      if fake_file_list > 0:
-         for ck in range(len(file_list)):
-             if file_list[ck]["flnm"] == x:
-                if file_list[ck]["done"] == 1:
-                   do_it = False
-                else:
-                   file_list[ck]["done"] = 1
-         if do_it == False:
+      if verbose:
+         print("do x fo= %d file= %s" % (fo, x), file=sys.stderr)
+#      do_it = True
+#      if fake_file_list > 0:
+#         got_file_list = 0
+#         got_file_list_done = 0
+#         for ck in range(len(file_list)):
+#             if file_list[ck]["flnm"] == x:
+#                got_file_list += 1
+#                #print("file_list[%d][done]= %d" % (ck, file_list[ck]["done"]), file=sys.stderr)
+#                if file_list[ck]["done"] == 1:
+#                   do_it = False
+#                else:
+#                   file_list[ck]["done"] = 1
+#         if do_it == False:
+#            continue
+
+      base = os.path.basename(x)
+      if not base in fn_bs_lkup:
+         fn_bs_lkup_mx += 1
+         fn_bs_lkup[base] = fn_bs_lkup_mx
+         fn_bs_sum[fn_bs_lkup_mx] = {}
+         fn_bs_n[fn_bs_lkup_mx] = {}
+      fn_bs_i = fn_bs_lkup[base]
+
+      base_i = base_lkup[base]
+      if base_i != bmi:
+         continue
+      if do_avg:
+         if base_i != bmi:
             continue
+         base_done[base_i] += 1
+      if fo2 in base_fl_opt[base_i]:
+         continue
+      base_fl_opt[base_i][fo2] = 1
+      print("doing bmi= %d, fo= %d, count= %d done= %d base= %s, x= %s" % (bmi, fo, base_count[base_i], base_done[base_i], base, x))
+
+      if do_avg and base_count[base_i] == base_done[base_i]:
+        do_avg_write = True
+        print("do_avg_write = True", file=sys.stderr)
+      else:
+        do_avg_write = False
+
 
       data = []
-      with open(x) as tsv:
-          for line in csv.reader(tsv, dialect="excel-tab"):
+      if not fo in fn_bs_data[bmi]:
+         with open(x) as tsv:
+            for line in csv.reader(tsv, dialect="excel-tab"):
               data.append(line)
+         fn_bs_data[bmi][fo] = data
+      else:
+         data = fn_bs_data[bmi][fo]
       
       chrts = 0
       ch_arr = []
+      ch_cols_used = {}
       sheet_nm = "sheet1"
       ch_type  = "line"
       for i in range(len(data)):
@@ -203,14 +329,31 @@ for fn in range(len(file_list)):
               #print(data[i][j])
           #print("")
       
-      prefix = prefix_dict[fo]
-      print("prefix2= ", prefix, ", fo= ", fo, ", file_list[",fn,"]= ", file_list[fn], ", x= ",x)
-      print("sheet_nm= %s\n" % (sheet_nm))
+      if fo in prefix_dict:
+         prefix = prefix_dict[fo]
+      else:
+         prefix = ""
+         
+      if verbose:
+         print("prefix2= ", prefix, ", fo= ", fo, ", file_list[",fo,"]= ", file_list[fo], ", x= ",x)
+         print("sheet_nm= %s\n" % (sheet_nm))
       wrksh_nm = sheet_nm
       if len(prefix) > 0:
          wrksh_nm = sheet_nm + "_" + prefix
-      worksheet = workbook.add_worksheet(wrksh_nm)
-      bold = workbook.add_format({'bold': 1})
+      if do_avg == False or do_avg_write == True:
+         if wrksh_nm in wksheet_nms:
+             for i in range(100):
+               tnm = wrksh_nm + "_" + str(i)
+               #print("ck if worksheet name %s exists" % (tnm), file=sys.stderr)
+               if not tnm in wksheet_nms:
+                  if verbose:
+                     print("use worksheet name %s" % (tnm), file=sys.stderr)
+                  wrksh_nm = tnm
+                  break
+         print("use worksheet name %s" % (wrksh_nm), file=sys.stderr)
+         worksheet = workbook.add_worksheet(wrksh_nm)
+         wksheet_nms[wrksh_nm] = 1
+         bold = workbook.add_format({'bold': 1})
    
       for c in range(chrts):
           #print("got chrt[%d] for x= %s\n" % (c, x))
@@ -233,26 +376,73 @@ for fn in range(len(file_list)):
                     break
              data[drw][3] = str(drow_end)
           dcol_end = int(data[drw][4])+1
+          for i in range(dcol_beg, dcol_end):
+             ch_cols_used[i] = 1
+          mcol_num_cols = len(data[drw])
+          if mcol_num_cols > 6:
+             for h in range(6, mcol_num_cols, 2):
+                 print("sheet_nm= %s got series[%d] colb= %d cole= %d" % (sheet_nm, len(mcol_list), int(data[drw][h]), int(data[drw][h+1])))
+                 tcol0 = int(data[drw][h])
+                 tcol1 = int(data[drw][h+1])
+                 if tcol0 > -1 and tcol1 > -1:
+                    for i in range(tcol0, tcol1+1):
+                        ch_cols_used[i] = 1
           mx = drow_end+1
           if mx > len(data):
              print("dude, mx= ", mx, ", len(data)= ", len(data))
         
           for i in range(drow_end-drow_beg+1):
               for h in range(hcol_end):
-                  if (len(data[i+drow_beg]) > h):
-                      if h >= len(data[i+drow_beg]):
-                         print("dude, idx= ", i+drow_beg, ", h= ", h, ", len(data[idx])= ", len(data[i+drow_beg]), " drow: ", data[i+drow_beg])
-                      is_num = is_number(data[i+drow_beg][h])
+                  ck_max = False
+                  if max_val > 0.0 and h in ch_cols_used:
+                     ck_max = True
+                  ij = i+drow_beg
+                  if not ij in fn_bs_sum[fn_bs_i]:
+                     fn_bs_sum[fn_bs_i][ij] = {}
+                     fn_bs_n[fn_bs_i][ij] = {}
+                  if (len(data[ij]) > h):
+                      if h >= len(data[ij]):
+                         print("dude, idx= ", ij, ", h= ", h, ", len(data[idx])= ", len(data[ij]), " drow: ", data[ij])
+                      is_num = is_number(data[ij][h])
                       if is_num:
-                         data[i+drow_beg][h] = float(data[i+drow_beg][h])
+                         data[ij][h] = float(data[ij][h])
+                         if ck_max:
+                            if data[ij][h] > max_val:
+                               data[ij][h] = 0.0
+                         if not h in fn_bs_sum[fn_bs_i][ij]:
+                            #fn_bs_sum[fn_bs_i][ij] = {}
+                            fn_bs_sum[fn_bs_i][ij][h] = 0.0;
+                            fn_bs_n[fn_bs_i][ij][h] = 0;
+                         fn_bs_sum[fn_bs_i][ij][h] += data[ij][h]
+                         fn_bs_n[fn_bs_i][ij][h] += 1;
+                      else:
+                         fn_bs_sum[fn_bs_i][ij][h] = data[ij][h]
+                         fn_bs_n[fn_bs_i][ij][h] = -1;
       
       ph_add = 0
       ph_done = 0
       if len(opt_phase) > 0:
          ph_add = 1
 
-      for i in range(len(data)):
-          worksheet.write_row(i, ph_add, data[i])
+      if do_avg == False or do_avg_write == True:
+         #print("---- do_avg= %s, do_avg_write= %s, fn_bs_sum[%d] rows= %d" % (do_avg, do_avg_write, fn_bs_i, len(fn_bs_sum[fn_bs_i])), file=sys.stderr)
+         if do_avg_write == True:
+            #print("fn_bs_sum[%d] rows= %d" % (fn_bs_i, len(fn_bs_sum[fn_bs_i])), file=sys.stderr)
+            for i in fn_bs_sum[fn_bs_i]:
+                #print("row[%d].len= %d" % (i, len(fn_bs_sum[fn_bs_i][i])), file=sys.stderr)
+                for j in fn_bs_sum[fn_bs_i][i]:
+                   #print("row[%d][%d]= %s" % (i, j, fn_bs_sum[fn_bs_i][i][j]), file=sys.stderr)
+                   val = fn_bs_sum[fn_bs_i][i][j]
+                   num = fn_bs_n[fn_bs_i][i][j]
+                   if num > 0:
+                      val /= num;
+                   worksheet.write(i, j, val)
+            for i in range(len(data)):
+                if not i in fn_bs_sum[fn_bs_i]:
+                   worksheet.write_row(i, ph_add, data[i])
+         else:
+            for i in range(len(data)):
+                worksheet.write_row(i, ph_add, data[i])
       
       for c in range(chrts):
           dcol_cat = -1
@@ -273,10 +463,10 @@ for fn in range(len(file_list)):
              print("no data for chart! sheet_nm= %s, ch_typ= %s, file= %s, drow_beg= %d, drow_end= %d, hcol_beg= %d, hcol_end= %d" % (sheet_nm, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end), file=sys.stderr)
              # didn't find any data in table
              continue
+          use_cats = False
           mcol_end = int(data[drw][4])+1
           mcol_num_cols = len(data[drw])
           mcol_list = []
-          use_cats = False
           if mcol_num_cols > 5 and int(data[drw][5]) > -1:
              dcol_cat = int(data[drw][5])
              use_cats = True
@@ -307,14 +497,17 @@ for fn in range(len(file_list)):
                     tval = data[ii][jjj]
                     for jj in range(len(opt_phase)):
                        if tval >= opt_phase[jj][1] and (tval <= opt_phase[jj][2] or opt_phase[jj][2] == -1):
-                          worksheet.write(ii, 0, opt_phase[jj][0])
+                          if do_avg == False or do_avg_write == True:
+                             worksheet.write(ii, 0, opt_phase[jj][0])
                           break
-             chart1 = workbook.add_chart({'type': 'scatter', 'subtype': 'straight'})
+             if do_avg == False or do_avg_write == True:
+                chart1 = workbook.add_chart({'type': 'scatter', 'subtype': 'straight'})
           else:
              if ch_type != "copy":
-                chart1 = workbook.add_chart({'type': ch_type})
+                if do_avg == False or do_avg_write == True:
+                   chart1 = workbook.add_chart({'type': ch_type})
           if ch_type == "copy":
-             print("chart_type= copy", file=sys.stderr)
+             #print("chart_type= copy", file=sys.stderr)
              continue
           # Configure the first series.
           got_how_many_series_for_chart = 0
@@ -326,37 +519,37 @@ for fn in range(len(file_list)):
                      print("What going on3, sheet_nm= %s, ch_typ= %s, file= %s, drow_beg= %d drow_end= %d hcol_beg= %d, hcol_end= %d" % (sheet_nm, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end), file=sys.stderr)
                      continue
                   got_how_many_series_for_chart += 1
-                  if use_cats:
+                  if do_avg == False or do_avg_write == True:
+                   if use_cats:
                      chart1.add_series({
                          'name':       [wrksh_nm, hrow_beg, h+ph_add],
                          'categories': [wrksh_nm, drow_beg, dcol_cat+ph_add, drow_end, dcol_cat+ph_add],
                          'values':     [wrksh_nm, drow_beg, h+ph_add, drow_end, h+ph_add],
                      })
-                  else:
+                   else:
                      chart1.add_series({
                          'name':       [wrksh_nm, hrow_beg, h+ph_add],
                          'values':     [wrksh_nm, drow_beg, h+ph_add, drow_end, h+ph_add],
                      })
           if got_how_many_series_for_chart == 0:
              print("What going on4, sheet_nm= %s, ch_typ= %s, file= %s, drow_beg= %d drow_end= %d hcol_beg= %d, hcol_end= %d" % (sheet_nm, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end), file=sys.stderr)
-          chart1.set_title ({'name': title})
-          chart1.set_style(ch_style)
-          ch_opt = {'x_offset': 25, 'y_offset': 10}
-          if len(ch_size) >= 2:
-             ch_opt = {'x_offset': 25, 'y_offset': 10, 'x_scale': ch_size[0], 'y_scale': ch_size[1]}
-             #chart1.set_size(ch_size)
-          #rc = worksheet.insert_chart(hrow_beg+1, 0, chart1, {'x_offset': 25, 'y_offset': 10})
-          ch_top_at_row = hrow_beg+1
-          ch_left_at_col = 0
-          if len(ch_array) > 0:
-             ch_ln_prev = len(ch_array)-1
-             if ch_array[ch_ln_prev][0] == sheet_nm:
-                ch_top_at_row = ch_array[ch_ln_prev][1] + int(ch_size[2]*ch_size[1])
-                ch_left_at_col = ch_array[ch_ln_prev][2] + 0
-          rc = worksheet.insert_chart(ch_top_at_row, ch_left_at_col, chart1, ch_opt)
-          if rc == -1:
-             print("insert chart failed for sheet= %s, chart= %s, row_beg= %d hcol_end= %d\n" % (sheet_nm, title, hrow_beg, hcol_end), file=sys.stderr)
-          ch_array.append([sheet_nm, ch_top_at_row, ch_left_at_col])
+          if do_avg == False or do_avg_write == True:
+             chart1.set_title ({'name': title})
+             chart1.set_style(ch_style)
+             ch_opt = {'x_offset': 25, 'y_offset': 10}
+             if len(ch_size) >= 2:
+                ch_opt = {'x_offset': 25, 'y_offset': 10, 'x_scale': ch_size[0], 'y_scale': ch_size[1]}
+             ch_top_at_row = hrow_beg+1
+             ch_left_at_col = 0
+             if len(ch_array) > 0:
+                ch_ln_prev = len(ch_array)-1
+                if ch_array[ch_ln_prev][0] == sheet_nm:
+                   ch_top_at_row = ch_array[ch_ln_prev][1] + int(ch_size[2]*ch_size[1])
+                   ch_left_at_col = ch_array[ch_ln_prev][2] + 0
+             rc = worksheet.insert_chart(ch_top_at_row, ch_left_at_col, chart1, ch_opt)
+             if rc == -1:
+                print("insert chart failed for sheet= %s, chart= %s, row_beg= %d hcol_end= %d\n" % (sheet_nm, title, hrow_beg, hcol_end), file=sys.stderr)
+             ch_array.append([sheet_nm, ch_top_at_row, ch_left_at_col])
 
 
    if len(image_files) > 0:
@@ -372,6 +565,7 @@ for fn in range(len(file_list)):
             cl = cl + 1
    
 if closed_wkbk == False:
+    print("close workbook %s\n" % (output_filename), file=sys.stderr)
     workbook.close()
     closed_wkbk = True
     
