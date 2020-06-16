@@ -1,4 +1,4 @@
-#!/bin/bash
+/#!/bin/bash
 
 # arg1 is prf stat file
 # arg2 (optional) is specint .log
@@ -108,21 +108,30 @@ if [ "$SHEET_IN" != "" ]; then
   SHEET=$SHEET_IN
 fi
 
-if [ -e "lscpu.log" ]; then
- TSC_FREQ=`cat lscpu.log |awk '/Model name/{for (i=1;i<=NF;i++){pos=index($i, "GHz");if (pos > 0){print substr($i,1,pos-1);}}}'`
-else
- # didn't collect lscpu.log for most of the data
- TSC_FREQ="2.1"
-fi
+# didn't collect lscpu.log for most of the data
+TSC_FREQ="2.1"
+THR_PER_CORE=2
+LSCPU_FL="lscpu.log lscpu.txt"
+for i in $LSCPU_FL; do
+  if [ -e $i ]; then
+    TSC_FREQ=`cat $i |awk '/^Model name/{for (i=1;i<=NF;i++){pos=index($i, "GHz");if (pos > 0){print substr($i,1,pos-1);}}}'`
+    NUM_CPUS=`cat $i |awk '/^CPU.s.:/{printf("%s\n",$2);}'`
+    THR_PER_CORE=`cat $i |awk '/^Thread.s. per core:/{printf("%s\n",$4);}'`
+    #CPU(s):                32
+  fi
+done
+echo "TSC_FREQ= $TSC_FREQ NUM_CPUS= $NUM_CPUS" > /dev/stderr
 
 
-awk -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s/skt|memory},LLC-misses PKI{|memory},IPC{InstPerCycle|CPU},%not_halted{|CPU},avg_freq{avg_freq GHz|CPU},QPI_BW{QPI_BW GB/s/skt|memory interconnect},Instructions*1e-9/s{Instructions*1e-9/s/skt|CPU}" 'BEGIN{
+awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s/skt|memory},LLC-misses PKI{|memory},IPC{InstPerCycle|CPU},%not_halted{|CPU},avg_freq{avg_freq GHz|CPU},QPI_BW{QPI_BW GB/s/skt|memory interconnect},Instructions*1e-9/s{Instructions*1e-9/s/skt|CPU}" 'BEGIN{
      row=0;
      evt_idx=-1;
      months="  JanFebMarAprMayJunJulAugSepOctNovDec";
      date_str="";
+     ts_initial = 0.0;
      ts_beg += 0.0;
      ts_end += 0.0;
+     num_cpus += 0;
      st_beg=0; 
      st_mx=0;
      ts_prev = 0.0;
@@ -221,15 +230,22 @@ awk -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN
     next;
   }
   }
-#  END{ 
-#    for (i=1; i <= st_mx; i++) {
-#      printf("%s\t%s\t%s\n", st_sv[i,1], st_sv[i,2], st_sv[i,3]);
-#    }
-#  }
 
   /^# started on / {
+# started on Fri Jun 12 14:36:31 UTC 2020 1591972591.618156223
+# started on Fri Jun 12 14:36:31 2020
     pos = index($0, " on ")+8;
+    if (date_str != "") {
+       # I prepend a more complete date time stamp as the first line
+       next;
+    }
     date_str = substr($0, pos);
+    if ($8 == "UTC") {
+       if (NF == 10) {
+          ts_initial = $10+0;
+       }
+       date_str = $5 " " $6 " " $7 " " $9;
+    }
     #printf("data_str = '%s'\n", date_str);
     tst_epoch = dt_to_epoch(0.0);
     #printf("tst_epoch= %s\n", tst_epoch);
@@ -257,23 +273,39 @@ awk -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN
     next;
   }
   /;/{
+#          1        2          3   4          5           6
+# 120.003961364;1919857.169339;;cpu-clock;1919864513706;100.00;;
+
+#          1    2  3     4       5    6            7           8   9     10
+#  1.004420989;S1;16;30384313506;;instructions;16051372488;100.00;0.84;insn per cycle
+
    n=split($0,arr,";");
    ts=arr[1];
    skt=arr[2];
-   #sum=arr[3];
-   inst=arr[3];
-   val=arr[4];
-   #not_sure=arr[5];
-   evt=arr[6];
+   skt_incr = 2;
+   if (skt != "S0" && skt != "S1" && skt != "S2" && skt != "S3") {
+     skt="S0";
+     skt_incr = 0;
+     inst = num_cpus;
+     if (options != "" && index(options, "dont_sum_sockets") > 0) {
+         printf("options before= %s\n", options) > "/dev/stderr";
+         gsub("dont_sum_sockets", "", options);
+         printf("options after = %s\n", options) > "/dev/stderr";
+         printf("ts_end= %s\n", ts_end) > "/dev/stderr";
+     }
+   } else {
+     inst=arr[3];
+   }
+   val=arr[2+skt_incr];
+   evt=arr[4+skt_incr];
    if (evt == "") {
      next;
    }
-   if (options != "" && index(options, "dont_sum_sockets") > 0) {
+   if (options != "" && skt_inc != 0 && index(options, "dont_sum_sockets") > 0) {
       evt = evt " " skt;
    }
-   tmr=arr[7];
-   #cyc=arr[7];
-   pct=arr[8];
+   tmr=arr[5+skt_incr];
+   pct=arr[6+skt_incr];
    if ( ck_row[ts,skt] != ts","skt) {
       row++;
       ck_row[ts,skt] = ts","skt;
@@ -293,7 +325,11 @@ awk -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN
      evt_inst_ts[evt_idx]=ts;
    }
    j=evt_num[evt];
-   epch = dt_to_epoch(ts);
+   if (ts_initial > 0.0) {
+      epch = ts_initial + ts;
+   } else {
+      epch = dt_to_epoch(ts);
+   }
    if (evt_inst_ts[j] == ts) {
      if (evt_inst[j] == 0 || inst > 1){ # if summing per socket events, then summing to system, just put 1 for instance
         evt_inst[j] += inst;
@@ -353,7 +389,7 @@ awk -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN
      got_lkfor[kmx,3]=100.0/(tsc_freq*1.0e9); # a factor
      got_lkfor[kmx,4]="div"; # operation x/y
      got_lkfor[kmx,5]=1; # instances
-     #got_lkfor[kmx,6]=""; # 
+     got_lkfor[kmx,6]="div_by_interval"; # 
      lkfor[kmx,1]="ref-cycles";
      lkfor[kmx,2]="instances";  # get the instances from the first lkfor event
      nwfor[kmx,1]="%not_halted";
@@ -395,12 +431,62 @@ awk -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN
      kmx++;
      got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
      got_lkfor[kmx,2]=1; # num of fields to look for
+     got_lkfor[kmx,3]=1.0; # a factor
+     got_lkfor[kmx,4]="sum"; # operation
+     got_lkfor[kmx,5]=1; # instances
+     got_lkfor[kmx,6]="div_by_interval"; # 
+     lkfor[kmx,1]="power/energy-pkg/";
+     nwfor[kmx,1]="power_pkg (watts)";
+
+     kmx++;
+     got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+     got_lkfor[kmx,2]=1; # num of fields to look for
      got_lkfor[kmx,3]=1.0e-9; # a factor
      got_lkfor[kmx,4]="sum"; # operation
      got_lkfor[kmx,5]=1; # instances
      got_lkfor[kmx,6]="div_by_interval"; # 
      lkfor[kmx,1]="instructions";
      nwfor[kmx,1]="Instructions*1e-9/s)";
+
+#                        "name"       : "metric_TMAM_Frontend_Bound(%)",
+#                        "expression" : "100 * [IDQ_UOPS_NOT_DELIVERED.CORE] / (4 * ([cpu-cycles] / [const_thread_count]))"
+     kmx++;
+     got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+     got_lkfor[kmx,2]=2; # num of fields to look for
+     got_lkfor[kmx,3]=25.0*thr_per_core; # a factor 100.0 / 4
+     got_lkfor[kmx,4]="div"; # operation x/y/z
+     got_lkfor[kmx,5]=1; # instances
+     got_lkfor[kmx,6]=""; # 
+     lkfor[kmx,1]=tolower("IDQ_UOPS_NOT_DELIVERED.CORE");
+     lkfor[kmx,2]="cycles";  # get the instances from the first lkfor event
+     nwfor[kmx,1]="TMAM_Frontend_Bound(%)";
+
+#                        "name"       : "metric_TMAM_Retiring(%)",
+#                        "expression" : "100 * [UOPS_RETIRED.RETIRE_SLOTS] / (4 * ([CPU_CLK_UNHALTED.THREAD_ANY] / [const_thread_count]))"
+     kmx++;
+     got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+     got_lkfor[kmx,2]=2; # num of fields to look for
+     got_lkfor[kmx,3]=25.0*thr_per_core; # a factor 100.0 / 4
+     got_lkfor[kmx,4]="div"; # operation x/y/z
+     got_lkfor[kmx,5]=1; # instances
+     got_lkfor[kmx,6]=""; # 
+     lkfor[kmx,1]=tolower("UOPS_RETIRED.RETIRE_SLOTS");
+     lkfor[kmx,2]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
+     nwfor[kmx,1]="TMAM_Retiring(%)";
+
+     kmx++;
+     got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+     got_lkfor[kmx,2]=4; # num of fields to look for
+     got_lkfor[kmx,3]="=100 - (INDIRECT(ADDRESS(ROW(), COLUMN()-2, 4)) +INDIRECT(ADDRESS(ROW(), COLUMN()-1, 4)))"; # 
+     got_lkfor[kmx,4]="formula"; # operation x/y/z
+     got_lkfor[kmx,5]=1; # instances
+     got_lkfor[kmx,6]=""; # 
+     lkfor[kmx,1]=tolower("UOPS_RETIRED.RETIRE_SLOTS");
+     lkfor[kmx,2]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
+     lkfor[kmx,3]=tolower("IDQ_UOPS_NOT_DELIVERED.CORE");
+     lkfor[kmx,4]="cycles";  # get the instances from the first lkfor event
+     nwfor[kmx,1]="TMAM_Backend_Bound_BadSpec(%)";
+
 
      if (options != "" && index(options, "dont_sum_sockets") > 0) {
        kmx_nw = kmx;
@@ -529,6 +615,9 @@ awk -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN
           if (index(nwfor[k,1], "not_halted") > 0) {
             unhalted_cols[++unhalted_cols_mx] = cols;
           }
+          if (index(nwfor[k,1], "not_halted") > 0 || index(nwfor[k,1], "TMAM") > 0 || index(nwfor[k,1], "power_pkg (watts)") > 0) {
+            TMAM_cols[++TMAM_cols_mx] = cols;
+          }
           if (index(nwfor[k,1], "IPC") > 0 || index(nwfor[k,1], "GHz") > 0 || index(nwfor[k,1], "PKI") > 0) {
             ipc_cols[++ipc_cols_mx] = cols;
           }
@@ -553,8 +642,9 @@ awk -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN
      }
      epoch_next=0;
      ts_prev = 0.0;
+     printf("perf stat rows= %d, skt_incr= %d, ts_beg= %f, ts_end= %f\n", row, skt_incr, ts_beg, ts_end) > "/dev/stderr";
      for(i=1; i <= row; i++) {
-       if (sv[i,2] == "S0" && i < row) {
+       if (skt_incr != 0 && sv[i,2] == "S0" && i < row) {
            # sum each evt to s0 for now
            for(ii=i+1; ii <= row; ii++) {
              if (sv[ii,1] != sv[i,1]) { 
@@ -566,12 +656,15 @@ awk -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN
              }
            }
        }
-       if (sv[i,2] != "S0") {
+       if (skt_incr != 0 && sv[i,2] != "S0") {
          continue;
        }
        interval = sv[i,1] - ts_prev;
        ts_prev = sv[i,1]
        use_epoch = sv[i,0];
+       #if (ts_beg > 0.0 && use_epoch < ts_beg) {
+          #continue; # TBD, this is a different use of tm_beg
+       #}
        if (ts_beg > 0.0) {
           use_epoch = ts_beg + sv[i,1];
        }
@@ -618,8 +711,11 @@ awk -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN
        for (sk=1; sk <= skt_idx; sk++) { not_halted_fctr[sk] = 0.0; }
        for (k=1; k <= kmx; k++) { 
          prt_it=0;
-         if (got_lkfor[k,4] == "div" && got_lkfor[k,1] == got_lkfor[k,2]) {
+         if ((got_lkfor[k,4] == "div" || got_lkfor[k,4] == "div_and_by_interval") && got_lkfor[k,1] == got_lkfor[k,2]) {
            val = numer[k]/denom[k] * got_lkfor[k,3];
+           if (got_lkfor[k,4] == "div_and_by_interval") {
+             val /= interval;
+           }
            prt_it=1;
          }
 
@@ -631,16 +727,47 @@ awk -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN
            if (got_lkfor[k,6] == "div_by_interval") {
               val = val / interval;
            }
-           if (got_lkfor[k,6] == "div_by_non_halted_interval") {
-              sk = got_lkfor[k,7];
-              nhf = not_halted_fctr[sk];
-             #printf("a sk= %d, nhf= %f\n", sk, not_halted_fctr[sk]) > "/dev/stderr";
-              val = val / (interval*nhf);
-           }
-           if (got_lkfor[k,8] == "%not_halted") {
+           if (index(nwfor[k,1], "%not_halted") == 1) {
+             #printf("%not_halted 03: prt_it= %s got_lkfor[%d,%s]= %s\n", prt_it, k, 7, got_lkfor[k,7]) > "/dev/stderr";
              sk = got_lkfor[k,7];
+             if (sk == "") { sk= 1; }
              not_halted_fctr[sk] = val/100.0;
              #printf("b sk= %d, nhf= %f\n", sk, not_halted_fctr[sk]) > "/dev/stderr";
+           }
+         }
+       }
+       for (k=1; k <= kmx; k++) { 
+         prt_it=0;
+         if (got_lkfor[k,4] == "div" && got_lkfor[k,1] == got_lkfor[k,2]) {
+           val = numer[k]/denom[k] * got_lkfor[k,3];
+           prt_it=1;
+         }
+
+         if (got_lkfor[k,4] == "sum" && got_lkfor[k,1] > 0) {
+           val = sum[k] * got_lkfor[k,3];
+           prt_it=1;
+         }
+         if (got_lkfor[k,4] == "formula" && got_lkfor[k,1] > 0) {
+           val =  got_lkfor[k,3];
+           prt_it=1;
+         }
+         if (prt_it == 1) {
+           if (got_lkfor[k,6] == "div_by_interval") {
+              val = val / interval;
+           }
+           if (index(newfor[k,1],"%not_halted") == 1) {
+             sk = got_lkfor[k,7];
+              if (sk == "") { sk= 1; }
+             not_halted_fctr[sk] = val/100.0;
+             #printf("b sk= %d, nhf= %f\n", sk, not_halted_fctr[sk]) > "/dev/stderr";
+           }
+           if (got_lkfor[k,6] == "div_by_non_halted_interval") {
+              sk = got_lkfor[k,7];
+              if (sk == "") { sk= 1; }
+             #not_halted_fctr[sk] = val/100.0;
+              nhf = not_halted_fctr[sk];
+             #printf("a sk= %s, nhf= %f, skt_idx= %s interval= %f\n", sk, not_halted_fctr[sk], skt_idx, interval) > "/dev/stderr";
+              val = val / (interval*nhf);
            }
            printf("\t%s", val);
            do_summary(cols, val+0.0, use_epoch+0.0, interval);
@@ -659,6 +786,14 @@ awk -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN
                 break;
             }
           }
+       }
+       printf("\n");
+     }
+     if (TMAM_cols_mx > 0) {
+       printf("\ntitle\t%s Top Lev: %%cpus Back/Front End Bound, Retiring\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, pfx, sheet);
+       printf("hdrs\t%d\t%d\t%d\t%d\t%d", rows+1, bcol+1, -1, evt_idx+extra_cols+4, 2);
+       for (i=1; i <= TMAM_cols_mx; i++) {
+         printf("\t%d\t%d", TMAM_cols[i], TMAM_cols[i]);
        }
        printf("\n");
      }
