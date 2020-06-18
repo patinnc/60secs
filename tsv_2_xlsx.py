@@ -181,6 +181,12 @@ for bmi in range(base_mx+1):
    image_files=[]
    prefix = ""
    ch_size = [1.0, 1.0, 15.0]
+
+   # if orient_vert == true then put charts down same column.
+   # if False, put charts across same row (so scroll right to see charts). This is useful if you start data at row 40 then charts won't obscure data.
+   # Also, if you put in a filter on the data, some charts might disappear if they are in the rows hidden by the filter.
+   # If the 1st hdr row number is > 35 then ch_orient_vert will be set to false.
+   ch_orient_vert = True
    
    print('OPTIONS   :', options)
    ch_array = []
@@ -381,7 +387,7 @@ for bmi in range(base_mx+1):
           mcol_num_cols = len(data[drw])
           if mcol_num_cols > 6:
              for h in range(6, mcol_num_cols, 2):
-                 print("sheet_nm= %s got series[%d] colb= %d cole= %d" % (sheet_nm, len(mcol_list), int(data[drw][h]), int(data[drw][h+1])))
+                 #print("sheet_nm= %s got series[%d] colb= %d cole= %d" % (sheet_nm, len(mcol_list), int(data[drw][h]), int(data[drw][h+1])))
                  tcol0 = int(data[drw][h])
                  tcol1 = int(data[drw][h+1])
                  if tcol0 > -1 and tcol1 > -1:
@@ -459,6 +465,11 @@ for bmi in range(base_mx+1):
           drow_beg = int(data[drw][1])+1
           dcol_beg = int(data[drw][2])
           drow_end = int(data[drw][3])
+          if c == 0:
+             if drw >= 35:
+                ch_orient_vert = False
+             else:
+                ch_orient_vert = True
           if drow_end == -1 or drow_beg >= drow_end:
              print("no data for chart! sheet_nm= %s, ch_typ= %s, file= %s, drow_beg= %d, drow_end= %d, hcol_beg= %d, hcol_end= %d" % (sheet_nm, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end), file=sys.stderr)
              # didn't find any data in table
@@ -472,7 +483,7 @@ for bmi in range(base_mx+1):
              use_cats = True
           if mcol_num_cols > 6:
              for h in range(6, mcol_num_cols, 2):
-                 print("sheet_nm= %s got series[%d] colb= %d cole= %d" % (sheet_nm, len(mcol_list), int(data[drw][h]), int(data[drw][h+1])))
+                 #print("sheet_nm= %s got series[%d] colb= %d cole= %d" % (sheet_nm, len(mcol_list), int(data[drw][h]), int(data[drw][h+1])))
                  tcol0 = int(data[drw][h])
                  tcol1 = int(data[drw][h+1])
                  if tcol0 > -1 and tcol1 > -1:
@@ -539,13 +550,23 @@ for bmi in range(base_mx+1):
              ch_opt = {'x_offset': 25, 'y_offset': 10}
              if len(ch_size) >= 2:
                 ch_opt = {'x_offset': 25, 'y_offset': 10, 'x_scale': ch_size[0], 'y_scale': ch_size[1]}
-             ch_top_at_row = hrow_beg+1
-             ch_left_at_col = 0
-             if len(ch_array) > 0:
-                ch_ln_prev = len(ch_array)-1
-                if ch_array[ch_ln_prev][0] == sheet_nm:
-                   ch_top_at_row = ch_array[ch_ln_prev][1] + int(ch_size[2]*ch_size[1])
-                   ch_left_at_col = ch_array[ch_ln_prev][2] + 0
+             if ch_orient_vert:
+                ch_top_at_row = hrow_beg+1
+                ch_left_at_col = 0
+                if len(ch_array) > 0:
+                   ch_ln_prev = len(ch_array)-1
+                   if ch_array[ch_ln_prev][0] == sheet_nm:
+                      ch_top_at_row = ch_array[ch_ln_prev][1] + int(ch_size[2]*ch_size[1])
+                      ch_left_at_col = ch_array[ch_ln_prev][2] + 0
+             else:
+                ch_top_at_row = 1
+                ch_left_at_col = 0
+                if len(ch_array) > 0:
+                   ch_ln_prev = len(ch_array)-1
+                   if ch_array[ch_ln_prev][0] == sheet_nm:
+                      ch_top_at_row = ch_array[ch_ln_prev][1] + 0
+                      ch_left_at_col = ch_array[ch_ln_prev][2] + int(ch_size[2])
+                #print("sh %s ch %s row= %d col= %d" % (sheet_nm, title, ch_top_at_row, ch_left_at_col))
              rc = worksheet.insert_chart(ch_top_at_row, ch_left_at_col, chart1, ch_opt)
              if rc == -1:
                 print("insert chart failed for sheet= %s, chart= %s, row_beg= %d hcol_end= %d\n" % (sheet_nm, title, hrow_beg, hcol_end), file=sys.stderr)
