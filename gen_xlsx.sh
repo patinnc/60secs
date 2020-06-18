@@ -15,6 +15,7 @@ NUM_DIR=0
 AVERAGE=0
 MAX_VAL=
 TS_INIT=
+VERBOSE=0
 
 while getopts "hvASd:e:m:N:P:x:X:" opt; do
   case ${opt} in
@@ -251,7 +252,10 @@ for i in $LST; do
      OPT_A=" -A "
    fi
  fi
- $SCR_DIR/sys_2_tsv.sh $OPT_A -p "$RPS" $OPT_SKIP $OPT_M -d . $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets $OPT_PH -t $DIR &> tmp.jnk
+ if [ $VERBOSE -gt 0 ]; then
+ echo "$SCR_DIR/sys_2_tsv.sh $OPT_A -p \"$RPS\" $OPT_SKIP $OPT_M -d . $OPT_BEG_TM $OPT_END_TM -i \"*.png\" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets $OPT_PH -t $DIR &> tmp.jnk"
+ fi
+       $SCR_DIR/sys_2_tsv.sh $OPT_A -p "$RPS" $OPT_SKIP $OPT_M -d . $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets $OPT_PH -t $DIR &> tmp.jnk
  SM_FL=
  if [ -e $SUM_FILE ]; then
    SM_FL=$i/$SUM_FILE
