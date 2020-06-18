@@ -86,7 +86,7 @@ while getopts "hvASb:d:e:m:o:P:p:i:s:t:x:" opt; do
       echo "      The default is chart_line.xlsx"
       echo "   -m max_val  any value in charts > max_val will be replaced with 0.0"
       echo "   -p prefix   string to be prefixed to each sheet name"
-      echo "   -P prefix   list of phases for data. fmt is 'phasename beg_time end_time'"
+      echo "   -P phase_file list of phases for data. fmt is 'phasename beg_time end_time'"
       echo "   -s sum_file summary_file"
       echo "   -S   skip creating detail xlsx file. Useful for when we are doing multiple directories"
       echo "   -t top_dir  top directory"
@@ -188,7 +188,7 @@ fi
 echo "awk time offset hours BEG_ADJ= $BEG_ADJ"
 #exit
 FILES=`ls -1 $DIR/sys_*_*.txt $DIR/$METRIC_OUT`
-#echo "FILES = $FILES"
+echo "FILES = $FILES"
 for i in $FILES; do
  echo $i
   if [[ $i == *"_uptime.txt"* ]]; then
@@ -329,6 +329,10 @@ trows++; printf("\n") > NFL;
      }
 scatter
      END{
+       for (i=1; i <= 40; i++) {
+        trows++;
+        printf("\n") > NFL;
+       }
        trows++;
        printf("title\titp_metrics\tsheet\titp_metric\ttype\tscatter_straight\n") > NFL;
        trows++;
@@ -2872,6 +2876,58 @@ if [ "$SUM_FILE" != "" ]; then
      }
    ' 
 fi
+RESP=`find .. -name "CPU2017.001.log" | wc -l | awk '{printf("%s\n", $1);exit;}'`
+pwd
+echo "find .. -name cpu2017.*.log resp = $RESP"
+if [ "$RESP" == "1" -a "$PHASE_FILE" == "" ]; then
+  RESP=`find .. -name CPU2017.001.log`
+  echo "find .. -name cpu2017.*.log resp = $RESP"
+  PH=`awk '
+    BEGIN{mx=0;}
+    #/Copy .* of .* (base refrate) run .* finished at .*.  Total elapsed time:/{
+    /Copy .* of .* .base refrate. run .* finished at .* Total elapsed time:/{
+        bm = $4;
+        #printf("got cpu2017 line= %s\n", $4);
+    }
+#Workload elapsed time (copy 0 workload 1) = 67.605964 seconds
+    /Workload elapsed time .copy .* workload .*. = .* seconds/ {
+       mx++;
+       subphase[mx,1] = substr($7, 1, length($7)-1);
+       subphase[mx,2] = $9+0.0;
+    }
+    /  Rate Start: /{
+        s = $5;
+        s = substr(s, 2,length(s)-2);
+        tm_beg= s;
+        #printf("tm_beg= %s\n", s);
+    }
+    /  Rate End: /{
+        s = $5;
+        s = substr(s, 2, length(s)-2);
+        #printf("tm_end= %s\n", s);
+        tm = tm_beg;
+        for (i=1; i <= mx; i++) {
+          elap = subphase[i,2];
+          printf("%s_%s %.3f %.3f %.3f\n", bm, subphase[i,1], tm, tm+elap, elap);
+          tm += elap;
+        }
+        #printf("%s %s %s %.3f\n", bm, tm_beg, s, s-tm_beg);
+    }
+    ' $RESP`
+  echo  -e "$PH" > phase_cpu2017.txt
+  PHASE_FILE=phase_cpu2017.txt
+fi
+
+#Workload elapsed time (copy 0 workload 1) = 67.605964 seconds
+#Workload elapsed time (copy 0 workload 2) = 237.692794 seconds
+#Workload elapsed time (copy 0 workload 3) = 254.901038 seconds
+#Copy 0 of 525.x264_r (base refrate) run 1 finished at 2020-06-16 18:10:54.  Total elapsed time: 578.495129
+#Benchmark Times:
+#  Run Start:    2020-06-16 18:01:16 (1592355676)
+#  Rate Start:   2020-06-16 18:01:16 (1592355676.05476)
+#  Rate End:     2020-06-16 18:10:54 (1592356254.54992)
+
+echo "SHEETS= $SHEETS SKIP_XLS= $SKIP_XLS, xls_fl= $XLSX_FILE avg= $AVERAGE"
 if [ "$SHEETS" != "" -a "$SKIP_XLS" == "0" ]; then
    OPT_PH=
    if [ "$PHASE_FILE" != "" ]; then
@@ -2881,7 +2937,7 @@ if [ "$SHEETS" != "" -a "$SKIP_XLS" == "0" ]; then
    if [ "$MAX_VAL" != "" ]; then
      OPT_M=" -m $MAX_VAL "
    fi
-   if [ "$AVERAGE" != "0" ]; then
+   if [ "$AVERAGE" == "0" ]; then
      echo "python $SCR_DIR/tsv_2_xlsx.py $SHEETS" > /dev/stderr
      echo python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" $OPT_M -o $XLSX_FILE $OPT_PH -i "$IMAGE_STR" $SHEETS > /dev/stderr
      # default chart size is pretty small, scale chart size x,y by 2 each. def 1,1 seems to be about 15 rows high (on my MacBook)
