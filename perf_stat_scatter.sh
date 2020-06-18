@@ -571,6 +571,11 @@ awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v 
      }
 
 #abcd
+     rows=0;
+     for(i=0; i <= 40; i++) {
+       printf("\n");
+       rows++;
+     }
      printf("epoch\tts\trel_ts\tinstances:");
      for(i=0; i <= evt_idx; i++) {
        printf("\t%s", evt_inst[i]);
@@ -580,7 +585,6 @@ awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v 
           printf("\t%s", got_lkfor[k,5]);
        }
      }
-     rows=1;
      printf("\n");
      rows++;
      printf("title\t%s\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, pfx, sheet);
