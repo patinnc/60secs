@@ -16,14 +16,21 @@ AVERAGE=0
 MAX_VAL=
 TS_INIT=
 VERBOSE=0
+CLIP=
 
-while getopts "hvASd:e:m:N:P:x:X:" opt; do
+while getopts "hvASc:D:d:e:m:N:P:x:X:" opt; do
   case ${opt} in
     A )
       AVERAGE=1
       ;;
+    c )
+      CLIP=$OPTARG
+      ;;
     d )
       DIR=$OPTARG
+      ;;
+    D )
+      DEBUG_OPT=$OPTARG
       ;;
     e )
       END_TM=$OPTARG
@@ -55,6 +62,7 @@ while getopts "hvASd:e:m:N:P:x:X:" opt; do
       echo "   -A   flag indicating you want to average the same file from multiple dirs into 1 sheet."
       echo "          The default is to create 1 sheet per file per directory"
       echo "   -d dir containing sys_XX_* files created by 60secs.sh"
+      echo "   -D debug_opt_strings    used for debugging"
       echo "   -m max_val    any value in chart > this value will be replaced by 0.0"
       echo "   -N number_of_dirs  if you have more than 1 directories then you can limit the num of dirs with this option. Default process all"
       echo "   -P phase_file"
@@ -197,6 +205,12 @@ for i in $LST; do
   NUM_DIRS=$((NUM_DIRS+1))
 done
 oIFS=$IFS
+DIR_NUM_MX=0
+for i in $LST; do
+ DIR_NUM_MX=$(($DIR_NUM_MX+1))
+done
+DIR_NUM=0
+TS_BEG=`date +%s`
 for i in $LST; do
  pushd $i
  IFS="/" read -ra PARTS <<< "$(pwd)"
@@ -246,6 +260,14 @@ for i in $LST; do
  if [ "$MAX_VAL" != "" ]; then
    OPT_M=" -m $MAX_VAL "
  fi
+ OPT_CLIP=
+ if [ "$CLIP" != "" ]; then
+   OPT_CLIP=" -c $CLIP "
+ fi
+ OPT_DEBUG=
+ if [ "$DEBUG_OPT" != "" ]; then
+   OPT_DEBUG=" -D $DEBUG_OPT "
+ fi
  OPT_A=
  if [ "$AVERAGE" != "" ]; then
    if [ $NUM_DIRS -gt 1 ]; then
@@ -253,9 +275,9 @@ for i in $LST; do
    fi
  fi
  if [ $VERBOSE -gt 0 ]; then
- echo "$SCR_DIR/sys_2_tsv.sh $OPT_A -p \"$RPS\" $OPT_SKIP $OPT_M -d . $OPT_BEG_TM $OPT_END_TM -i \"*.png\" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets $OPT_PH -t $DIR &> tmp.jnk"
+ echo "$SCR_DIR/sys_2_tsv.sh $OPT_A -p \"$RPS\" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i \"*.png\" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets $OPT_PH -t $DIR &> tmp.jnk"
  fi
-       $SCR_DIR/sys_2_tsv.sh $OPT_A -p "$RPS" $OPT_SKIP $OPT_M -d . $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets $OPT_PH -t $DIR &> tmp.jnk
+       $SCR_DIR/sys_2_tsv.sh $OPT_A -p "$RPS" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets $OPT_PH -t $DIR &> tmp.jnk
  SM_FL=
  if [ -e $SUM_FILE ]; then
    SM_FL=$i/$SUM_FILE
@@ -265,13 +287,19 @@ for i in $LST; do
  if [ "$AVERAGE" == "1" ]; then
     echo -e "-A" >> $ALST
  fi
+ if [ "$CLIP" != "" ]; then
+    echo -e "-c $CLIP" >> $ALST
+ fi
  echo -e "-i\t\"$i/*.png\"" >> $ALST
  #echo -e "-x\t$i.xlsx" >> $ALST
  #echo -e "-o\tchart_new,dont_sum_sockets" >> $ALST
  popd
  FLS=`ls -1 $SM_FL $i/*txt.tsv`
  echo -e "${FLS}" >> $ALST
- echo -e "FLS: ${FLS}" > /dev/stderr
+ TS_CUR=`date +%s`
+ TS_DFF=$(($TS_CUR-$TS_BEG))
+ echo -e "FLS: dir_num= ${DIR_NUM} of ${DIR_NUM_MX}, elap_tm= $TS_DFF secs, ${FLS}" > /dev/stderr
+ DIR_NUM=$(($DIR_NUM+1))
  MYA=($i/*log.tsv)
  if [ "${#MYA}" != "0" ]; then
    FLS=`ls -1 $i/*log.tsv`
@@ -429,8 +457,13 @@ if [ $NUM_DIRS -gt 1 ]; then
     OPT_M=" -m $MAX_VAL "
   fi
       
+  TS_DFF=$(($TS_CUR-$TS_BEG))
+  echo "elap_tm= $TS_DFF"
   echo "about to do tsv_2_xls.py" > /dev/stderr
   echo "python $SCR_DIR/tsv_2_xlsx.py $OPT_A $OPT_M -f $ALST > tmp2.jnk"
         python $SCR_DIR/tsv_2_xlsx.py $OPT_A $OPT_M -f $ALST $SHEETS > tmp2.jnk
+  TS_CUR=`date +%s`
+  TS_DFF=$(($TS_CUR-$TS_BEG))
+  echo "elap_tm= $TS_DFF"
 fi
 
