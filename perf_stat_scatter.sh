@@ -14,13 +14,16 @@ BEG=
 SUM_FILE=
 END_TM=
 
-while getopts "hvb:c:e:f:o:p:s:S:l:" opt; do
+while getopts "hvb:c:D:e:f:o:p:s:S:l:" opt; do
   case ${opt} in
     b )
       BEG=$OPTARG
       ;;
     c )
       CHART_IN=$OPTARG
+      ;;
+    D )
+      DEBUG_OPT=$OPTARG
       ;;
     e )
       END_TM=$OPTARG
@@ -106,6 +109,13 @@ fi
 SHEET="perf stat"
 if [ "$SHEET_IN" != "" ]; then
   SHEET=$SHEET_IN
+fi
+
+if [ "$DEBUG_OPT" != "" ]; then
+  if [[ $DEBUG_OPT == *"skip_perf_stat_scatter"* ]]; then
+     echo "skipping $0 due do $DEBUG_OPT"
+     exit
+  fi
 fi
 
 # didn't collect lscpu.log for most of the data
@@ -571,7 +581,7 @@ awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v 
      }
 
 #abcd
-     rows=0;
+     rows=1;
      for(i=0; i <= 40; i++) {
        printf("\n");
        rows++;
