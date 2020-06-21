@@ -25,10 +25,12 @@ opened_wkbk = False
 closed_wkbk = False
 
 options_filename = ""
+clip = ""
 
-options, remainder = getopt.getopt(sys.argv[1:], 'Ab:e:f:i:m:o:P:p:s:v', [
+options, remainder = getopt.getopt(sys.argv[1:], 'Ab:c:e:f:i:m:o:P:p:s:v', [
                                                          'average',
                                                          'begin=',
+                                                         'clip=',
                                                          'end=',
                                                          'file=',
                                                          'images=',
@@ -52,6 +54,8 @@ for opt, arg in options:
         do_avg = True
     elif opt in ('-b', '--begin'):
         ts_beg = float(arg)
+    elif opt in ('-c', '--clip'):
+        clip   = arg
     elif opt in ('-e', '--end'):
         ts_end = float(arg)
     elif opt in ('-f', '--file'):
@@ -124,8 +128,9 @@ base_mx = -1
 for fo2 in range(len(fl_options)):
    fo = fo2
    print("fo= ", fo)
-   options, remainder = getopt.getopt(fl_options[fo][1:], 'Ai:m:o:P:p:s:v', [
+   options, remainder = getopt.getopt(fl_options[fo][1:], 'Ac:i:m:o:P:p:s:v', [
                                                             'average',
+                                                            'clip=',
                                                             'images=',
                                                             'max=',
                                                             'output=',
@@ -166,8 +171,9 @@ for bmi in range(base_mx+1):
    #   continue
    print("fo= ", fo)
    #options, remainder = getopt.getopt(sys.argv[1:], 'i:o:p:v', ['images=',
-   options, remainder = getopt.getopt(fl_options[fo][1:], 'Ai:m:o:P:p:s:v', [
+   options, remainder = getopt.getopt(fl_options[fo][1:], 'Ac:i:m:o:P:p:s:v', [
                                                             'average',
+                                                            'clip=',
                                                             'images=',
                                                             'max=',
                                                             'output=',
@@ -198,9 +204,11 @@ for bmi in range(base_mx+1):
        if opt in ('-i', '--images'):
            for x in glob.glob(arg):
               image_files.append(x)
+       elif opt in ('-c', '--clip'):
+           clip = arg
+           print("python clip= ", clip)
        elif opt in ('-o', '--output'):
            output_filename = arg
-           #print("output_filename= ", output_filename, file=sys.stderr)
        elif opt in ('-m', '--max'):
            max_val = float(arg)
        elif opt in ('-A', '--average'):
@@ -242,6 +250,7 @@ for bmi in range(base_mx+1):
    if opened_wkbk == False:
        print("+++open workbook output_filename", output_filename)
        workbook = xlsxwriter.Workbook(output_filename)
+       bold0 = workbook.add_format({'bold': 0})
        opened_wkbk = True
    
    def is_number(s):
@@ -502,15 +511,24 @@ for bmi in range(base_mx+1):
                     #  'categories': [wrksh_nm, drow_beg, dcol_cat+ph_add, drow_end, dcol_cat+ph_add],
                     jjj = dcol_cat-1
                     if len(data[ii]) <  1 or ii <= hrow_beg:
-                      continue
+                       continue
                     if data[ii][jjj] is None or data[ii][jjj] == '':
-                      continue
+                       continue
+                    if ii > drow_end:
+                       continue
                     tval = data[ii][jjj]
+                    in_phase = False
                     for jj in range(len(opt_phase)):
                        if tval >= opt_phase[jj][1] and (tval <= opt_phase[jj][2] or opt_phase[jj][2] == -1):
                           if do_avg == False or do_avg_write == True:
                              worksheet.write(ii, 0, opt_phase[jj][0])
+                             in_phase = True
                           break
+                    if in_phase == False and clip != "":
+                       #print("try to zero out row ", ii, " len= ", len(data[ii]))
+                       for ij in range(len(data[ii])):
+                           worksheet.write_blank(ii, ph_add+ij, None, bold0)
+
              if do_avg == False or do_avg_write == True:
                 chart1 = workbook.add_chart({'type': 'scatter', 'subtype': 'straight'})
           else:
