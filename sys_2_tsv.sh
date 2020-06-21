@@ -21,8 +21,9 @@ METRIC_AVG="metric_out.average"
 SKIP_XLS=0
 MAX_VAL=
 AVERAGE=0
+CLIP=
 
-while getopts "hvASb:d:e:m:o:P:p:i:s:t:x:" opt; do
+while getopts "hvASb:c:D:d:e:m:o:P:p:i:s:t:x:" opt; do
   case ${opt} in
     A )
       AVERAGE=1
@@ -30,8 +31,14 @@ while getopts "hvASb:d:e:m:o:P:p:i:s:t:x:" opt; do
     b )
       BEG_TM_IN=$OPTARG
       ;;
+    c )
+      CLIP=$OPTARG
+      ;;
     d )
       DIR=$OPTARG
+      ;;
+    D )
+      DEBUG_OPT=$OPTARG
       ;;
     e )
       END_TM=$OPTARG
@@ -71,6 +78,7 @@ while getopts "hvASb:d:e:m:o:P:p:i:s:t:x:" opt; do
       echo "Usage: $0 [-h] -d sys_data_dir [-v] [ -p prefix ]"
       echo "   -d dir containing sys_XX_* files created by 60secs.sh"
       echo "   -b beg_tm ending timestamp to clip time to"
+      echo "   -c clip_to_Phase  enter string of phase for clipping (like x264_r*)"
       echo "   -e end_tm ending timestamp to clip time to"
       echo "   -i \"image_file_name_str\" this option is passed to tsv_2_xlsx.py to identify image files to be inserted into the xlsx"
       echo "      For instance '-i \"*.png\"'. Note the dbl quotes around the glob. This keeps the cmdline from expanding the files. python will expand the glob."
@@ -337,9 +345,17 @@ scatter
        printf("title\titp_metrics\tsheet\titp_metric\ttype\tscatter_straight\n") > NFL;
        trows++;
        hn = split(hdr, harr, ",");
-       printf("hdrs\t%d\t%d\t%d\t%d\t1\n", trows, 3, -1, hn+1) > NFL;
-       trows_top = trows;
+       printf("hdrs\t%d\t%d\t%d\t%d\t1\n", trows+1, 3, -1, hn+1) > NFL;
+       #trows_top = trows;
        extr_col = 1;
+       printf("\t") > NFL;
+       for (i=1; i <= hn; i++) {
+          frm = sprintf("=subtotal(101, INDIRECT(ADDRESS(row()+2, column(), 1)):INDIRECT(ADDRESS(row()-1+%d, column(),1)))", mx);
+          printf("\t%s", frm) > NFL;
+       }
+       printf("\n") > NFL;
+       trows++;
+       trows_top = trows;
        printf("TS\tts_rel") > NFL;
        mb_mx=0;
        pct_mx=0;
@@ -352,6 +368,7 @@ scatter
        for (i=1; i <= hn; i++) {
           printf("\t%s", harr[i]) > NFL;
           str = tolower(harr[i]);
+          hdr_cols[harr[i]] = i+2;
           if (index(str, "mb/sec") > 0) {
              mb_arr[++mb_mx] = i+extr_col;
              #printf("MB hdr= %s, mx= %d\n", harr[i], mb_arr[mb_mx]) > "/dev/stderr";
@@ -387,7 +404,7 @@ scatter
           printf("%.3f\t%.3f", ts_epoch + tm_off, tm_off) > NFL;
           for (j=1; j <= n; j++) {
             val = arr[j]+0.0;
-            if ((index(harr[j], "MB/s") > 0 && index(harr[j], "metric_IO_bandwidth_disk_or_network_read") == 0) && val > 10000.0) {
+            if ((index(harr[j], "MB/s") > 0 && index(harr[j], "metric_IO_bandwidth_disk_or_network_read") == 0) && val > 100000.0) {
               val = 500.0;
             }
             printf("\t%s", val) > NFL;
@@ -503,13 +520,21 @@ scatter
        }
        #printf("--------got into metric sum_file= %s\n", sum_file) > "/dev/stderr";
        lkfor = "metric_";
-       for (j=1; j <= amx; j++) {
-          n = split(sv_aln[j], arr, ",");
-          str = arr[1];
-          if (substr(str, 1, length(lkfor)) == lkfor) {
-             str = substr(str, length(lkfor)+1, length(str));
-          }
-          printf("\titp\t%s\t=%s\n", str, arr[javg]) >> sum_file;
+#itp_metric_itp!INDIRECT(ADDRESS(42, 0, 4))
+#=subtotal(101, INDIRECT(ADDRESS(ROW()+6, COLUMN(), 4)):INDIRECT(ADDRESS(ROW()+100, COLUMN())))
+       for (j=1; j <= hn; j++) {
+          #str = harr[j];
+          #n = split(sv_aln[j], arr, ",");
+          #str = arr[1];
+          #cb = hdr_cols[str];
+          #frm = sprintf("=itp_metric_itp!subtotal(101, INDIRECT(ADDRESS(%d, %d, 4)):INDIRECT(ADDRESS(%d, %d)))", trow+1, cb, trow+mx, cb);
+          # =INDIRECT(ADDRESS(43, 5, 1,1,"itp_metric_itp"))
+          frm1 = sprintf("=INDIRECT(ADDRESS(%d, %d, 1, 1, \"itp_metric_itp\"))", trows_top, j+3);
+          frm2 = sprintf("=INDIRECT(ADDRESS(%d, %d, 1, 1, \"itp_metric_itp\"))", trows_top+1, j+3);
+          #if (substr(str, 1, length(lkfor)) == lkfor) {
+          #   str = substr(str, length(lkfor)+1, length(str));
+          #}
+          printf("\titp\t%s\t%s\n", frm1, frm2) >> sum_file;
        }
        printf("\n") >> sum_file;
        close(sum_file);
@@ -2253,8 +2278,12 @@ row += trows;
  fi
 
   if [[ $i == *"_perf_stat.txt"* ]]; then
+    OPT_D=
+    if [ "$DEBUG_OPT" != "" ]; then
+       OPT_D=" -D $DEBUG_OPT "
+    fi
     echo "do perf_stat data"
-    time $SCR_DIR/perf_stat_scatter.sh -b "$BEG"  -e "$END_TM"  -o "$OPTIONS"  -f $i -S $SUM_FILE > $i.tsv
+    time $SCR_DIR/perf_stat_scatter.sh $OPT_D -b "$BEG"  -e "$END_TM"  -o "$OPTIONS"  -f $i -S $SUM_FILE > $i.tsv
    SHEETS="$SHEETS $i.tsv"
   fi
 
@@ -2937,11 +2966,15 @@ if [ "$SHEETS" != "" -a "$SKIP_XLS" == "0" ]; then
    if [ "$MAX_VAL" != "" ]; then
      OPT_M=" -m $MAX_VAL "
    fi
+   OPT_C=
+   if [ "$CLIP" != "" ]; then
+     OPT_C=" -c $CLIP "
+   fi
    if [ "$AVERAGE" == "0" ]; then
      echo "python $SCR_DIR/tsv_2_xlsx.py $SHEETS" > /dev/stderr
-     echo python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" $OPT_M -o $XLSX_FILE $OPT_PH -i "$IMAGE_STR" $SHEETS > /dev/stderr
+     echo python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" $OPT_M -o $XLSX_FILE $OPT_C $OPT_PH -i "$IMAGE_STR" $SHEETS > /dev/stderr
      # default chart size is pretty small, scale chart size x,y by 2 each. def 1,1 seems to be about 15 rows high (on my MacBook)
-     python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" $OPT_M -o $XLSX_FILE $OPT_PH -i "$IMAGE_STR" $SHEETS
+     python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" $OPT_M -o $XLSX_FILE $OPT_C $OPT_PH -i "$IMAGE_STR" $SHEETS
      if [ "$DIR" == "." ];then
        UDIR=`pwd`
      else
