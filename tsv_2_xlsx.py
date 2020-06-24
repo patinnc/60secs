@@ -386,10 +386,14 @@ for bmi in range(base_mx+1):
           drow_end = int(data[drw][3])
           if drow_end == -1:
              for i in range(drow_beg, len(data)):
-                 drow_end = i
                  if len(data[i]) == 0:
                     break
+                 if i > drow_beg:
+                    drow_end = i-1
+                 else:
+                    drow_end = i
              data[drw][3] = str(drow_end)
+             print("found end data row= %d" % (drow_end))
           dcol_end = int(data[drw][4])+1
           for i in range(dcol_beg, dcol_end):
              ch_cols_used[i] = 1
