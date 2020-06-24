@@ -195,6 +195,15 @@ if [ "$BEG_TM_IN" != "" ]; then
 fi
 echo "awk time offset hours BEG_ADJ= $BEG_ADJ"
 #exit
+RESP=`find .. -name "CPU2017.001.log" | wc -l | awk '{printf("%s\n", $1);exit;}'`
+pwd
+echo "find .. -name cpu2017.*.log resp = $RESP"
+CPU2017LOG=
+if [ "$RESP" == "1" -a "$PHASE_FILE" == "" ]; then
+  RESP=`find .. -name CPU2017.001.log`
+  echo "find .. -name cpu2017.*.log resp = $RESP"
+  CPU2017LOG=$RESP
+fi
 FILES=`ls -1 $DIR/sys_*_*.txt $DIR/$METRIC_OUT`
 echo "FILES = $FILES"
 for i in $FILES; do
@@ -245,7 +254,7 @@ trows++; printf("\tdemand; vmstat or mpstat will confirm, which are commands 3 a
 trows++; printf("\n") > NFL;
 
        printf("title\tuptime\tsheet\tuptime\ttype\tline\n") > NFL;
-       printf("hdrs\t%d\t0\t%d\t2\t-1\n", trows+2, trows+mx+1) > NFL;
+       printf("hdrs\t%d\t0\t%d\t2\t-1\n", trows+2, trows+mx1) > NFL;
        for (i=1; i <= mx; i++) {
           printf("%s\n", sv[i]) > NFL;
        }
@@ -264,6 +273,7 @@ trows++; printf("\n") > NFL;
       BEGIN{
          beg=1;
          mx=0
+         hdr="";
          fl0=0;
          smp_intrvl=1.0;
       }
@@ -273,10 +283,26 @@ trows++; printf("\n") > NFL;
 #title	mpstat cpu= all
 #hdrs	2	1	62	10
 #CPU	%usr	%nice	%sys	%iowait	%irq	%soft	%steal	%guest	%gnice	%idle
-#all	10.66	10.44	3.84	0.22	0.00	0.13	0.00	0.00	0.00	74.72
+#all	10.66	10.44	3.84	0.22	0.00	0.13	0.00	0.00	0.00	74.722018
 
+       /^ Run .* base refrate ratio=.*, runtime=.*, copies=.*, / {
+        # Run 531.deepsjeng_r base refrate ratio=2.40, runtime=477.559603, copies=1, threads=1, power=0.00W, temp=0.00 degC, humidity=0.00%
+        if (match(FNM, /CPU2017.[0-9][0-9][0-9].log$/)) {
+           bm_nm = $2;
+           n = split($5, arr, /[=,]/);
+           bm_ratio = arr[2];
+           n = split($6, arr, /[=,]/);
+           bm_runtm = arr[2];
+           n = split($7, arr, /[=,]/);
+           bm_copies = arr[2];
+           #printf("got cpu2017.001.log bm= %s, ratio= %s, run_tm= %s, copies= %s ln= %s file= %s\n", bm_nm, bm_ratio, bm_runtm, bm_copies, $0, FNM);
+           #exit;
+        }
+      }
       {
 	FNM=ARGV[ARGIND];
+        sub(//,"")
+        #if (index(FNM, "CPU2017.*.log/) > 0) {
         if (index(FNM, "result.csv") > 0) {
            if (fl0 == 0) {
             printf("got result.csv= %s\n", FNM) > "/dev/stderr";
@@ -311,13 +337,12 @@ trows++; printf("\n") > NFL;
         }
         if (index(FNM, metric_file) > 0) {
           NFL=FNM ".tsv";
-          if (mx == 0) {
-             mx++;
+          if (hdr == "") {
              hdr = $0;
              printf("hdr= %s\n", hdr);
              next;
           } else {
-            sv_ln[mx++] = $0;
+            sv_ln[++mx] = $0;
           }
         }
         next;
@@ -341,15 +366,39 @@ scatter
         trows++;
         printf("\n") > NFL;
        }
+       GIPS_col_freq = -1;
+       GIPS_col_IPC  = -1;
+       got_GIPS = 0
+       hn = split(hdr, harr, ",");
+       extr_col = 1;
+       for (i=1; i <= hn; i++) {
+          if (index(harr[i], "metric_CPU operating frequency (in GHz)") > 0) {
+             GIPS_col_freq = i+extr_col;
+             got_GIPS++;
+          }
+          if (index(harr[i], "metric_TMAM_Info_CoreIPC") > 0) {
+             GIPS_col_IPC = i+extr_col;
+             got_GIPS++;
+          }
+       }
+       GIPS_extra_col = 0;
+       if (got_GIPS == 2) {
+         GIPS_extra_col = 1;
+         GIPS_hdr = "Instr/sec (1e9 instr/sec)";
+         GIPS_col_num = hn + 1 + extr_col;
+       }
+       printf("got GIPS_col_num= %d\n", GIPS_col_num) > "/dev/stderr";
        trows++;
        printf("title\titp_metrics\tsheet\titp_metric\ttype\tscatter_straight\n") > NFL;
        trows++;
-       hn = split(hdr, harr, ",");
-       printf("hdrs\t%d\t%d\t%d\t%d\t1\n", trows+1, 3, -1, hn+1) > NFL;
+       printf("hdrs\t%d\t%d\t%d\t%d\t1\n", trows+1, 3, -1, hn+1+GIPS_extra_col) > NFL;
        #trows_top = trows;
-       extr_col = 1;
        printf("\t") > NFL;
        for (i=1; i <= hn; i++) {
+          frm = sprintf("=subtotal(101, INDIRECT(ADDRESS(row()+2, column(), 1)):INDIRECT(ADDRESS(row()-1+%d, column(),1)))", mx);
+          printf("\t%s", frm) > NFL;
+       }
+       if (got_GIPS == 2) {
           frm = sprintf("=subtotal(101, INDIRECT(ADDRESS(row()+2, column(), 1)):INDIRECT(ADDRESS(row()-1+%d, column(),1)))", mx);
           printf("\t%s", frm) > NFL;
        }
@@ -395,6 +444,9 @@ scatter
              tmam_arr[++tmam_mx] = i+extr_col;
           }
        }
+       if (got_GIPS == 2) {
+          printf("\t%s", GIPS_hdr) > NFL;
+       }
        trows++;
        printf("\n") > NFL;
        for (i=1; i <= mx; i++) {
@@ -408,6 +460,11 @@ scatter
               val = 500.0;
             }
             printf("\t%s", val) > NFL;
+          }
+          if (got_GIPS == 2) {
+            frm = sprintf("=INDIRECT(ADDRESS(row(), column()-%d, 2))/INDIRECT(ADDRESS(row(), column()-%d,2))", GIPS_col_num-GIPS_col_IPC, GIPS_col_num-GIPS_col_freq);
+            #printf("GIPS_frm= %s\n", frm) > "/dev/stderr";
+            printf("\t%s", frm) > NFL;
           }
           trows++;
           printf("\n") > NFL;
@@ -494,12 +551,21 @@ scatter
        }
        if (pwr_mx > 0) {
          trows++;
-         printf("title\tPower/instruction)\tsheet\titp_metric\ttype\tscatter_straight\n") > NFL;
+         printf("title\tPower\tsheet\titp_metric\ttype\tscatter_straight\n") > NFL;
          trows++;
          printf("hdrs\t%d\t%d\t%d\t%d\t1", trows_top, 3, -1, 3) > NFL;
          for (j=1; j <= pwr_mx; j++) {
              printf("\t%d\t%d", pwr_arr[j], pwr_arr[j]) > NFL;
          }
+         trows++;
+         printf("\n") > NFL;
+       }
+       if (GIPS_extra_col > 0) {
+         trows++;
+         printf("title\tinstruction/sec (Bill_instr/sec)\tsheet\titp_metric\ttype\tscatter_straight\n") > NFL;
+         trows++;
+         printf("hdrs\t%d\t%d\t%d\t%d\t1", trows_top, 3, -1, 3) > NFL;
+         printf("\t%d\t%d", GIPS_col_num, GIPS_col_num) > NFL;
          trows++;
          printf("\n") > NFL;
        }
@@ -519,27 +585,31 @@ scatter
          exit;
        }
        #printf("--------got into metric sum_file= %s\n", sum_file) > "/dev/stderr";
+       if (bm_nm != "") {
+          printf("\tspecint\t%s\t%s\n", bm_nm, "spec_int substest") >> sum_file;
+          printf("\tspecint\t%s\t%s\n", bm_ratio, "spec_int ratio") >> sum_file;
+          printf("\tspecint\t%s\t%s\n", bm_runtm, "spec_int run_time") >> sum_file;
+          printf("\tspecint\t%s\t%s\n", bm_copies, "spec_int number copies") >> sum_file;
+       }
        lkfor = "metric_";
 #itp_metric_itp!INDIRECT(ADDRESS(42, 0, 4))
 #=subtotal(101, INDIRECT(ADDRESS(ROW()+6, COLUMN(), 4)):INDIRECT(ADDRESS(ROW()+100, COLUMN())))
-       for (j=1; j <= hn; j++) {
-          #str = harr[j];
-          #n = split(sv_aln[j], arr, ",");
-          #str = arr[1];
-          #cb = hdr_cols[str];
-          #frm = sprintf("=itp_metric_itp!subtotal(101, INDIRECT(ADDRESS(%d, %d, 4)):INDIRECT(ADDRESS(%d, %d)))", trow+1, cb, trow+mx, cb);
-          # =INDIRECT(ADDRESS(43, 5, 1,1,"itp_metric_itp"))
+       for (j=1; j <= (hn+GIPS_extra_col); j++) {
           frm1 = sprintf("=INDIRECT(ADDRESS(%d, %d, 1, 1, \"itp_metric_itp\"))", trows_top, j+3);
           frm2 = sprintf("=INDIRECT(ADDRESS(%d, %d, 1, 1, \"itp_metric_itp\"))", trows_top+1, j+3);
-          #if (substr(str, 1, length(lkfor)) == lkfor) {
-          #   str = substr(str, length(lkfor)+1, length(str));
-          #}
           printf("\titp\t%s\t%s\n", frm1, frm2) >> sum_file;
        }
        printf("\n") >> sum_file;
        close(sum_file);
      }
-   ' $DIR/result.csv $DIR/$METRIC_AVG $i
+   ' $CPU2017LOG $DIR/result.csv $DIR/$METRIC_AVG $i
+   pwd
+   echo "cpu2017log= $CPU2017LOG"
+   if [ "$CPU2017LOG" != "" ]; then
+     if [ -e $CPU2017LOG ]; then
+        echo "found -e $CPU2017LOG"
+     fi
+   fi
    SHEETS="$SHEETS $i.tsv"
   fi
 
@@ -2905,11 +2975,8 @@ if [ "$SUM_FILE" != "" ]; then
      }
    ' 
 fi
-RESP=`find .. -name "CPU2017.001.log" | wc -l | awk '{printf("%s\n", $1);exit;}'`
-pwd
-echo "find .. -name cpu2017.*.log resp = $RESP"
-if [ "$RESP" == "1" -a "$PHASE_FILE" == "" ]; then
-  RESP=`find .. -name CPU2017.001.log`
+if [ "$CPU2017LOG" != "" -a "$PHASE_FILE" == "" ]; then
+  RESP=$CPU2017LOG
   echo "find .. -name cpu2017.*.log resp = $RESP"
   PH=`awk '
     BEGIN{mx=0;}
