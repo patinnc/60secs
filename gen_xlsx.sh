@@ -17,8 +17,10 @@ MAX_VAL=
 TS_INIT=
 VERBOSE=0
 CLIP=
+G_SUM=()
+OPTIONS=
 
-while getopts "hvASc:D:d:e:m:N:P:x:X:" opt; do
+while getopts "hvASc:D:d:e:g:m:N:o:P:x:X:" opt; do
   case ${opt} in
     A )
       AVERAGE=1
@@ -35,8 +37,14 @@ while getopts "hvASc:D:d:e:m:N:P:x:X:" opt; do
     e )
       END_TM=$OPTARG
       ;;
+    g )
+      G_SUM+=("$OPTARG")
+      ;;
     m )
       MAX_VAL=$OPTARG
+      ;;
+    o )
+      OPTIONS=$OPTARG
       ;;
     N )
       NUM_DIR=$OPTARG
@@ -63,8 +71,11 @@ while getopts "hvASc:D:d:e:m:N:P:x:X:" opt; do
       echo "          The default is to create 1 sheet per file per directory"
       echo "   -d dir containing sys_XX_* files created by 60secs.sh"
       echo "   -D debug_opt_strings    used for debugging"
+      echo "   -g key=val    key value pairs to be added to summary sheet. use multiple -g k=v options to specify multiple key value pairs"
       echo "   -m max_val    any value in chart > this value will be replaced by 0.0"
       echo "   -N number_of_dirs  if you have more than 1 directories then you can limit the num of dirs with this option. Default process all"
+      echo "   -o options       comma separated options."
+      echo "         Currently only 'drop_summary' is supported which drops summary sheets if you have more than 1 (since the data will be in sum_all sheet"
       echo "   -P phase_file"
       echo "   -S    skip creating detail xlsx file, just do the summary all spreadsheet"
       echo "   -x xlsx_filename  This is passed to tsv_2_xlsx.py as the name of the xlsx. (you need to add the .xlsx)"
@@ -89,7 +100,6 @@ shift $((OPTIND -1))
 
 INPUT_DIR=$DIR
 
-
 if [ ! -e $DIR/60secs.log ]; then
    DIR_ORIG=$DIR
    RESP=`find $DIR -name 60secs.log | wc -l | awk '{$1=$1;print}'`
@@ -99,7 +109,8 @@ if [ ! -e $DIR/60secs.log ]; then
      RESP=`find $DIR -name $CKF | wc -l | awk '{$1=$1;print}'`
      if [ "$RESP" != "0" ]; then
        echo "found $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one."
-       RESP=`find $DIR -name $CKF`
+       #RESP=`find $DIR -name $CKF -print0 | sort -z | xargs -0 cat`
+       RESP=`find $DIR -name $CKF -print | sort | xargs `
        echo "found $CKF file in dir $RESP"
        STR=
        for ii in $RESP; do
@@ -268,16 +279,28 @@ for i in $LST; do
  if [ "$DEBUG_OPT" != "" ]; then
    OPT_DEBUG=" -D $DEBUG_OPT "
  fi
+ OPT_OPT=
+ if [ "$OPTIONS" != "" ]; then
+   OPT_OPT=",$OPTIONS "
+ fi
  OPT_A=
- if [ "$AVERAGE" != "" ]; then
+ if [ "$AVERAGE" != "0" ]; then
    if [ $NUM_DIRS -gt 1 ]; then
      OPT_A=" -A "
    fi
  fi
- if [ $VERBOSE -gt 0 ]; then
- echo "$SCR_DIR/sys_2_tsv.sh $OPT_A -p \"$RPS\" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i \"*.png\" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets $OPT_PH -t $DIR &> tmp.jnk"
+ OPT_G=
+ if [ "$G_SUM" != "" ]; then
+   for g in "${G_SUM[@]}"; do
+      OPT_G+=" -g $g "
+      #echo "build g opt= $OPT_G"
+   done
+   echo "new g opt= $OPT_G"
  fi
-       $SCR_DIR/sys_2_tsv.sh $OPT_A -p "$RPS" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets $OPT_PH -t $DIR &> tmp.jnk
+ if [ $VERBOSE -gt 0 ]; then
+ echo "$SCR_DIR/sys_2_tsv.sh $OPT_A $OPT_G -p \"$RPS\" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i \"*.png\" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets$OPT_OPT $OPT_PH -t $DIR &> tmp.jnk"
+ fi
+       $SCR_DIR/sys_2_tsv.sh $OPT_A $OPT_G -p "$RPS" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets$OPT_OPT $OPT_PH -t $DIR &> tmp.jnk
  SM_FL=
  if [ -e $SUM_FILE ]; then
    SM_FL=$i/$SUM_FILE
@@ -338,8 +361,9 @@ if [ $NUM_DIRS -gt 1 ]; then
   if [ -e $SUM_ALL ]; then
     rm $SUM_ALL
   fi
+  echo "ALST= $ALST" > /dev/stderr
   awk -v input_file="$ALST" -v sum_all="$SUM_ALL" -v sum_file="$SUM_FILE" '
-    BEGIN{sum_files=0;fls=0;}
+    BEGIN{sum_files=0;fls=0; fld_m=3;fld_v=4;}
     { if (index($0, sum_file) > 0) {
         flnm = $0;
         fls++;
@@ -348,16 +372,57 @@ if [ $NUM_DIRS -gt 1 ]; then
         while ((getline line < flnm) > 0) {
            ln++;
            if (ln <= 2) {
+              if (ln == 2) {
+                nh = split(line, hdrs, /\t/);
+                if (hdrs[3] == "Value" && hdrs[4] == "Metric") {
+                   fld_m=4; 
+                   fld_v=3; 
+                }
+              }
               continue;
            }
            n = split(line, arr, /\t/);
-           mtrc = arr[3];
+           mtrc = arr[fld_m];
            if (!(mtrc in mtrc_list)) {
               mtrc_list[mtrc] = ++mtrc_mx;
               mtrc_lkup[mtrc_mx] = mtrc;
            }
            mtrc_i = mtrc_list[mtrc];
-           mtrc_arr[fls,mtrc_i] = arr[4];
+           if (mtrc == "goto_sheet") {
+              gs=arr[fld_v]; 
+              if (!(gs in gs_list)) {
+                gs_list[gs] = ++gs_list_mx;
+                gs_lkup[gs_list_mx] = gs;
+              } else {
+                for (i=0; i <= 100; i++) {
+                   tnm = gs "_" i;
+                   if (!(tnm in gs_list)) {
+                     gs_list[tnm] = ++gs_list_mx;
+                     gs_lkup[gs_list_mx] = tnm;
+                     arr[fld_v] = tnm;
+                     break;
+                   }
+                }
+              }
+           }
+           if (mtrc == "data_sheet") {
+              ds=arr[fld_v]; 
+              if (!(ds in ds_list)) {
+                ds_list[ds] = ++ds_list_mx;
+                ds_lkup[ds_list_mx] = ds;
+              } else {
+                for (i=0; i <= 100; i++) {
+                   tnm = ds "_" i;
+                   if (!(tnm in ds_list)) {
+                     ds_list[tnm] = ++ds_list_mx;
+                     ds_lkup[ds_list_mx] = tnm;
+                     arr[fld_v] = tnm;
+                     break;
+                   }
+                }
+              }
+           }
+           mtrc_arr[fls,mtrc_i] = arr[fld_v];
         }
         close(flnm)
       }
@@ -375,7 +440,11 @@ if [ $NUM_DIRS -gt 1 ]; then
       for (i=1; i <= mtrc_mx; i++) {
         mtrc = mtrc_lkup[i];
         if (mtrc == "") { continue; }
-        printf("\titp\t%s", mtrc) > ofile;
+        if (mtrc == "data_sheet") {
+          printf("\t%s\t%s", mtrc_arr[1,i], mtrc) > ofile;
+        } else {
+          printf("\titp\t%s", mtrc) > ofile;
+        }
         for (j=1; j <= fls; j++) {
           val = mtrc_arr[j,i];
           printf("\t%s", val) > ofile;
@@ -452,6 +521,10 @@ if [ $NUM_DIRS -gt 1 ]; then
   if [ "$AVERAGE" == "1" ]; then
     OPT_A=" -A "
   fi
+  OPT_OPTIONS=
+  if [ "$OPTIONS" != "" ]; then
+    OPT_OPTIONS=" -O $OPTIONS "
+  fi
   OPT_M=
   if [ "$MAX_VAL" != "" ]; then
     OPT_M=" -m $MAX_VAL "
@@ -460,8 +533,8 @@ if [ $NUM_DIRS -gt 1 ]; then
   TS_DFF=$(($TS_CUR-$TS_BEG))
   echo "elap_tm= $TS_DFF"
   echo "about to do tsv_2_xls.py" > /dev/stderr
-  echo "python $SCR_DIR/tsv_2_xlsx.py $OPT_A $OPT_M -f $ALST > tmp2.jnk"
-        python $SCR_DIR/tsv_2_xlsx.py $OPT_A $OPT_M -f $ALST $SHEETS > tmp2.jnk
+  echo "python $SCR_DIR/tsv_2_xlsx.py $OPT_A $OPT_OPTIONS $OPT_M -f $ALST > tmp2.jnk"
+        python $SCR_DIR/tsv_2_xlsx.py $OPT_A $OPT_OPTIONS $OPT_M -f $ALST $SHEETS > tmp2.jnk
   TS_CUR=`date +%s`
   TS_DFF=$(($TS_CUR-$TS_BEG))
   echo "elap_tm= $TS_DFF"
