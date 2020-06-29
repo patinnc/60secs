@@ -26,8 +26,11 @@ closed_wkbk = False
 
 options_filename = ""
 clip = ""
+options_str = ""
+worksheet_charts = None
+ch_sh_arr = []
 
-options, remainder = getopt.getopt(sys.argv[1:], 'Ab:c:e:f:i:m:o:P:p:s:v', [
+options, remainder = getopt.getopt(sys.argv[1:], 'Ab:c:e:f:i:m:o:O:P:p:s:v', [
                                                          'average',
                                                          'begin=',
                                                          'clip=',
@@ -36,6 +39,7 @@ options, remainder = getopt.getopt(sys.argv[1:], 'Ab:c:e:f:i:m:o:P:p:s:v', [
                                                          'images=',
                                                          'max=',
                                                          'output=',
+                                                         'options=',
                                                          'phase=',
                                                          'prefix=',
                                                          'size=',
@@ -63,12 +67,20 @@ for opt, arg in options:
     elif opt in ('-o', '--output'):
         output_filename = arg
         #print("output_filename= ", output_filename, file=sys.stderr)
+    elif opt in ('-O', '--options'):
+        options_str = arg
     elif opt in ('-m', '--max'):
         max_val = float(arg)
+
+if options_str.find("drop_summary") >= 0:
+  got_drop_summary = True
+else:
+  got_drop_summary = False
 
 opt_fl = []
 fl_options = []
 file_list1 = []
+got_sum_all = 0
 
 if options_filename != "":
    opt_fl = []
@@ -88,6 +100,8 @@ if len(opt_fl) > 0:
           print("path? try= ", opt_fl[i][0])
           base = os.path.basename(opt_fl[i][0])
           file_list1.append({"fl_opt":fl_opt, "flnm":opt_fl[i][0], "base":base, "done":0})
+          if base == "sum_all.tsv":
+             got_sum_all += 1
        for j in range(len(opt_fl[i])):
            fl_options[fl_opt].append(opt_fl[i][j])
 else:
@@ -97,6 +111,7 @@ else:
        fl_options[fl_opt].append(sys.argv[i])
 
 
+print("got number of sum_all.tsv files= ", got_sum_all)
 #file_list = sorted(file_list1, key=lambda x: (x["base"], x["fl_opt"]))
 file_list = file_list1
 print(file_list)
@@ -128,12 +143,13 @@ base_mx = -1
 for fo2 in range(len(fl_options)):
    fo = fo2
    print("fo= ", fo)
-   options, remainder = getopt.getopt(fl_options[fo][1:], 'Ac:i:m:o:P:p:s:v', [
+   options, remainder = getopt.getopt(fl_options[fo][1:], 'Ac:i:m:o:O:P:p:s:v', [
                                                             'average',
                                                             'clip=',
                                                             'images=',
                                                             'max=',
                                                             'output=',
+                                                            'options=',
                                                             'phase=',
                                                             'prefix=',
                                                             'size=',
@@ -141,6 +157,8 @@ for fo2 in range(len(fl_options)):
                                                             ])
    for x in remainder:
       base = os.path.basename(x)
+      if got_sum_all > 0 and got_drop_summary and len(base) >= 7 and base[0:7] == "summary":
+         continue
       if not base in base_lkup:
          base_mx += 1
          base_lkup[base] = base_mx
@@ -152,6 +170,9 @@ for fo2 in range(len(fl_options)):
       base_i = base_lkup[base]
       base_count[base_i] += 1
       #base_fl_opt[base_i][fo] = 1
+
+worksheet_sum_all = None
+worksheet_sum_all_nm = None
 
 for i in range(base_mx+1):
     print("base_lkup[%s] = %d, count= %d" % (base_list[i], i, base_count[i]))
@@ -171,12 +192,13 @@ for bmi in range(base_mx+1):
    #   continue
    print("fo= ", fo)
    #options, remainder = getopt.getopt(sys.argv[1:], 'i:o:p:v', ['images=',
-   options, remainder = getopt.getopt(fl_options[fo][1:], 'Ac:i:m:o:P:p:s:v', [
+   options, remainder = getopt.getopt(fl_options[fo][1:], 'Ac:i:m:o:O:P:p:s:v', [
                                                             'average',
                                                             'clip=',
                                                             'images=',
                                                             'max=',
                                                             'output=',
+                                                            'options=',
                                                             'phase=',
                                                             'prefix=',
                                                             'size=',
@@ -209,6 +231,8 @@ for bmi in range(base_mx+1):
            print("python clip= ", clip)
        elif opt in ('-o', '--output'):
            output_filename = arg
+       elif opt in ('-O', '--options'):
+           options_str = arg
        elif opt in ('-m', '--max'):
            max_val = float(arg)
        elif opt in ('-A', '--average'):
@@ -252,6 +276,26 @@ for bmi in range(base_mx+1):
        workbook = xlsxwriter.Workbook(output_filename)
        bold0 = workbook.add_format({'bold': 0})
        opened_wkbk = True
+       if options_str.find("chart_sheet") >= 0:
+          wrksh_nm = "charts"
+          worksheet_charts = workbook.add_worksheet(wrksh_nm)
+          worksheet_charts_nm = wrksh_nm
+          ch_sh_row = -1
+       if got_sum_all > 0:
+          if fo in prefix_dict:
+             prefix = prefix_dict[fo]
+          else:
+             prefix = ""
+         
+          sheet_nm = "sum_all"
+          wrksh_nm = sheet_nm
+          if len(prefix) > 0:
+             wrksh_nm = sheet_nm + "_" + prefix
+          worksheet = workbook.add_worksheet(wrksh_nm)
+          worksheet_sum_all = worksheet
+          worksheet_sum_all_nm = wrksh_nm
+          wksheet_nms[wrksh_nm] = 1
+          bold = workbook.add_format({'bold': 1})
    
    def is_number(s):
        try:
@@ -344,6 +388,8 @@ for bmi in range(base_mx+1):
               #print(data[i][j])
           #print("")
       
+      if got_sum_all > 0 and got_drop_summary and len(sheet_nm) >= 7 and sheet_nm[0:7] == "summary":
+         continue
       if fo in prefix_dict:
          prefix = prefix_dict[fo]
       else:
@@ -355,21 +401,28 @@ for bmi in range(base_mx+1):
       wrksh_nm = sheet_nm
       if len(prefix) > 0:
          wrksh_nm = sheet_nm + "_" + prefix
+      suffix = ""
       if do_avg == False or do_avg_write == True:
-         if wrksh_nm in wksheet_nms:
+         if sheet_nm == "sum_all":
+            worksheet = worksheet_sum_all
+            wrksh_nm  = worksheet_sum_all_nm
+         else:
+            if wrksh_nm in wksheet_nms:
              for i in range(100):
-               tnm = wrksh_nm + "_" + str(i)
+               suffix = "_" + str(i)
+               tnm = wrksh_nm + suffix
                #print("ck if worksheet name %s exists" % (tnm), file=sys.stderr)
                if not tnm in wksheet_nms:
                   if verbose:
                      print("use worksheet name %s" % (tnm), file=sys.stderr)
                   wrksh_nm = tnm
                   break
-         print("use worksheet name %s" % (wrksh_nm), file=sys.stderr)
-         worksheet = workbook.add_worksheet(wrksh_nm)
+             print("use worksheet name %s" % (wrksh_nm), file=sys.stderr)
+            worksheet = workbook.add_worksheet(wrksh_nm)
          wksheet_nms[wrksh_nm] = 1
          bold = workbook.add_format({'bold': 1})
    
+
       for c in range(chrts):
           #print("got chrt[%d] for x= %s\n" % (c, x))
           title_rw = ch_arr[c][0][1]
@@ -411,11 +464,16 @@ for bmi in range(base_mx+1):
              print("dude, mx= ", mx, ", len(data)= ", len(data))
         
           for i in range(drow_end-drow_beg+1):
+              ij = i+drow_beg
+              if len(wrksh_nm) >= 7 and wrksh_nm[0:7] == "summary" and len(data[ij]) >= 4:
+                  #print("---- got1 summary wrk_sh= %s suffix= %s len= %d col3= %s" % (wrksh_nm, suffix, len(data[ij]), data[ij][3]), file=sys.stderr)
+                  if data[ij][3] == "data_sheet" and suffix != "" and len(data[ij][2]) > len(suffix) and data[ij][2][-len(suffix)] != suffix:
+                     # so we haven't already added the suffix to the sheet name
+                     data[ij][2] += suffix
               for h in range(hcol_end):
                   ck_max = False
                   if max_val > 0.0 and h in ch_cols_used:
                      ck_max = True
-                  ij = i+drow_beg
                   if not ij in fn_bs_sum[fn_bs_i]:
                      fn_bs_sum[fn_bs_i][ij] = {}
                      fn_bs_n[fn_bs_i][ij] = {}
@@ -460,8 +518,19 @@ for bmi in range(base_mx+1):
                 if not i in fn_bs_sum[fn_bs_i]:
                    worksheet.write_row(i, ph_add, data[i])
          else:
+            doing_sum_all = False
+            if len(wrksh_nm) >= 7 and wrksh_nm[0:7] == "sum_all":
+               doing_sum_all = True
             for i in range(len(data)):
-                worksheet.write_row(i, ph_add, data[i])
+              if doing_sum_all and len(data[i]) >= 3 and data[i][2] == "goto_sheet":
+                #print("---- got1 summary wrk_sh= %s suffix= %s len= %d col3= %s" % (wrksh_nm, suffix, len(data[ij]), data[ij][3]), file=sys.stderr)
+                for j in range(len(data[i])):
+                   if j <= 2:
+                     worksheet.write(i, j, data[i][j])
+                   else:
+                     worksheet.write_url(i, j,  "internal:"+data[i][j]+"!A1")
+              else:
+                   worksheet.write_row(i, ph_add, data[i])
       
       for c in range(chrts):
           dcol_cat = -1
@@ -538,7 +607,12 @@ for bmi in range(base_mx+1):
           else:
              if ch_type != "copy":
                 if do_avg == False or do_avg_write == True:
-                   chart1 = workbook.add_chart({'type': ch_type})
+                   if ch_type == "line_stacked":
+                      print("chart_type2= %s, use_cats= %s" % (ch_type, use_cats), file=sys.stderr)
+                      chart1 = workbook.add_chart({'type': "area", 'subtype': 'stacked'})
+                      #chart1 = workbook.add_chart({'type': "line", 'subtype': 'stacked'})
+                   else:
+                      chart1 = workbook.add_chart({'type': ch_type})
           if ch_type == "copy":
              #print("chart_type= copy", file=sys.stderr)
              continue
@@ -589,7 +663,17 @@ for bmi in range(base_mx+1):
                       ch_top_at_row = ch_array[ch_ln_prev][1] + 0
                       ch_left_at_col = ch_array[ch_ln_prev][2] + int(ch_size[2])
                 #print("sh %s ch %s row= %d col= %d" % (sheet_nm, title, ch_top_at_row, ch_left_at_col))
-             rc = worksheet.insert_chart(ch_top_at_row, ch_left_at_col, chart1, ch_opt)
+                if worksheet_charts != None:
+                   if c == 0:  # first chart of row
+                      ch_sh_row += 1
+                      if ch_sh_row > 0:
+                         ch_top_at_row = ch_sh_arr[ch_sh_row-1][0] + int(ch_size[2]*ch_size[1])
+                      ch_sh_arr.append([ch_top_at_row, ch_left_at_col])
+                   ch_top_at_row = ch_sh_arr[ch_sh_row][0]
+             if worksheet_charts != None:
+                rc = worksheet_charts.insert_chart(ch_top_at_row, ch_left_at_col, chart1, ch_opt)
+             else:
+                rc = worksheet.insert_chart(ch_top_at_row, ch_left_at_col, chart1, ch_opt)
              if rc == -1:
                 print("insert chart failed for sheet= %s, chart= %s, row_beg= %d hcol_end= %d\n" % (sheet_nm, title, hrow_beg, hcol_end), file=sys.stderr)
              ch_array.append([sheet_nm, ch_top_at_row, ch_left_at_col])
