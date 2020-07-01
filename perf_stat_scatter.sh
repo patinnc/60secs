@@ -1,4 +1,4 @@
-/#!/bin/bash
+#!/bin/bash
 
 # arg1 is prf stat file
 # arg2 (optional) is specint .log
@@ -311,11 +311,12 @@ awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v 
    if (evt == "") {
      next;
    }
-   if (options != "" && skt_inc != 0 && index(options, "dont_sum_sockets") > 0) {
+   if (options != "" && skt_incr != 0 && index(options, "dont_sum_sockets") > 0) {
       evt = evt " " skt;
    }
    tmr=arr[5+skt_incr];
    pct=arr[6+skt_incr];
+   #printf("ts= %s, skt= %s, inst= %s val= %s, evt= %s, tmr= %s, pct= %s\n", ts, skt, inst, val, evt, tmr, pct) > "/dev/stderr";
    if ( ck_row[ts,skt] != ts","skt) {
       row++;
       ck_row[ts,skt] = ts","skt;
@@ -325,6 +326,7 @@ awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v 
      skt_idx++;
      skt_num[skt]=skt_idx;
      skt_lkup[skt_idx]=skt;
+     printf("skt_lkup[%d]= %s\n", skt_idx, skt) > "/dev/stderr";
    }
    if ( evts[evt] != evt) {
      evts[evt] = evt;
@@ -497,12 +499,14 @@ awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v 
      lkfor[kmx,4]="cycles";  # get the instances from the first lkfor event
      nwfor[kmx,1]="TMAM_Backend_Bound_BadSpec(%)";
 
+     printf("perf_stat awk options= %s, skt_idx= %s\n", options, skt_idx) > "/dev/stderr";
 
      if (options != "" && index(options, "dont_sum_sockets") > 0) {
        kmx_nw = kmx;
        for (k=1; k <= kmx; k++) { 
           got_it=0;
           for (kk=1; kk <= got_lkfor[k,2]; kk++) {
+             #printf("got lkfor[%d,%d]= %s\n", k, kk, lkfor[k,kk]) > "/dev/stderr";
              if (lkfor[k,kk] != "interval" && lkfor[k,kk] != "instances") {
                got_it = 1;
                break;
@@ -529,6 +533,7 @@ awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v 
                  }
               }
               nwfor[kmx_nw,1]=nwfor[k,1] " " skt_lkup[sk];
+              #printf("got new got_lkfor[%d,%d]= %s\n", kmx_nw, 1, nwfor[kmx_nw,1]) > "/dev/stderr";
             }
             for (kk=1; kk <= got_lkfor[k,2]; kk++) {
                if (lkfor[k,kk] != "interval" && lkfor[k,kk] != "instances") {
@@ -552,6 +557,8 @@ awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v 
      for(i=0; i <= evt_idx; i++) {
        for (k=1; k <= kmx; k++) { 
          for (j=1; j <= got_lkfor[k,2]; j++) { 
+           #printf("i= %d, evt_idx= %d, k= %d, kmx= %d, j= %d, got_lkfor[%d,2]= %d, evt_lkup[i]= %s, lkfor[k,j]= %s\n",
+           #   i, evt_idx, k, kmx, j, k, got_lkfor[k,2], evt_lkup[i], lkfor[k,j]) > "/dev/stderr";
            if (evt_lkup[i] == lkfor[k,j]) {
              lkup[k,j] = i
              got_lkfor[k,1]++;
@@ -620,9 +627,11 @@ awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v 
        cols++;
      }
      for (k=1; k <= kmx; k++) { 
+          #printf("ck nwfor[%d,1]= %s, got_lkfor1= %d, got_lkfor2= %d\n", k, nwfor[k,1], got_lkfor[k,1], got_lkfor[k,2]) > "/dev/stderr";
        if (got_lkfor[k,1] == got_lkfor[k,2] || (got_lkfor[k,"typ_match"] == "require_any" && got_lkfor[k,1] > 0)) {
           printf("\t%s", nwfor[k,1]);
           col_hdr[cols] = nwfor[k,1];
+          #printf("got nwfor[%d,1]= %s\n", k, nwfor[k,1]) > "/dev/stderr";
           if (index(nwfor[k,1], "GB/s") > 0) {
             bw_cols[++bw_cols_mx] = cols;
           }
@@ -761,7 +770,7 @@ awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v 
            val = sum[k] * got_lkfor[k,3];
            prt_it=1;
          }
-         if (got_lkfor[k,4] == "formula" && got_lkfor[k,1] > 0) {
+         if (got_lkfor[k,4] == "formula" && got_lkfor[k,1] == got_lkfor[k,2]) {
            val =  got_lkfor[k,3];
            prt_it=1;
          }
@@ -811,6 +820,7 @@ awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v 
        }
        printf("\n");
      }
+     printf("got bw_cols_mx= %d\n", bw_cols_mx) >> "/dev/stderr";
      if (bw_cols_mx > 0) {
        printf("\ntitle\t%s mem bw\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, pfx, sheet);
        printf("hdrs\t%d\t%d\t%d\t%d\t%d", rows+1, bcol+1, -1, evt_idx+extra_cols+4, 2);
@@ -842,7 +852,10 @@ awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v 
              if (sum_type[i_sum] == 1) {
                 divi = sum_tmax[i_sum] - sum_tmin[i_sum];
              }
-             printf("%s\t%s\t%s\t%f\n", sum_res[i_sum], "perf_stat", sum_prt[i_sum], (divi > 0 ? sum_tot[i_sum]/divi : 0.0)) >> sum_file;
+             ky = sum_prt[i_sum];
+             vl = (divi > 0 ? sum_tot[i_sum]/divi : 0.0);
+             printf("got perf_stat %s\t%f\tsum_tot= %s\n", ky, vl, sum_tot[i_sum]) >> "/dev/stderr";
+             printf("%s\t%s\t%f\t%s\n", sum_res[i_sum], "perf_stat", vl, ky) >> sum_file;
           }
        }
    }' $FILES $SPECINT_LOG
