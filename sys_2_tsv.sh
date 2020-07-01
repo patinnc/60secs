@@ -1102,7 +1102,7 @@ trows++; printf("\t$ power") > NFL;
                 n = sum_tmax[i_sum] - sum_tmin[i_sum];
              }
              avg = (n > 0.0 ? sum_tot[i_sum]/n : 0.0);
-             printf("%s\t%s\t%s\t%f\n", sum_res[i_sum], tool, sum_prt[i_sum], avg) >> sum_file;
+             printf("%s\t%s\t%f\t%s\n", sum_res[i_sum], tool, avg, sum_prt[i_sum]) >> sum_file;
              stdev = 0.0;
              if (index(sum_opt[i_sum], "stdev") > 0) {
                 if (n > 0.0) {
@@ -1111,10 +1111,10 @@ trows++; printf("\t$ power") > NFL;
                 }
              }
              if (index(sum_opt[i_sum], "%stdev") > 0) {
-                printf("%s\t%s\t%s %%stdev\t%f\n",  sum_res[i_sum], tool, sum_prt[i_sum], 100.0*stdev/avg) >> sum_file;
+                printf("%s\t%s\t%f\t%s %%stdev\n",  sum_res[i_sum], tool, 100.0*stdev/avg, sum_prt[i_sum]) >> sum_file;
              }
              else if (index(sum_opt[i_sum], "stdev") > 0) {
-                printf("%s\t%s\t%s stdev\t%f\n",  sum_res[i_sum], tool, sum_prt[i_sum], stdev) >> sum_file;
+                printf("%s\t%s\t%f\t%s stdev\n",  sum_res[i_sum], tool, stdev, sum_prt[i_sum]) >> sum_file;
              }
           }
      }
@@ -1317,7 +1317,7 @@ trows++; printf("\t\n") > NFL;
           for (i_sum=1; i_sum <= n_sum; i_sum++) {
              n = sum_occ[i_sum];
              avg = (n > 0.0 ? sum_tot[i_sum]/n : 0.0);
-             printf("%s\t%s\t%s\t%f\n",  sum_res[i_sum], "vmstat", sum_prt[i_sum], avg) >> sum_file;
+             printf("%s\t%s\t%f\t%s\n",  sum_res[i_sum], "vmstat", avg, sum_prt[i_sum]) >> sum_file;
              stdev = 0.0;
              if (index(sum_opt[i_sum], "stdev") > 0) {
                 if (n > 0.0) {
@@ -1326,10 +1326,10 @@ trows++; printf("\t\n") > NFL;
                 }
              }
              if (index(sum_opt[i_sum], "%stdev") > 0) {
-                printf("%s\t%s\t%s %%stdev\t%f\n",  sum_res[i_sum], "vmstat", sum_prt[i_sum], 100.0*stdev/avg) >> sum_file;
+                printf("%s\t%s\t%f\t%s %%stdev\n",  sum_res[i_sum], "vmstat", 100.0*stdev/avg, sum_prt[i_sum]) >> sum_file;
              }
              else if (index(sum_opt[i_sum], "stdev") > 0) {
-                printf("%s\t%s\t%s stdev\t%f\n",  sum_res[i_sum], "vmstat", sum_prt[i_sum], stdev) >> sum_file;
+                printf("%s\t%s\t%f\t%s stdev\n",  sum_res[i_sum], "vmstat", stdev, sum_prt[i_sum]) >> sum_file;
              }
           }
        }
@@ -2098,7 +2098,9 @@ row += trows;
              if (sum_type[i_sum] == 1) {
                 divi = sum_tmax[i_sum] - sum_tmin[i_sum];
              }
-             printf("%s\t%s\t%s\t%f\n", sum_res[i_sum], "iostat", sum_prt[i_sum], (divi > 0 ? sum_tot[i_sum]/divi : 0.0)) >> sum_file;
+             ky = sum_prt[i_sum];
+             vl = (divi > 0 ? sum_tot[i_sum]/divi : 0.0);
+             printf("%s\t%s\t%f\t%s\n", sum_res[i_sum], "iostat", vl, ky) >> sum_file;
           }
        }
      }
@@ -2227,7 +2229,9 @@ row += trows;
                 divi = sum_tmax[i_sum] - sum_tmin[i_sum];
              }
              if (dev_str != "lo") {
-             printf("%s\t%s %s\t%s\t%f\n", sum_res[i_sum], "sar_net", dev_str, sum_prt[i_sum], (divi > 0 ? sum_tot[i_sum]/divi : 0.0)) >> sum_file;
+             ky = sum_prt[i_sum];
+             vl = (divi > 0 ? sum_tot[i_sum]/divi : 0.0);
+             printf("%s\t%s %s\t%f\t%s\n", sum_res[i_sum], "sar_net", dev_str, vl, ky) >> sum_file;
              }
           }
           for (i_sum=1; i_sum <= n_sum; i_sum++) {
@@ -2980,7 +2984,9 @@ row += trows;
              if (sum_type[i_sum] == 1) {
                 divi = sum_tmax[i_sum] - sum_tmin[i_sum];
              }
-             printf("%s\t%s\t%s\t%f\n", sum_res[i_sum], "nicstat", sum_prt[i_sum], (divi > 0 ? sum_tot[i_sum]/divi : 0.0)) >> sum_file;
+             ky = sum_prt[i_sum];
+             vl = (divi > 0 ? sum_tot[i_sum]/divi : 0.0);
+             printf("%s\t%s\t%f\t%s\n", sum_res[i_sum], "nicstat", vl, ky) >> sum_file;
           }
        }
    }
@@ -3215,11 +3221,15 @@ if [ "$SHEETS" != "" -a "$SKIP_XLS" == "0" ]; then
    if [ "$CLIP" != "" ]; then
      OPT_C=" -c $CLIP "
    fi
+   OPT_O=
+   if [ "$OPTIONS" != "" ]; then
+     OPT_O=" -O $OPTIONS "
+   fi
    if [ "$AVERAGE" == "0" ]; then
      echo "python $SCR_DIR/tsv_2_xlsx.py $SHEETS" > /dev/stderr
-     echo python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" $OPT_M -o $XLSX_FILE $OPT_C $OPT_PH -i "$IMAGE_STR" $SHEETS > /dev/stderr
+     echo python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" $OPT_O $OPT_M -o $XLSX_FILE $OPT_C $OPT_PH -i "$IMAGE_STR" $SHEETS > /dev/stderr
      # default chart size is pretty small, scale chart size x,y by 2 each. def 1,1 seems to be about 15 rows high (on my MacBook)
-     python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" $OPT_M -o $XLSX_FILE $OPT_C $OPT_PH -i "$IMAGE_STR" $SHEETS
+     python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" $OPT_O $OPT_M -o $XLSX_FILE $OPT_C $OPT_PH -i "$IMAGE_STR" $SHEETS
      if [ "$DIR" == "." ];then
        UDIR=`pwd`
      else
