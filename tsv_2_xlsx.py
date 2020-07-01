@@ -27,6 +27,7 @@ closed_wkbk = False
 options_filename = ""
 clip = ""
 options_str = ""
+options_str_top = ""
 worksheet_charts = None
 ch_sh_arr = []
 
@@ -69,6 +70,8 @@ for opt, arg in options:
         #print("output_filename= ", output_filename, file=sys.stderr)
     elif opt in ('-O', '--options'):
         options_str = arg
+        options_str_top = arg
+        print("options_str_top= ", options_str_top, file=sys.stderr)
     elif opt in ('-m', '--max'):
         max_val = float(arg)
 
@@ -577,6 +580,8 @@ for bmi in range(base_mx+1):
           print("sheet= %s ch= %d hro= %d hc= %d hce= %d, dr= %d, dre= %d" % (sheet_nm, c, hrow_beg, hcol_beg, hcol_end, drow_beg, drow_end))
           ch_style = 10
           chart1 = None
+          if ch_type == "scatter_straight" and options_str_top.find("line_for_scatter") > -1:
+             ch_type = "line"
           if ch_type == "scatter_straight":
              if ph_done == 0 and ph_add == 1 and dcol_cat > 0:
                 ph_done = 1
