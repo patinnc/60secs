@@ -24,7 +24,7 @@ AVERAGE=0
 CLIP=
 G_SUM=()
 
-while getopts "hvASb:c:D:d:e:g:m:o:P:p:i:s:t:x:" opt; do
+while getopts "hvASb:c:D:d:e:g:i:m:o:P:p:s:t:x:" opt; do
   case ${opt} in
     A )
       AVERAGE=1
@@ -119,6 +119,7 @@ while getopts "hvASb:c:D:d:e:g:m:o:P:p:i:s:t:x:" opt; do
   esac
 done
 shift $((OPTIND -1))
+
 
 if [ "$DIR" == "" ]; then
   echo "you must enter a dir '-d dir_path' containing sys_*_*.txt files created by 60secs.sh"
@@ -284,6 +285,11 @@ trows++; printf("\n") > NFL;
     ls -l
 #time,metric_CPU operating frequency (in GHz),metric_CPU utilization %,metric_CPU utilization% in kernel mode,metric_CPI,metric_kernel_CPI,metric_L1D MPI (includes data+rfo w/ prefetches),metric_L1D demand data read hits per instr,metric_L1-I code read misses (w/ prefetches) per instr,metric_L2 demand data read hits per instr,metric_L2 MPI (includes code+data+rfo w/ prefetches),metric_L2 demand data read MPI,metric_L2 demand code MPI,metric_LLC code read MPI (demand+prefetch),metric_LLC data read MPI (demand+prefetch),metric_LLC total HITM (per instr),metric_LLC total HIT clean line forwards (per instr),metric_Average LLC data read miss latency (in clks),metric_Average LLC data read miss latency (in ns),metric_Average LLC data read miss latency for LOCAL requests (in ns),metric_Average LLC data read miss latency for REMOTE requests (in ns),metric_ITLB MPI,metric_DTLB load MPI,metric_DTLB 2MB large page load MPI,metric_DTLB store MPI,metric_NUMA %_Reads addressed to local DRAM,metric_NUMA %_Reads addressed to remote DRAM,metric_uncore frequency GHz,metric_package power (watts),metric_DRAM power (watts),metric_memory bandwidth read (MB/sec),metric_memory bandwidth write (MB/sec),metric_memory bandwidth total (MB/sec),metric_UPI Data transmit BW (MB/sec) (only data),metric_UPI Data transmit BW (MB/sec) (includes control),metric_UPI Transmit utilization_% (includes control),metric_IO_bandwidth_disk_or_network_writes (MB/sec),metric_IO_bandwidth_disk_or_network_reads (MB/sec),metric_TMAM_Info_cycles_both_threads_active(%),metric_TMAM_Info_CoreIPC,metric_TMAM_Frontend_Bound(%),metric_TMAM_Bad_Speculation(%),metric_TMAM_Backend_bound(%),metric_TMAM_Retiring(%)
 #1,2.40600733,16.99837547,8.62996838,1.23067363,2.46693285,0.01511105,0.22598270,0.01507297,0.00307467,0.01691751,0.00439661,0.00624014,0.00052181,0.00398891,0.00019856,0.00019378,318.59677510,118.15075255,99.19535669,140.57104104,0.00018185,0.00096670,0.00010964,0.00012614,52.91514060,47.08485940,2.69652768,66.36900000,20.17800000,3714.28599040,1431.27577600,5145.56176640,2554.91950720,3804.67245600,5.94338708,33.62602240,1380.14116480,15.50708414,1.62512623,38.76328927,4.78888272,48.60994847,24.53865285
+    #CPU(s):                48
+    NCPUS=1
+    if [ -e lscpu.txt ]; then
+     NCPUS=`awk '/^CPU.s.:/ { printf("%s\n", $2);exit;}' lscpu.txt`
+    fi
     SPIN_TXT=
     if [ "$CPU2017LOG" != "" ]; then
       #SPIN_TXT=`dirname $CPU2017LOG`
@@ -303,7 +309,7 @@ trows++; printf("\n") > NFL;
          SPIN_TXT=$DIR/../spin.txt
       fi
     fi
-    echo "========SPIN_TXT5= $SPIN_TXT dir= $DIR i= $i, average= $AVERAGE" > /dev/stderr
+    echo "========SPIN_TXT5= $SPIN_TXT dir= $DIR i= $i, average= $AVERAGE, NCPUS= $NCPUS" > /dev/stderr
     awk -v do_avg="$AVERAGE" -v sum_file="$SUM_FILE" -v metric_file="$METRIC_OUT" -v metric_avg="$METRIC_AVG" -v pfx="$PFX" '
       BEGIN{
          beg=1;
@@ -359,11 +365,12 @@ trows++; printf("\n") > NFL;
            # started on Fri Jun  5 23:17:03 2020 EPOCH 1591399023
            if (index($0, "# started on ") == 1) {
              n = split($0, arr, /[ ,]/);
-             ts_mon = arr[5];
-             ts_day = arr[6];
-             ts_time = arr[7];
-             ts_year = arr[8];
-             ts_epoch = arr[10];
+             ts_mon  = $5;
+             ts_day  = $6;
+             ts_time = $7;
+             ts_year = $8;
+             ts_epoch = $10;
+             printf("ts_epoch= %s for line= %s\n", ts_epoch, $0) > "/dev/stderr";
              got_result_csv_epoch=1;
              next;
              #nextfile;
@@ -3202,6 +3209,17 @@ if [ "$CPU2017LOG" != "" -a "$PHASE_FILE" == "" ]; then
   PHASE_FILE=phase_cpu2017.txt
 fi
 
+if [ "$PHASE_FILE" == "" ]; then
+  if [ -e phase.txt ]; then
+    echo "got phase.txt file"
+    PHASE_FILE=phase.txt
+  fi
+  if [ -e ../phase.txt ]; then
+    echo "got ../phase.txt file"
+    PHASE_FILE=../phase.txt
+  fi
+fi
+
 #Workload elapsed time (copy 0 workload 1) = 67.605964 seconds
 #Workload elapsed time (copy 0 workload 2) = 237.692794 seconds
 #Workload elapsed time (copy 0 workload 3) = 254.901038 seconds
@@ -3230,10 +3248,10 @@ if [ "$SHEETS" != "" -a "$SKIP_XLS" == "0" ]; then
      OPT_O=" -O $OPTIONS "
    fi
    if [ "$AVERAGE" == "0" ]; then
-     echo "python $SCR_DIR/tsv_2_xlsx.py $SHEETS" > /dev/stderr
-     echo python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" $OPT_O $OPT_M -o $XLSX_FILE $OPT_C $OPT_PH -i "$IMAGE_STR" $SHEETS > /dev/stderr
+     echo "for python: SKIP_XLS= $SKIP_XLS" > /dev/stderr
      # default chart size is pretty small, scale chart size x,y by 2 each. def 1,1 seems to be about 15 rows high (on my MacBook)
-     python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" $OPT_O $OPT_M -o $XLSX_FILE $OPT_C $OPT_PH -i "$IMAGE_STR" $SHEETS
+     echo python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" $OPT_O $OPT_M -o $XLSX_FILE $OPT_C $OPT_PH -i "$IMAGE_STR" $SHEETS > /dev/stderr
+          python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" $OPT_O $OPT_M -o $XLSX_FILE $OPT_C $OPT_PH -i "$IMAGE_STR" $SHEETS
      if [ "$DIR" == "." ];then
        UDIR=`pwd`
      else
