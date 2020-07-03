@@ -19,20 +19,29 @@ VERBOSE=0
 CLIP=
 G_SUM=()
 OPTIONS=
+INPUT_FILE_LIST=
+echo "$0 ${@}"
 
-while getopts "hvASc:D:d:e:g:m:N:o:P:x:X:" opt; do
+while getopts "hvASc:D:d:e:g:I:m:N:o:P:X:x:" opt; do
   case ${opt} in
     A )
       AVERAGE=1
       ;;
+    S )
+      SKIP_XLS=1
+      ;;
+    v )
+      VERBOSE=$((VERBOSE+1))
+      ;;
     c )
       CLIP=$OPTARG
       ;;
-    d )
-      DIR=$OPTARG
-      ;;
     D )
       DEBUG_OPT=$OPTARG
+      ;;
+    d )
+      DIR=$OPTARG
+      echo "input DIR= $DIR"
       ;;
     e )
       END_TM=$OPTARG
@@ -40,29 +49,26 @@ while getopts "hvASc:D:d:e:g:m:N:o:P:x:X:" opt; do
     g )
       G_SUM+=("$OPTARG")
       ;;
+    I )
+      INPUT_FILE_LIST=$OPTARG
+      ;;
     m )
       MAX_VAL=$OPTARG
-      ;;
-    o )
-      OPTIONS=$OPTARG
       ;;
     N )
       NUM_DIR=$OPTARG
       ;;
-    S )
-      SKIP_XLS=1
+    o )
+      OPTIONS=$OPTARG
       ;;
     P )
       PHASE_FILE=$OPTARG
       ;;
-    x )
-      XLSX_FILE=$OPTARG
-      ;;
     X )
       AXLSX_FILE=$OPTARG
       ;;
-    v )
-      VERBOSE=$((VERBOSE+1))
+    x )
+      XLSX_FILE=$OPTARG
       ;;
     h )
       echo "$0 split data files into columns"
@@ -72,10 +78,14 @@ while getopts "hvASc:D:d:e:g:m:N:o:P:x:X:" opt; do
       echo "   -d dir containing sys_XX_* files created by 60secs.sh"
       echo "   -D debug_opt_strings    used for debugging"
       echo "   -g key=val    key value pairs to be added to summary sheet. use multiple -g k=v options to specify multiple key value pairs"
+      echo "   -I file_with_list_of_input_files   used for getting a specify list of file proccessed"
       echo "   -m max_val    any value in chart > this value will be replaced by 0.0"
       echo "   -N number_of_dirs  if you have more than 1 directories then you can limit the num of dirs with this option. Default process all"
       echo "   -o options       comma separated options."
-      echo "         Currently only 'drop_summary' is supported which drops summary sheets if you have more than 1 (since the data will be in sum_all sheet"
+      echo "         'drop_summary' is supported which drops summary sheets if you have more than 1 (since the data will be in sum_all sheet"
+      echo "         'dont_sum_sockets' if the perf stat data is per-socket then don't sum per-socket data to the system level"
+      echo "         'line_for_scatter' substitute line charts for the scatter plots"
+      echo "         'drop_summary' don't add a sheet for each summary sheet (if you are doing more than 1 dir). Just do the sum_all sheet"
       echo "   -P phase_file"
       echo "   -S    skip creating detail xlsx file, just do the summary all spreadsheet"
       echo "   -x xlsx_filename  This is passed to tsv_2_xlsx.py as the name of the xlsx. (you need to add the .xlsx)"
@@ -87,20 +97,35 @@ while getopts "hvASc:D:d:e:g:m:N:o:P:x:X:" opt; do
       exit
       ;;
     : )
-      echo "Invalid option: $OPTARG requires an argument" 1>&2
+      echo "Invalid option: $OPTARG requires an argument ${@}" 1>&2
       exit
       ;;
     \? )
-      echo "Invalid option: $OPTARG" 1>&2
+      echo "Invalid option: $OPTARG ${@}" 1>&2
       exit
       ;;
   esac
 done
 shift $((OPTIND -1))
+remaining_args="$@"
+
+if [ "$remaining_args" != "" ]; then
+  echo "remaining args= $remaining_args"
+  echo "got args leftover. Usually due to * in -d dir_name option"
+  exit
+fi
+
 
 INPUT_DIR=$DIR
 
-if [ ! -e $DIR/60secs.log ]; then
+echo "SKIP_XLS= $SKIP_XLS"
+
+if [ "$INPUT_FILE_LIST" != "" ]; then
+  if [ -e $INPUT_FILE_LIST ]; then
+    echo "got input_file_list= $INPUT_FILE_LIST"
+  fi
+fi
+if [ ! -e $DIR/60SECS.LOG ]; then
    DIR_ORIG=$DIR
    RESP=`find $DIR -name 60secs.log | wc -l | awk '{$1=$1;print}'`
    if [ $RESP -eq 0 ]; then
@@ -111,7 +136,7 @@ if [ ! -e $DIR/60secs.log ]; then
        echo "found $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one."
        #RESP=`find $DIR -name $CKF -print0 | sort -z | xargs -0 cat`
        RESP=`find $DIR -name $CKF -print | sort | xargs `
-       echo "found $CKF file in dir $RESP"
+       echo "found $CKF file in dir $DIR"
        STR=
        for ii in $RESP; do
          NM=$(dirname $ii)
@@ -126,7 +151,7 @@ if [ ! -e $DIR/60secs.log ]; then
        if [ "$RESP" != "0" ]; then
          echo "found $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one."
          RESP=`find $DIR -name $CKF`
-         echo "found $CKF file in dir $RESP" | head -10
+         echo "found $CKF file in dir $DIR"
          STR=
          j=0
          for ii in $RESP; do
@@ -173,7 +198,7 @@ if [ ! -e $DIR/60secs.log ]; then
            fi
          done
          DIR=$STR
-         echo "using DIR= $DIR, orig DIR= $DIR_ORIG"
+         #echo "using DIR= $DIR, orig DIR= $DIR_ORIG"
        else
          echo "didn't find 60secs.log nor metric_out nor sys_*_perf_stat.xt file under dir $DIR. Bye"
          exit
@@ -194,7 +219,7 @@ LST=$DIR
 
 CDIR=`pwd`
 ALST=$CDIR/tmp1.jnk
-echo "ALST= $ALST"
+#echo "ALST= $ALST"
 if [ -e $ALST ]; then
   rm $ALST
 fi
@@ -209,7 +234,7 @@ FCTRS=
 SVGS=
 SUM_FILE=sum.tsv
 
-echo "LST= $LST" > /dev/stderr
+#echo "LST= $LST" > /dev/stderr
 
 NUM_DIRS=0
 for i in $LST; do
@@ -367,7 +392,7 @@ if [ $NUM_DIRS -gt 1 ]; then
     { if (index($0, sum_file) > 0) {
         flnm = $0;
         fls++;
-        printf("got sumfile= %s\n", flnm) > "/dev/stderr";
+        #printf("got sumfile= %s\n", flnm) > "/dev/stderr";
         ln = -1;
         while ((getline line < flnm) > 0) {
            ln++;
@@ -429,7 +454,7 @@ if [ $NUM_DIRS -gt 1 ]; then
     }
     END {
       ofile = sum_all;
-      printf("ofile= %s\n", ofile) > "/dev/stderr";
+      #printf("ofile= %s\n", ofile) > "/dev/stderr";
       printf("title\tsum_all\tsheet\tsum_all\ttype\tcopy\n")  > ofile;
       printf("hdrs\t2\t0\t-1\t%d\t-1\n", fls+3) > ofile;
       printf("Resource\tTool\tMetric") > ofile;
