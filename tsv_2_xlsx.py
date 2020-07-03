@@ -30,6 +30,7 @@ options_str = ""
 options_str_top = ""
 worksheet_charts = None
 ch_sh_arr = []
+verbose = False
 
 options, remainder = getopt.getopt(sys.argv[1:], 'Ab:c:e:f:i:m:o:O:P:p:s:v', [
                                                          'average',
@@ -44,7 +45,7 @@ options, remainder = getopt.getopt(sys.argv[1:], 'Ab:c:e:f:i:m:o:O:P:p:s:v', [
                                                          'phase=',
                                                          'prefix=',
                                                          'size=',
-                                                         'verbose',
+                                                         'verbose'
                                                          ])
 sv_remainder = remainder
 do_avg = False
@@ -52,7 +53,7 @@ max_val = 0.0
 ts_beg = -1.0
 ts_end = -1.0
 
-print("remainder files: ", remainder)
+#print("remainder files: ", remainder)
 
 for opt, arg in options:
     if opt in ('-A', '--average'):
@@ -71,9 +72,11 @@ for opt, arg in options:
     elif opt in ('-O', '--options'):
         options_str = arg
         options_str_top = arg
-        print("options_str_top= ", options_str_top, file=sys.stderr)
+        #print("options_str_top= ", options_str_top, file=sys.stderr)
     elif opt in ('-m', '--max'):
         max_val = float(arg)
+    elif opt in ('-v', '--verbose'):
+        verbose = True
 
 if options_str.find("drop_summary") >= 0:
   got_drop_summary = True
@@ -143,6 +146,13 @@ base_done= {}
 base_fl_opt= {}
 base_mx = -1
 
+def is_number(s):
+    try:
+      float(s)
+      return True
+    except ValueError:
+      return False
+   
 for fo2 in range(len(fl_options)):
    fo = fo2
    print("fo= ", fo)
@@ -208,7 +218,6 @@ for bmi in range(base_mx+1):
                                                             'verbose',
                                                             ])
 
-   verbose = False
    image_files=[]
    prefix = ""
    ch_size = [1.0, 1.0, 15.0]
@@ -244,15 +253,25 @@ for bmi in range(base_mx+1):
            phase = arg
            print("phase file= %s" % (phase), file=sys.stderr)
            with open(phase) as tsv:
+              ln2 = [None, None, None]
               for line in csv.reader(tsv, delimiter=' ', dialect="excel-tab"):
-                  line[1] = float(line[1])
-                  if len(line) < 3:
-                     line.append("-1.0")
-                  if len(line[2]) == 0 or line[2] is None:
-                     line[2] = "-1.0"
-                  print("line2= '%s', len(line)= %d" % (line[2], len(line)), file=sys.stderr)
-                  line[2] = float(line[2])
-                  opt_phase.append(line)
+                  if len(line) >= 3 and (line[0] == "beg" or line[0] == "end") and not is_number(line[1]):
+                     if line[0] == "beg" and is_number(line[2]):
+                        ln2[1] = float(line[2])
+                     if line[0] == "end" and is_number(line[2]):
+                        ln2[0] = line[1] 
+                        ln2[2] = float(line[2])
+                        opt_phase.append(ln2)
+                  else:
+                     if is_number(line[1]):
+                        line[1] = float(line[1])
+                     if len(line) < 3:
+                        line.append("-1.0")
+                     if len(line[2]) == 0 or line[2] is None:
+                        line[2] = "-1.0"
+                     print("line2= '%s', len(line)= %d" % (line[2], len(line)), file=sys.stderr)
+                     line[2] = float(line[2])
+                     opt_phase.append(line)
            print("phase= ", opt_phase, file=sys.stderr)
        elif opt in ('-p', '--prefix'):
            prefix = arg
@@ -299,13 +318,6 @@ for bmi in range(base_mx+1):
           worksheet_sum_all_nm = wrksh_nm
           wksheet_nms[wrksh_nm] = 1
           bold = workbook.add_format({'bold': 1})
-   
-   def is_number(s):
-       try:
-           float(s)
-           return True
-       except ValueError:
-           return False
    
 #   if fake_file_list > 0:
 #      remainder = [file_list[fo]["flnm"]]
@@ -420,7 +432,8 @@ for bmi in range(base_mx+1):
                      print("use worksheet name %s" % (tnm), file=sys.stderr)
                   wrksh_nm = tnm
                   break
-             print("use worksheet name %s" % (wrksh_nm), file=sys.stderr)
+             if verbose:
+                print("use worksheet name %s" % (wrksh_nm), file=sys.stderr)
             worksheet = workbook.add_worksheet(wrksh_nm)
          wksheet_nms[wrksh_nm] = 1
          bold = workbook.add_format({'bold': 1})
@@ -449,7 +462,8 @@ for bmi in range(base_mx+1):
                  else:
                     drow_end = i
              data[drw][3] = str(drow_end)
-             print("found end data row= %d" % (drow_end))
+             if verbose:
+                print("found end data row= %d" % (drow_end))
           dcol_end = int(data[drw][4])+1
           for i in range(dcol_beg, dcol_end):
              ch_cols_used[i] = 1
@@ -577,7 +591,8 @@ for bmi in range(base_mx+1):
              if hcol_beg < 0 or hcol_end < 0:
                 print("What going on, sheet_nm= %s, ch_typ= %s, file= %s, hcol_beg= %d, hcol_end= %d" % (sheet_nm, ch_type, x, hcol_beg, hcol_end), file=sys.stderr)
              mcol_list.append([hcol_beg, hcol_end])
-          print("sheet= %s ch= %d hro= %d hc= %d hce= %d, dr= %d, dre= %d" % (sheet_nm, c, hrow_beg, hcol_beg, hcol_end, drow_beg, drow_end))
+          if verbose:
+             print("sheet= %s ch= %d hro= %d hc= %d hce= %d, dr= %d, dre= %d" % (sheet_nm, c, hrow_beg, hcol_beg, hcol_end, drow_beg, drow_end))
           ch_style = 10
           chart1 = None
           if ch_type == "scatter_straight" and options_str_top.find("line_for_scatter") > -1:
@@ -613,7 +628,7 @@ for bmi in range(base_mx+1):
              if ch_type != "copy":
                 if do_avg == False or do_avg_write == True:
                    if ch_type == "line_stacked":
-                      print("chart_type2= %s, use_cats= %s" % (ch_type, use_cats), file=sys.stderr)
+                      #print("chart_type2= %s, use_cats= %s" % (ch_type, use_cats), file=sys.stderr)
                       chart1 = workbook.add_chart({'type': "area", 'subtype': 'stacked'})
                       #chart1 = workbook.add_chart({'type': "line", 'subtype': 'stacked'})
                    else:
@@ -697,7 +712,7 @@ for bmi in range(base_mx+1):
             cl = cl + 1
    
 if closed_wkbk == False:
-    print("close workbook %s\n" % (output_filename), file=sys.stderr)
+    print("python: close workbook %s\n" % (output_filename), file=sys.stderr)
     workbook.close()
     closed_wkbk = True
     
