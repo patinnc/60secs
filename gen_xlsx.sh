@@ -124,7 +124,7 @@ if [ "$INPUT_FILE_LIST" != "" ]; then
   if [ -e $INPUT_FILE_LIST ]; then
     echo "got input_file_list= $INPUT_FILE_LIST"
   fi
-fi
+else
 if [ ! -e $DIR/60SECS.LOG ]; then
    DIR_ORIG=$DIR
    RESP=`find $DIR -name 60secs.log | wc -l | awk '{$1=$1;print}'`
@@ -212,6 +212,7 @@ if [ ! -e $DIR/60SECS.LOG ]; then
      echo "using DIR= $DIR, orig DIR= $DIR_ORIG"
    fi
 fi
+fi
 
 
 
@@ -236,17 +237,21 @@ SUM_FILE=sum.tsv
 
 #echo "LST= $LST" > /dev/stderr
 
-NUM_DIRS=0
-for i in $LST; do
-  NUM_DIRS=$((NUM_DIRS+1))
-done
+if [ "$INPUT_FILE_LIST" == "" ]; then
+  NUM_DIRS=0
+  for i in $LST; do
+    NUM_DIRS=$((NUM_DIRS+1))
+  done
+fi
+
+TS_BEG=`date +%s`
+if [ "$INPUT_FILE_LIST" == "" ]; then
 oIFS=$IFS
 DIR_NUM_MX=0
 for i in $LST; do
  DIR_NUM_MX=$(($DIR_NUM_MX+1))
 done
 DIR_NUM=0
-TS_BEG=`date +%s`
 for i in $LST; do
  pushd $i
  IFS="/" read -ra PARTS <<< "$(pwd)"
@@ -376,17 +381,25 @@ for i in $LST; do
  fi
  FCTRS="$FCTRS$FCTR"
 done
-echo "got to end of $0" > /dev/stderr
+fi
+
+SUM_ALL=sum_all.tsv
+if [ "$INPUT_FILE_LIST" != "" ]; then
+  echo "$SUM_ALL" >> $ALST
+  cat $INPUT_FILE_LIST >> $ALST
+  NUM_DIRS=2
+fi
+
 if [ "$SVGS" != "" ]; then
   $SCR_DIR/svg_to_html.sh $SVGS -r $FCTRS > tmp.html
 fi
   
 if [ $NUM_DIRS -gt 1 ]; then
-  SUM_ALL=sum_all.tsv
   if [ -e $SUM_ALL ]; then
     rm $SUM_ALL
   fi
   echo "ALST= $ALST" > /dev/stderr
+  echo "awk -v input_file=\"$ALST\" -v sum_all=\"$SUM_ALL\" -v sum_file=\"$SUM_FILE\""
   awk -v input_file="$ALST" -v sum_all="$SUM_ALL" -v sum_file="$SUM_FILE" '
     BEGIN{sum_files=0;fls=0; fld_m=3;fld_v=4;}
     { if (index($0, sum_file) > 0) {
@@ -510,9 +523,13 @@ if [ $NUM_DIRS -gt 1 ]; then
 
   echo "=========== pwd =========="
   pwd
-  echo "find $INPUT_DIR -name muttley?.json | wc -l | awk '{$1=$1;print}'"
-  RESP=`find $INPUT_DIR -name "muttley?.json" | wc -l | awk '{$1=$1;print}'`
-  echo "find muttley RESP= $RESP"
+  if [ "$INPUT_FILE_LIST" != "" ]; then
+    RESP=0
+  else
+    echo "find $INPUT_DIR -name muttley?.json | wc -l | awk '{$1=$1;print}'"
+    RESP=`find $INPUT_DIR -name "muttley?.json" | wc -l | awk '{$1=$1;print}'`
+    echo "find muttley RESP= $RESP"
+  fi
   if [ "$RESP" != "0" ]; then
     RESP=`find $INPUT_DIR -name run.log | head -1 | wc -l | awk '{$1=$1;print}'`
     echo "find run.log RESP= $RESP"
@@ -564,4 +581,3 @@ if [ $NUM_DIRS -gt 1 ]; then
   TS_DFF=$(($TS_CUR-$TS_BEG))
   echo "elap_tm= $TS_DFF"
 fi
-
