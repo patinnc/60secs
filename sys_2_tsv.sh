@@ -270,7 +270,7 @@ trows++; printf("\tdemand; vmstat or mpstat will confirm, which are commands 3 a
 trows++; printf("\n") > NFL;
 
        printf("title\tuptime\tsheet\tuptime\ttype\tline\n") > NFL;
-       printf("hdrs\t%d\t0\t%d\t2\t-1\n", trows+2, trows+mx1) > NFL;
+       printf("hdrs\t%d\t0\t%d\t2\t-1\n", trows+2, trows+mx+1) > NFL;
        for (i=1; i <= mx; i++) {
           printf("%s\n", sv[i]) > NFL;
        }
