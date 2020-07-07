@@ -6,6 +6,8 @@
 # '-d dir' is expected to have file sys_00_uptime.txt sys_01_dmesg.txt sys_02_vmstat.txt sys_03_mpstat.txt sys_04_pidstat.txt sys_05_iostat.txt sys_06_free.txt sys_07_sar_dev.txt sys_08_sar_tcp.txt sys_09_top.txt sys_10_perf_stat.txt
 # and output files in the are sys_00_uptime.txt.tsv sys_01_dmesg.txt.tsv sys_02_vmstat.txt.tsv sys_03_mpstat.txt.tsv sys_04_pidstat.txt.tsv sys_05_iostat.txt.tsv sys_06_free.txt.tsv sys_07_sar_dev.txt.tsv sys_08_sar_tcp.txt.tsv sys_09_top.txt.tsv sys_10_perf_stat.txt.tsv
 #
+# excel formula to convert UTC epoch to localtme =(B5/86400)+DATE(1970,1,1)
+#
 DIR=
 SHEETS=
 SCR_DIR=`dirname $0`
@@ -2547,7 +2549,7 @@ row += trows;
     fi
     echo "do perf_stat data"
     time $SCR_DIR/perf_stat_scatter.sh $OPT_D -b "$BEG"  -e "$END_TM"  -o "$OPTIONS"  -f $i -S $SUM_FILE > $i.tsv
-   SHEETS="$SHEETS $i.tsv"
+    SHEETS="$SHEETS $i.tsv"
   fi
 
   if [[ $i == *"gmatching_logs.txt" ]]; then
