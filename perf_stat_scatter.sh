@@ -845,7 +845,7 @@ awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v 
        }
        printf("\n");
      }
-       if (n_sum > 0) {
+     if (n_sum > 0) {
           printf("got perf_stat n_sum= %d\n", n_sum) >> "/dev/stderr";
           for (i_sum=1; i_sum <= n_sum; i_sum++) {
              divi = sum_occ[i_sum];
@@ -857,6 +857,6 @@ awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v 
              printf("got perf_stat %s\t%f\tsum_tot= %s\n", ky, vl, sum_tot[i_sum]) >> "/dev/stderr";
              printf("%s\t%s\t%f\t%s\n", sum_res[i_sum], "perf_stat", vl, ky) >> sum_file;
           }
-       }
+     }
    }' $FILES $SPECINT_LOG
 
