@@ -19,10 +19,11 @@ VERBOSE=0
 CLIP=
 G_SUM=()
 OPTIONS=
+REGEX=
 INPUT_FILE_LIST=
 echo "$0 ${@}"
 
-while getopts "hvASc:D:d:e:g:I:m:N:o:P:X:x:" opt; do
+while getopts "hvASc:D:d:e:g:I:m:N:o:P:r:X:x:" opt; do
   case ${opt} in
     A )
       AVERAGE=1
@@ -64,6 +65,9 @@ while getopts "hvASc:D:d:e:g:I:m:N:o:P:X:x:" opt; do
     P )
       PHASE_FILE=$OPTARG
       ;;
+    r )
+      REGEX=$OPTARG
+      ;;
     X )
       AXLSX_FILE=$OPTARG
       ;;
@@ -82,11 +86,13 @@ while getopts "hvASc:D:d:e:g:I:m:N:o:P:X:x:" opt; do
       echo "   -m max_val    any value in chart > this value will be replaced by 0.0"
       echo "   -N number_of_dirs  if you have more than 1 directories then you can limit the num of dirs with this option. Default process all"
       echo "   -o options       comma separated options."
-      echo "         'drop_summary' is supported which drops summary sheets if you have more than 1 (since the data will be in sum_all sheet"
       echo "         'dont_sum_sockets' if the perf stat data is per-socket then don't sum per-socket data to the system level"
       echo "         'line_for_scatter' substitute line charts for the scatter plots"
       echo "         'drop_summary' don't add a sheet for each summary sheet (if you are doing more than 1 dir). Just do the sum_all sheet"
+      echo "         'chart_sheet' put all the charts on a separate sheet"
+      echo "         'all_charts_one_row' put all the charts for a workbook on one row"
       echo "   -P phase_file"
+      echo "   -r regex   regex expression to select directories"
       echo "   -S    skip creating detail xlsx file, just do the summary all spreadsheet"
       echo "   -x xlsx_filename  This is passed to tsv_2_xlsx.py as the name of the xlsx. (you need to add the .xlsx)"
       echo "      The default is chart_line.xlsx"
@@ -135,7 +141,14 @@ if [ ! -e $DIR/60SECS.LOG ]; then
      if [ "$RESP" != "0" ]; then
        echo "found $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one."
        #RESP=`find $DIR -name $CKF -print0 | sort -z | xargs -0 cat`
-       RESP=`find $DIR -name $CKF -print | sort | xargs `
+       if [ "$REGEX" != "" ]; then
+         RESP2=`find $DIR -name $CKF -print | sort`
+         RESP=`echo -e "$RESP2" | grep "$REGEX"`
+         mydir=`echo -e "$RESP" | wc -l`
+         echo "mydir count= $mydir"
+       else
+         RESP=`find $DIR -name $CKF -print | sort | xargs `
+       fi
        echo "found $CKF file in dir $DIR"
        STR=
        for ii in $RESP; do
@@ -151,6 +164,27 @@ if [ ! -e $DIR/60SECS.LOG ]; then
        if [ "$RESP" != "0" ]; then
          echo "found $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one."
          RESP=`find $DIR -name $CKF`
+       if [ "$REGEX" != "" ]; then
+         RESP=`find $DIR -name $CKF | grep "$REGEX"`
+#         echo "regex resp= $RESP"
+#         mydir=0
+#         RESP=
+#         for i in $RESP2; do
+#               #echo "got regex for $i and $REGEX"
+#            if [[ $i =~ $REGEX ]]; then
+#               #echo "got regex for $i and $REGEX"
+#               RESP="$(printf %s%s$'\n' "$RESP"  $i)"
+#               mydir=$((mydir+1))
+#               echo -e "mydir= $mydir resp= $RESP"
+#               if [ $mydir -gt 2 ]; then
+#                  echo "bye at here72"
+#                  exit
+#               fi
+#            fi
+#         done
+         RESP3=`echo "$RESP" | wc -l`
+         echo "mydir count= $mydir, resplines= $RESP3"
+       fi
          echo "found $CKF file in dir $DIR"
          STR=
          j=0
@@ -237,9 +271,13 @@ SUM_FILE=sum.tsv
 
 #echo "LST= $LST" > /dev/stderr
 
+DIR_1ST_DIR=
 if [ "$INPUT_FILE_LIST" == "" ]; then
   NUM_DIRS=0
   for i in $LST; do
+    if [ $NUM_DIRS -eq 0 ]; then
+      DIR_1ST_DIR=$i
+    fi
     NUM_DIRS=$((NUM_DIRS+1))
   done
 fi
@@ -387,6 +425,7 @@ SUM_ALL=sum_all.tsv
 if [ "$INPUT_FILE_LIST" != "" ]; then
   echo "$SUM_ALL" >> $ALST
   cat $INPUT_FILE_LIST >> $ALST
+  DIR_1ST_DIR=`head -1 $INPUT_FILE_LIST`
   NUM_DIRS=2
 fi
 
@@ -531,14 +570,23 @@ if [ $NUM_DIRS -gt 1 ]; then
     echo "find muttley RESP= $RESP"
   fi
   if [ "$RESP" != "0" ]; then
-    RESP=`find $INPUT_DIR -name run.log | head -1 | wc -l | awk '{$1=$1;print}'`
+    USE_DIR=
+    RESP=`find $DIR_1ST_DIR -name run.log | head -1 | wc -l | awk '{$1=$1;print}'`
+    if [ "$RESP" == "0" ]; then
+      RESP=`find $INPUT_DIR -name run.log | head -1 | wc -l | awk '{$1=$1;print}'`
+      USE_DIR=$INPUT_DIR
+    else
+      USE_DIR=$DIR_1ST_DIR
+    fi
     echo "find run.log RESP= $RESP"
     if [ "$RESP" != "0" ]; then
-      RUN_LOG=`find $INPUT_DIR -name run.log | head -1`
+      RUN_LOG=`find $USE_DIR -name run.log | head -1`
       echo "run_log file= $RUN_LOG"
       BEG_TM=`awk '/ start /{printf("%s\n", $2);}' $RUN_LOG`
       END_TM=`awk '/ end /{printf("%s\n", $2);}' $RUN_LOG`
       echo "beg_tm= $BEG_TM end_tm= $END_TM" > /dev/stderr
+      echo "$BEG_TM" | awk '{print strftime("beg_time: %c %Z",$1)}' > /dev/stderr
+      echo "$END_TM" | awk '{print strftime("end_time: %c %Z",$1)}' > /dev/stderr
       
       tst_files=`find $INPUT_DIR -name "muttley?.json"`
       echo "muttley files: $tst_files" > /dev/stderr
