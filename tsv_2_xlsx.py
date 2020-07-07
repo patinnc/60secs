@@ -31,6 +31,8 @@ options_str_top = ""
 worksheet_charts = None
 ch_sh_arr = []
 verbose = False
+options_all_charts_one_row = False
+all_charts_one_row = [-1, -1]
 
 options, remainder = getopt.getopt(sys.argv[1:], 'Ab:c:e:f:i:m:o:O:P:p:s:v', [
                                                          'average',
@@ -79,9 +81,11 @@ for opt, arg in options:
         verbose = True
 
 if options_str.find("drop_summary") >= 0:
-  got_drop_summary = True
+   got_drop_summary = True
 else:
-  got_drop_summary = False
+   got_drop_summary = False
+if options_str.find("all_charts_one_row") >= 0:
+   options_all_charts_one_row = True
 
 opt_fl = []
 fl_options = []
@@ -365,7 +369,7 @@ for bmi in range(base_mx+1):
 
       if do_avg and base_count[base_i] == base_done[base_i]:
         do_avg_write = True
-        print("do_avg_write = True", file=sys.stderr)
+        #print("do_avg_write = True", file=sys.stderr)
       else:
         do_avg_write = False
 
@@ -569,6 +573,8 @@ for bmi in range(base_mx+1):
                 ch_orient_vert = False
              else:
                 ch_orient_vert = True
+          if options_all_charts_one_row == True:
+             ch_orient_vert = False
           if drow_end == -1 or drow_beg >= drow_end:
              print("no data for chart! sheet_nm= %s, ch_typ= %s, file= %s, drow_beg= %d, drow_end= %d, hcol_beg= %d, hcol_end= %d" % (sheet_nm, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end), file=sys.stderr)
              # didn't find any data in table
@@ -674,6 +680,7 @@ for bmi in range(base_mx+1):
                    if ch_array[ch_ln_prev][0] == sheet_nm:
                       ch_top_at_row = ch_array[ch_ln_prev][1] + int(ch_size[2]*ch_size[1])
                       ch_left_at_col = ch_array[ch_ln_prev][2] + 0
+                #print("+_++__insert chart for sheet= %s, chart= %s, at_row= %d at_col= %d" % (sheet_nm, title, ch_top_at_row, ch_left_at_col), file=sys.stderr)
              else:
                 ch_top_at_row = 1
                 ch_left_at_col = 0
@@ -683,13 +690,23 @@ for bmi in range(base_mx+1):
                       ch_top_at_row = ch_array[ch_ln_prev][1] + 0
                       ch_left_at_col = ch_array[ch_ln_prev][2] + int(ch_size[2])
                 #print("sh %s ch %s row= %d col= %d" % (sheet_nm, title, ch_top_at_row, ch_left_at_col))
+                #print("++++__insert chart for sheet= %s, chart= %s, at_row= %d at_col= %d" % (sheet_nm, title, ch_top_at_row, ch_left_at_col), file=sys.stderr)
                 if worksheet_charts != None:
-                   if c == 0:  # first chart of row
-                      ch_sh_row += 1
-                      if ch_sh_row > 0:
-                         ch_top_at_row = ch_sh_arr[ch_sh_row-1][0] + int(ch_size[2]*ch_size[1])
-                      ch_sh_arr.append([ch_top_at_row, ch_left_at_col])
-                   ch_top_at_row = ch_sh_arr[ch_sh_row][0]
+                   if options_all_charts_one_row == True:
+                      if all_charts_one_row[0] == -1:
+                         all_charts_one_row[0] = 1
+                         all_charts_one_row[1] = 1
+                      else:
+                         all_charts_one_row[1] = all_charts_one_row[1] + int(ch_size[2])
+                      ch_top_at_row  = all_charts_one_row[0]
+                      ch_left_at_col = all_charts_one_row[1]
+                   else:
+                     if c == 0:  # first chart of row
+                        ch_sh_row += 1
+                        if ch_sh_row > 0:
+                           ch_top_at_row = ch_sh_arr[ch_sh_row-1][0] + int(ch_size[2]*ch_size[1])
+                        ch_sh_arr.append([ch_top_at_row, ch_left_at_col])
+                     ch_top_at_row = ch_sh_arr[ch_sh_row][0]
              if worksheet_charts != None:
                 rc = worksheet_charts.insert_chart(ch_top_at_row, ch_left_at_col, chart1, ch_opt)
              else:
