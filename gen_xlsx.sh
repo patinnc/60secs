@@ -21,9 +21,11 @@ G_SUM=()
 OPTIONS=
 REGEX=
 INPUT_FILE_LIST=
+AVG_DIR=
+DESC_FILE=
 echo "$0 ${@}"
 
-while getopts "hvASc:D:d:e:g:I:m:N:o:P:r:X:x:" opt; do
+while getopts "hvASa:c:D:d:e:F:g:I:m:N:o:P:r:X:x:" opt; do
   case ${opt} in
     A )
       AVERAGE=1
@@ -33,6 +35,9 @@ while getopts "hvASc:D:d:e:g:I:m:N:o:P:r:X:x:" opt; do
       ;;
     v )
       VERBOSE=$((VERBOSE+1))
+      ;;
+    a )
+      AVG_DIR=$OPTARG
       ;;
     c )
       CLIP=$OPTARG
@@ -46,6 +51,9 @@ while getopts "hvASc:D:d:e:g:I:m:N:o:P:r:X:x:" opt; do
       ;;
     e )
       END_TM=$OPTARG
+      ;;
+    F )
+      DESC_FILE=$OPTARG
       ;;
     g )
       G_SUM+=("$OPTARG")
@@ -77,10 +85,13 @@ while getopts "hvASc:D:d:e:g:I:m:N:o:P:r:X:x:" opt; do
     h )
       echo "$0 split data files into columns"
       echo "Usage: $0 [-h] -d sys_data_dir [-v] [ -p prefix ]"
+      echo "   -a avg_dir requires -A. Average tsv files will be put in this dir"
       echo "   -A   flag indicating you want to average the same file from multiple dirs into 1 sheet."
       echo "          The default is to create 1 sheet per file per directory"
       echo "   -d dir containing sys_XX_* files created by 60secs.sh"
       echo "   -D debug_opt_strings    used for debugging"
+      echo "   -F desc_file  file containing 1 line of text describing the results dir. Currently this is just the gen_xls.sh cmdline."
+      echo "      this file can be used to identify breaks in the chart_sheet rows of charts. All charts with the same desc_file will be put be put on the same line"
       echo "   -g key=val    key value pairs to be added to summary sheet. use multiple -g k=v options to specify multiple key value pairs"
       echo "   -I file_with_list_of_input_files   used for getting a specify list of file proccessed"
       echo "   -m max_val    any value in chart > this value will be replaced by 0.0"
@@ -91,6 +102,10 @@ while getopts "hvASc:D:d:e:g:I:m:N:o:P:r:X:x:" opt; do
       echo "         'drop_summary' don't add a sheet for each summary sheet (if you are doing more than 1 dir). Just do the sum_all sheet"
       echo "         'chart_sheet' put all the charts on a separate sheet"
       echo "         'all_charts_one_row' put all the charts for a workbook on one row"
+      echo "         'match_itp_muttley_interval' if you have itp/perf stat and muttley data, try to match the muttley interval to the perf interval"
+      echo "           say the perf stat interval is 30 seconds and the muttley interval is 10 seconds. You might want to have the same number of rows of data"
+      echo "           in the muttley tables as in perf stat data. So there are 3 muttley records for every 1 perf stat record. So only use the 3rd muttley record."
+      echo "           this requires getting the perf stat interval from the run_itp.log file"
       echo "   -P phase_file"
       echo "   -r regex   regex expression to select directories"
       echo "   -S    skip creating detail xlsx file, just do the summary all spreadsheet"
@@ -122,9 +137,35 @@ if [ "$remaining_args" != "" ]; then
 fi
 
 
+SKIP_SYS_2_TSV=0
+if [ "$OPTIONS" != "" ]; then
+  if [[ $OPTIONS == *"skip_sys_2_tsv"* ]]; then
+     SKIP_SYS_2_TSV=1
+  fi
+fi
+
 INPUT_DIR=$DIR
 
 echo "SKIP_XLS= $SKIP_XLS"
+
+get_abs_filename() {
+  # $1 : relative filename
+  echo "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
+}
+
+OPT_a=
+if [ "$AVG_DIR" != "" ]; then
+  if [ -d $AVG_DIR ]; then
+    mkdir -p "$AVG_DIR"
+  fi
+  AVG_DIR=$(get_abs_filename "$AVG_DIR")
+  OPT_a=" -a $AVG_DIR "
+fi
+if [ "$DESC_FILE" != "" ]; then
+   echo "DESC_FILE= $DESC_FILE" > /dev/stderr
+   DESC_FILE=$(get_abs_filename "$DESC_FILE")
+   echo "DESC_FILE= $DESC_FILE" > /dev/stderr
+fi
 
 if [ "$INPUT_FILE_LIST" != "" ]; then
   if [ -e $INPUT_FILE_LIST ]; then
@@ -160,31 +201,21 @@ if [ ! -e $DIR/60SECS.LOG ]; then
        echo "using DIR= $DIR, orig DIR= $DIR_ORIG"
      else
        CKF="sys_*_perf_stat.txt"
-       RESP=`find $DIR -name $CKF | wc -l|awk '{$1=$1;print}'`
-       if [ "$RESP" != "0" ]; then
-         echo "found $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one."
-         RESP=`find $DIR -name $CKF`
-       if [ "$REGEX" != "" ]; then
-         RESP=`find $DIR -name $CKF | grep "$REGEX"`
-#         echo "regex resp= $RESP"
-#         mydir=0
-#         RESP=
-#         for i in $RESP2; do
-#               #echo "got regex for $i and $REGEX"
-#            if [[ $i =~ $REGEX ]]; then
-#               #echo "got regex for $i and $REGEX"
-#               RESP="$(printf %s%s$'\n' "$RESP"  $i)"
-#               mydir=$((mydir+1))
-#               echo -e "mydir= $mydir resp= $RESP"
-#               if [ $mydir -gt 2 ]; then
-#                  echo "bye at here72"
-#                  exit
-#               fi
-#            fi
-#         done
-         RESP3=`echo "$RESP" | wc -l`
-         echo "mydir count= $mydir, resplines= $RESP3"
+       RESP=`find $DIR -name "$CKF" | wc -l | awk '{$1=$1;print}'`
+       echo "got $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one." > /dev/stderr
+       if [ "$RESP" == "0" ]; then
+       CKF="sys_*_perf_stat.txt*"
+       RESP=`find $DIR -name "$CKF" | wc -l | awk '{$1=$1;print}'`
+       echo "got $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one." > /dev/stderr
        fi
+       if [ "$RESP" != "0" ]; then
+         echo "found $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one." > /dev/stderr
+         RESP=`find $DIR -name "$CKF"|sort`
+         if [ "$REGEX" != "" ]; then
+           RESP=`find $DIR -name "$CKF" | grep "$REGEX" | sort`
+           RESP3=`echo "$RESP" | wc -l`
+           echo "mydir count= $mydir, resplines= $RESP3"
+         fi
          echo "found $CKF file in dir $DIR"
          STR=
          j=0
@@ -202,6 +233,12 @@ if [ ! -e $DIR/60SECS.LOG ]; then
      dt_str = darr[6] " " mnth_num " " darr[2] " " darr[3] " " darr[4] " " darr[5];
      epoch = mktime(dt_str);
      return epoch + offset;
+  }
+  /epoch\tts\trel_ts\tinterval/ {
+    getline;
+    ts=$1 - $2;
+    printf("%f\n", ts);
+    exit;
   }
   /^# started on / {
     # started on Fri Jun 12 14:36:31 UTC 2020 1591972591.618156223
@@ -234,7 +271,7 @@ if [ ! -e $DIR/60SECS.LOG ]; then
          DIR=$STR
          #echo "using DIR= $DIR, orig DIR= $DIR_ORIG"
        else
-         echo "didn't find 60secs.log nor metric_out nor sys_*_perf_stat.xt file under dir $DIR. Bye"
+         echo "didn't find 60secs.log nor metric_out nor sys_*_perf_stat.txt file under dir $DIR. Bye"
          exit
        fi
      fi
@@ -249,6 +286,7 @@ fi
 fi
 
 
+PIDS_WAIT=0
 
 LST=$DIR
 
@@ -278,6 +316,7 @@ if [ "$INPUT_FILE_LIST" == "" ]; then
     if [ $NUM_DIRS -eq 0 ]; then
       DIR_1ST_DIR=$i
     fi
+    #echo "dir_num= $NUM_DIRS dir= $i"
     NUM_DIRS=$((NUM_DIRS+1))
   done
 fi
@@ -291,6 +330,15 @@ for i in $LST; do
 done
 DIR_NUM=0
 for i in $LST; do
+ OPT_DESC_FILE=
+ if [ "$DESC_FILE" == "" ]; then
+   if [ -e $i/desc.txt ]; then
+      FLS=$(get_abs_filename "$i/desc.txt")
+      if [ -e $FLS ]; then
+        OPT_DESC_FILE="$FLS"
+      fi
+   fi
+ fi
  pushd $i
  IFS="/" read -ra PARTS <<< "$(pwd)"
  XLS=
@@ -365,14 +413,32 @@ for i in $LST; do
    done
    echo "new g opt= $OPT_G"
  fi
- if [ $VERBOSE -gt 0 ]; then
- echo "$SCR_DIR/sys_2_tsv.sh $OPT_A $OPT_G -p \"$RPS\" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i \"*.png\" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets$OPT_OPT $OPT_PH -t $DIR &> tmp.jnk"
+ if [ "$SKIP_SYS_2_TSV" == "0" ]; then
+   PIDS_WAIT=$(($PIDS_WAIT+1))
+   if [ $VERBOSE -gt 0 ]; then
+     echo "$SCR_DIR/sys_2_tsv.sh $OPT_a $OPT_A $OPT_G -p \"$RPS\" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i \"*.png\" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets$OPT_OPT $OPT_PH -t $DIR &> tmp.jnk" &
+   fi
+          $SCR_DIR/sys_2_tsv.sh $OPT_a $OPT_A $OPT_G -p "$RPS" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets$OPT_OPT $OPT_PH -t $DIR &> tmp.jnk &
+   if [ $PIDS_WAIT -gt 12 ]; then
+     wait
+     PIDS_WAIT=0
+   fi
  fi
-       $SCR_DIR/sys_2_tsv.sh $OPT_A $OPT_G -p "$RPS" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets$OPT_OPT $OPT_PH -t $DIR &> tmp.jnk
+ TS_CUR=`date +%s`
+ TS_DFF=$(($TS_CUR-$TS_BEG))
+ echo -e "FLS: dir_num= ${DIR_NUM} of ${DIR_NUM_MX}, elap_tm= $TS_DFF secs, ${FLS}" > /dev/stderr
+ DIR_NUM=$(($DIR_NUM+1))
+ popd
+done
+wait
+PIDS_WAIT=0
+for i in $LST; do
+ pushd $i
  SM_FL=
- if [ -e $SUM_FILE ]; then
+ #if [ ! -e $SUM_FILE ]; then
    SM_FL=$i/$SUM_FILE
- fi
+ #fi
+ echo "$0 SM_FL= $SM_FL  SUM_FILE= $SUM_FILE"
  echo -e "-p\t\"$RPS\"" >> $ALST
  echo -e "-s\t2,2" >> $ALST
  if [ "$AVERAGE" == "1" ]; then
@@ -381,16 +447,24 @@ for i in $LST; do
  if [ "$CLIP" != "" ]; then
     echo -e "-c $CLIP" >> $ALST
  fi
+ if [ "$DESC_FILE" != "" ]; then
+   echo -e "-d\t\"$DESC_FILE\"" >> $ALST
+ fi
+ if [ "$DESC_FILE" == "" ]; then
+   if [ -e desc.txt ]; then
+      FLS=$(get_abs_filename "desc.txt")
+      OPT_DESC_FILE="$FLS"
+   fi
+ fi
+ if [ "$OPT_DESC_FILE" != "" ]; then
+      echo -e "-d\t\"$OPT_DESC_FILE\"" >> $ALST
+ fi
  echo -e "-i\t\"$i/*.png\"" >> $ALST
  #echo -e "-x\t$i.xlsx" >> $ALST
  #echo -e "-o\tchart_new,dont_sum_sockets" >> $ALST
  popd
  FLS=`ls -1 $SM_FL $i/*txt.tsv`
  echo -e "${FLS}" >> $ALST
- TS_CUR=`date +%s`
- TS_DFF=$(($TS_CUR-$TS_BEG))
- echo -e "FLS: dir_num= ${DIR_NUM} of ${DIR_NUM_MX}, elap_tm= $TS_DFF secs, ${FLS}" > /dev/stderr
- DIR_NUM=$(($DIR_NUM+1))
  MYA=($i/*log.tsv)
  if [ "${#MYA}" != "0" ]; then
    FLS=`ls -1 $i/*log.tsv`
@@ -408,6 +482,16 @@ for i in $LST; do
  MYA=($i/*current.tsv)
  if [ "${#MYA}" != "0" ]; then
    FLS=`ls -1 $i/*current.tsv`
+   echo -e "${FLS}" >> $ALST
+ fi
+ MYA=($i/muttley*.json.tsv)
+ if [ "${#MYA}" != "0" ]; then
+   FLS=`ls -1 $i/muttley*.json.tsv`
+   echo -e "${FLS}" >> $ALST
+ fi
+ MYA=($i/sum_all.tsv)
+ if [ "${#MYA}" != "0" ]; then
+   FLS=`ls -1 $i/sum_all.tsv`
    echo -e "${FLS}" >> $ALST
  fi
  echo -e "" >> $ALST
@@ -429,6 +513,11 @@ if [ "$INPUT_FILE_LIST" != "" ]; then
   NUM_DIRS=2
 fi
 
+ if [ $PIDS_WAIT -gt 0 ]; then
+   wait
+   PIDS_WAIT=0
+ fi
+
 if [ "$SVGS" != "" ]; then
   $SCR_DIR/svg_to_html.sh $SVGS -r $FCTRS > tmp.html
 fi
@@ -441,11 +530,13 @@ if [ $NUM_DIRS -gt 1 ]; then
   echo "awk -v input_file=\"$ALST\" -v sum_all=\"$SUM_ALL\" -v sum_file=\"$SUM_FILE\""
   awk -v input_file="$ALST" -v sum_all="$SUM_ALL" -v sum_file="$SUM_FILE" '
     BEGIN{sum_files=0;fls=0; fld_m=3;fld_v=4;}
-    { if (index($0, sum_file) > 0) {
+    { if (index($0, sum_file) > 0 || index($0, sum_all) > 0) {
         flnm = $0;
         fls++;
-        #printf("got sumfile= %s\n", flnm) > "/dev/stderr";
+        fls_mx = fls;
+        printf("got sumfile= %s sum_all= %s\n", flnm, sum_all) > "/dev/stderr";
         ln = -1;
+        nflds=4;
         while ((getline line < flnm) > 0) {
            ln++;
            if (ln <= 2) {
@@ -454,6 +545,14 @@ if [ $NUM_DIRS -gt 1 ]; then
                 if (hdrs[3] == "Value" && hdrs[4] == "Metric") {
                    fld_m=4; 
                    fld_v=3; 
+                }
+                if (hdrs[3] == "Metric" && hdrs[4] == "0") {
+                   fld_m=3; 
+                   fld_v=4; 
+                   printf("sum_all metric fld= %d nf= %d\n", 3, nh) > "/dev/stderr";
+                   if (nh > 4) {
+                     nflds= nh;
+                   }
                 }
               }
               continue;
@@ -500,7 +599,15 @@ if [ $NUM_DIRS -gt 1 ]; then
               }
            }
            mtrc_arr[fls,mtrc_i] = arr[fld_v];
+           if (nflds > 4) {
+             for (f= 5; f <= nflds; f++) {
+                mtrc_arr[fls+f-4,mtrc_i] = arr[f];
+             }
+             fls_mx = fls+nflds-5;
+             printf("fls= %d, flx_mx= %d\n", fls, fls_mx) > "/dev/stderr";
+           }
         }
+        fls = fls_mx;
         close(flnm)
       }
     }
@@ -560,16 +667,8 @@ if [ $NUM_DIRS -gt 1 ]; then
       }
   ' $ALST
 
-  echo "=========== pwd =========="
-  pwd
-  if [ "$INPUT_FILE_LIST" != "" ]; then
-    RESP=0
-  else
-    echo "find $INPUT_DIR -name muttley?.json | wc -l | awk '{$1=$1;print}'"
-    RESP=`find $INPUT_DIR -name "muttley?.json" | wc -l | awk '{$1=$1;print}'`
-    echo "find muttley RESP= $RESP"
-  fi
-  if [ "$RESP" != "0" ]; then
+  got_pwd=`pwd`
+  echo "=========== pwd = $got_pwd ========="
     USE_DIR=
     RESP=`find $DIR_1ST_DIR -name run.log | head -1 | wc -l | awk '{$1=$1;print}'`
     if [ "$RESP" == "0" ]; then
@@ -579,6 +678,7 @@ if [ $NUM_DIRS -gt 1 ]; then
       USE_DIR=$DIR_1ST_DIR
     fi
     echo "find run.log RESP= $RESP"
+    ITP_INTRVL=0
     if [ "$RESP" != "0" ]; then
       RUN_LOG=`find $USE_DIR -name run.log | head -1`
       echo "run_log file= $RUN_LOG"
@@ -587,25 +687,54 @@ if [ $NUM_DIRS -gt 1 ]; then
       echo "beg_tm= $BEG_TM end_tm= $END_TM" > /dev/stderr
       echo "$BEG_TM" | awk '{print strftime("beg_time: %c %Z",$1)}' > /dev/stderr
       echo "$END_TM" | awk '{print strftime("end_time: %c %Z",$1)}' > /dev/stderr
-      
-      tst_files=`find $INPUT_DIR -name "muttley?.json"`
-      echo "muttley files: $tst_files" > /dev/stderr
+      RESP_ITP=`find $USE_DIR -name run_itp.log | wc -l | awk '{$1=$1;print}'`
+      if [ "$RESP" != "0" ]; then
+         ITP_LOG=`find $USE_DIR -name run_itp.log | head -1`
+         ITP_INTRVL=`awk '
+            BEGIN{intrvl=0;}
+            /perf\sstat/ {for (i=2; i < NF; i++) { if ($i == "-I" ) { intrvl= $(i+1); exit;}}}
+            END{printf("%.0f\n", intrvl/1000);}
+          ' $ITP_LOG`
+         echo "ITP_INTERVAL= $ITP_INTRVL, log= $ITP_LOG" > /dev/stderr
+      fi
+    fi
+  if [ "$INPUT_FILE_LIST" != "" ]; then
+    RESP=0
+  else
+    echo "find $INPUT_DIR -name muttley?.json | wc -l | awk '{$1=$1;print}'"
+    RESP=`find $INPUT_DIR -name "muttley?.json" | wc -l | awk '{$1=$1;print}'`
+    echo "find muttley RESP= \"$RESP\"" 
+  fi
+  if [ "$RESP" != "0" ]; then
+      OPT_M=
+      if [ "$ITP_INTRVL" != "0" -a "$OPTIONS" != "" ]; then
+         if [[ $OPTIONS == *"match_itp_muttley_interval"* ]]; then
+           OPT_M=" -m $ITP_INTRVL "
+         fi
+      fi
       echo -e "-p\t\"$RPS\"" >> $ALST
       echo -e "-s\t2,2" >> $ALST
-      for f in $tst_files; do
-        echo "try muttley file= $f" > /dev/stderr
-        if [ -e $f ]; then
-           echo "try muttley log $f" 
-           $SCR_DIR/resp_2_tsv.sh -b $BEG_TM -e $END_TM -f $f -s $SUM_FILE
-           if [ -e $f.tsv ]; then
-           echo -e "$f.tsv" >> $ALST
-           #SHEETS="$SHEETS $f.tsv"
-           #echo "got latency log $f.tsv" > /dev/stderr
-           fi
-        fi
-      done
-      echo -e "" >> $ALST
-    fi
+      if [ "$DESC_FILE" != "" ]; then
+        echo -e "-d\t\"$DESC_FILE\"" >> $ALST
+      fi
+      tst_files=`find $INPUT_DIR -name "muttley?.json"|sort`
+      echo "find muttley*.json.tsv RESP= $tst_files"
+      echo "muttley files_0: $tst_files" > /dev/stderr
+      if [ "$tst_files" != "" ]; then
+        for f in $tst_files; do
+          echo "try muttley_a file= $f" > /dev/stderr
+          if [ -e $f ]; then
+             echo "try muttley log $f" 
+             $SCR_DIR/resp_2_tsv.sh -b $BEG_TM -e $END_TM -f $f -s $SUM_FILE $OPT_M
+          fi
+          if [ -e $f.tsv ]; then
+             echo -e "$f.tsv" >> $ALST
+             #SHEETS="$SHEETS $f.tsv"
+             #echo "got latency log $f.tsv" > /dev/stderr
+          fi
+        done
+      fi
+    echo -e "" >> $ALST
   fi
   OPT_A=
   if [ "$AVERAGE" == "1" ]; then
@@ -623,8 +752,8 @@ if [ $NUM_DIRS -gt 1 ]; then
   TS_DFF=$(($TS_CUR-$TS_BEG))
   echo "elap_tm= $TS_DFF"
   echo "about to do tsv_2_xls.py" > /dev/stderr
-  echo "python $SCR_DIR/tsv_2_xlsx.py $OPT_A $OPT_OPTIONS $OPT_M -f $ALST > tmp2.jnk"
-        python $SCR_DIR/tsv_2_xlsx.py $OPT_A $OPT_OPTIONS $OPT_M -f $ALST $SHEETS > tmp2.jnk
+  echo "python $SCR_DIR/tsv_2_xlsx.py $OPT_a $OPT_A $OPT_OPTIONS $OPT_M -f $ALST > tmp2.jnk"
+        python $SCR_DIR/tsv_2_xlsx.py $OPT_a $OPT_A $OPT_OPTIONS $OPT_M -f $ALST $SHEETS > tmp2.jnk
   TS_CUR=`date +%s`
   TS_DFF=$(($TS_CUR-$TS_BEG))
   echo "elap_tm= $TS_DFF"
