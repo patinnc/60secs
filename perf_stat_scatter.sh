@@ -134,6 +134,7 @@ echo "TSC_FREQ= $TSC_FREQ NUM_CPUS= $NUM_CPUS" > /dev/stderr
 
 
 awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s/skt|memory},LLC-misses PKI{|memory},IPC{InstPerCycle|CPU},%not_halted{|CPU},avg_freq{avg_freq GHz|CPU},QPI_BW{QPI_BW GB/s/skt|memory interconnect},Instructions*1e-9/s{Instructions*1e-9/s/skt|CPU}" 'BEGIN{
+     rpn_sp = 0;
      row=0;
      evt_idx=-1;
      months="  JanFebMarAprMayJunJulAugSepOctNovDec";
@@ -175,6 +176,25 @@ awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v 
          }
        }
   }
+# rpn calc from http://lancelot.pecquet.org/download/science/aesthack/rpn.html#AWK
+function rpn_push(x) { rpn_stack[++rpn_sp] = x; }
+function rpn_pop()   { if(rpn_sp > 0) rpn_sp--; else rpn_err = "rpn Stack underflow"; }
+function rpn_top()   { if(rpn_sp > 0) return rpn_stack[rpn_sp]; }
+
+function rpn_eval(x) {
+  if(x != "-" && (x ~ /^[-.0-9][0-9]*[.0-9]?[0-9]*$/)) rpn_push(x);
+  else {
+    rpn_second      = rpn_stack[rpn_sp]; rpn_pop();
+    rpn_first       = rpn_stack[rpn_sp]; rpn_pop();
+         if(x == "+") rpn_push(rpn_first + rpn_second);
+    else if(x == "-") rpn_push(rpn_first - rpn_second);
+    else if(x == "*") rpn_push(rpn_first * rpn_second);
+    else if(x == "/") rpn_push(rpn_first / rpn_second);
+    else rpn_err = "Bad operator: " + x;
+  }
+}
+
+
   function do_summary(colms, v, epch, intrvl) {
      if (n_sum > 0 && hdr_lkup[colms] != -1) {
         i_sum = hdr_lkup[colms];
@@ -486,13 +506,40 @@ awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v 
      lkfor[kmx,2]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
      nwfor[kmx,1]="TMAM_Retiring(%)";
 
+#     kmx++;
+#     got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+#     got_lkfor[kmx,2]=4; # num of fields to look for
+#     got_lkfor[kmx,3]="=100 - (INDIRECT(ADDRESS(ROW(), COLUMN()-2, 4)) +INDIRECT(ADDRESS(ROW(), COLUMN()-1, 4)))"; # 
+#     got_lkfor[kmx,4]="formula"; # operation x/y/z
+#     got_lkfor[kmx,5]=1; # instances
+#     got_lkfor[kmx,6]=""; # 
+#     lkfor[kmx,1]=tolower("UOPS_RETIRED.RETIRE_SLOTS");
+#     lkfor[kmx,2]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
+#     lkfor[kmx,3]=tolower("IDQ_UOPS_NOT_DELIVERED.CORE");
+#     lkfor[kmx,4]="cycles";  # get the instances from the first lkfor event
+#     nwfor[kmx,1]="TMAM_Backend_Bound_BadSpec(%)";
+
      kmx++;
      got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
      got_lkfor[kmx,2]=4; # num of fields to look for
-     got_lkfor[kmx,3]="=100 - (INDIRECT(ADDRESS(ROW(), COLUMN()-2, 4)) +INDIRECT(ADDRESS(ROW(), COLUMN()-1, 4)))"; # 
-     got_lkfor[kmx,4]="formula"; # operation x/y/z
+     got_lkfor[kmx,3]="1.0";
+     got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
      got_lkfor[kmx,5]=1; # instances
      got_lkfor[kmx,6]=""; # 
+#     got_lkfor[kmx,3]="=100 - (INDIRECT(ADDRESS(ROW(), COLUMN()-2, 4)) +INDIRECT(ADDRESS(ROW(), COLUMN()-1, 4)))"; # 
+#    rpn operations
+#    TBD repeating this stuff for sockets. Right now (if you had per-socket data and -o dont_sum_sockets) you wouldnt match up the column header because youd have " S0" or " S1" socket suffix
+     got_rpn_eqn[kmx,1]=6;
+     got_rpn_eqn[kmx,2,1]=100;
+     got_rpn_eqn[kmx,2,2]="push_val";
+     got_rpn_eqn[kmx,3,1]="TMAM_Retiring(%)"
+     got_rpn_eqn[kmx,3,2]="push_row_val";
+     got_rpn_eqn[kmx,4,1]="TMAM_Frontend_Bound(%)"
+     got_rpn_eqn[kmx,4,2]="push_row_val";
+     got_rpn_eqn[kmx,5,1]="+";
+     got_rpn_eqn[kmx,5,2]="oper";
+     got_rpn_eqn[kmx,6,1]="-";
+     got_rpn_eqn[kmx,6,2]="oper";
      lkfor[kmx,1]=tolower("UOPS_RETIRED.RETIRE_SLOTS");
      lkfor[kmx,2]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
      lkfor[kmx,3]=tolower("IDQ_UOPS_NOT_DELIVERED.CORE");
@@ -589,9 +636,12 @@ awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v 
 
 #abcd
      rows=1;
-     for(i=0; i <= 40; i++) {
-       printf("\n");
-       rows++;
+     if (options != "" && index(options, "chart_sheet") == 0) {
+       # make room for a row of charts
+       for(i=0; i <= 40; i++) {
+         printf("\n");
+         rows++;
+       }
      }
      printf("epoch\tts\trel_ts\tinstances:");
      for(i=0; i <= evt_idx; i++) {
@@ -667,6 +717,7 @@ awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v 
      ts_prev = 0.0;
      printf("perf stat rows= %d, skt_incr= %d, ts_beg= %f, ts_end= %f\n", row, skt_incr, ts_beg, ts_end) > "/dev/stderr";
      for(i=1; i <= row; i++) {
+       rw_col=0;
        if (skt_incr != 0 && sv[i,2] == "S0" && i < row) {
            # sum each evt to s0 for now
            for(ii=i+1; ii <= row; ii++) {
@@ -695,6 +746,10 @@ awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v 
          continue;
        }
        printf("%.4f\t%s\t%s\t%.4f", use_epoch, sv[i,1], sv[i,1], interval);
+       rw_data[rw_col++] = use_epoch;
+       rw_data[rw_col++] = sv[i,1];
+       rw_data[rw_col++] = sv[i,1];
+       rw_data[rw_col++] = interval;
        cols = 4;
        for (k=1; k <= kmx; k++) { 
          sum[k]=0.0;
@@ -703,6 +758,7 @@ awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v 
          for(j=0; j <= evt_idx; j++) {
            if (k == 1) {
              printf("\t%s", sv[i,3+j]);
+             rw_data[rw_col++] = sv[i,3+j];
              do_summary(cols, sv[i,3+j]+0.0, use_epoch+0.0, interval);
              cols++;
            }
@@ -774,6 +830,51 @@ awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v 
            val =  got_lkfor[k,3];
            prt_it=1;
          }
+         if (got_lkfor[k,4] == "rpn_eqn" && got_lkfor[k,1] == got_lkfor[k,2]) {
+           val =  0.0;
+           prt_it=1;
+           rpn_err = "";
+           rpn_sp = 0;
+           for(la=2; la <= got_rpn_eqn[k,1]; la++) {
+              if (got_rpn_eqn[k,la,2]=="push_val") {
+                  rpn_eval(got_rpn_eqn[k,la,1]+0.0);
+                  #printf("rpn_eqn k= %d, la= %d, hdr= %s init %s\n", k, la, nwfor[k,1], val0) > "/dev/stderr";
+                  continue;
+              }
+              if (got_rpn_eqn[k,la,2]=="push_row_val") {
+                  val1= "";
+                  if (got_rpn_eqn[k,la,3]=="") {
+                    for (lc=0; lc <= col_hdr_mx; lc++) {
+                      if (col_hdr[lc] == got_rpn_eqn[k,la,1]) {
+                         got_rpn_eqn[k,la,3] = lc;
+                         break;
+                      }
+                    }
+                    if (got_rpn_eqn[k,la,3]=="") {
+                      got_rpn_eqn[k,la,3] = -1;
+                    }
+                  }
+                  if (got_rpn_eqn[k,la,3] != -1) {
+                    lc = got_rpn_eqn[k,la,3];
+                    val1=rw_data[lc];
+                    rpn_eval(val1+0.0);
+                  }
+                  if (val1 == "") {
+                     prt_it = 0;
+                     break;
+                  }
+              }
+              if (got_rpn_eqn[k,la,2]=="oper") {
+                  rpn_eval(got_rpn_eqn[k,la,1]);
+                  #printf("rpn_eqn k= %d, la= %d, hdr= %s, get_col %s val= %f nw_val= %f\n", k, la, nwfor[k,1], col_hdr[lc], val1, val0) > "/dev/stderr";
+              }
+           }
+           if (prt_it == 1) {
+             val = rpn_top()
+           } else {
+             printf("rpn_err: %s rpn_eqn k= %d, la= %d, hdr= %s\n", rpn_err, k, la, nwfor[k,1]) > "/dev/stderr";
+           }
+         }
          if (prt_it == 1) {
            if (got_lkfor[k,6] == "div_by_interval") {
               val = val / interval;
@@ -793,6 +894,7 @@ awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v 
               val = val / (interval*nhf);
            }
            printf("\t%s", val);
+           rw_data[rw_col++] = val;
            do_summary(cols, val+0.0, use_epoch+0.0, interval);
            cols++;
          }
@@ -804,6 +906,7 @@ awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v 
           for (ii=1; ii < st_mx; ii++) {
             if (epb <= st_sv[ii,2] && st_sv[ii,2] < epe) {
 		printf("\t%s", st_sv[ii,1]);
+                rw_data[rw_col++] = st_sv[ii,1];
                 do_summary(cols, st_sv[ii,1]+0.0, use_epoch+0.0, interval);
                 cols++;
                 break;
