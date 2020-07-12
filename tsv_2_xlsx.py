@@ -32,12 +32,17 @@ worksheet_charts = None
 ch_sh_arr = []
 verbose = False
 options_all_charts_one_row = False
-all_charts_one_row = [-1, -1]
+all_charts_one_row = []
+all_charts_one_row_hash = {}
+all_charts_one_row_max = -1
+desc = None
 
-options, remainder = getopt.getopt(sys.argv[1:], 'Ab:c:e:f:i:m:o:O:P:p:s:v', [
+options, remainder = getopt.getopt(sys.argv[1:], 'Aa:b:c:d:e:f:i:m:o:O:P:p:s:v', [
                                                          'average',
+                                                         'avg_dir',
                                                          'begin=',
                                                          'clip=',
+                                                         'desc=',
                                                          'end=',
                                                          'file=',
                                                          'images=',
@@ -54,16 +59,21 @@ do_avg = False
 max_val = 0.0
 ts_beg = -1.0
 ts_end = -1.0
+avg_dir = None;
 
 #print("remainder files: ", remainder)
 
 for opt, arg in options:
     if opt in ('-A', '--average'):
         do_avg = True
+    elif opt in ('-a', '--avg_dir'):
+        avg_dir = arg
     elif opt in ('-b', '--begin'):
         ts_beg = float(arg)
     elif opt in ('-c', '--clip'):
         clip   = arg
+    elif opt in ('-d', '--desc'):
+        desc   = arg
     elif opt in ('-e', '--end'):
         ts_end = float(arg)
     elif opt in ('-f', '--file'):
@@ -101,10 +111,13 @@ if options_filename != "":
 if len(opt_fl) > 0:
    fl_opt = 0
    fl_options.append([sys.argv[0]])
+   print("len(fl_options)= %d at 20, len(opt_fl)= %d" % (len(fl_options), len(opt_fl)), file=sys.stderr)
    for i in range(len(opt_fl)):
-       if len(opt_fl[i]) == 0:
+       # use blank lines to mark groups, might have multiple consecutive blanks so only use change from non-blank to blank
+       if len(opt_fl[i]) == 0 and i > 0 and len(opt_fl[i-1]) > 0:
           fl_opt = fl_opt + 1
           fl_options.append([sys.argv[0]])
+          #print("len(fl_options)= %d at 22" % (len(fl_options)), file=sys.stderr)
           continue
        if len(opt_fl[i]) == 1 and opt_fl[i][0][0] != "-":
           print("path? try= ", opt_fl[i][0])
@@ -116,10 +129,12 @@ if len(opt_fl) > 0:
            fl_options[fl_opt].append(opt_fl[i][j])
 else:
    fl_opt = 0
+   #print("len(fl_options)= %d at 30" % (len(fl_options)), file=sys.stderr)
    fl_options.append([])
    for i in range(len(sys.argv)):
        fl_options[fl_opt].append(sys.argv[i])
 
+print("len(fl_options)= %d at 50" % (len(fl_options)), file=sys.stderr)
 
 print("got number of sum_all.tsv files= ", got_sum_all)
 #file_list = sorted(file_list1, key=lambda x: (x["base"], x["fl_opt"]))
@@ -160,9 +175,10 @@ def is_number(s):
 for fo2 in range(len(fl_options)):
    fo = fo2
    print("fo= ", fo)
-   options, remainder = getopt.getopt(fl_options[fo][1:], 'Ac:i:m:o:O:P:p:s:v', [
+   options, remainder = getopt.getopt(fl_options[fo][1:], 'Ac:d:i:m:o:O:P:p:s:v', [
                                                             'average',
                                                             'clip=',
+                                                            'desc=',
                                                             'images=',
                                                             'max=',
                                                             'output=',
@@ -194,6 +210,9 @@ worksheet_sum_all_nm = None
 for i in range(base_mx+1):
     print("base_lkup[%s] = %d, count= %d" % (base_list[i], i, base_count[i]))
 
+for fo2 in range(len(fl_options)):
+   all_charts_one_row.append([-1, 1, 0, None])
+
 for bmi in range(base_mx+1):
 
  print("doing bmi= %d of %d" % (bmi, base_mx+1))
@@ -209,9 +228,10 @@ for bmi in range(base_mx+1):
    #   continue
    print("fo= ", fo)
    #options, remainder = getopt.getopt(sys.argv[1:], 'i:o:p:v', ['images=',
-   options, remainder = getopt.getopt(fl_options[fo][1:], 'Ac:i:m:o:O:P:p:s:v', [
+   options, remainder = getopt.getopt(fl_options[fo][1:], 'Ac:d:i:m:o:O:P:p:s:v', [
                                                             'average',
                                                             'clip=',
+                                                            'desc=',
                                                             'images=',
                                                             'max=',
                                                             'output=',
@@ -245,6 +265,9 @@ for bmi in range(base_mx+1):
        elif opt in ('-c', '--clip'):
            clip = arg
            print("python clip= ", clip)
+       elif opt in ('-d', '--desc'):
+           desc = arg
+           all_charts_one_row[fo2][3] = desc
        elif opt in ('-o', '--output'):
            output_filename = arg
        elif opt in ('-O', '--options'):
@@ -426,6 +449,7 @@ for bmi in range(base_mx+1):
             worksheet = worksheet_sum_all
             wrksh_nm  = worksheet_sum_all_nm
          else:
+            # make sure worksheet name is unique (allow 100 versions of base name)
             if wrksh_nm in wksheet_nms:
              for i in range(100):
                suffix = "_" + str(i)
@@ -526,6 +550,7 @@ for bmi in range(base_mx+1):
          #print("---- do_avg= %s, do_avg_write= %s, fn_bs_sum[%d] rows= %d" % (do_avg, do_avg_write, fn_bs_i, len(fn_bs_sum[fn_bs_i])), file=sys.stderr)
          if do_avg_write == True:
             #print("fn_bs_sum[%d] rows= %d" % (fn_bs_i, len(fn_bs_sum[fn_bs_i])), file=sys.stderr)
+            ndata = [row[:] for row in data]
             for i in fn_bs_sum[fn_bs_i]:
                 #print("row[%d].len= %d" % (i, len(fn_bs_sum[fn_bs_i][i])), file=sys.stderr)
                 for j in fn_bs_sum[fn_bs_i][i]:
@@ -535,9 +560,20 @@ for bmi in range(base_mx+1):
                    if num > 0:
                       val /= num;
                    worksheet.write(i, j, val)
+                   ndata[i][j] = val
             for i in range(len(data)):
                 if not i in fn_bs_sum[fn_bs_i]:
                    worksheet.write_row(i, ph_add, data[i])
+            #with open('new_tsv.tsv', 'w', newline='') as csvfile:
+            base = os.path.basename(x)
+            nw_nm = base
+            if avg_dir != None:
+               nw_nm = avg_dir + "/" + nw_nm
+               print("---- got do_avg_write nw_nm= %s, rows= %d" % (nw_nm, len(data)), file=sys.stderr)
+               with open(nw_nm, 'w') as csvfile:
+                  spamwriter = csv.writer(csvfile, dialect="excel-tab")
+                  for i in range(len(ndata)):
+                      spamwriter.writerow(ndata[i])
          else:
             doing_sum_all = False
             if len(wrksh_nm) >= 7 and wrksh_nm[0:7] == "sum_all":
@@ -692,14 +728,28 @@ for bmi in range(base_mx+1):
                 #print("sh %s ch %s row= %d col= %d" % (sheet_nm, title, ch_top_at_row, ch_left_at_col))
                 #print("++++__insert chart for sheet= %s, chart= %s, at_row= %d at_col= %d" % (sheet_nm, title, ch_top_at_row, ch_left_at_col), file=sys.stderr)
                 if worksheet_charts != None:
-                   if options_all_charts_one_row == True:
-                      if all_charts_one_row[0] == -1:
-                         all_charts_one_row[0] = 1
-                         all_charts_one_row[1] = 1
-                      else:
-                         all_charts_one_row[1] = all_charts_one_row[1] + int(ch_size[2])
-                      ch_top_at_row  = all_charts_one_row[0]
-                      ch_left_at_col = all_charts_one_row[1]
+                   if options_all_charts_one_row == True and desc != None:
+                      print("++++__calc0  chart for sheet= %s, fo2= %d desc= %s" % (sheet_nm, fo2, all_charts_one_row[fo2][3]), file=sys.stderr)
+                      dsc = all_charts_one_row[fo2][3]
+                      if dsc != None and not dsc in all_charts_one_row_hash:
+                         all_charts_one_row_max += 1
+                         file1 = open(desc,"r")  
+                         txt = file1.readline() 
+                         file1.close() 
+                         all_charts_one_row_hash[dsc] = {"index": all_charts_one_row_max, "charts":0, "txt":txt}
+                      dsc_i = -1
+                      if dsc != None:
+                         dsc_i    = all_charts_one_row_hash[dsc]["index"]
+                         ch_in_rw = all_charts_one_row_hash[dsc]["charts"]
+                         all_charts_one_row[dsc_i][0] = 3+ dsc_i * (3+int(ch_size[1]*ch_size[2]))
+                         all_charts_one_row[dsc_i][1] = ch_in_rw * int(ch_size[2])
+                         if ch_in_rw == 0:
+                            worksheet_charts.write(all_charts_one_row[dsc_i][0]-2, 0, txt);
+                         ch_top_at_row  = all_charts_one_row[dsc_i][0]
+                         ch_left_at_col = all_charts_one_row[dsc_i][1]
+                         all_charts_one_row_hash[dsc]["charts"] += 1
+                         
+                      print("chart sheet= %s, row_beg= %d col= %d, title= %s" % (sheet_nm, ch_top_at_row, ch_left_at_col, title), file=sys.stderr)
                    else:
                      if c == 0:  # first chart of row
                         ch_sh_row += 1
@@ -709,6 +759,8 @@ for bmi in range(base_mx+1):
                      ch_top_at_row = ch_sh_arr[ch_sh_row][0]
              if worksheet_charts != None:
                 rc = worksheet_charts.insert_chart(ch_top_at_row, ch_left_at_col, chart1, ch_opt)
+                if options_all_charts_one_row == True:
+                   all_charts_one_row[fo2][2] += 1
              else:
                 rc = worksheet.insert_chart(ch_top_at_row, ch_left_at_col, chart1, ch_opt)
              if rc == -1:
