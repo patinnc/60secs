@@ -24,12 +24,16 @@ SKIP_XLS=0
 MAX_VAL=
 AVERAGE=0
 CLIP=
+AVG_DIR=
 G_SUM=()
 
-while getopts "hvASb:c:D:d:e:g:i:m:o:P:p:s:t:x:" opt; do
+while getopts "hvASa:b:c:D:d:e:g:i:m:o:P:p:s:t:x:" opt; do
   case ${opt} in
     A )
       AVERAGE=1
+      ;;
+    a )
+      AVG_DIR=$OPTARG
       ;;
     b )
       BEG_TM_IN=$OPTARG
@@ -82,6 +86,7 @@ while getopts "hvASb:c:D:d:e:g:i:m:o:P:p:s:t:x:" opt; do
     h )
       echo "$0 split data files into columns"
       echo "Usage: $0 [-h] -d sys_data_dir [-v] [ -p prefix ]"
+      echo "   -a avg_dir average files (-A ) will be put in this dir"
       echo "   -d dir containing sys_XX_* files created by 60secs.sh"
       echo "   -b beg_tm ending timestamp to clip time to"
       echo "   -c clip_to_Phase  enter string of phase for clipping (like x264_r*)"
@@ -133,6 +138,14 @@ if [ ! -d $DIR ]; then
 fi
 echo "dir= $DIR"
 
+OPT_a=
+if [ "$AVG_DIR" != "" ]; then
+   if [ ! -e $AVG_DIR ]; then
+     mkdir -p $AVG_DIR
+   fi
+   OPT_a=" -a $AVG_DIR "
+fi
+echo "$0: SUM_FILE= $SUM_FILE" > /dev/stderr
 if [ "$SUM_FILE" != "" ]; then
   printf "title\tsummary\tsheet\tsummary\ttype\tcopy\n"  > $SUM_FILE;
   printf "hdrs\t2\t0\t-1\t3\t-1\n" >> $SUM_FILE;
@@ -224,6 +237,9 @@ if [ "$RESP" == "1" -a "$PHASE_FILE" == "" ]; then
 fi
 FILES=`ls -1 $DIR/sys_*_*.txt $DIR/$METRIC_OUT`
 echo "FILES = $FILES"
+if [ "$FILES" == "" ]; then
+   FILES=`ls -1 $DIR/*txt.tsv`
+fi
 for i in $FILES; do
  echo $i
   if [[ $i == *"_uptime.txt"* ]]; then
@@ -285,9 +301,6 @@ trows++; printf("\n") > NFL;
   if [[ $i == *"$METRIC_OUT"* ]]; then
     echo "do itp $DIR $METRIC_OUT $i"
     ls -l
-#time,metric_CPU operating frequency (in GHz),metric_CPU utilization %,metric_CPU utilization% in kernel mode,metric_CPI,metric_kernel_CPI,metric_L1D MPI (includes data+rfo w/ prefetches),metric_L1D demand data read hits per instr,metric_L1-I code read misses (w/ prefetches) per instr,metric_L2 demand data read hits per instr,metric_L2 MPI (includes code+data+rfo w/ prefetches),metric_L2 demand data read MPI,metric_L2 demand code MPI,metric_LLC code read MPI (demand+prefetch),metric_LLC data read MPI (demand+prefetch),metric_LLC total HITM (per instr),metric_LLC total HIT clean line forwards (per instr),metric_Average LLC data read miss latency (in clks),metric_Average LLC data read miss latency (in ns),metric_Average LLC data read miss latency for LOCAL requests (in ns),metric_Average LLC data read miss latency for REMOTE requests (in ns),metric_ITLB MPI,metric_DTLB load MPI,metric_DTLB 2MB large page load MPI,metric_DTLB store MPI,metric_NUMA %_Reads addressed to local DRAM,metric_NUMA %_Reads addressed to remote DRAM,metric_uncore frequency GHz,metric_package power (watts),metric_DRAM power (watts),metric_memory bandwidth read (MB/sec),metric_memory bandwidth write (MB/sec),metric_memory bandwidth total (MB/sec),metric_UPI Data transmit BW (MB/sec) (only data),metric_UPI Data transmit BW (MB/sec) (includes control),metric_UPI Transmit utilization_% (includes control),metric_IO_bandwidth_disk_or_network_writes (MB/sec),metric_IO_bandwidth_disk_or_network_reads (MB/sec),metric_TMAM_Info_cycles_both_threads_active(%),metric_TMAM_Info_CoreIPC,metric_TMAM_Frontend_Bound(%),metric_TMAM_Bad_Speculation(%),metric_TMAM_Backend_bound(%),metric_TMAM_Retiring(%)
-#1,2.40600733,16.99837547,8.62996838,1.23067363,2.46693285,0.01511105,0.22598270,0.01507297,0.00307467,0.01691751,0.00439661,0.00624014,0.00052181,0.00398891,0.00019856,0.00019378,318.59677510,118.15075255,99.19535669,140.57104104,0.00018185,0.00096670,0.00010964,0.00012614,52.91514060,47.08485940,2.69652768,66.36900000,20.17800000,3714.28599040,1431.27577600,5145.56176640,2554.91950720,3804.67245600,5.94338708,33.62602240,1380.14116480,15.50708414,1.62512623,38.76328927,4.78888272,48.60994847,24.53865285
-    #CPU(s):                48
     NCPUS=1
     if [ -e lscpu.txt ]; then
      NCPUS=`awk '/^CPU.s.:/ { printf("%s\n", $2);exit;}' lscpu.txt`
@@ -312,7 +325,7 @@ trows++; printf("\n") > NFL;
       fi
     fi
     echo "========SPIN_TXT5= $SPIN_TXT dir= $DIR i= $i, average= $AVERAGE, NCPUS= $NCPUS" > /dev/stderr
-    awk -v do_avg="$AVERAGE" -v sum_file="$SUM_FILE" -v metric_file="$METRIC_OUT" -v metric_avg="$METRIC_AVG" -v pfx="$PFX" '
+    awk -v options="$OPTIONS" -v do_avg="$AVERAGE" -v sum_file="$SUM_FILE" -v metric_file="$METRIC_OUT" -v metric_avg="$METRIC_AVG" -v pfx="$PFX" '
       BEGIN{
          beg=1;
          mx=0
@@ -434,11 +447,12 @@ trows++; printf("\n") > NFL;
            }
         }
      }
-#scatter
      END{
-       for (i=1; i <= 40; i++) {
-        trows++;
-        printf("\n") > NFL;
+       if (options != "" && index(options, "chart_sheet") == 0) {
+         for (i=1; i <= 40; i++) {
+          trows++;
+          printf("\n") > NFL;
+         }
        }
        GIPS_col_freq = -1;
        GIPS_col_CPI  = -1;
@@ -2542,14 +2556,20 @@ row += trows;
    SHEETS="$SHEETS $i.tsv"
  fi
 
-  if [[ $i == *"_perf_stat.txt"* ]]; then
+  if [[ $i == *"_perf_stat.txt" ]]; then
     OPT_D=
     if [ "$DEBUG_OPT" != "" ]; then
        OPT_D=" -D $DEBUG_OPT "
     fi
-    echo "do perf_stat data"
+    echo "do perf_stat data $i" > /dev/stderr
     time $SCR_DIR/perf_stat_scatter.sh $OPT_D -b "$BEG"  -e "$END_TM"  -o "$OPTIONS"  -f $i -S $SUM_FILE > $i.tsv
-    SHEETS="$SHEETS $i.tsv"
+  fi
+  if [[ $i == *"_perf_stat.txt.tsv"* ]]; then
+    SHEETS="$SHEETS $i"
+  else
+    if [[ $i == *"_perf_stat.txt"* ]]; then
+      SHEETS="$SHEETS $i.tsv"
+    fi
   fi
 
   if [[ $i == *"gmatching_logs.txt" ]]; then
@@ -3017,10 +3037,10 @@ for f in $tst_files; do
   if [ -e $f ]; then
      echo "try latency log $f" > /dev/stderr
      $SCR_DIR/resp_2_tsv.sh -f $f -s $SUM_FILE $OPT_END_TM
-     if [ -e $f.tsv ]; then
+  fi
+  if [ -e $f.tsv ]; then
      SHEETS="$SHEETS $f.tsv"
      echo "got latency log $f.tsv" > /dev/stderr
-     fi
   fi
 done
 tst_files="http-status.log"
@@ -3028,20 +3048,20 @@ for f in $tst_files; do
   if [ -e $f ]; then
      echo "try http-status log $f" > /dev/stderr
      $SCR_DIR/resp_2_tsv.sh -f $f -s $SUM_FILE  $OPT_END_TM
-     if [ -e $f.tsv ]; then
+  fi
+  if [ -e $f.tsv ]; then
      SHEETS="$SHEETS $f.tsv"
      echo "got http-status log $f.tsv" > /dev/stderr
      grep title $f.tsv > /dev/stderr
-     fi
   fi
 done
 tst_files="RPS.log response_time.log"
 for f in $tst_files; do
   if [ -e $f ]; then
      $SCR_DIR/resp_2_tsv.sh -f $f -s $SUM_FILE  $OPT_END_TM
-     if [ -e $f.tsv ]; then
+  fi
+  if [ -e $f.tsv ]; then
      SHEETS="$SHEETS $f.tsv"
-     fi
   fi
 done
 ITP_FILE=$METRIC_OUT.tsv
@@ -3230,6 +3250,12 @@ fi
 #  Run Start:    2020-06-16 18:01:16 (1592355676)
 #  Rate Start:   2020-06-16 18:01:16 (1592355676.05476)
 #  Rate End:     2020-06-16 18:10:54 (1592356254.54992)
+  RESP=`find . -name "muttley?.json.tsv" | wc -l | awk '{$1=$1;print}'`
+  echo "find muttley RESP= $RESP"
+  if [ "$RESP" != "0" ]; then
+    RESP=`find . -name "muttley?.json.tsv" | xargs`
+    SHEETS="$SHEETS $RESP"
+  fi
 
 echo "SHEETS= $SHEETS SKIP_XLS= $SKIP_XLS, xls_fl= $XLSX_FILE avg= $AVERAGE"
 if [ "$SHEETS" != "" -a "$SKIP_XLS" == "0" ]; then
@@ -3252,8 +3278,8 @@ if [ "$SHEETS" != "" -a "$SKIP_XLS" == "0" ]; then
    if [ "$AVERAGE" == "0" ]; then
      echo "for python: SKIP_XLS= $SKIP_XLS" > /dev/stderr
      # default chart size is pretty small, scale chart size x,y by 2 each. def 1,1 seems to be about 15 rows high (on my MacBook)
-     echo python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" $OPT_O $OPT_M -o $XLSX_FILE $OPT_C $OPT_PH -i "$IMAGE_STR" $SHEETS > /dev/stderr
-          python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" $OPT_O $OPT_M -o $XLSX_FILE $OPT_C $OPT_PH -i "$IMAGE_STR" $SHEETS
+     echo python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" $OPT_a $OPT_O $OPT_M -o $XLSX_FILE $OPT_C $OPT_PH -i "$IMAGE_STR" $SHEETS > /dev/stderr
+          python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" $OPT_a $OPT_O $OPT_M -o $XLSX_FILE $OPT_C $OPT_PH -i "$IMAGE_STR" $SHEETS
      if [ "$DIR" == "." ];then
        UDIR=`pwd`
      else
