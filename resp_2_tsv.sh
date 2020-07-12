@@ -9,8 +9,10 @@ END_IN=
 SUM_FILE=
 TYP_IN=
 SHEET_NM=
+OPTIONS=
+MATCH_INTRVL=
 
-while getopts "hvf:b:e:s:S:" opt; do
+while getopts "hvf:b:e:m:o:s:S:" opt; do
   case ${opt} in
     f )
       FILE=$OPTARG
@@ -20,6 +22,12 @@ while getopts "hvf:b:e:s:S:" opt; do
       ;;
     e )
       END_IN=$OPTARG
+      ;;
+    m )
+      MATCH_INTRVL=$OPTARG
+      ;;
+    o )
+      OPTIONS=$OPTARG
       ;;
     S )
       SHEET_NM=$OPTARG
@@ -94,10 +102,18 @@ O_TYP=
 if [ "$TYP" != "" ]; then
   O_TYP=" -t $TYP "
 fi
+O_OPT=
+if [ "$OPTIONS" != "" ]; then
+  O_OPT=" -o $OPTIONS "
+fi
+O_MATCH=
+if [ "$MATCH_INTRVL" != "" ]; then
+  O_MATCH=" -m $MATCH_INTRVL "
+fi
 OPT_SHEET_NM=
 if [ "$SHEET_NM" != "" ]; then
   OPT_SHEET_NM=" -S $SHEET_NM "
 fi
-echo "python $SCR_DIR/json_2_tsv.py -f $FILE -s $SUM_FILE $O_BEG $O_END $O_TYP $OPT_SHEET_NM " > /dev/stderr
-      python $SCR_DIR/json_2_tsv.py -f $FILE -s $SUM_FILE $O_BEG $O_END $O_TYP $OPT_SHEET_NM
+echo "python $SCR_DIR/json_2_tsv.py -f $FILE $O_OPT $O_MATCH -s $SUM_FILE $O_BEG $O_END $O_TYP $OPT_SHEET_NM " > /dev/stderr
+      python $SCR_DIR/json_2_tsv.py -f $FILE $O_OPT $O_MATCH -s $SUM_FILE $O_BEG $O_END $O_TYP $OPT_SHEET_NM
 #python ../json_2_tsv.py response_time.json $BEG $END
