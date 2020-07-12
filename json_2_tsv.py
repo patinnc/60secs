@@ -5,8 +5,10 @@ import sys
 import os
 
 
-options, remainder = getopt.getopt(sys.argv[1:], 'vf:b:e:S:s:t:', ['verbose', 'file=', 'beg=',
+options, remainder = getopt.getopt(sys.argv[1:], 'vf:b:e:m:o:S:s:t:', ['verbose', 'file=', 'beg=',
                                                          'end=',
+                                                         'match=',
+                                                         'options=',
                                                          'Sheet=',
                                                          'summary=',
                                                          'type=',
@@ -14,14 +16,23 @@ options, remainder = getopt.getopt(sys.argv[1:], 'vf:b:e:S:s:t:', ['verbose', 'f
 hdr=""
 sum_file=""
 sheet_nm=""
+options_str=""
+match_intrvl = 0
+verbose = 0
 
 for opt, arg in options:
+    if opt in ('-v', '--verbose'):
+        verbose += 1
     if opt in ('-f', '--file'):
         flnm = arg
     if opt in ('-b', '--beg'):
         beg = float(arg)
     if opt in ('-e', '--end'):
         end = float(arg)
+    if opt in ('-m', '--match'):
+        match_intrvl = int(arg)
+    if opt in ('-o', '--options'):
+        options_str = arg
     if opt in ('-t', '--type'):
         hdr = arg
     if opt in ('-s', '--summary'):
@@ -29,6 +40,8 @@ for opt, arg in options:
     if opt in ('-S', '--Sheet'):
         sheet_nm = arg
 
+if verbose > 0:
+   print("________json_2_tsv.py: got match_intrvl= %d" % (match_intrvl), file=sys.stderr)
 
 
 #flnm=sys.argv[1]
@@ -83,8 +96,26 @@ for i in range(len(data)):
           lwr_bnd = int(lwr_bnd_str)
        trgt_ts[trgt] = lwr_bnd
        print("target= %s, lwr_bnd= %d" % (trgt, lwr_bnd))
+    tm_diff = 0
+    use_every = 1
+    use_this  = 0
     for j in range(len(data[i]['datapoints'])):
         tm = data[i]['datapoints'][j][1]
+        if match_intrvl > 0 and tm_diff == 0:
+           tm_diff = data[i]['datapoints'][j+1][1] - tm
+           if tm_diff > 0 and tm_diff < match_intrvl:
+              use_every = match_intrvl/tm_diff
+              if use_every < 1:
+                 use_every = 1
+           if verbose > 0:
+              print("________json_2_tsv.py: got match_intrvl= %d, use_every= %d" % (match_intrvl, use_every), file=sys.stderr)
+           
+        if use_every > 1:
+           use_this += 1
+           if use_this < use_every:
+              continue
+           else:
+              use_this = 0
         if tm >= beg and tm <= end:
            if data[i]['datapoints'][j][0] == None:
               val = 0.0
@@ -121,9 +152,13 @@ if hdr == "" and len(trgt_arr2) == 1:
 if sheet_nm == "" and hdr != "":
    sheet_nm = hdr
 
+line_typ = "scatter_straight"
+if options_str != "" and options_str.find("line_for_scatter") >= 0:
+   line_typ = "line"
+
 of = open(flnm+".tsv","w+")
 rw = 0
-of.write("title\t%s\tsheet\t%s\ttype\tscatter_straight\n" % (hdr, sheet_nm))
+of.write("title\t%s\tsheet\t%s\ttype\t%s\n" % (hdr, sheet_nm, line_typ))
 rw += 1
 of.write("hdrs\t%d\t%d\t%d\t%d\t1\n" % (rw+1, 2, len(odata)+rw+1, 1+len(trgt_arr)))
 #hdrs	3	24	-1	35
