@@ -155,6 +155,10 @@ get_abs_filename() {
 
 OPT_a=
 if [ "$AVG_DIR" != "" ]; then
+  if [ "$AVERAGE" == "0" ]; then
+     echo "$0: cmdline options has -a $AVG_DIR but you didn't specify -A option. Bye" > /dev/stderr
+     exit
+  fi
   if [ -d $AVG_DIR ]; then
     mkdir -p "$AVG_DIR"
   fi
@@ -688,7 +692,7 @@ if [ $NUM_DIRS -gt 1 ]; then
       echo "$BEG_TM" | awk '{print strftime("beg_time: %c %Z",$1)}' > /dev/stderr
       echo "$END_TM" | awk '{print strftime("end_time: %c %Z",$1)}' > /dev/stderr
       RESP_ITP=`find $USE_DIR -name run_itp.log | wc -l | awk '{$1=$1;print}'`
-      if [ "$RESP" != "0" ]; then
+      if [ "$RESP_ITP" != "0" ]; then
          ITP_LOG=`find $USE_DIR -name run_itp.log | head -1`
          ITP_INTRVL=`awk '
             BEGIN{intrvl=0;}
