@@ -451,7 +451,7 @@ for bmi in range(base_mx+1):
          else:
             # make sure worksheet name is unique (allow 100 versions of base name)
             if wrksh_nm in wksheet_nms:
-             for i in range(100):
+             for i in range(200):
                suffix = "_" + str(i)
                tnm = wrksh_nm + suffix
                #print("ck if worksheet name %s exists" % (tnm), file=sys.stderr)
