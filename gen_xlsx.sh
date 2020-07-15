@@ -615,6 +615,32 @@ if [ $NUM_DIRS -gt 1 ]; then
         close(flnm)
       }
     }
+ function ck_num(a) {
+  b=a+0;
+  isnum=0;
+  if (a==0.0){
+    isnum=2;
+  }else {
+    if (b==0) {
+     if (index(a, "0") > 0) {
+       c = a;
+       gsub(/[0]+/,"",c);
+       gsub(/./,"",c);
+       if (c == "") {
+         isnum=3;
+       } else {
+         isnum=-1;
+       }
+     } else {
+       isnum=-2;
+     }
+    } else {
+     isnum=4;
+    }
+  }
+  return isnum;
+ }
+
     END {
       ofile = sum_all;
       #printf("ofile= %s\n", ofile) > "/dev/stderr";
@@ -635,7 +661,12 @@ if [ $NUM_DIRS -gt 1 ]; then
         }
         for (j=1; j <= fls; j++) {
           val = mtrc_arr[j,i];
-          printf("\t%s", val) > ofile;
+          isnum=ck_num(val);
+          equal = "";
+          if (isnum > 0) {
+            equal = "=";
+          }
+          printf("\t%s%s", equal, val) > ofile;
         }
         printf("\n") > ofile;
       }
