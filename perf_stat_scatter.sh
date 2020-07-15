@@ -133,7 +133,7 @@ done
 echo "TSC_FREQ= $TSC_FREQ NUM_CPUS= $NUM_CPUS" > /dev/stderr
 
 
-awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s/skt|memory},LLC-misses PKI{|memory},IPC{InstPerCycle|CPU},%not_halted{|CPU},avg_freq{avg_freq GHz|CPU},QPI_BW{QPI_BW GB/s/skt|memory interconnect},Instructions*1e-9/s{Instructions*1e-9/s/skt|CPU}" 'BEGIN{
+awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s|memory},LLC-misses PKI{|memory},IPC{InstPerCycle|CPU},%not_halted{|CPU},avg_freq{avg_freq GHz|CPU},QPI_BW{QPI_BW GB/s|memory interconnect},Instructions*1e-9/s{Instructions*1e-9/s|CPU}" 'BEGIN{
      rpn_sp = 0;
      row=0;
      evt_idx=-1;
@@ -387,6 +387,7 @@ function rpn_eval(x) {
      got_lkfor[kmx,5]=1; # instances
      got_lkfor[kmx,6]="div_by_interval"; # 
      got_lkfor[kmx,"typ_match"]="require_any"; # 
+     got_lkfor[kmx,"max"]=1000.0;
      lkfor[kmx,1]="unc0_read_write";
      lkfor[kmx,2]="unc1_read_write";
      lkfor[kmx,3]="unc2_read_write";
@@ -445,6 +446,17 @@ function rpn_eval(x) {
      got_lkfor[kmx,5]=1; # instances
      got_lkfor[kmx,6]="div_by_interval"; # 
      lkfor[kmx,1]="qpi_data_bandwidth_tx";
+     nwfor[kmx,1]="QPI_BW (GB/sec)";
+
+     kmx++;
+     got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+     got_lkfor[kmx,2]=2; # num of fields to look for
+     got_lkfor[kmx,3]=1e-9; # a factor
+     got_lkfor[kmx,4]="sum"; # operation
+     got_lkfor[kmx,5]=1; # instances
+     got_lkfor[kmx,6]="div_by_interval"; # 
+     lkfor[kmx,1]="qpi_data_bandwidth_tx0";
+     lkfor[kmx,2]="qpi_data_bandwidth_tx1";
      nwfor[kmx,1]="QPI_BW (GB/sec)";
 
      kmx++;
@@ -570,6 +582,7 @@ function rpn_eval(x) {
               got_lkfor[kmx_nw,5]= got_lkfor[k,5];
               got_lkfor[kmx_nw,6]= got_lkfor[k,6];
               got_lkfor[kmx_nw,"typ_match"]= got_lkfor[k,"typ_match"];
+              got_lkfor[kmx_nw,"max"]= got_lkfor[k,"max"];
               got_lkfor[kmx_nw,7]= sk; # skt_idx
               got_lkfor[kmx_nw,8]= nwfor[k,1]; # save off original result name so we only have to ck 1 name
               for (kk=1; kk <= got_lkfor[k,2]; kk++) {
@@ -892,6 +905,11 @@ function rpn_eval(x) {
               nhf = not_halted_fctr[sk];
              #printf("a sk= %s, nhf= %f, skt_idx= %s interval= %f\n", sk, not_halted_fctr[sk], skt_idx, interval) > "/dev/stderr";
               val = val / (interval*nhf);
+           }
+           if (got_lkfor[k,"max"] != "") {
+               if (val > got_lkfor[k,"max"]) {
+                  val=0.0;
+               }
            }
            printf("\t%s", val);
            rw_data[rw_col++] = val;
