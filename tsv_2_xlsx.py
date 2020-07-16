@@ -560,6 +560,16 @@ for bmi in range(base_mx+1):
                    if num > 0:
                       val /= num;
                    worksheet.write(i, j, val)
+                   if i >= len(ndata) or j >= len(ndata[i]):
+                      print("bad idx: i= %d, len(ndata)= %d, j= %d, len(ndata[%d])= %d, val= %f, num= %d" % (i, len(ndata), j, i, len(ndata[i]), val, num), file=sys.stderr)
+                      ii = i
+                      if i >= len(ndata):
+                         for ii in (len(ndata), i+1):
+                            ndata.append([])
+                      if j >= len(ndata[i]):
+                         for ii in (len(ndata[i]), j+1):
+                            ndata[i].append(0.0)
+                     
                    ndata[i][j] = val
             for i in range(len(data)):
                 if not i in fn_bs_sum[fn_bs_i]:
