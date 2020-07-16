@@ -6,6 +6,7 @@
 SCR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 echo "SCR_DIR= $SCR_DIR" > /dev/stderr
 
+declare -a REGEX
 DIR=
 PHASE_FILE=
 XLSX_FILE=
@@ -19,7 +20,6 @@ VERBOSE=0
 CLIP=
 G_SUM=()
 OPTIONS=
-REGEX=
 INPUT_FILE_LIST=
 AVG_DIR=
 DESC_FILE=
@@ -74,7 +74,7 @@ while getopts "hvASa:c:D:d:e:F:g:I:m:N:o:P:r:X:x:" opt; do
       PHASE_FILE=$OPTARG
       ;;
     r )
-      REGEX=$OPTARG
+      REGEX+=($OPTARG)
       ;;
     X )
       AXLSX_FILE=$OPTARG
@@ -136,6 +136,22 @@ if [ "$remaining_args" != "" ]; then
   exit
 fi
 
+SUM_ALL_AVG_BY_METRIC=
+if [ "$OPTIONS" != "" ]; then
+   lkfor="sum_all_avg_by_metric{"
+   if [[ $OPTIONS == *"$lkfor"* ]]; then
+       rest=${OPTIONS#*$lkfor}
+       echo $(( ${#OPTIONS} - ${#rest} - ${#lkfor} ))
+       echo "got $lkfor, rest= $rest"
+       lkfor="}"
+       #rest2=${rest#*$lkfor}
+       pfx=${rest%%$lkfor*}
+       echo "options: sum_all_avg_by_metric=\"${pfx}\""
+       SUM_ALL_AVG_BY_METRIC="$pfx"
+   fi
+fi
+
+REGEX_LEN=${#REGEX[@]}
 
 SKIP_SYS_2_TSV=0
 if [ "$OPTIONS" != "" ]; then
@@ -183,12 +199,19 @@ if [ ! -e $DIR/60SECS.LOG ]; then
      echo "didn't find 60secs.log file under dir $DIR. Bye"
      CKF="metric_out"
      RESP=`find $DIR -name $CKF | wc -l | awk '{$1=$1;print}'`
+     if [ "$RESP" == "0" ]; then
+     CKF="metric_out.tsv"
+     RESP=`find $DIR -name $CKF | wc -l | awk '{$1=$1;print}'`
+     fi
      if [ "$RESP" != "0" ]; then
        echo "found $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one."
        #RESP=`find $DIR -name $CKF -print0 | sort -z | xargs -0 cat`
-       if [ "$REGEX" != "" ]; then
+       if [ "$REGEX_LEN" != "0" ]; then
          RESP2=`find $DIR -name $CKF -print | sort`
-         RESP=`echo -e "$RESP2" | grep "$REGEX"`
+         RESP=$RESP2
+         for ii in ${REGEX[@]}; do
+            RESP=`echo -e "$RESP" | grep "$ii"`
+         done
          mydir=`echo -e "$RESP" | wc -l`
          echo "mydir count= $mydir"
        else
@@ -215,8 +238,11 @@ if [ ! -e $DIR/60SECS.LOG ]; then
        if [ "$RESP" != "0" ]; then
          echo "found $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one." > /dev/stderr
          RESP=`find $DIR -name "$CKF"|sort`
-         if [ "$REGEX" != "" ]; then
-           RESP=`find $DIR -name "$CKF" | grep "$REGEX" | sort`
+         if [ "$REGEX_LEN" != "0" ]; then
+           RESP=`find $DIR -name "$CKF" | sort`
+           for ii in ${REGEX[@]}; do
+             RESP=`echo -e "$RESP" | grep "$ii"`
+           done
            RESP3=`echo "$RESP" | wc -l`
            echo "mydir count= $mydir, resplines= $RESP3"
          fi
@@ -466,17 +492,18 @@ for i in $LST; do
  echo -e "-i\t\"$i/*.png\"" >> $ALST
  #echo -e "-x\t$i.xlsx" >> $ALST
  #echo -e "-o\tchart_new,dont_sum_sockets" >> $ALST
+ # itp files
+ if [ -e metric_out.tsv ]; then
+   FLS=$(get_abs_filename metric_out.tsv)
+   #FLS=`ls -1 $i/metric_out.tsv`
+   echo -e "${FLS}" >> $ALST
+ fi
  popd
  FLS=`ls -1 $SM_FL $i/*txt.tsv`
  echo -e "${FLS}" >> $ALST
  MYA=($i/*log.tsv)
  if [ "${#MYA}" != "0" ]; then
    FLS=`ls -1 $i/*log.tsv`
-   echo -e "${FLS}" >> $ALST
- fi
- # itp files
- if [ -e $i/metric_out.tsv ]; then
-   FLS=`ls -1 $i/metric_out.tsv`
    echo -e "${FLS}" >> $ALST
  fi
  MYSVG=($i/*.svg)
@@ -532,8 +559,8 @@ if [ $NUM_DIRS -gt 1 ]; then
   fi
   echo "ALST= $ALST" > /dev/stderr
   echo "awk -v input_file=\"$ALST\" -v sum_all=\"$SUM_ALL\" -v sum_file=\"$SUM_FILE\""
-  awk -v input_file="$ALST" -v sum_all="$SUM_ALL" -v sum_file="$SUM_FILE" '
-    BEGIN{sum_files=0;fls=0; fld_m=3;fld_v=4;}
+  awk -v input_file="$ALST" -v sum_all="$SUM_ALL" -v sum_file="$SUM_FILE" -v sum_all_avg_by_metric="$SUM_ALL_AVG_BY_METRIC" '
+    BEGIN{sum_files=0;fls=0; fld_m=3;fld_v=4; got_avgby=0;}
     { if (index($0, sum_file) > 0 || index($0, sum_all) > 0) {
         flnm = $0;
         fls++;
@@ -568,6 +595,34 @@ if [ $NUM_DIRS -gt 1 ]; then
               mtrc_lkup[mtrc_mx] = mtrc;
            }
            mtrc_i = mtrc_list[mtrc];
+           if (sum_all_avg_by_metric != "" && mtrc == sum_all_avg_by_metric) {
+              got_avgby = 1;
+              avgby=arr[fld_v]; 
+              if (!(avgby in avgby_list)) {
+                avgby_list[avgby] = ++avgby_list_mx;
+                avgby_lkup[avgby_list_mx] = avgby;
+              } 
+              avgby_i = avgby_list[avgby];
+              avgby_arr[fls,1] = avgby_i;
+              avgby_arr[fls,2]++;
+           }
+           if (mtrc == "goto_sheet") {
+              gs=arr[fld_v]; 
+              if (!(gs in gs_list)) {
+                gs_list[gs] = ++gs_list_mx;
+                gs_lkup[gs_list_mx] = gs;
+              } else {
+                for (i=0; i <= 100; i++) {
+                   tnm = gs "_" i;
+                   if (!(tnm in gs_list)) {
+                     gs_list[tnm] = ++gs_list_mx;
+                     gs_lkup[gs_list_mx] = tnm;
+                     arr[fld_v] = tnm;
+                     break;
+                   }
+                }
+              }
+           }
            if (mtrc == "goto_sheet") {
               gs=arr[fld_v]; 
               if (!(gs in gs_list)) {
@@ -625,7 +680,7 @@ if [ $NUM_DIRS -gt 1 ]; then
      if (index(a, "0") > 0) {
        c = a;
        gsub(/[0]+/,"",c);
-       gsub(/./,"",c);
+       gsub(/\./,"",c);
        if (c == "") {
          isnum=3;
        } else {
@@ -648,7 +703,13 @@ if [ $NUM_DIRS -gt 1 ]; then
       printf("hdrs\t2\t0\t-1\t%d\t-1\n", fls+3) > ofile;
       printf("Resource\tTool\tMetric") > ofile;
       for (j=1; j <= fls; j++) {
-         printf("\t%d", j-1) > ofile;
+         if (got_avgby == 1) {
+          if (j == 1 || avgby_arr[j,1] != avgby_arr[j-1,1]) {
+            printf("\t%d", avgby_arr[j,1]) > ofile;
+          }
+         } else {
+            printf("\t%d", j-1) > ofile;
+         }
       }
       printf("\n") > ofile;
       for (i=1; i <= mtrc_mx; i++) {
@@ -665,6 +726,29 @@ if [ $NUM_DIRS -gt 1 ]; then
           equal = "";
           if (isnum > 0) {
             equal = "=";
+            if (got_avgby == 1) {
+              if (j == 1 || avgby_arr[j,1] != avgby_arr[j-1,1]) {
+                sm = 0;
+                for (jj=0; jj < avgby_arr[j,2]; jj++) {
+                  sm += mtrc_arr[j+jj,i];
+                }
+                if (avgby_arr[j,2] > 0) {
+                  val = sm / avgby_arr[j,2];
+                } else {
+                  val = 0.0;
+                }
+              } else {
+                continue;
+              }
+            }
+          } else {
+            if (got_avgby == 1) {
+              if (j == 1 || avgby_arr[j,1] != avgby_arr[j-1,1]) {
+               ;
+              } else {
+                continue;
+              }
+            }
           }
           printf("\t%s%s", equal, val) > ofile;
         }
