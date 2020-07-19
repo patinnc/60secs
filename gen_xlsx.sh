@@ -25,7 +25,7 @@ AVG_DIR=
 DESC_FILE=
 echo "$0 ${@}"
 
-while getopts "hvASa:c:D:d:e:F:g:I:m:N:o:P:r:X:x:" opt; do
+while getopts "hvASa:b:c:D:d:e:F:g:I:m:N:o:P:r:X:x:" opt; do
   case ${opt} in
     A )
       AVERAGE=1
@@ -39,6 +39,9 @@ while getopts "hvASa:c:D:d:e:F:g:I:m:N:o:P:r:X:x:" opt; do
     a )
       AVG_DIR=$OPTARG
       ;;
+    b )
+      BEG_TM_IN=$OPTARG
+      ;;
     c )
       CLIP=$OPTARG
       ;;
@@ -50,7 +53,7 @@ while getopts "hvASa:c:D:d:e:F:g:I:m:N:o:P:r:X:x:" opt; do
       echo "input DIR= $DIR"
       ;;
     e )
-      END_TM=$OPTARG
+      END_TM_IN=$OPTARG
       ;;
     F )
       DESC_FILE=$OPTARG
@@ -405,9 +408,13 @@ for i in $LST; do
  if [ "$TS_INIT" != "" ]; then
     OPT_BEG_TM=" -b $TS_INIT "
  fi
+ if [ "$BEG_TM_IN" != "" ]; then
+    OPT_BEG_TM=" -b $BEG_TM_IN "
+    echo "$0: BEG_TM= $BEG_TM_IN"
+ fi
  OPT_END_TM=
- if [ "$END_TM" != "" ]; then
-    OPT_END_TM=" -e $END_TM "
+ if [ "$END_TM_IN" != "" ]; then
+    OPT_END_TM=" -e $END_TM_IN "
  fi
  OPT_SKIP=
  if [ "$SKIP_XLS" == "1" ]; then
@@ -448,6 +455,7 @@ for i in $LST; do
    if [ $VERBOSE -gt 0 ]; then
      echo "$SCR_DIR/sys_2_tsv.sh $OPT_a $OPT_A $OPT_G -p \"$RPS\" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i \"*.png\" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets$OPT_OPT $OPT_PH -t $DIR &> tmp.jnk" &
    fi
+     #echo "$SCR_DIR/sys_2_tsv.sh $OPT_a $OPT_A $OPT_G -p \"$RPS\" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i \"*.png\" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets$OPT_OPT $OPT_PH -t $DIR &> tmp.jnk" &
           $SCR_DIR/sys_2_tsv.sh $OPT_a $OPT_A $OPT_G -p "$RPS" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets$OPT_OPT $OPT_PH -t $DIR &> tmp.jnk &
    if [ $PIDS_WAIT -gt 12 ]; then
      wait
@@ -787,6 +795,12 @@ if [ $NUM_DIRS -gt 1 ]; then
   ' $ALST
 
   got_pwd=`pwd`
+      if [ "$BEG_TM_IN" != "" ]; then
+        BEG_TM=$BEG_TM_IN
+      fi
+      if [ "$END_TM_IN" != "" ]; then
+        END_TM=$END_TM_IN
+      fi
   echo "=========== pwd = $got_pwd ========="
     USE_DIR=
     RESP=`find $DIR_1ST_DIR -name run.log | head -1 | wc -l | awk '{$1=$1;print}'`
@@ -801,8 +815,16 @@ if [ $NUM_DIRS -gt 1 ]; then
     if [ "$RESP" != "0" ]; then
       RUN_LOG=`find $USE_DIR -name run.log | head -1`
       echo "run_log file= $RUN_LOG"
-      BEG_TM=`awk '/ start /{printf("%s\n", $2);}' $RUN_LOG`
-      END_TM=`awk '/ end /{printf("%s\n", $2);}' $RUN_LOG`
+      if [ "$BEG_TM_IN" != "" ]; then
+        BEG_TM=$BEG_TM_IN
+      else
+        BEG_TM=`awk '/ start /{printf("%s\n", $2);}' $RUN_LOG`
+      fi
+      if [ "$END_TM_IN" != "" ]; then
+        END_TM=$END_TM_IN
+      else
+        END_TM=`awk '/ end /{printf("%s\n", $2);}' $RUN_LOG`
+      fi
       echo "beg_tm= $BEG_TM end_tm= $END_TM" > /dev/stderr
       echo "$BEG_TM" | awk '{print strftime("beg_time: %c %Z",$1)}' > /dev/stderr
       echo "$END_TM" | awk '{print strftime("end_time: %c %Z",$1)}' > /dev/stderr
