@@ -26,6 +26,7 @@ AVERAGE=0
 CLIP=
 AVG_DIR=
 G_SUM=()
+#echo "$0: cmdline= ${@}"
 
 while getopts "hvASa:b:c:D:d:e:g:i:m:o:P:p:s:t:x:" opt; do
   case ${opt} in
@@ -37,6 +38,7 @@ while getopts "hvASa:b:c:D:d:e:g:i:m:o:P:p:s:t:x:" opt; do
       ;;
     b )
       BEG_TM_IN=$OPTARG
+      echo "$0: top BEG_TM_IN= $BEG_TM_IN"
       ;;
     c )
       CLIP=$OPTARG
@@ -127,6 +129,7 @@ while getopts "hvASa:b:c:D:d:e:g:i:m:o:P:p:s:t:x:" opt; do
 done
 shift $((OPTIND -1))
 
+#echo "$0: top BEG_TM_IN= $BEG_TM_IN" > /dev/stderr
 
 if [ "$DIR" == "" ]; then
   echo "you must enter a dir '-d dir_path' containing sys_*_*.txt files created by 60secs.sh"
@@ -223,8 +226,9 @@ BEG_ADJ=`cat $DIR/60secs.log | awk '
     '`
 if [ "$BEG_TM_IN" != "" ]; then
   BEG=$BEG_TM_IN
+  echo "$0 set BEG_TM= $BEG_TM_IN"
 fi
-echo "awk time offset hours BEG_ADJ= $BEG_ADJ"
+echo "awk time offset hours BEG_ADJ= $BEG_ADJ  BEG_TM= $BEG, BEG_TM_IN= $BEG_TM_IN"
 #exit
 RESP=`find .. -name "CPU2017.001.log" | wc -l | awk '{printf("%s\n", $1);exit;}'`
 pwd
@@ -2561,7 +2565,7 @@ row += trows;
     if [ "$DEBUG_OPT" != "" ]; then
        OPT_D=" -D $DEBUG_OPT "
     fi
-    echo "do perf_stat data $i" > /dev/stderr
+    echo "do perf_stat data $i with BEG= $BEG, end= $END_TM" > /dev/stderr
     time $SCR_DIR/perf_stat_scatter.sh $OPT_D -b "$BEG"  -e "$END_TM"  -o "$OPTIONS"  -f $i -S $SUM_FILE > $i.tsv
   fi
   if [[ $i == *"_perf_stat.txt.tsv"* ]]; then
