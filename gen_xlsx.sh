@@ -1,5 +1,4 @@
 #!/bin/bash
-
 #SCR_DIR=`dirname $(readlink -e $0)`
 #SCR_DIR=`dirname $0`
 #SCR_DIR=`dirname "$(readlink -f "$0")"`
@@ -23,6 +22,7 @@ OPTIONS=
 INPUT_FILE_LIST=
 AVG_DIR=
 DESC_FILE=
+BACKGROUND=20  # setting this to 0 turns off launching sys_2_tsv.sh in the background
 echo "$0 ${@}"
 
 while getopts "hvASa:b:c:D:d:e:F:g:I:m:N:o:P:r:X:x:" opt; do
@@ -228,7 +228,7 @@ if [ ! -e $DIR/60SECS.LOG ]; then
        done
        DIR=$STR
        #DIR=$(dirname $RESP)
-       echo "using DIR= $DIR, orig DIR= $DIR_ORIG"
+       echo "using1 DIR= $DIR, orig DIR= $DIR_ORIG"
      else
        CKF="sys_*_perf_stat.txt"
        RESP=`find $DIR -name "$CKF" | wc -l | awk '{$1=$1;print}'`
@@ -302,7 +302,7 @@ if [ ! -e $DIR/60SECS.LOG ]; then
            fi
          done
          DIR=$STR
-         #echo "using DIR= $DIR, orig DIR= $DIR_ORIG"
+         #echo "using2 DIR= $DIR, orig DIR= $DIR_ORIG"
        else
          echo "didn't find 60secs.log nor metric_out nor sys_*_perf_stat.txt file under dir $DIR. Bye"
          exit
@@ -313,7 +313,7 @@ if [ ! -e $DIR/60SECS.LOG ]; then
      RESP=`find $DIR -name 60secs.log | head -1`
      echo "found 60secs.log file in dir $RESP"
      DIR=$(dirname $RESP)
-     echo "using DIR= $DIR, orig DIR= $DIR_ORIG"
+     echo "using3 DIR= $DIR, orig DIR= $DIR_ORIG"
    fi
 fi
 fi
@@ -451,13 +451,18 @@ for i in $LST; do
    echo "new g opt= $OPT_G"
  fi
  if [ "$SKIP_SYS_2_TSV" == "0" ]; then
-   PIDS_WAIT=$(($PIDS_WAIT+1))
    if [ $VERBOSE -gt 0 ]; then
      echo "$SCR_DIR/sys_2_tsv.sh $OPT_a $OPT_A $OPT_G -p \"$RPS\" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i \"*.png\" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets$OPT_OPT $OPT_PH -t $DIR &> tmp.jnk" &
    fi
      #echo "$SCR_DIR/sys_2_tsv.sh $OPT_a $OPT_A $OPT_G -p \"$RPS\" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i \"*.png\" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets$OPT_OPT $OPT_PH -t $DIR &> tmp.jnk" &
+   if [ "$BACKGROUND" -le "0" ]; then
+          $SCR_DIR/sys_2_tsv.sh $OPT_a $OPT_A $OPT_G -p "$RPS" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets$OPT_OPT $OPT_PH -t $DIR &> tmp.jnk 
+   else
           $SCR_DIR/sys_2_tsv.sh $OPT_a $OPT_A $OPT_G -p "$RPS" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets$OPT_OPT $OPT_PH -t $DIR &> tmp.jnk &
-   if [ $PIDS_WAIT -gt 12 ]; then
+     PIDS_WAIT=$(($PIDS_WAIT+1))
+   fi
+   if [ "$PIDS_WAIT" -gt "$BACKGROUND" ]; then
+     echo "$0: do wait PIDS_WAIT= $PIDS_WAIT" > /dev/stderr
      wait
      PIDS_WAIT=0
    fi
@@ -596,6 +601,7 @@ if [ $NUM_DIRS -gt 1 ]; then
               }
               continue;
            }
+        printf("got sum.tsv[%d][%d]= %s\n", fls, ln, line) > "/dev/stderr";
            n = split(line, arr, /\t/);
            mtrc = arr[fld_m];
            if (!(mtrc in mtrc_list)) {
@@ -670,7 +676,9 @@ if [ $NUM_DIRS -gt 1 ]; then
              for (f= 5; f <= nflds; f++) {
                 mtrc_arr[fls+f-4,mtrc_i] = arr[f];
              }
-             fls_mx = fls+nflds-5;
+             if (fls_mx < (fls+nflds-5)) {
+               fls_mx = fls+nflds-5;
+             }
              printf("fls= %d, flx_mx= %d\n", fls, fls_mx) > "/dev/stderr";
            }
         }
@@ -710,6 +718,9 @@ if [ $NUM_DIRS -gt 1 ]; then
       printf("title\tsum_all\tsheet\tsum_all\ttype\tcopy\n")  > ofile;
       printf("hdrs\t2\t0\t-1\t%d\t-1\n", fls+3) > ofile;
       printf("Resource\tTool\tMetric") > ofile;
+      if (got_avgby == 0 && fls > 1) {
+          printf("\taverage") > ofile;
+      }
       for (j=1; j <= fls; j++) {
          if (got_avgby == 1) {
           if (j == 1 || avgby_arr[j,1] != avgby_arr[j-1,1]) {
@@ -748,6 +759,24 @@ if [ $NUM_DIRS -gt 1 ]; then
               } else {
                 continue;
               }
+            } else {
+              if (j == 1) {
+                sum_n = 0;
+                sum_v = 0;
+                for (k=1; k <= fls; k++) {
+                  val2   = mtrc_arr[k,i];
+                  isnum2 = ck_num(val2);
+                  if (isnum2 > 0) {
+                  sum_v = sum_v + val2;
+                  sum_n = sum_n + 1;
+                  }
+                }
+                if (sum_n > 0) {
+                  printf("\t%s%f", equal, sum_v/sum_n) > ofile;
+                } else {
+                  printf("\t%s%s", equal, 0) > ofile;
+                }
+              }
             }
           } else {
             if (got_avgby == 1) {
@@ -755,6 +784,10 @@ if [ $NUM_DIRS -gt 1 ]; then
                ;
               } else {
                 continue;
+              }
+            } else {
+              if (j == 1) {
+                 printf("\t%s%s", "", "") > ofile;
               }
             }
           }
@@ -866,9 +899,10 @@ if [ $NUM_DIRS -gt 1 ]; then
           echo "try muttley_a file= $f" > /dev/stderr
           if [ -e $f ]; then
              echo "try muttley log $f" 
-             $SCR_DIR/resp_2_tsv.sh -b $BEG_TM -e $END_TM -f $f -s $SUM_FILE $OPT_M
+             $SCR_DIR/resp_2_tsv.sh -b $BEG_TM -e $END_TM -f $f -s $SUM_ALL $OPT_M
           fi
           if [ -e $f.tsv ]; then
+            echo "++++++++++ got $f.tsv "
              echo -e "$f.tsv" >> $ALST
              #SHEETS="$SHEETS $f.tsv"
              #echo "got latency log $f.tsv" > /dev/stderr
