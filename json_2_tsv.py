@@ -209,7 +209,11 @@ if hdr == "http_status" and sum_file != "":
 
 if sum_file != "" and hdr != "latency" and hdr != "http_status":
    for j in range(0, len(trgt_arr)):
-       sf.write("%s\t%s\t=%f\t%s\n" % ("software utilization", hdr, avg_sum[j]/avg_n[j], trgt_arr[j]))
+       str = hdr
+       if len(str) == 0 and len(trgt_arr[j]) > 0:
+           str = "RPS "+trgt_arr[j]
+       #sf.write("\t%s\t%s\t=%f\n" % ("software utilization", hdr, avg_sum[j]/avg_n[j], trgt_arr[j]))
+       sf.write("\t%s\t%s\t=%f\n" % ("software utilization", str, avg_sum[j]/avg_n[j]))
 
 
 if hdr != "latency":
