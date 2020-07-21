@@ -174,7 +174,67 @@ fi
 RPS=`echo $TDIR | sed 's/rps_v/rpsv/' | sed 's/rps.*_.*/rps/' | sed 's/.*_//'`
 RPS="${RPS}"
 FCTR=`echo $RPS | sed 's/rps//'`
-printf "RPS= %s\n", $RPS > "/dev/stderr"
+printf "DIR= $DIR, RPS= %s\n", $RPS > "/dev/stderr"
+
+if [ -e run.log ]; then
+ MYA=(sys_*_perf_stat.txt)
+ if [ "${#MYA}" != "0" ]; then
+   # 20200719_155911 1595174351.170475304 start  
+   DATE_ARR=()
+   get_date_arr() {
+   RESP=`awk -v want="$1" 'BEGIN{ ln = 0; day_str = ""; end_str = ""; }
+   / start / {
+      ln++;
+      if (day_str == "" && $3 == "start" && substr($1, 1, 3) == "202") {
+         val = $2 + 0.0;
+         if (val != 0) {
+            day_str=sprintf(strftime("%a_%b_%d", val));
+            beg_str=sprintf(strftime("%a %b %e %H:%M:%S %Z %Y", val));
+            got_it=1;
+            next;
+         }
+      }
+      printf("NR= %s, %s\n", NR, $0);
+      next;
+   }
+   / end /{
+      if (end_str == "" && $3 == "end" && substr($1, 1, 3) == "202") {
+         val = $2 + 0.0;
+         end_str=sprintf(strftime("%a %b %e %H:%M:%S %Z %Y", val));
+      }
+   }
+   END{
+     if (day_str == "") {
+       printf("");
+       exit;
+     } else {
+     if (want == "day_str") {
+       printf("%s", day_str);
+     }
+     if (want == "beg_str") {
+       printf("%s", beg_str);
+     }
+     if (want == "end_str") {
+       printf("%s", end_str);
+     }
+     }
+   }' run.log`
+   }
+   get_date_arr "day_str"
+   DATE_ARR[0]="$RESP"
+   get_date_arr "beg_str"
+   DATE_ARR[1]="$RESP"
+   get_date_arr "end_str"
+   DATE_ARR[2]="$RESP"
+   echo "got run.log DATE_ARR0= ${DATE_ARR[0]}"
+   echo "got run.log DATE_ARR1= ${DATE_ARR[1]}"
+   echo "got run.log DATE_ARR2= ${DATE_ARR[2]}"
+   printf "time\titp_run\t%s\tday_beg\n"  "${DATE_ARR[0]}" >> $SUM_FILE;
+   printf "time\titp_run\t%s\tdate_beg\n" "${DATE_ARR[1]}" >> $SUM_FILE;
+   printf "time\titp_run\t%s\tdate_end\n" "${DATE_ARR[2]}" >> $SUM_FILE;
+ fi
+fi
+
 
 BEG=`cat $DIR/60secs.log | awk '{n=split($0, arr);printf("%s\n", arr[n]);exit;}'`
 BEG_ADJ=`cat $DIR/60secs.log | awk '
@@ -232,12 +292,14 @@ echo "awk time offset hours BEG_ADJ= $BEG_ADJ  BEG_TM= $BEG, BEG_TM_IN= $BEG_TM_
 #exit
 RESP=`find .. -name "CPU2017.001.log" | wc -l | awk '{printf("%s\n", $1);exit;}'`
 pwd
-echo "find .. -name cpu2017.*.log resp = $RESP"
-CPU2017LOG=
-if [ "$RESP" == "1" -a "$PHASE_FILE" == "" ]; then
+echo "++++++++++find .. -name cpu2017.*.log resp = $RESP"
+CPU2017LOG=()
+if [ "$RESP" -ge "1" -a "$PHASE_FILE" == "" ]; then
   RESP=`find .. -name CPU2017.001.log`
   echo "find .. -name cpu2017.*.log resp = $RESP"
   CPU2017LOG=$RESP
+  #j=0
+  #for i in $RESP; do echo "echo j= $j CPU2017LOG $i ${CPU2017LOG[$j]}"; j=$((j+1)); done
 fi
 FILES=`ls -1 $DIR/sys_*_*.txt $DIR/$METRIC_OUT`
 echo "FILES = $FILES"
@@ -310,7 +372,12 @@ trows++; printf("\n") > NFL;
      NCPUS=`awk '/^CPU.s.:/ { printf("%s\n", $2);exit;}' lscpu.txt`
     fi
     SPIN_TXT=
-    if [ "$CPU2017LOG" != "" ]; then
+    CPU2017files=
+    if [ "${#CPU2017LOG[@]}" -gt "0" ]; then
+      for ii in ${CPU2017LOG[@]}; do
+        CPU2017files+="$ii "
+      done
+      echo "CPU2017files= $CPU2017files"
       #SPIN_TXT=`dirname $CPU2017LOG`
       SPIN_TXT="$( cd "$( dirname "${CPU2017LOG[0]}" )" >/dev/null 2>&1 && pwd )"
       if [ -d $SPIN_TXT ]; then
@@ -337,6 +404,9 @@ trows++; printf("\n") > NFL;
          fl0=0;
          smp_intrvl=1.0;
          got_result_csv_epoch=0;
+         cpu_count=0;
+         skt_count=0;
+         ht_count=0;
       }
       function ltrim(s) { sub(/^[ \t\r\n]+/, "", s); return s }
       function rtrim(s) { sub(/[ \t\r\n,]+$/, "", s); return s }
@@ -349,14 +419,16 @@ trows++; printf("\n") > NFL;
        /^ Run .* base refrate ratio=.*, runtime=.*, copies=.*, / {
         # Run 531.deepsjeng_r base refrate ratio=2.40, runtime=477.559603, copies=1, threads=1, power=0.00W, temp=0.00 degC, humidity=0.00%
         if (match(FNM, /CPU2017.[0-9][0-9][0-9].log$/)) {
-           bm_nm = $2;
+           bm_mx++;
+           bm_arr[bm_mx,"nm"] = $2;
            n = split($5, arr, /[=,]/);
-           bm_score = arr[2];
+           bm_arr[bm_mx,"score"] = arr[2];
            n = split($6, arr, /[=,]/);
-           bm_runtm = arr[2];
+           bm_arr[bm_mx,"runtm"] = arr[2];
            n = split($7, arr, /[=,]/);
-           bm_copies = arr[2];
-           #printf("got cpu2017.001.log bm= %s, ratio= %s, run_tm= %s, copies= %s ln= %s file= %s\n", bm_nm, bm_score, bm_runtm, bm_copies, $0, FNM);
+           bm_arr[bm_mx,"copies"] = arr[2];
+           #printf("got cpu2017.001.log[%d] bm= %s, ratio= %s, run_tm= %s, copies= %s ln= %s file= %s\n",
+           #   bm_mx, bm_arr[bm_mx,"nm"], bm_arr[bm_mx,"score"], bm_arr[bm_mx,"runtm"], bm_arr[bm_mx,"copies"], $0, FNM);
            #exit;
         }
       }
@@ -377,6 +449,21 @@ trows++; printf("\n") > NFL;
             #printf("got result.csv= %s\n", FNM) > "/dev/stderr";
            }
            fl0++;
+           #CPU count,12.0,
+           #SOCKET count,2,
+           #HT count,2,
+           if (index($0, "CPU count,") == 1) {
+             n = split($0, arr, ",");
+             cpu_count=arr[2];
+           }
+           if (index($0, "SOCKET count,") == 1) {
+             n = split($0, arr, ",");
+             skt_count=arr[2];
+           }
+           if (index($0, "HT count,") == 1) {
+             n = split($0, arr, ",");
+             ht_count=arr[2];
+           }
            if (index($0, "Sampling Interval,") == 1) {
              n = split($0, arr, ",");
              smp_intrvl=arr[2];
@@ -460,7 +547,10 @@ trows++; printf("\n") > NFL;
        }
        GIPS_col_freq = -1;
        GIPS_col_CPI  = -1;
+       CPU_util_col  = -1;
        got_GIPS = 0
+       num_cpus = cpu_count * skt_count * ht_count;
+       printf("metric_out: num_cpus= %d\n", num_cpus) > "/dev/stderr";
        hn = split(hdr, harr, ",");
        extr_col = 1;
        for (i=1; i <= hn; i++) {
@@ -470,6 +560,9 @@ trows++; printf("\n") > NFL;
           }
           if (index(harr[i], "metric_TMAM_Info_CoreIPC") > 0) {
              GIPS_col_IPC = i+extr_col;
+          }
+          if (index(harr[i], "metric_CPU utilization %") > 0) {
+             CPU_util_col = i+extr_col;
           }
           if (index(harr[i], "metric_CPI") > 0) {
              GIPS_col_CPI = i+extr_col;
@@ -483,20 +576,16 @@ trows++; printf("\n") > NFL;
          GIPS_col_num = hn + 1 + extr_col;
        }
        title_pfx = "";
-       if (bm_nm != "") {
-          str = bm_nm;
-          n = split(bm_nm, arr, ".");
+       for (ii=1; ii <= bm_mx; ii++) {
+          str = bm_arr[ii,"nm"];
+          n = split(str, arr, ".");
           if (n == 2) {
             str = arr[2];
           }
           gsub("_r$", "", str);
           title_pfx = title_pfx "" str ", ";
-       }
-       if (bm_score != "") {
-          title_pfx = title_pfx "" bm_score ", ";
-       }
-       if (bm_copies != "") {
-          title_pfx = title_pfx "" bm_copies ", ";
+          title_pfx = title_pfx "" bm_arr[ii,"score"] ", ";
+          title_pfx = title_pfx "" bm_arr[ii,"copies"] ", ";
        }
        printf("got GIPS_col_num= %d\n", GIPS_col_num) > "/dev/stderr";
        trows++;
@@ -609,12 +698,10 @@ trows++; printf("\n") > NFL;
             }
             printf("\t%s", val) > NFL;
           }
-          if (got_GIPS == 2) {
-            use_cpy = bm_copies;
-            if (bm_copies == 0) {
-              use_cpy = 1;
-            }
-            frm = sprintf("=%d*(1.0/INDIRECT(ADDRESS(row(), column()-%d, 2)))*INDIRECT(ADDRESS(row(), column()-%d,2))", use_cpy, GIPS_col_num-GIPS_col_CPI, GIPS_col_num-GIPS_col_freq);
+          frm="";
+          if (got_GIPS == 2 && CPU_util_col > 0 && num_cpus > 0) {
+            frm = sprintf("=%d*0.01*INDIRECT(ADDRESS(row(), column()-%d,2))*(1.0/INDIRECT(ADDRESS(row(), column()-%d, 2)))*INDIRECT(ADDRESS(row(), column()-%d,2))",
+                num_cpus, GIPS_col_num-CPU_util_col, GIPS_col_num-GIPS_col_CPI, GIPS_col_num-GIPS_col_freq);
             #printf("GIPS_frm= %s\n", frm) > "/dev/stderr";
             printf("\t%s", frm) > NFL;
           }
@@ -741,11 +828,8 @@ trows++; printf("\n") > NFL;
        }
        if (GIPS_extra_col > 0) {
          trows++;
-         use_cpy = bm_copies;
-         if (bm_copies == 0) {
-            use_cpy = "1?";
-         }
-         printf("title\t%sinstruction/sec %s copies (Bill_instr/sec)\tsheet\titp_metric\ttype\tscatter_straight\n", title_pfx, use_cpy) > NFL;
+         use_cpy = num_cpus;
+         printf("title\t%sinstruction/sec %scpus*%%util*freq/cpi (Bill_instr/sec)\tsheet\titp_metric\ttype\tscatter_straight\n", title_pfx, use_cpy) > NFL;
          trows++;
          printf("hdrs\t%d\t%d\t%d\t%d\t1", trows_top, 3, -1, 3) > NFL;
          printf("\t%d\t%d", GIPS_col_num, GIPS_col_num) > NFL;
@@ -768,12 +852,15 @@ trows++; printf("\n") > NFL;
          exit;
        }
        #printf("--------got into metric sum_file= %s\n", sum_file) > "/dev/stderr";
-       if (bm_nm != "") {
-          n = split(bm_nm, arr, "."); if (n == 2) { bm_nm = arr[2]; }
+       if (bm_mx > 0) {
+          for (ii=1; ii <= bm_mx; ii++) {
+          bm_nm = bm_arr[ii,"nm"];
+          n = split(bm_arr[ii,"nm"], arr, "."); if (n == 2) { bm_nm = arr[2]; }
           printf("\tspecint\t%s\t%s\n", bm_nm, "specint_substest") >> sum_file;
-          printf("\tspecint\t%s\t%s\n", bm_score, "specint_score") >> sum_file;
-          printf("\tspecint\t%s\t%s\n", bm_runtm, "specint_run_time") >> sum_file;
-          printf("\tspecint\t%s\t%s\n", bm_copies, "specint_copies") >> sum_file;
+          printf("\tspecint\t%s\t%s\n", bm_arr[ii,"score"], "specint_score") >> sum_file;
+          printf("\tspecint\t%s\t%s\n", bm_arr[ii,"runtm"], "specint_run_time") >> sum_file;
+          printf("\tspecint\t%s\t%s\n", bm_arr[ii,"copies"], "specint_copies") >> sum_file;
+          }
        }
        if (spin_work != "") {
             gsub(",", "", spin_work);
@@ -811,14 +898,14 @@ trows++; printf("\n") > NFL;
        printf("\n") >> sum_file;
        close(sum_file);
      }
-   ' $CPU2017LOG $DIR/result.csv $DIR/$METRIC_AVG $i $SPIN_TXT
+   ' $CPU2017files $DIR/result.csv $DIR/$METRIC_AVG $i $SPIN_TXT
    pwd
    echo "cpu2017log= $CPU2017LOG"
-   if [ "$CPU2017LOG" != "" ]; then
-     if [ -e $CPU2017LOG ]; then
-        echo "found -e $CPU2017LOG"
+   for ii in ${CPU2017LOG[@]}; do
+     if [ -e $ii ]; then
+        echo "found -e $ii"
      fi
-   fi
+   done
    SHEETS="$SHEETS $i.tsv"
   fi
 
@@ -3198,7 +3285,7 @@ if [ "$SUM_FILE" != "" ]; then
 fi
 if [ "$CPU2017LOG" != "" -a "$PHASE_FILE" == "" ]; then
   RESP=$CPU2017LOG
-  echo "find .. -name cpu2017.*.log resp = $RESP"
+  echo "+++find .. -name cpu2017.*.log resp = $RESP"
   PH=`awk '
     BEGIN{mx=0;}
     #/Copy .* of .* (base refrate) run .* finished at .*.  Total elapsed time:/{
@@ -3258,6 +3345,43 @@ fi
   echo "find muttley RESP= $RESP"
   if [ "$RESP" != "0" ]; then
     RESP=`find . -name "muttley?.json.tsv" | xargs`
+#title   Riders Ontrip   sheet   Riders Ontrip   type    scatter_straight
+#hdrs    2       2       1682    2       1
+#ts      offset  Riders Ontrip
+#1595174322.000000       25.540400       86091.000000
+#1595174352.000000       55.540400       86057.000000
+#1595174382.000000       85.540400       86066.000000
+#1595174412.000000       115.540400      86081.000000
+    echo "+++++++++++++++ multtley RESP= $RESP"
+    awk -v cur_dir="$(pwd)" -v sum_file="$SUM_FILE" '
+       BEGIN { mx=0; mx_val=-1; }
+       /^title/ {
+         mx++;
+         n = split($0, arr, "\t");
+         if (arr[2] == "") {
+           arr[2] = "RPS by service";
+         }
+         sv[mx,"title"] = arr[2];
+       }
+       /^1/ {
+         n = split($0, arr, "\t");
+         for (i=3; i <= NF; i++) {
+         val = arr[i];
+         if (sv[mx,"max"] == "" || sv[mx,"max"] < val) {
+             sv[mx,"max"] = val;
+         }
+         if (sv[mx,"min"] == "" || sv[mx,"min"] < val) {
+             sv[mx,"min"] = val;
+         }
+         }
+       }
+       END{
+         for (i=1; i <= mx; i++) {
+            printf("\tm3\t%s\tmax %s  and cur_dir= %s sum_file= %s\n", sv[i,"title"], sv[i,"max"], cur_dir, sum_file) > "/dev/stderr";
+            printf("\tm3\t%s\tmax %s\n", sv[i,"title"], sv[i,"max"]) >> sum_file;
+            printf("\tm3\t%s\tmin %s\n", sv[i,"title"], sv[i,"min"]) >> sum_file;
+         }
+       }' $RESP
     SHEETS="$SHEETS $RESP"
   fi
 
