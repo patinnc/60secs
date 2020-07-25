@@ -3377,7 +3377,7 @@ fi
        }
        END{
          for (i=1; i <= mx; i++) {
-            printf("\tm3\t%s\tmax %s  and cur_dir= %s sum_file= %s\n", sv[i,"title"], sv[i,"max"], cur_dir, sum_file) > "/dev/stderr";
+            #printf("\tm3\t%s\tmax %s  and cur_dir= %s sum_file= %s\n", sv[i,"title"], sv[i,"max"], cur_dir, sum_file) > "/dev/stderr";
             printf("\tm3\t%s\tmax %s\n", sv[i,"title"], sv[i,"max"]) >> sum_file;
             printf("\tm3\t%s\tmin %s\n", sv[i,"title"], sv[i,"min"]) >> sum_file;
          }
