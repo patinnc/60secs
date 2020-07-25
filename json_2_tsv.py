@@ -99,6 +99,12 @@ for i in range(len(data)):
     tm_diff = 0
     use_every = 1
     use_this  = 0
+    json_ts = data[i]['step_size_ms']
+    json_ts = json_ts / 1000;
+    if match_intrvl > 0 and json_ts > match_intrvl:
+       print("________json_2_tsv.py: got match_intrvl= %d, but json_ts = %d secs so disabling matching interval" % (match_intrvl, json_ts), file=sys.stderr)
+       match_intrvl = 0
+
     for j in range(len(data[i]['datapoints'])):
         tm = data[i]['datapoints'][j][1]
         if match_intrvl > 0 and tm_diff == 0:
