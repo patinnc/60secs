@@ -104,7 +104,7 @@ got_sum_all = 0
 
 if options_filename != "":
    opt_fl = []
-   with open(options_filename) as tsv:
+   with open(options_filename, 'rU') as tsv:
        for line in csv.reader(tsv, dialect="excel-tab"):
            opt_fl.append(line)
 
@@ -279,7 +279,7 @@ for bmi in range(base_mx+1):
        elif opt in ('-P', '--phase'):
            phase = arg
            print("phase file= %s" % (phase), file=sys.stderr)
-           with open(phase) as tsv:
+           with open(phase, 'rU') as tsv:
               ln2 = [None, None, None]
               for line in csv.reader(tsv, delimiter=' ', dialect="excel-tab"):
                   if len(line) >= 3 and (line[0] == "beg" or line[0] == "end") and not is_number(line[1]):
@@ -399,7 +399,7 @@ for bmi in range(base_mx+1):
 
       data = []
       if not fo in fn_bs_data[bmi]:
-         with open(x) as tsv:
+         with open(x, 'rU') as tsv:
             for line in csv.reader(tsv, dialect="excel-tab"):
               data.append(line)
          fn_bs_data[bmi][fo] = data
