@@ -22,8 +22,33 @@ OPTIONS=
 INPUT_FILE_LIST=
 AVG_DIR=
 DESC_FILE=
-BACKGROUND=20  # setting this to 0 turns off launching sys_2_tsv.sh in the background
+OSTYP=$OSTYPE
+NUM_CPUS=0
+if [[ "$OSTYP" == "linux-gnu"* ]]; then
+   NUM_CPUS=`grep -c processor /proc/cpuinfo`
+elif [[ "$OSTYP" == "darwin"* ]]; then
+   # Mac OSX
+   NUM_CPUS=`sysctl -a | grep machdep.cpu.thread_count | awk '{v=$2+0;printf("%d\n", v);exit;}'`
+elif [[ "$OSTYP" == "cygwin" ]]; then
+   # POSIX compatibility layer and Linux environment emulation for Windows
+   NUM_CPUS=`grep -c processor /proc/cpuinfo`
+elif [[ "$OSTYP" == "msys" ]]; then
+   # Lightweight shell and GNU utilities compiled for Windows (part of MinGW)
+   NUM_CPUS=`grep -c processor /proc/cpuinfo`
+elif [[ "$OSTYP" == "win32" ]]; then
+   # I'm not sure this can happen.
+   NUM_CPUS=4
+elif [[ "$OSTYP" == "freebsd"* ]]; then
+   # ...
+   NUM_CPUS=`grep -c processor /proc/cpuinfo`
+else
+   # Unknown.
+   NUM_CPUS=4
+fi
+# on macbook could do sysctl -a | grep machdep.cpu.thread_count
+BACKGROUND=$(($NUM_CPUS+2))  # setting this to 0 turns off launching sys_2_tsv.sh in the background
 echo "$0 ${@}"
+echo "BACKGROUND= $NUM_CPUS"
 
 while getopts "hvASa:b:c:D:d:e:F:g:I:m:N:o:P:r:X:x:" opt; do
   case ${opt} in
@@ -459,12 +484,30 @@ for i in $LST; do
           $SCR_DIR/sys_2_tsv.sh $OPT_a $OPT_A $OPT_G -p "$RPS" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets$OPT_OPT $OPT_PH -t $DIR &> tmp.jnk 
    else
           $SCR_DIR/sys_2_tsv.sh $OPT_a $OPT_A $OPT_G -p "$RPS" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets$OPT_OPT $OPT_PH -t $DIR &> tmp.jnk &
-     PIDS_WAIT=$(($PIDS_WAIT+1))
+     #PIDS_WAIT=$(($PIDS_WAIT+1))
    fi
-   if [ "$PIDS_WAIT" -gt "$BACKGROUND" ]; then
-     echo "$0: do wait PIDS_WAIT= $PIDS_WAIT" > /dev/stderr
-     wait
-     PIDS_WAIT=0
+     LOAD=`uptime | awk '{printf("%.0f\n", $(NF-2)+0.5);}'`
+     jbs=0
+     for job in `jobs -p`
+     do
+       #echo $job
+       jbs=$((jbs+1))
+     done
+     jbs=$(($jbs+$LOAD))
+   if [ "$jbs" -gt "$BACKGROUND" ]; then
+     #jbs=0
+     for job in `jobs -p`
+     do
+       echo "wait for jobs (jbs= $jbs) pid= $job"
+       jbs=$((jbs-1))
+       wait $job || let "FAIL+=1"
+       if [ "$jbs" -lt "$BACKGROUND" ]; then
+         break
+       fi
+     done
+     echo "$0: do wait PIDS_WAIT= $jbs  load= $LOAD" > /dev/stderr
+     #wait
+     #PIDS_WAIT=0
    fi
  fi
  TS_CUR=`date +%s`
@@ -557,6 +600,7 @@ if [ "$INPUT_FILE_LIST" != "" ]; then
   NUM_DIRS=2
 fi
 
+   wait
  if [ $PIDS_WAIT -gt 0 ]; then
    wait
    PIDS_WAIT=0
@@ -601,7 +645,7 @@ if [ $NUM_DIRS -gt 1 ]; then
               }
               continue;
            }
-        printf("got sum.tsv[%d][%d]= %s\n", fls, ln, line) > "/dev/stderr";
+        #printf("got sum.tsv[%d][%d]= %s\n", fls, ln, line) > "/dev/stderr";
            n = split(line, arr, /\t/);
            mtrc = arr[fld_m];
            if (!(mtrc in mtrc_list)) {
@@ -928,7 +972,10 @@ if [ $NUM_DIRS -gt 1 ]; then
   echo "elap_tm= $TS_DFF"
   echo "about to do tsv_2_xls.py" > /dev/stderr
   echo "python $SCR_DIR/tsv_2_xlsx.py $OPT_a $OPT_A $OPT_OPTIONS $OPT_M -f $ALST > tmp2.jnk"
-        python $SCR_DIR/tsv_2_xlsx.py $OPT_a $OPT_A $OPT_OPTIONS $OPT_M -f $ALST $SHEETS > tmp2.jnk
+        python $SCR_DIR/tsv_2_xlsx.py $OPT_a $OPT_A $OPT_OPTIONS $OPT_M -f $ALST $SHEETS > tmp2.jnk &
+        PY_PID=$!
+        echo $PY_PID >> tsv_2_xlsx.pid
+        
   TS_CUR=`date +%s`
   TS_DFF=$(($TS_CUR-$TS_BEG))
   echo "elap_tm= $TS_DFF"
