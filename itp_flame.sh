@@ -62,7 +62,17 @@ awk -v csv_file="$CSV_FILE" '
         if (got_fe == 0) {
           next;
         }
-        nm = substr($1, length("metric_TMAM_")+1, length($1));
+        # allow for metric_out.average file
+        if (index($0, ",") > 0) {
+           n = split($0, arr, ",");
+           key = arr[1];
+           val = arr[2] + 0.0;
+        } else {
+           # assume the line is already separated by default seperator
+           key = $1;
+           val = $2 + 0.0;
+        }
+        nm = substr(key, length("metric_TMAM_")+1, length(key));
         dpth = 1;
         tnm = nm;
         while(substr(tnm, 1,2) == "..") {
@@ -77,7 +87,7 @@ awk -v csv_file="$CSV_FILE" '
         } else {
            d_arr[dpth]++;
         }
-        d_sum[dpth] += $2;
+        d_sum[dpth] += val;
         tree="";
         for (i=1; i<= dpth; i++) { tree = tree "" d_arr[i] ",";}
         if (dpth <  dpth_prev) { dir="up"; }
@@ -90,7 +100,6 @@ awk -v csv_file="$CSV_FILE" '
         nd[nd_mx,"dir"]  = dir;
         nd[nd_mx,"sum"]  = d_sum[dpth];
         nd[nd_mx,"dad"]  = dad[dpth];
-        val = $2+0.0;
         nd[nd_mx,"val"]  = val;
         nd_lkup[tree] = nd_mx;
         if (dir == "up") {
@@ -106,7 +115,7 @@ awk -v csv_file="$CSV_FILE" '
            d_arr[dpth] = lvl_mx[dpth];
         }
         if (dpth_mx == "" || dpth_mx < dpth) { dpth_mx = dpth; }
-        printf("%2d\t%2d\t%8.4f\t%8.4f\t%s\t%s\t%d\t%s\n", nd_mx, dad[dpth], nd[nd_mx,"sum"], $2, nm, dir, dpth, tree);
+        printf("%2d\t%2d\t%8.4f\t%8.4f\t%s\t%s\t%d\t%s\n", nd_mx, dad[dpth], nd[nd_mx,"sum"], val, nm, dir, dpth, tree);
         dpth_prev = dpth;
     }
     END{
