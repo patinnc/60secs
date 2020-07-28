@@ -45,10 +45,12 @@ while getopts "hd:f:l:r:" opt; do
       exit
       ;;
     : )
-      echo "Invalid option: $OPTARG requires an argument" 1>&2
+      echo "Invalid option: $OPTARG requires an argument, cmdline args: ${@}" 1>&2
+      exit
       ;;
     \? )
-      echo "Invalid option: $OPTARG" 1>&2
+      echo "Invalid option: $OPTARG , cmdline args: ${@}" 1>&2
+      exit
       ;;
   esac
 done
