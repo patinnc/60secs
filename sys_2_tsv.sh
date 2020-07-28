@@ -577,15 +577,17 @@ trows++; printf("\n") > NFL;
        }
        title_pfx = "";
        for (ii=1; ii <= bm_mx; ii++) {
-          str = bm_arr[ii,"nm"];
-          n = split(str, arr, ".");
-          if (n == 2) {
-            str = arr[2];
+          if (ii==1 || (bm_arr[ii,"nm"] != bm_arr[ii-1,"nm"])) {
+            str = bm_arr[ii,"nm"];
+            n = split(str, arr, ".");
+            if (n == 2) {
+              str = arr[2];
+            }
+            gsub("_r$", "", str);
+            title_pfx = title_pfx "" str;
+            title_pfx = title_pfx "(" bm_arr[ii,"copies"] ") ";
           }
-          gsub("_r$", "", str);
-          title_pfx = title_pfx "" str ", ";
           title_pfx = title_pfx "" bm_arr[ii,"score"] ", ";
-          title_pfx = title_pfx "" bm_arr[ii,"copies"] ", ";
        }
        printf("got GIPS_col_num= %d\n", GIPS_col_num) > "/dev/stderr";
        trows++;
@@ -3333,25 +3335,11 @@ if [ "$PHASE_FILE" == "" ]; then
   fi
 fi
 
-#Workload elapsed time (copy 0 workload 1) = 67.605964 seconds
-#Workload elapsed time (copy 0 workload 2) = 237.692794 seconds
-#Workload elapsed time (copy 0 workload 3) = 254.901038 seconds
-#Copy 0 of 525.x264_r (base refrate) run 1 finished at 2020-06-16 18:10:54.  Total elapsed time: 578.495129
-#Benchmark Times:
-#  Run Start:    2020-06-16 18:01:16 (1592355676)
-#  Rate Start:   2020-06-16 18:01:16 (1592355676.05476)
-#  Rate End:     2020-06-16 18:10:54 (1592356254.54992)
+
   RESP=`find . -name "muttley?.json.tsv" | wc -l | awk '{$1=$1;print}'`
   echo "find muttley RESP= $RESP"
   if [ "$RESP" != "0" ]; then
     RESP=`find . -name "muttley?.json.tsv" | xargs`
-#title   Riders Ontrip   sheet   Riders Ontrip   type    scatter_straight
-#hdrs    2       2       1682    2       1
-#ts      offset  Riders Ontrip
-#1595174322.000000       25.540400       86091.000000
-#1595174352.000000       55.540400       86057.000000
-#1595174382.000000       85.540400       86066.000000
-#1595174412.000000       115.540400      86081.000000
     echo "+++++++++++++++ multtley RESP= $RESP"
     awk -v cur_dir="$(pwd)" -v sum_file="$SUM_FILE" '
        BEGIN { mx=0; mx_val=-1; }
@@ -3387,6 +3375,17 @@ fi
 
 echo "SHEETS= $SHEETS SKIP_XLS= $SKIP_XLS, xls_fl= $XLSX_FILE avg= $AVERAGE"
 if [ "$SHEETS" != "" -a "$SKIP_XLS" == "0" ]; then
+   OPT_I=
+   if [ -e metric_out.average ]; then
+      echo "do flamegraph.pl" 1>&2
+      $SCR_DIR/itp_flame.sh -f metric_out.average -c tmp.jnk
+      RESP=$(basename "$XLSX_FILE")
+      cat tmp.jnk | perl $SCR_DIR/../flamegraph/flamegraph.pl --title "ITP Flamegraph $RESP" > itp.svg
+      echo "do svg_to_html.sh " 1>&2
+      $SCR_DIR/svg_to_html.sh -r 1 -d . -f itp.svg > itp.html
+      inkscape -z  -w 2400 -j --export-file=itp.png  itp.svg
+      OPT_I=" -i \"*.png\" "
+   fi
    OPT_PH=
    if [ "$PHASE_FILE" != "" ]; then
      OPT_PH=" -P $PHASE_FILE "
@@ -3406,8 +3405,8 @@ if [ "$SHEETS" != "" -a "$SKIP_XLS" == "0" ]; then
    if [ "$AVERAGE" == "0" ]; then
      echo "for python: SKIP_XLS= $SKIP_XLS" > /dev/stderr
      # default chart size is pretty small, scale chart size x,y by 2 each. def 1,1 seems to be about 15 rows high (on my MacBook)
-     echo python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" $OPT_a $OPT_O $OPT_M -o $XLSX_FILE $OPT_C $OPT_PH -i "$IMAGE_STR" $SHEETS > /dev/stderr
-          python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" $OPT_a $OPT_O $OPT_M -o $XLSX_FILE $OPT_C $OPT_PH -i "$IMAGE_STR" $SHEETS
+     echo python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" $OPT_I $OPT_a $OPT_O $OPT_M -o $XLSX_FILE $OPT_C $OPT_PH -i "$IMAGE_STR" $SHEETS > /dev/stderr
+          python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" $OPT_I $OPT_a $OPT_O $OPT_M -o $XLSX_FILE $OPT_C $OPT_PH -i "$IMAGE_STR" $SHEETS
      if [ "$DIR" == "." ];then
        UDIR=`pwd`
      else
