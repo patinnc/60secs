@@ -915,6 +915,14 @@ if [ $NUM_DIRS -gt 1 ]; then
           ' $ITP_LOG`
          echo "ITP_INTERVAL= $ITP_INTRVL, log= $ITP_LOG" > /dev/stderr
       fi
+      if [ "$ITP_INTRVL" == "0" ]; then
+        if [ -e "$RUN_LOG" ]; then
+          TRY_ITP=`awk '/ start /{for (i=1; i < NF; i++) { if ($(i) == "-i") { printf("%s\n", $(i+1));exit}};printf("\n");exit;}' $RUN_LOG`
+          if [ "$TRY_ITP" != "" ]; then
+            ITP_INTRVL=$TRY_ITP
+          fi
+        fi
+      fi
     fi
   if [ "$INPUT_FILE_LIST" != "" ]; then
     RESP=0
