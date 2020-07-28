@@ -43,7 +43,6 @@ for opt, arg in options:
 if verbose > 0:
    print("________json_2_tsv.py: got match_intrvl= %d" % (match_intrvl), file=sys.stderr)
 
-
 #flnm=sys.argv[1]
 #beg=float(sys.argv[2])
 #end=float(sys.argv[3])
