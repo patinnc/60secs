@@ -58,20 +58,6 @@ function decode_c2
     #[6] – Global Intel® Node Manager policy control enabled [7] – Set to 1 if policy is created and managed by other management client e.g., DCMI management API, OSPM or responder LUN does not match. If policy is managed by external agent it could not be modified by Intel® NM IPMI commands.
 }
 
-if [ "$DO_Q" == "1" ]; then
-$POWER_LO=0xAA # (170W total for 2 CPU)
-$POWER_HI=0x00
-POWER_LO=0xAA # (170W total for 2 CPU)
-POWER_HI=0x00
-ipmitool -b 0x06 -t 0x2C raw 0x2E 0xC0 0x57 0x01 0x00 0x01 0x00 0x00   #pg 57 enable nm global policy
-ipmitool -b 0x06 -t 0x2C raw 0x2E 0xC0 0x57 0x01 0x00 0x03 0x01 0x00   #pg 57 enable per domain policy for cpu subsystem
-ipmitool -b 0x06 -t 0x2c raw 0x2e 0xc1 0x57 0x01 0x00 0x01 0x02 0x10 0x01 $POWER_LO $POWER_HI 0x10 0x27 0x00 0x00 $POWER_LO $POWER_HI 0x0a 0x00
-ipmitool -b 0x06 -t 0x2C raw 0x2E 0xC0 0x57 0x01 0x00 0x05 0x01 0x02   #pg 57 enable per policy of bytes 5 & 6: per cpu and memory
-
-#exit
-fi
-
-
 if [ "$ACTION" == "set" ]; then
   
   # below 0xC0 Enable power capping
@@ -91,7 +77,9 @@ if [ "$ACTION" == "set" ]; then
     POWER_HI=0x00
     ipmitool -b 0x06 -t 0x2C raw 0x2E 0xC0 0x57 0x01 0x00 0x01 0x00 0x00   #pg 57 enable nm global policy
     ipmitool -b 0x06 -t 0x2C raw 0x2E 0xC0 0x57 0x01 0x00 0x03 0x01 0x00   #pg 57 enable per domain policy for cpu subsystem
+    #                                    bye        1    2    3   4    5     6   7         8         9    10   11   12   13       14         15  16    17
     RESP=`ipmitool -b 0x06 -t 0x2c raw 0x2e 0xc1 0x57 0x01 0x00 0x01 0x02 0x10 0x01 $POWER_LO $POWER_HI 0x10 0x27 0x00 0x00 $POWER_LO $POWER_HI 0x0a 0x00`
+    RC=$?
     ipmitool -b 0x06 -t 0x2C raw 0x2E 0xC0 0x57 0x01 0x00 0x05 0x01 0x02   #pg 57 enable per policy of bytes 5 & 6: per cpu and memory
   else
   # page 105
@@ -99,8 +87,8 @@ if [ "$ACTION" == "set" ]; then
   # byte6      && 0xf0 policy enabled
   #                                                            4    5    6    7        8    9   10   11   12   13   14   15   16   17
   RESP=`ipmitool  -t 0x2c -b 6 raw 0x2e 0xc1 0x57 0x01 0x00 0x01 0x01 0xb0 0x00 $PWR_HEX 0x00 0xe8 0x03 0x00 0x00 0x00 0x00 0x01 0x00`
-  fi
   RC=$?
+  fi
   echo "set cmd RC= $RC"
   if [ "$RC" != "0" -o "$RESP" != " 57 01 00" ]; then
      echo "set cmd seems to have failed"
@@ -127,16 +115,47 @@ if [ "$ACTION" == "enable" ]; then
   #exit
 fi
 
+if [ "$ACTION" == "disable" ]; then
+  # see c0 cmd on pgg 104 of nm-4-0-external-interface-spec-550710-rev2-10.pdf
+  echo "do $ACTION"
+  # below 0xC0 Enable power capping , byte 4: if 0 dis glbl policy, if 2 per domain policy
+  #                                            1   2    3     4
+  # per policy disable for cpu
+  RESP=`ipmitool -t 0x2c -b 6 raw 0x2e 0xc0 0x57 0x01 0x00 0x04 0x01 0x01`
+  RC=$?
+  echo "disable cmd response= 0x$RC, resp= $RESP"
+
+  # per domain disable for cpu
+  RESP=`ipmitool -t 0x2c -b 6 raw 0x2e 0xc0 0x57 0x01 0x00 0x02 0x01 0x01`
+  RC=$?
+  echo "disable cmd response= 0x$RC, resp= $RESP"
+
+  # global disable for cpu
+  RESP=`ipmitool -t 0x2c -b 6 raw 0x2e 0xc0 0x57 0x01 0x00 0x00 0x01 0x01`
+  RC=$?
+  echo "disable cmd response= 0x$RC, resp= $RESP"
+
+ # RESP=`ipmitool -t 0x2c -b 6 raw 0x2e 0xc0 0x57 0x01 0x00 0x00 0x00 0x01`
+ # RC=$?
+ # echo "disable cmd response= 0x$RC"
+  if [ "$RC" != "0" -o "$RESP" != " 57 01 00" ]; then
+     echo "disable cmd seems to have failed, RC= $RC resp= $RESP"
+     exit
+  fi
+  ACTION="get"
+fi
+
 if [ "$ACTION" == "get" ]; then
   # below 0xC2 Get NM policy
-  echo "do $ACTION"
+  echo "do $ACTION for ven= $VEN"
   if [ "$VEN" == "qct" ]; then
-  #RESP=`ipmitool  -t 0x2c -b 6 raw 0x2e 0xc2 0x57 0x01 0x00 0x01 0x00`
-  RESP=`ipmitool -b 0x06 -t 0x2C raw 0x2E 0xC2 0x57 0x01 0x00 0x00 0x01`   #pg 57 enable per policy of bytes 5 & 6: per cpu and memory
+    #pg 57 enable per policy of bytes 5 & 6: per cpu and memory
+    RESP=`ipmitool  -t 0x2c -b 6 raw 0x2e 0xc2 0x57 0x01 0x00 0x01 0x01`
+    RC=$?
   else
-  RESP=`ipmitool  -t 0x2c -b 6 raw 0x2e 0xc2 0x57 0x01 0x00 0x01 0x01`
+    RESP=`ipmitool -b 0x06 -t 0x2c raw 0x2e 0xc2 0x57 0x01 0x00 0x01 0x01`
+    RC=$?
   fi
-  RC=$?
   # 57 01 00 71 b0 00 96 00 e8 03 00 00 96 00 01 00
   echo "get cmd RC= $RC, RESP= $RESP"
   HX=`echo "$RESP" | awk '{printf("%s\n", $7);exit;}'`
@@ -153,14 +172,5 @@ if [ "$ACTION" == "get" ]; then
   exit
 fi
 
-exit
-
-# dcmi version of power capping cmds:
-#   use https://systemx.lenovofiles.com/help/index.jsp?topic=%2Fcom.lenovo.sysx.imm2.doc%2Fnn1jo_c_dcmi_power_mgmt.html
-#   enable capping
-#   ipmitool raw 0x2c 0x05 0xdc 0x01 0x00 0x00
-
-# below 0xC2 Get NM policy, the policy is disabled and power capping is 100W
-ipmitool  -t 0x2c -b 6 raw 0x2e 0xc2 0x57 0x01 0x00 0x01 0x01
 exit
 
