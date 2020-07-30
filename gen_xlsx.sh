@@ -116,6 +116,7 @@ while getopts "hvASa:b:c:D:d:e:F:g:I:m:N:o:P:r:X:x:" opt; do
       echo "   -a avg_dir requires -A. Average tsv files will be put in this dir"
       echo "   -A   flag indicating you want to average the same file from multiple dirs into 1 sheet."
       echo "          The default is to create 1 sheet per file per directory"
+      echo "   -b begin_timestamp  exclude data until this timestamp (UTC timestamp)"
       echo "   -d dir containing sys_XX_* files created by 60secs.sh"
       echo "   -D debug_opt_strings    used for debugging"
       echo "   -F desc_file  file containing 1 line of text describing the results dir. Currently this is just the gen_xls.sh cmdline."
