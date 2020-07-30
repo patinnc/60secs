@@ -175,10 +175,12 @@ def is_number(s):
 for fo2 in range(len(fl_options)):
    fo = fo2
    print("fo= ", fo)
-   options, remainder = getopt.getopt(fl_options[fo][1:], 'Ac:d:i:m:o:O:P:p:s:v', [
+   options, remainder = getopt.getopt(fl_options[fo][1:], 'Ab:c:d:e:i:m:o:O:P:p:s:v', [
                                                             'average',
+                                                            'begin',
                                                             'clip=',
                                                             'desc=',
+                                                            'end=',
                                                             'images=',
                                                             'max=',
                                                             'output=',
@@ -228,10 +230,12 @@ for bmi in range(base_mx+1):
    #   continue
    print("fo= ", fo)
    #options, remainder = getopt.getopt(sys.argv[1:], 'i:o:p:v', ['images=',
-   options, remainder = getopt.getopt(fl_options[fo][1:], 'Ac:d:i:m:o:O:P:p:s:v', [
+   options, remainder = getopt.getopt(fl_options[fo][1:], 'Ab:c:d:e:i:m:o:O:P:p:s:v', [
                                                             'average',
+                                                            'begin=',
                                                             'clip=',
                                                             'desc=',
+                                                            'end=',
                                                             'images=',
                                                             'max=',
                                                             'output=',
@@ -254,6 +258,7 @@ for bmi in range(base_mx+1):
    
    print('OPTIONS   :', options)
    ch_array = []
+   opt_phase_in = []
    opt_phase = []
    #do_avg = False
    do_avg_write = False
@@ -262,6 +267,12 @@ for bmi in range(base_mx+1):
        if opt in ('-i', '--images'):
            for x in glob.glob(arg):
               image_files.append(x)
+       elif opt in ('-b', '--begin'):
+           ts_beg = float(arg)
+           print("ts_beg= %f" % (ts_beg), file=sys.stderr)
+       elif opt in ('-e', '--end'):
+           ts_end = float(arg)
+           print("ts_end= %f" % (ts_end), file=sys.stderr)
        elif opt in ('-c', '--clip'):
            clip = arg
            print("python clip= ", clip)
@@ -288,7 +299,7 @@ for bmi in range(base_mx+1):
                      if line[0] == "end" and is_number(line[2]):
                         ln2[0] = line[1] 
                         ln2[2] = float(line[2])
-                        opt_phase.append(ln2)
+                        opt_phase_in.append(ln2)
                   else:
                      if is_number(line[1]):
                         line[1] = float(line[1])
@@ -296,9 +307,10 @@ for bmi in range(base_mx+1):
                         line.append("-1.0")
                      if len(line[2]) == 0 or line[2] is None:
                         line[2] = "-1.0"
-                     print("line2= '%s', len(line)= %d" % (line[2], len(line)), file=sys.stderr)
+                     #print("line2= '%s', len(line)= %d" % (line[2], len(line)), file=sys.stderr)
                      line[2] = float(line[2])
-                     opt_phase.append(line)
+                     opt_phase_in.append(line)
+           opt_phase = sorted(opt_phase_in, key=lambda x: x[1])
            print("phase= ", opt_phase, file=sys.stderr)
        elif opt in ('-p', '--prefix'):
            prefix = arg
@@ -481,21 +493,38 @@ for bmi in range(base_mx+1):
           drow_beg = int(data[drw][1])+1
           dcol_beg = int(data[drw][2])
           drow_end = int(data[drw][3])
+          mcol_num_cols = len(data[drw])
+          dcol_cat = -1
+          if mcol_num_cols > 5 and int(data[drw][5]) > -1:
+             dcol_cat = int(data[drw][5])
           if drow_end == -1:
+             jjj = dcol_cat-1
              for i in range(drow_beg, len(data)):
+                 if 1==1 and dcol_cat != -1 and len(data[i]) > jjj and i >= drow_beg:
+                    if not (data[i][jjj] is None or data[i][jjj] == ''):
+                       tval = float(data[i][jjj])
+                       skip_it = False
+                       if ts_beg != -1.0 and tval < ts_beg:
+                          skip_it = True
+                       if ts_end != -1.0 and tval > ts_end:
+                          skip_it = True
+                       if skip_it:
+                          skipped += 1
+                          #for ij in range(len(data[i])):
+                          #    worksheet.write_blank(i, ph_add+ij, None, bold0)
+                          continue
                  if len(data[i]) == 0:
                     break
                  if i > drow_beg:
-                    drow_end = i-1
-                 else:
                     drow_end = i
+                 else:
+                    drow_end = i+1
              data[drw][3] = str(drow_end)
              if verbose:
                 print("found end data row= %d" % (drow_end))
           dcol_end = int(data[drw][4])+1
           for i in range(dcol_beg, dcol_end):
              ch_cols_used[i] = 1
-          mcol_num_cols = len(data[drw])
           if mcol_num_cols > 6:
              for h in range(6, mcol_num_cols, 2):
                  #print("sheet_nm= %s got series[%d] colb= %d cole= %d" % (sheet_nm, len(mcol_list), int(data[drw][h]), int(data[drw][h+1])))
@@ -548,11 +577,15 @@ for bmi in range(base_mx+1):
 
       if do_avg == False or do_avg_write == True:
          #print("---- do_avg= %s, do_avg_write= %s, fn_bs_sum[%d] rows= %d" % (do_avg, do_avg_write, fn_bs_i, len(fn_bs_sum[fn_bs_i])), file=sys.stderr)
+         write_rows = 0
+         write_rows3 = 0
          if do_avg_write == True:
             #print("fn_bs_sum[%d] rows= %d" % (fn_bs_i, len(fn_bs_sum[fn_bs_i])), file=sys.stderr)
             ndata = [row[:] for row in data]
+            skipped = 0
             for i in fn_bs_sum[fn_bs_i]:
                 #print("row[%d].len= %d" % (i, len(fn_bs_sum[fn_bs_i][i])), file=sys.stderr)
+                write_rows3 += 1
                 for j in fn_bs_sum[fn_bs_i][i]:
                    #print("row[%d][%d]= %s" % (i, j, fn_bs_sum[fn_bs_i][i][j]), file=sys.stderr)
                    val = fn_bs_sum[fn_bs_i][i][j]
@@ -569,11 +602,12 @@ for bmi in range(base_mx+1):
                       if j >= len(ndata[i]):
                          for ii in (len(ndata[i]), j+1):
                             ndata[i].append(0.0)
-                     
                    ndata[i][j] = val
             for i in range(len(data)):
                 if not i in fn_bs_sum[fn_bs_i]:
                    worksheet.write_row(i, ph_add, data[i])
+                   write_rows += 1
+            print("----  write_rows2= %d, write_rows3= $d" % (write_rows, write_rows3), file=sys.stderr)
             #with open('new_tsv.tsv', 'w', newline='') as csvfile:
             base = os.path.basename(x)
             nw_nm = base
@@ -588,6 +622,8 @@ for bmi in range(base_mx+1):
             doing_sum_all = False
             if len(wrksh_nm) >= 7 and wrksh_nm[0:7] == "sum_all":
                doing_sum_all = True
+            skipped = 0
+            jjj = dcol_cat-1
             for i in range(len(data)):
               if doing_sum_all and len(data[i]) >= 3 and data[i][2] == "goto_sheet":
                 #print("---- got1 summary wrk_sh= %s suffix= %s len= %d col3= %s" % (wrksh_nm, suffix, len(data[ij]), data[ij][3]), file=sys.stderr)
@@ -596,8 +632,25 @@ for bmi in range(base_mx+1):
                      worksheet.write(i, j, data[i][j])
                    else:
                      worksheet.write_url(i, j,  "internal:"+data[i][j]+"!A1")
+                write_rows3 += 1
               else:
+                   if 1==1 and dcol_cat != -1 and len(data[i]) > jjj and i >= drow_beg and i <= (drow_end):
+                       if data[i][jjj] is None or data[i][jjj] == '':
+                          continue
+                       tval = data[i][jjj]
+                       skip_it = False
+                       if ts_beg != -1.0 and tval < ts_beg:
+                          skip_it = True
+                       if ts_end != -1.0 and tval > ts_end:
+                          skip_it = True
+                       if skip_it:
+                          skipped += 1
+                          for ij in range(len(data[i])):
+                              worksheet.write_blank(i, ph_add+ij, None, bold0)
+                          continue
                    worksheet.write_row(i, ph_add, data[i])
+                   write_rows += 1
+         print("---- skipped2a= %d, write_rows= %d, write_rows3= %d" % (skipped, write_rows, write_rows3), file=sys.stderr)
       
       for c in range(chrts):
           dcol_cat = -1
@@ -647,11 +700,12 @@ for bmi in range(base_mx+1):
              print("sheet= %s ch= %d hro= %d hc= %d hce= %d, dr= %d, dre= %d" % (sheet_nm, c, hrow_beg, hcol_beg, hcol_end, drow_beg, drow_end))
           ch_style = 10
           chart1 = None
-          if ch_type == "scatter_straight" and options_str_top.find("line_for_scatter") > -1:
-             ch_type = "line"
+          #if ch_type == "scatter_straight" and options_str_top.find("line_for_scatter") > -1:
+          #   ch_type = "line"
           if ch_type == "scatter_straight":
              if ph_done == 0 and ph_add == 1 and dcol_cat > 0:
                 ph_done = 1
+                skipped = 0
                 for ii in range(len(data)):
                     #  'categories': [wrksh_nm, drow_beg, dcol_cat+ph_add, drow_end, dcol_cat+ph_add],
                     jjj = dcol_cat-1
@@ -662,20 +716,39 @@ for bmi in range(base_mx+1):
                     if ii > drow_end:
                        continue
                     tval = data[ii][jjj]
+                    if (ts_beg != -1.0 and tval < ts_beg) or (ts_end != -1.0 and tval > ts_end):
+                       skipped += 1
+                       continue
                     in_phase = False
+                    phase_arr = []
                     for jj in range(len(opt_phase)):
+                       if tval < opt_phase[jj][1]:
+                          continue
+                       if opt_phase[jj][2] != -1 and tval >= opt_phase[jj][2]:
+                          break
                        if tval >= opt_phase[jj][1] and (tval <= opt_phase[jj][2] or opt_phase[jj][2] == -1):
                           if do_avg == False or do_avg_write == True:
-                             worksheet.write(ii, 0, opt_phase[jj][0])
                              in_phase = True
-                          break
+                             already_in_phase_arr = False
+                             for ck_ph in range(len(phase_arr)):
+                                 if phase_arr[ck_ph] == opt_phase[jj][0]:
+                                     already_in_phase_arr = True
+                                     break
+                             if already_in_phase_arr == False:
+                                phase_arr.append(opt_phase[jj][0])
+                    if in_phase and len(phase_arr) > 0:
+                       worksheet.write(ii, 0, " ".join(phase_arr))
                     if in_phase == False and clip != "":
                        #print("try to zero out row ", ii, " len= ", len(data[ii]))
                        for ij in range(len(data[ii])):
                            worksheet.write_blank(ii, ph_add+ij, None, bold0)
+                print("opt_phase skipped= %d" % (skipped), file=sys.stderr)
 
              if do_avg == False or do_avg_write == True:
-                chart1 = workbook.add_chart({'type': 'scatter', 'subtype': 'straight'})
+                if ch_type == "scatter_straight" and options_str_top.find("line_for_scatter") > -1:
+                   chart1 = workbook.add_chart({'type': "line"})
+                else:
+                   chart1 = workbook.add_chart({'type': 'scatter', 'subtype': 'straight'})
           else:
              if ch_type != "copy":
                 if do_avg == False or do_avg_write == True:
