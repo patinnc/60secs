@@ -301,7 +301,15 @@ if [ "$RESP" -ge "1" -a "$PHASE_FILE" == "" ]; then
   #j=0
   #for i in $RESP; do echo "echo j= $j CPU2017LOG $i ${CPU2017LOG[$j]}"; j=$((j+1)); done
 fi
-FILES=`ls -1 $DIR/sys_*_*.txt $DIR/$METRIC_OUT`
+EXTRA_FILE=
+if [ -e $DIR/$METRIC_OUT ]; then
+  EXTRA_FILE=$DIR/$METRIC_OUT
+else
+  if [ -e $DIR/${METRIC_OUT}.csv ]; then
+    EXTRA_FILE=$DIR/${METRIC_OUT}.csv
+  fi
+fi
+FILES=`ls -1 $DIR/sys_*_*.txt $EXTRA_FILE`
 echo "FILES = $FILES"
 if [ "$FILES" == "" ]; then
    FILES=`ls -1 $DIR/*txt.tsv`
@@ -395,8 +403,15 @@ trows++; printf("\n") > NFL;
          SPIN_TXT=$DIR/../spin.txt
       fi
     fi
-    echo "========SPIN_TXT5= $SPIN_TXT dir= $DIR i= $i, average= $AVERAGE, NCPUS= $NCPUS" > /dev/stderr
-    awk -v options="$OPTIONS" -v do_avg="$AVERAGE" -v sum_file="$SUM_FILE" -v metric_file="$METRIC_OUT" -v metric_avg="$METRIC_AVG" -v pfx="$PFX" '
+    MET_FL=$METRIC_OUT
+    MET_AV=$METRIC_AVG
+    if [ ! -e $DIR/$METRIC_OUT ]; then
+       MET_FL=metric_out.csv
+       MET_AV=metric_out.average.csv
+    fi
+    pwd
+    echo "========SPIN_TXT5= $SPIN_TXT dir= $DIR i= $i, average= $AVERAGE, NCPUS= $NCPUS, MET_FL= $MET_FL, MET_AV= $MET_AV" > /dev/stderr
+    awk -v options="$OPTIONS" -v do_avg="$AVERAGE" -v sum_file="$SUM_FILE" -v metric_file="$MET_FL" -v metric_avg="$MET_AV" -v pfx="$PFX" '
       BEGIN{
          beg=1;
          mx=0
@@ -900,7 +915,7 @@ trows++; printf("\n") > NFL;
        printf("\n") >> sum_file;
        close(sum_file);
      }
-   ' $CPU2017files $DIR/result.csv $DIR/$METRIC_AVG $i $SPIN_TXT
+   ' $CPU2017files $DIR/result.csv $DIR/$MET_AV $i $SPIN_TXT
    pwd
    echo "cpu2017log= $CPU2017LOG"
    for ii in ${CPU2017LOG[@]}; do
@@ -3158,6 +3173,9 @@ for f in $tst_files; do
   fi
 done
 ITP_FILE=$METRIC_OUT.tsv
+if [ ! -e $ITP_FILE ]; then
+  ITP_FILE=$METRIC_OUT.csv.tsv
+fi
 if [ -e $ITP_FILE ]; then
   echo "found itp_file: $ITP_FILE" > /dev/stderr
   SHEETS="$SHEETS $ITP_FILE"
@@ -3376,9 +3394,13 @@ fi
 echo "SHEETS= $SHEETS SKIP_XLS= $SKIP_XLS, xls_fl= $XLSX_FILE avg= $AVERAGE"
 if [ "$SHEETS" != "" -a "$SKIP_XLS" == "0" ]; then
    OPT_I=
-   if [ -e metric_out.average ]; then
+   MET_AV=metric_out.average
+   if [ ! -e $MET_FL ]; then
+     MET_AV=metric_out.average.csv
+   fi
+   if [ -e $MET_AV ]; then
       echo "do flamegraph.pl" 1>&2
-      $SCR_DIR/itp_flame.sh -f metric_out.average -c tmp.jnk
+      $SCR_DIR/itp_flame.sh -f MET_AV -c tmp.jnk
       RESP=$(basename "$XLSX_FILE")
       cat tmp.jnk | perl $SCR_DIR/../flamegraph/flamegraph.pl --title "ITP Flamegraph $RESP" > itp.svg
       echo "do svg_to_html.sh " 1>&2
