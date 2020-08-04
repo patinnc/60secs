@@ -232,6 +232,14 @@ if [ ! -e $DIR/60SECS.LOG ]; then
      CKF="metric_out.tsv"
      RESP=`find $DIR -name $CKF | wc -l | awk '{$1=$1;print}'`
      fi
+     if [ "$RESP" == "0" ]; then
+     CKF="metric_out.csv"
+     RESP=`find $DIR -name $CKF | wc -l | awk '{$1=$1;print}'`
+     fi
+     if [ "$RESP" == "0" ]; then
+     CKF="metric_out.csv.tsv"
+     RESP=`find $DIR -name $CKF | wc -l | awk '{$1=$1;print}'`
+     fi
      if [ "$RESP" != "0" ]; then
        echo "found $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one."
        #RESP=`find $DIR -name $CKF -print0 | sort -z | xargs -0 cat`
