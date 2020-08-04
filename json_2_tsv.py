@@ -93,6 +93,14 @@ for i in range(len(data)):
              mspos=dshpos
           lwr_bnd_str = trgt[:mspos]
           lwr_bnd = int(lwr_bnd_str)
+       else:
+          mspos = trgt.find("s")
+          if mspos != -1:
+             dshpos = trgt.find("-")
+             if dshpos < mspos:
+                mspos=dshpos
+             lwr_bnd_str = trgt[:mspos]
+             lwr_bnd = 1000*float(lwr_bnd_str)
        trgt_ts[trgt] = lwr_bnd
        print("target= %s, lwr_bnd= %d" % (trgt, lwr_bnd))
     tm_diff = 0
@@ -233,11 +241,13 @@ rw += 1
 of.write("%s\t%s\t%s\t%s\t%s\n" % ("Latency", "calls", "tot_time(ms)", "%tot_time", "bucket"))
 rw += 1
 tm_tot_lo = 0
+tot_calls = 0
 tm_tot_hi = 0
 if lat_tot == 0:
    lat_tot = 1
 for j in range(len(trgt_arr)):
     trgt = trgt_arr[j]
+    tot_calls += trgt_tot[trgt]
     tm_cur = trgt_ts[trgt]*trgt_tot[trgt]
     tm_nxt = 0
     if (j+1) < len(trgt_arr):
@@ -250,7 +260,9 @@ for j in range(len(trgt_arr)):
 of.write("\n")
 tm_tot_lo = tm_tot_lo * 0.001
 tm_tot_hi = tm_tot_hi * 0.001
+of.write("\t\t\t\t\ttot_calls\t=%d\n" % (tot_calls))
 of.write("\t\t\t\t\ttm_tot_lo\t=%d\t=%d\ttm_tot_hi\n" % (tm_tot_lo, tm_tot_hi))
+of.write("\t\t\t\t\ttm_tot_lo_ms/tot_calls\t=%.6f\t=%.6f\ttm_tot_hi_ms/tot_calls\n" % (1000.0*tm_tot_lo/tot_calls, 1000.0*tm_tot_hi/tot_calls))
 if tm_last > 0.0:
    tm_tot_lo = tm_tot_lo / tm_last
    tm_tot_hi = tm_tot_hi / tm_last
