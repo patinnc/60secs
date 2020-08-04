@@ -12,7 +12,7 @@ SHEET_NM=
 OPTIONS=
 MATCH_INTRVL=
 
-while getopts "hvf:b:e:m:o:s:S:" opt; do
+while getopts "hvf:b:e:m:o:s:S:t:" opt; do
   case ${opt} in
     f )
       FILE=$OPTARG
