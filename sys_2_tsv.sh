@@ -20,6 +20,7 @@ END_TM=
 BEG_TM_IN=
 METRIC_OUT="metric_out"
 METRIC_AVG="metric_out.average"
+SUM_TMAM_FILE="sum_TMAM.tsv"
 SKIP_XLS=0
 MAX_VAL=
 AVERAGE=0
@@ -411,7 +412,7 @@ trows++; printf("\n") > NFL;
     fi
     pwd
     echo "========SPIN_TXT5= $SPIN_TXT dir= $DIR i= $i, average= $AVERAGE, NCPUS= $NCPUS, MET_FL= $MET_FL, MET_AV= $MET_AV" > /dev/stderr
-    awk -v options="$OPTIONS" -v do_avg="$AVERAGE" -v sum_file="$SUM_FILE" -v metric_file="$MET_FL" -v metric_avg="$MET_AV" -v pfx="$PFX" '
+    awk -v sum_tmam="$SUM_TMAM_FILE" -v options="$OPTIONS" -v tm_beg_in="$BEG_TM_IN" -v tm_end_in="$END_TM" -v do_avg="$AVERAGE" -v sum_file="$SUM_FILE" -v metric_file="$MET_FL" -v metric_avg="$MET_AV" -v pfx="$PFX" '
       BEGIN{
          beg=1;
          mx=0
@@ -422,6 +423,11 @@ trows++; printf("\n") > NFL;
          cpu_count=0;
          skt_count=0;
          ht_count=0;
+         runs= -1;
+         runs_FNM = "___";
+         tm_beg_in += 0.0; 
+         tm_end_in += 0.0;
+         printf("sum_tmam file= %s, tm_beg_in= %f tm_end_in= %f\n", sum_tmam, tm_beg_in, tm_end_in) > "/dev/stderr";
       }
       function ltrim(s) { sub(/^[ \t\r\n]+/, "", s); return s }
       function rtrim(s) { sub(/[ \t\r\n,]+$/, "", s); return s }
@@ -431,6 +437,20 @@ trows++; printf("\n") > NFL;
 #CPU	%usr	%nice	%sys	%iowait	%irq	%soft	%steal	%guest	%gnice	%idle
 #all	10.66	10.44	3.84	0.22	0.00	0.13	0.00	0.00	0.00	74.722018
 
+#  Rate Start:   2020-08-04 05:35:25 (1596519325.87119)
+#  Rate End:     2020-08-04 05:47:23 (1596520043.99671)
+       /^  Rate Start: / {
+	   FNM=ARGV[ARGIND];
+	   if(FNM != runs_FNM) {
+             runs = -1;
+           }
+	   runs_FNM = FNM;
+           ++runs;
+           rate_beg=substr($5, 2, length($5)-2);
+       }
+       /^  Rate End: / {
+           rate_end=substr($5, 2, length($5)-2);
+       }
        /^ Run .* base refrate ratio=.*, runtime=.*, copies=.*, / {
         # Run 531.deepsjeng_r base refrate ratio=2.40, runtime=477.559603, copies=1, threads=1, power=0.00W, temp=0.00 degC, humidity=0.00%
         if (match(FNM, /CPU2017.[0-9][0-9][0-9].log$/)) {
@@ -442,6 +462,9 @@ trows++; printf("\n") > NFL;
            bm_arr[bm_mx,"runtm"] = arr[2];
            n = split($7, arr, /[=,]/);
            bm_arr[bm_mx,"copies"] = arr[2];
+           bm_arr[bm_mx,"runs"] = runs;
+           bm_arr[bm_mx,"rate_beg"] = rate_beg;
+           bm_arr[bm_mx,"rate_end"] = rate_end;
            #printf("got cpu2017.001.log[%d] bm= %s, ratio= %s, run_tm= %s, copies= %s ln= %s file= %s\n",
            #   bm_mx, bm_arr[bm_mx,"nm"], bm_arr[bm_mx,"score"], bm_arr[bm_mx,"runtm"], bm_arr[bm_mx,"copies"], $0, FNM);
            #exit;
@@ -603,6 +626,7 @@ trows++; printf("\n") > NFL;
             title_pfx = title_pfx "(" bm_arr[ii,"copies"] ") ";
           }
           title_pfx = title_pfx "" bm_arr[ii,"score"] ", ";
+          printf("specint_phase: %s_%s %s %s\n", bm_arr[ii,"nm"], bm_arr[ii,"runs"], bm_arr[ii,"rate_beg"], bm_arr[ii,"rate_end"]) > "/dev/stderr";
        }
        printf("got GIPS_col_num= %d\n", GIPS_col_num) > "/dev/stderr";
        trows++;
@@ -696,8 +720,10 @@ trows++; printf("\n") > NFL;
        }
        trows++;
        printf("\n") > NFL;
+       mx_cols = 0;
        for (i=1; i <= mx; i++) {
           n = split(sv_ln[i], arr, ",");
+          if (mx_cols < n) { mx_cols = n; }
           tm = arr[1]+0.0;
           if (tm in res_ts_lkup) {
             tm_off = res_ts_lkup[tm]+0.0;
@@ -705,6 +731,14 @@ trows++; printf("\n") > NFL;
             printf("missed tm= %s in results.csv\n", tm) > "/dev/stderr";
             tm_off = tm * smp_intrvl;
           }
+          use_line = 1;
+          tm_cur = ts_epoch + tm_off;
+          if ((tm_beg_in != 0.0 && tm_cur < tm_beg_in) || (tm_end_in != 0.0 && tm_cur > tm_end_in)) {
+             #printf("tmam drop line = %d tm_off= %f, tm_beg_in= %f tm_cur= %f, tm_end_in= %f\n", i, tm_off, tm_beg_in, tm_cur, tm_end_in) > "/dev/stderr";
+             use_line = 0;
+          }
+          sm_mx += use_line;
+            
            
 
           printf("%.3f\t%.3f", ts_epoch + tm_off, tm_off) > NFL;
@@ -712,6 +746,10 @@ trows++; printf("\n") > NFL;
             val = arr[j]+0.0;
             if ((index(harr[j], "MB/s") > 0 && index(harr[j], "metric_IO_bandwidth_disk_or_network_read") == 0) && val > 1000000.0) {
               val = 500.0;
+            }
+            if (use_line == 1) {
+              sm_arr[j,"sum"] += val;
+              sm_arr[j,"n"] += 1;
             }
             printf("\t%s", val) > NFL;
           }
@@ -854,6 +892,17 @@ trows++; printf("\n") > NFL;
          printf("\n") > NFL;
        }
        close(NFL);
+       if (sm_mx > 0 && sum_tmam != "") {
+          for (j=1; j <= mx_cols; j++) {
+             val = 0.0;
+             if (sm_arr[j,"n"] > 0) {
+               val = sm_arr[j,"sum"]/sm_arr[j,"n"];
+             }
+             printf("%s,%f\n", harr[j], val) > sum_tmam;
+             printf("++__%s,%f\n", harr[j], val) > "/dev/stderr";
+          }
+          close(sum_tmam);
+       }
        if (amx == 0) {
          exit;
        }
@@ -877,6 +926,9 @@ trows++; printf("\n") > NFL;
           printf("\tspecint\t%s\t%s\n", bm_arr[ii,"score"], "specint_score") >> sum_file;
           printf("\tspecint\t%s\t%s\n", bm_arr[ii,"runtm"], "specint_run_time") >> sum_file;
           printf("\tspecint\t%s\t%s\n", bm_arr[ii,"copies"], "specint_copies") >> sum_file;
+          printf("\tspecint\t%s\t%s\n", bm_arr[ii,"runs"], "specint_run") >> sum_file;
+          printf("\tspecint\t%s\t%s\n", bm_arr[ii,"rate_beg"], "specint_beg_ts") >> sum_file;
+          printf("\tspecint\t%s\t%s\n", bm_arr[ii,"rate_end"], "specint_end_ts") >> sum_file;
           }
        }
        if (spin_work != "") {
@@ -3395,17 +3447,23 @@ echo "SHEETS= $SHEETS SKIP_XLS= $SKIP_XLS, xls_fl= $XLSX_FILE avg= $AVERAGE"
 if [ "$SHEETS" != "" -a "$SKIP_XLS" == "0" ]; then
    OPT_I=
    MET_AV=metric_out.average
-   if [ ! -e $MET_FL ]; then
+   NM=$(basename "$XLSX_FILE")
+   if [ ! -e $MET_AV ]; then
      MET_AV=metric_out.average.csv
    fi
+   if [ -e $SUM_TMAM_FILE ]; then
+     MET_AV=$SUM_TMAM_FILE
+     echo "below is sum_tmam_file $SUM_TMAM_FILE for $NM"
+     cp $SUM_TMAM_FILE $NM.sum_tmam.tsv
+     cat $SUM_TMAM_FILE
+   fi
    if [ -e $MET_AV ]; then
-      echo "do flamegraph.pl" 1>&2
-      $SCR_DIR/itp_flame.sh -f MET_AV -c tmp.jnk
-      RESP=$(basename "$XLSX_FILE")
-      cat tmp.jnk | perl $SCR_DIR/../flamegraph/flamegraph.pl --title "ITP Flamegraph $RESP" > itp.svg
-      echo "do svg_to_html.sh " 1>&2
-      $SCR_DIR/svg_to_html.sh -r 1 -d . -f itp.svg > itp.html
-      inkscape -z  -w 2400 -j --export-file=itp.png  itp.svg
+      echo "do flamegraph.pl -f $MET_AV nm= $NM xlxs=$XLSX_FILE" > /dev/stderr
+      $SCR_DIR/itp_flame.sh -f $MET_AV -c tmp_flamegraph.jnk
+      cat tmp_flamegraph.jnk | perl $SCR_DIR/../flamegraph/flamegraph.pl --title "ITP Flamegraph $NM" > $NM.svg
+      echo "do svg_to_html.sh " > /dev/stderr
+      $SCR_DIR/svg_to_html.sh -r 1 -d .  > $NM.html
+      inkscape -z  -w 2400 -j --export-file=$NM.png  $NM.svg
       OPT_I=" -i \"*.png\" "
    fi
    OPT_PH=
