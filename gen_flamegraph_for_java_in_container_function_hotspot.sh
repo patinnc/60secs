@@ -73,24 +73,24 @@ gawk -v typ="$TYP_IN" '
    }
    {
      if (typ == "count") {
-     if ($1 == "---") {
-        # this marks the beginning of the traces section of a combined collapsed and traces file from async profiler
-        exit;
-     }
-     i = NF;
-     samples = $i;
-     n = split($0, arr, ";");
-     fnc = arr[n];
-     str = substr(fnc, 1, length(fnc)-length(samples)-1); 
-     if (!(str in hs_list)) {
-       hs_mx++;
-       hs_list[str] = hs_mx;
-       hs_lkup[hs_mx] = str;
-     }
-     idx = hs_list[str];
-     hs_count[idx] += samples;
-     #printf("%s\n", str);
-     next;
+       if ($1 == "---") {
+          # this marks the beginning of the traces section of a combined collapsed and traces file from async profiler
+          exit;
+       }
+       i = NF;
+       samples = $i;
+       n = split($0, arr, ";");
+       fnc = arr[n];
+       str = substr(fnc, 1, length(fnc)-length(samples)-1); 
+       if (!(str in hs_list)) {
+         hs_mx++;
+         hs_list[str] = hs_mx;
+         hs_lkup[hs_mx] = str;
+       }
+       idx = hs_list[str];
+       hs_count[idx] += samples;
+       #printf("%s\n", str);
+       next;
      }
    }
    {
