@@ -607,7 +607,7 @@ for bmi in range(base_mx+1):
                 if not i in fn_bs_sum[fn_bs_i]:
                    worksheet.write_row(i, ph_add, data[i])
                    write_rows += 1
-            print("----  write_rows2= %d, write_rows3= $d" % (write_rows, write_rows3), file=sys.stderr)
+            print("----  write_rows2= %d, write_rows3= %d" % (write_rows, write_rows3), file=sys.stderr)
             #with open('new_tsv.tsv', 'w', newline='') as csvfile:
             base = os.path.basename(x)
             nw_nm = base
