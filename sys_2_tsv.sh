@@ -3217,8 +3217,12 @@ for f in $tst_files; do
 done
 tst_files="RPS.log response_time.log"
 for f in $tst_files; do
+  OPT_S=
+  if [ "$SUM_FILE" != "" ]; then
+    OPT_S=" -s $SUM_FILE "
+  fi
   if [ -e $f ]; then
-     $SCR_DIR/resp_2_tsv.sh -f $f -s $SUM_FILE  $OPT_END_TM
+     $SCR_DIR/resp_2_tsv.sh -f $f $OPT_S $OPT_END_TM
   fi
   if [ -e $f.tsv ]; then
      SHEETS="$SHEETS $f.tsv"
