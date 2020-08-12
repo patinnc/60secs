@@ -231,10 +231,12 @@ if [ ! -e $DIR/60SECS.LOG ]; then
      if [ "$RESP" == "0" ]; then
      CKF="metric_out.tsv"
      RESP=`find $DIR -name $CKF | wc -l | awk '{$1=$1;print}'`
+       echo "found $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one."
      fi
      if [ "$RESP" == "0" ]; then
      CKF="metric_out.csv"
      RESP=`find $DIR -name $CKF | wc -l | awk '{$1=$1;print}'`
+       echo "found $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one."
      fi
      if [ "$RESP" == "0" ]; then
      CKF="metric_out.csv.tsv"
@@ -256,8 +258,14 @@ if [ ! -e $DIR/60SECS.LOG ]; then
        fi
        echo "found $CKF file in dir $DIR"
        STR=
+       j=0
        for ii in $RESP; do
          NM=$(dirname $ii)
+           j=$((j+1))
+           if [ "$NUM_DIR" != "" -a "$NUM_DIR" != "0" -a $NUM_DIR -gt 0 -a $j -ge $NUM_DIR ]; then
+              echo "limit number of dirs with $CKF due to -N $NUM_DIR option"
+              break
+           fi
          STR="$STR $NM"
        done
        DIR=$STR
@@ -560,6 +568,11 @@ for i in $LST; do
  # itp files
  if [ -e metric_out.tsv ]; then
    FLS=$(get_abs_filename metric_out.tsv)
+   #FLS=`ls -1 $i/metric_out.tsv`
+   echo -e "${FLS}" >> $ALST
+ fi
+ if [ -e metric_out.csv.tsv ]; then
+   FLS=$(get_abs_filename metric_out.csv.tsv)
    #FLS=`ls -1 $i/metric_out.tsv`
    echo -e "${FLS}" >> $ALST
  fi
@@ -984,12 +997,23 @@ if [ $NUM_DIRS -gt 1 ]; then
   if [ "$MAX_VAL" != "" ]; then
     OPT_M=" -m $MAX_VAL "
   fi
+  OPT_TM=
+  if [ "$BEG_TM_IN" != "" ]; then
+     OPT_TM=" -b $BEG_TM_IN "
+  fi
+  if [ "$END_TM" != "" ]; then
+     OPT_TM="$OPT_TM -e $END_TM "
+  fi
       
+  echo "====== begin $ALST ========"
+  #cat $ALST
+  head -50 $ALST
+  echo "====== end $ALST ========"
   TS_DFF=$(($TS_CUR-$TS_BEG))
   echo "elap_tm= $TS_DFF"
   echo "about to do tsv_2_xls.py" > /dev/stderr
-  echo "python $SCR_DIR/tsv_2_xlsx.py $OPT_a $OPT_A $OPT_OPTIONS $OPT_M -f $ALST > tmp2.jnk"
-        python $SCR_DIR/tsv_2_xlsx.py $OPT_a $OPT_A $OPT_OPTIONS $OPT_M -f $ALST $SHEETS > tmp2.jnk &
+  echo "python $SCR_DIR/tsv_2_xlsx.py $OPT_a $OPT_A $OPT_TM $OPT_OPTIONS $OPT_M -f $ALST > tmp2.jnk"
+        python $SCR_DIR/tsv_2_xlsx.py $OPT_a $OPT_A $OPT_TM $OPT_OPTIONS $OPT_M -f $ALST $SHEETS > tmp2.jnk &
         PY_PID=$!
         echo $PY_PID >> tsv_2_xlsx.pid
         
