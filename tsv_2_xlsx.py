@@ -495,6 +495,7 @@ for bmi in range(base_mx+1):
           drow_end = int(data[drw][3])
           mcol_num_cols = len(data[drw])
           dcol_cat = -1
+          skipped = 0
           if mcol_num_cols > 5 and int(data[drw][5]) > -1:
              dcol_cat = int(data[drw][5])
           if drow_end == -1:
