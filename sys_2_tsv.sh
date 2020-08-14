@@ -583,9 +583,25 @@ trows++; printf("\n") > NFL;
           printf("\n") > NFL;
          }
        }
+#metric_L1D MPI (includes data+rfo w/ prefetches)
+#metric_L1D demand data read hits per instr
+#metric_L1-I code read misses (w/ prefetches) per instr
+#metric_L2 demand data read hits per instr
+#metric_L2 MPI (includes code+data+rfo w/ prefetches)
+#metric_L2 demand data read MPI
+#metric_L2 demand code MPI
+#metric_LLC MPI
+#metric_LLC code read MPI (demand+prefetch)
+#metric_LLC data read MPI (demand+prefetch)
+#metric_LLC total HITM (per instr)
+#metric_LLC total HIT clean line forwards (per instr)
+
        GIPS_col_freq = -1;
        GIPS_col_CPI  = -1;
        CPU_util_col  = -1;
+       L1_data_hit_ratio_mx = 0;
+       L2_data_hit_ratio_mx = 0;
+       L3_data_hit_ratio_mx = 0;
        got_GIPS = 0
        num_cpus = cpu_count * skt_count * ht_count;
        printf("metric_out: num_cpus= %d\n", num_cpus) > "/dev/stderr";
@@ -606,12 +622,72 @@ trows++; printf("\n") > NFL;
              GIPS_col_CPI = i+extr_col;
              got_GIPS++;
           }
+#metric_L1D MPI (includes data+rfo w/ prefetches)
+#metric_L1D demand data read hits per instr
+          if (index(harr[i], "metric_L1D demand data read hits per instr") > 0) {
+             L1_data_hit_ratio_mx++;
+             L1_data_hit_ratio_col[1] = i+extr_col;
+          }
+          if (index(harr[i], "metric_L1D MPI (includes data+rfo w/ prefetches)") > 0) {
+             L1_data_hit_ratio_mx++;
+             L1_data_hit_ratio_col[2] = i+extr_col;
+          }
+#metric_L2 demand data read hits per instr
+#metric_L2 MPI (includes code+data+rfo w/ prefetches)
+#metric_L2 demand data read MPI
+#metric_L2 demand code MPI
+          if (index(harr[i], "metric_L2 demand data read hits per instr") > 0) {
+             L2_data_hit_ratio_mx++;
+             L2_data_hit_ratio_col[1] = i+extr_col;
+          }
+          if (index(harr[i], "metric_L2 demand data read MPI") > 0) {
+             L2_data_hit_ratio_mx++;
+             L2_data_hit_ratio_col[2] = i+extr_col;
+          }
+#metric_LLC MPI
+#metric_LLC total HITM (per instr)
+#metric_LLC total HIT clean line forwards (per instr)
+          if (index(harr[i], "metric_LLC total HITM (per instr)") > 0) {
+             L3_data_hit_ratio_mx++;
+             L3_data_hit_ratio_col[1] = i+extr_col;
+          }
+          if (index(harr[i], "metric_LLC total HIT clean line forwards (per instr)") > 0) {
+             L3_data_hit_ratio_mx++;
+             L3_data_hit_ratio_col[2] = i+extr_col;
+          }
+          if (index(harr[i], "metric_LLC MPI") > 0) {
+             L3_data_hit_ratio_mx++;
+             L3_data_hit_ratio_col[3] = i+extr_col;
+          }
        }
        GIPS_extra_col = 0;
+       tot_extra_col = 0;
        if (got_GIPS == 2) {
          GIPS_extra_col = 1;
          GIPS_hdr = "Instr/sec (1e9 instr/sec)";
          GIPS_col_num = hn + 1 + extr_col;
+         tot_extra_col++;
+       }
+       L1_data_hit_ratio_extra_col = 0;
+       if (L1_data_hit_ratio_mx == 2) {
+         L1_data_hit_ratio_extra_col = 1;
+         L1_data_hit_ratio_hdr = "L1 data hit% (hits/(hits+miss))";
+         L1_data_hit_ratio_col_num = hn + 1 + tot_extra_col + extr_col;
+         tot_extra_col++;
+       }
+       L2_data_hit_ratio_extra_col = 0;
+       if (L2_data_hit_ratio_mx == 2) {
+         L2_data_hit_ratio_extra_col = 1;
+         L2_data_hit_ratio_hdr = "L2 data hit% (hits/(hits+miss))";
+         L2_data_hit_ratio_col_num = hn + 1 + tot_extra_col + extr_col;
+         tot_extra_col++;
+       }
+       L3_data_hit_ratio_extra_col = 0;
+       if (L3_data_hit_ratio_mx == 3) {
+         L3_data_hit_ratio_extra_col = 1;
+         L3_data_hit_ratio_hdr = "LLC data hit% (hits/(hits+miss))";
+         L3_data_hit_ratio_col_num = hn + 1 + tot_extra_col + extr_col;
+         tot_extra_col++;
        }
        title_pfx = "";
        for (ii=1; ii <= bm_mx; ii++) {
@@ -632,7 +708,7 @@ trows++; printf("\n") > NFL;
        trows++;
        printf("title\t%sitp_metrics\tsheet\titp_metric\ttype\tscatter_straight\n", title_pfx) > NFL;
        trows++;
-       printf("hdrs\t%d\t%d\t%d\t%d\t1\n", trows+1, 3, -1, hn+1+GIPS_extra_col) > NFL;
+       printf("hdrs\t%d\t%d\t%d\t%d\t1\n", trows+1, 3, -1, hn+1+tot_extra_col) > NFL;
        #trows_top = trows;
        printf("\t") > NFL;
        for (i=1; i <= hn; i++) {
@@ -640,6 +716,18 @@ trows++; printf("\n") > NFL;
           printf("\t%s", frm) > NFL;
        }
        if (got_GIPS == 2) {
+          frm = sprintf("=subtotal(101, INDIRECT(ADDRESS(row()+2, column(), 1)):INDIRECT(ADDRESS(row()-1+%d, column(),1)))", mx);
+          printf("\t%s", frm) > NFL;
+       }
+       if (L1_data_hit_ratio_mx == 2) {
+          frm = sprintf("=subtotal(101, INDIRECT(ADDRESS(row()+2, column(), 1)):INDIRECT(ADDRESS(row()-1+%d, column(),1)))", mx);
+          printf("\t%s", frm) > NFL;
+       }
+       if (L2_data_hit_ratio_mx == 2) {
+          frm = sprintf("=subtotal(101, INDIRECT(ADDRESS(row()+2, column(), 1)):INDIRECT(ADDRESS(row()-1+%d, column(),1)))", mx);
+          printf("\t%s", frm) > NFL;
+       }
+       if (L3_data_hit_ratio_mx == 3) {
           frm = sprintf("=subtotal(101, INDIRECT(ADDRESS(row()+2, column(), 1)):INDIRECT(ADDRESS(row()-1+%d, column(),1)))", mx);
           printf("\t%s", frm) > NFL;
        }
@@ -718,6 +806,15 @@ trows++; printf("\n") > NFL;
        if (got_GIPS == 2) {
           printf("\t%s", GIPS_hdr) > NFL;
        }
+       if (L1_data_hit_ratio_mx == 2) {
+          printf("\t%s", L1_data_hit_ratio_hdr) > NFL;
+       }
+       if (L2_data_hit_ratio_mx == 2) {
+          printf("\t%s", L2_data_hit_ratio_hdr) > NFL;
+       }
+       if (L3_data_hit_ratio_mx == 3) {
+          printf("\t%s", L3_data_hit_ratio_hdr) > NFL;
+       }
        trows++;
        printf("\n") > NFL;
        mx_cols = 0;
@@ -757,7 +854,31 @@ trows++; printf("\n") > NFL;
           if (got_GIPS == 2 && CPU_util_col > 0 && num_cpus > 0) {
             frm = sprintf("=%d*0.01*INDIRECT(ADDRESS(row(), column()-%d,2))*(1.0/INDIRECT(ADDRESS(row(), column()-%d, 2)))*INDIRECT(ADDRESS(row(), column()-%d,2))",
                 num_cpus, GIPS_col_num-CPU_util_col, GIPS_col_num-GIPS_col_CPI, GIPS_col_num-GIPS_col_freq);
-            #printf("GIPS_frm= %s\n", frm) > "/dev/stderr";
+            printf("\t%s", frm) > NFL;
+          }
+          if (L1_data_hit_ratio_mx == 2) {
+            cur_col = L1_data_hit_ratio_col_num;
+            hit  = cur_col - L1_data_hit_ratio_col[1];
+            miss = cur_col - L1_data_hit_ratio_col[2];
+            frm = sprintf("=100.0*INDIRECT(ADDRESS(row(), column()-%d,2))/(INDIRECT(ADDRESS(row(), column()-%d, 2)) + INDIRECT(ADDRESS(row(), column()-%d,2)))",
+                hit, miss, hit);
+            printf("\t%s", frm) > NFL;
+          }
+          if (L2_data_hit_ratio_mx == 2) {
+            cur_col = L2_data_hit_ratio_col_num;
+            hit  = cur_col - L2_data_hit_ratio_col[1];
+            miss = cur_col - L2_data_hit_ratio_col[2];
+            frm = sprintf("=100.0*INDIRECT(ADDRESS(row(), column()-%d,2))/(INDIRECT(ADDRESS(row(), column()-%d, 2)) + INDIRECT(ADDRESS(row(), column()-%d,2)))",
+                hit, miss, hit);
+            printf("\t%s", frm) > NFL;
+          }
+          if (L3_data_hit_ratio_mx == 3) {
+            cur_col = L3_data_hit_ratio_col_num;
+            hit1 = cur_col - L3_data_hit_ratio_col[1];
+            hit2 = cur_col - L3_data_hit_ratio_col[2];
+            miss = cur_col - L3_data_hit_ratio_col[3];
+            frm = sprintf("=100.0*(INDIRECT(ADDRESS(row(), column()-%d,2))+INDIRECT(ADDRESS(row(), column()-%d,2)))/(INDIRECT(ADDRESS(row(), column()-%d, 2)) + INDIRECT(ADDRESS(row(), column()-%d, 2)) + INDIRECT(ADDRESS(row(), column()-%d,2)))",
+                hit1, hit2, miss, hit1, hit2);
             printf("\t%s", frm) > NFL;
           }
           trows++;
@@ -948,7 +1069,7 @@ trows++; printf("\n") > NFL;
        printf("\titp\t%s\t%s\n", "4", "data_col_key") >> sum_file;
        printf("\titp_metric_itp\t%s\t%s\n", "itp_metric_itp", "data_sheet") >> sum_file;
        if (do_avg == "1") {
-          for (j=1; j <= (amx+GIPS_extra_col); j++) {
+          for (j=1; j <= (amx+tot_extra_col); j++) {
             printf("\titp\t%s\t%s", sv_aln_valu[1,j], sv_aln_lkup[j]) >> sum_file;
             for (m=2; m <= avg_file_mx; m++) {
                 printf("\t%s", sv_aln_valu[m,j]) >> sum_file;
@@ -956,7 +1077,7 @@ trows++; printf("\n") > NFL;
             printf("\n") >> sum_file;
           }
        } else {
-       for (j=1; j <= (hn+GIPS_extra_col); j++) {
+       for (j=1; j <= (hn+tot_extra_col); j++) {
           frm3 = sprintf("INDIRECT(ADDRESS(ROW()-%d, column(), 4, 1))", j);
           frm4 = sprintf("INDIRECT(ADDRESS(ROW()-%d, column()-1, 4, 1))", j);
           frm1 = sprintf("=INDIRECT(ADDRESS(%d, %d, 1, 1, %s))", trows_top, j+3, frm3);
