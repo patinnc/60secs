@@ -87,6 +87,7 @@ awk -v csv_file="$CSV_FILE" '
         } else {
            d_arr[dpth]++;
         }
+        if (val < 0.0) { val = 0.0; }
         d_sum[dpth] += val;
         tree="";
         for (i=1; i<= dpth; i++) { tree = tree "" d_arr[i] ",";}
@@ -160,6 +161,11 @@ awk -v csv_file="$CSV_FILE" '
       for ( n=1; n <= nd_mx; n++) {
         printf("%2d\t%2d\t%8.4f\t%8.4f\t%s\t%s\n", n, nd[n,"dad"], nd[n,"sum"], nd[n,"val"], nd[n,"fstr"], nd[n,"tree"]);
       }
+      sum = 0.0;
+      for ( n=1; n <= nd_mx; n++) {
+        sum += nd[n,"val"];
+      }
+      printf("sum = %f\n\n", sum);
       # the flamegraph assumes that all the "counts" are in the right most unit
       # That is, say have a hierarchy like
       #   A 100
@@ -199,8 +205,26 @@ awk -v csv_file="$CSV_FILE" '
         printf("%2d\t%2d\t%8.4f\t%8.4f\t%s\t%s\t%d\t%s\n", n, nd[n,"dad"], nd[n,"sum"], nd[n,"val"], nd[n,"fstr"], nd[n,"dir"], nd[n,"dpth"], nd[n,"tree"]);
       }
       # print the ; separated call stack file
+      sum = 0.0;
+      sum1 = 0.0;
+      sum2 = 0.0;
+      sum3 = 0.0;
       for ( n=1; n <= nd_mx; n++) {
         dpth = nd[n,"dpth"];
+        if (dpth == 1) {
+           if (sum1 != 0.0) {
+              printf("sum1 = %f, %s\n", sum1, sv_lvl);
+           }
+           sum1 = 0.0;
+           sv_lvl= nd[n, "fstr"];
+        }
+        if (dpth == 2) {
+           if (sum2 != 0.0) {
+              printf("sum2 = %f, %s\n", sum2, sv_lvl2);
+           }
+           sum2 = 0.0;
+           sv_lvl2 = nd[n, "fstr"];
+        }
         dstr[dpth] = nd[n,"str"];
         fstr = "";
         sep = ";";
@@ -209,8 +233,18 @@ awk -v csv_file="$CSV_FILE" '
           fstr = fstr "" dstr[d] "" sep;
         }
         fstr = fstr " " sprintf("%.0f", nd[n,"val"] * 1000.0);
+        sum += nd[n,"val"];
+        sum1 += nd[n,"val"];
+        sum2 += nd[n,"val"];
         printf("%s\n", fstr) > csv_file;
       }
+      if (sum1 != 0.0) {
+         printf("sum1 = %f, %s\n", sum1, sv_lvl);
+      }
+      if (sum2 != 0.0) {
+         printf("sum2 = %f, %s\n", sum2, sv_lvl2);
+      }
+      printf("sum = %f\n\n", sum);
     }
     ' $FL
 exit
