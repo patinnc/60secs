@@ -949,8 +949,8 @@ if [ $NUM_DIRS -gt 1 ]; then
   if [ "$INPUT_FILE_LIST" != "" ]; then
     RESP=0
   else
-    echo "find $INPUT_DIR -name muttley?.json | wc -l | awk '{$1=$1;print}'"
-    RESP=`find $INPUT_DIR -name "muttley?.json" | wc -l | awk '{$1=$1;print}'`
+    echo "find $INPUT_DIR -name muttley*.json | wc -l | awk '{$1=$1;print}'"
+    RESP=`find $INPUT_DIR -name "muttley*.json" | wc -l | awk '{$1=$1;print}'`
     echo "find muttley RESP= \"$RESP\"" 
   fi
   if [ "$RESP" != "0" ]; then
@@ -965,7 +965,7 @@ if [ $NUM_DIRS -gt 1 ]; then
       if [ "$DESC_FILE" != "" ]; then
         echo -e "-d\t\"$DESC_FILE\"" >> $ALST
       fi
-      tst_files=`find $INPUT_DIR -name "muttley?.json"|sort`
+      tst_files=`find $INPUT_DIR -name "muttley*.json"|sort`
       echo "find muttley*.json.tsv RESP= $tst_files"
       echo "muttley files_0: $tst_files" > /dev/stderr
       if [ "$tst_files" != "" ]; then
