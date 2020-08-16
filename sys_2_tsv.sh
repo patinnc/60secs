@@ -3531,10 +3531,10 @@ if [ "$PHASE_FILE" == "" ]; then
 fi
 
 
-  RESP=`find . -name "muttley?.json.tsv" | wc -l | awk '{$1=$1;print}'`
+  RESP=`find . -name "muttley*.json.tsv" | wc -l | awk '{$1=$1;print}'`
   echo "find muttley RESP= $RESP"
   if [ "$RESP" != "0" ]; then
-    RESP=`find . -name "muttley?.json.tsv" | xargs`
+    RESP=`find . -name "muttley*.json.tsv" | xargs`
     echo "+++++++++++++++ multtley RESP= $RESP"
     awk -v cur_dir="$(pwd)" -v sum_file="$SUM_FILE" '
        BEGIN { mx=0; mx_val=-1; }
