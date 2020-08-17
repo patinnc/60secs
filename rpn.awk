@@ -16,8 +16,7 @@ function rpn_eval(x) {
   }
 }
 
-#function rpn_rtn(val, k, got_rpn_eqn, col_hdr_mx, col_hdr, rw_data) {
-function rpn_rtn(val, k4, got_rpn_eqn, col_hdr_mx, col_hdr, rw_data,    la, val1, lc) {
+function rpn_rtn(val, k4, got_rpn_eqn, col_hdr_mx, col_hdr, rw_data,    la, val1, lc, prt_it, oper, val2) {
    val =  0.0;
    prt_it=1;
    rpn_err = "";
@@ -30,8 +29,6 @@ function rpn_rtn(val, k4, got_rpn_eqn, col_hdr_mx, col_hdr, rw_data,    la, val1
         val1=val2+0.0;
         rpn_push(val1);
         if (rpn_err != "") { printf("rpn_err1= %s\n", rpn_err) > "/dev/stderr"; }
-        #printf("rpn_eqn k4= %d, la= %d, hdr= %s init %s\n", k4, la, nwfor[k4,1], val0) > "/dev/stderr";
-        #if (k4==4){for(jjj=1; jjj <= rpn_sp; jjj++) { printf("aft push_val2 %s sp[%d]= %s\n", val1, jjj, rpn_stack[jjj]);}}
         continue;
       }
       if (oper == "push_row_val" || oper == "push_row_val2") {
@@ -52,12 +49,8 @@ function rpn_rtn(val, k4, got_rpn_eqn, col_hdr_mx, col_hdr, rw_data,    la, val1
         if (got_rpn_eqn[k4,la,"lkup_col"] != -1) {
           lc = got_rpn_eqn[k4,la,"lkup_col"];
           val1=rw_data[lc]+0.0;
-          #if (k4==4){printf("before push rpn_sp= %d\n", rpn_sp);}
-          #if (k4==4){for(jjj=1; jjj <= rpn_sp; jjj++) { printf("push_row_val1 %s sp[%d]= %s\n", val2, jjj, rpn_stack[jjj]);}}
           rpn_push(val1);
           if (rpn_err != "") { printf("after push rpn_err3= %s\n", rpn_err) > "/dev/stderr"; }
-          #if (k4 == 4) { printf("after push val1= %s, fv= %f, rpn_sp= %d ret_rpn_sp= %d\n", val1, val1, rpn_sp, ret_run_sp); }
-          #if (k4==4){for(jjj=1; jjj <= rpn_sp; jjj++) { printf("push_row_val2 %s sp[%d]= %s\n", val2, jjj, rpn_stack[jjj]);}}
         }
         if (val1 == "") {
            prt_it = 0;
@@ -66,24 +59,15 @@ function rpn_rtn(val, k4, got_rpn_eqn, col_hdr_mx, col_hdr, rw_data,    la, val1
         continue;
       }
       if (oper == "oper") {
-        #if (k4 == 4) {
-        #printf("rpn_eqn bef k4= %d, la= %d, hdr= %s, get_col %s val= %f nw_val= %f\n", k4, la, eqn_arr[k4,1,"hdr"], col_hdr[lc], val1, val0);
-        # for(jjj=1; jjj <= rpn_sp; jjj++) { printf("oper1 %s sp[%d]= %s\n", val2, jjj, rpn_stack[jjj]);}
-        #}
         rpn_eval(val2);
         if (rpn_err != "") { printf("rpn_err4= %s, oper= %s, val= %s\n", rpn_err, oper, val2) > "/dev/stderr"; }
-        #if (k4 == 4) {
-        #printf("rpn_eqn aft k4= %d, la= %d, hdr= %s, get_col %s val= %f nw_val= %f\n", k4, la, eqn_arr[k4,1,"hdr"], col_hdr[lc], val1, val0);
-        # for(jjj=1; jjj <= rpn_sp; jjj++) { printf("oper2 %s sp[%d]= %s\n", val2, jjj, rpn_stack[jjj]);}
-        #}
         continue;
       }
    }
    if (prt_it == 1) {
-     #if (k4==4){for(jjj=1; jjj <= rpn_sp; jjj++) { printf("sp[%d]= %s\n", jjj, rpn_stack[jjj]);}}
      val = rpn_top()
    } else {
-     printf("rpn_err: %s rpn_eqn k4= %d, la= %d, hdr= %s\n", rpn_err, k4, la, nwfor[k4,1]) > "/dev/stderr";
+     printf("rpn_err: %s rpn_eqn k4= %d, la= %d\n", rpn_err, k4, la) > "/dev/stderr";
    }
    return val;
 }
