@@ -4,6 +4,7 @@
 # arg2 (optional) is specint .log
 # for example:
 # ../perf_stat_scatter.sh B20a_specint_prf/prf_data_specint.txt B20a_specint_prf/20-01-15_130627_specint/result/CPU2017.001.log  > tmp.tsv
+SCR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 FILES=
 SPECINT_LOG=
 CHART_IN=
@@ -132,9 +133,11 @@ for i in $LSCPU_FL; do
 done
 echo "TSC_FREQ= $TSC_FREQ NUM_CPUS= $NUM_CPUS" > /dev/stderr
 
+export AWKPATH=$SCR_DIR
 
-awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s|memory},LLC-misses PKI{|memory},IPC{InstPerCycle|CPU},%not_halted{|CPU},avg_freq{avg_freq GHz|CPU},QPI_BW{QPI_BW GB/s|memory interconnect},power_pkg {power pkg (watts)|power},Instructions*1e-9/s{Instructions*1e-9/s|CPU}" 'BEGIN{
-     rpn_sp = 0;
+awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s|memory},LLC-misses PKI{|memory},IPC{InstPerCycle|CPU},%not_halted{|CPU},avg_freq{avg_freq GHz|CPU},QPI_BW{QPI_BW GB/s|memory interconnect},power_pkg {power pkg (watts)|power},Instructions*1e-9/s{Instructions*1e-9/s|CPU}" '
+   @include "rpn.awk"
+   BEGIN{
      row=0;
      evt_idx=-1;
      months="  JanFebMarAprMayJunJulAugSepOctNovDec";
@@ -176,23 +179,6 @@ awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v 
          }
        }
   }
-# rpn calc from http://lancelot.pecquet.org/download/science/aesthack/rpn.html#AWK
-function rpn_push(x) { rpn_stack[++rpn_sp] = x; }
-function rpn_pop()   { if(rpn_sp > 0) rpn_sp--; else rpn_err = "rpn Stack underflow"; }
-function rpn_top()   { if(rpn_sp > 0) return rpn_stack[rpn_sp]; }
-
-function rpn_eval(x) {
-  if(x != "-" && (x ~ /^[-.0-9][0-9]*[.0-9]?[0-9]*$/)) rpn_push(x);
-  else {
-    rpn_second      = rpn_stack[rpn_sp]; rpn_pop();
-    rpn_first       = rpn_stack[rpn_sp]; rpn_pop();
-         if(x == "+") rpn_push(rpn_first + rpn_second);
-    else if(x == "-") rpn_push(rpn_first - rpn_second);
-    else if(x == "*") rpn_push(rpn_first * rpn_second);
-    else if(x == "/") rpn_push(rpn_first / rpn_second);
-    else rpn_err = "Bad operator: " + x;
-  }
-}
 
 
   function do_summary(colms, v, epch, intrvl, k_idx) {
@@ -511,33 +497,34 @@ function rpn_eval(x) {
      got_lkfor[kmx,5]=1; # instances
      got_lkfor[kmx,6]=""; # 
 #    rpn operations
-     got_rpn_eqn[kmx,1]=14;
-     got_rpn_eqn[kmx,2,1]=100;
-     got_rpn_eqn[kmx,2,2]="push_val";
-     got_rpn_eqn[kmx,3,1]=tolower("UOPS_RETIRED.RETIRE_SLOTS");
-     got_rpn_eqn[kmx,3,2]="push_row_val";
-     got_rpn_eqn[kmx,4,1]="*";   # 100 * uop_ret
-     got_rpn_eqn[kmx,4,2]="oper";
-     got_rpn_eqn[kmx,5,1]=4.0;
-     got_rpn_eqn[kmx,5,2]="push_val";
-     got_rpn_eqn[kmx,6,1]="cycles"
-     got_rpn_eqn[kmx,6,2]="push_row_val";
-     got_rpn_eqn[kmx,7,1]=thr_per_core;
-     got_rpn_eqn[kmx,7,2]="push_val";
-     got_rpn_eqn[kmx,8,1]="/";   # clk_unh.thr_any / thr_cou
-     got_rpn_eqn[kmx,8,2]="oper";
-     got_rpn_eqn[kmx,9,1]="*";    # * 4
-     got_rpn_eqn[kmx,9,2]="oper";
-     got_rpn_eqn[kmx,10,1]="/";
-     got_rpn_eqn[kmx,10,2]="oper";
-     got_rpn_eqn[kmx,11,1]="cycles"
-     got_rpn_eqn[kmx,11,2]="push_row_val";
-     got_rpn_eqn[kmx,12,1]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");
-     got_rpn_eqn[kmx,12,2]="push_row_val";
-     got_rpn_eqn[kmx,13,1]="/";
-     got_rpn_eqn[kmx,13,2]="oper";
-     got_rpn_eqn[kmx,14,1]="*";
-     got_rpn_eqn[kmx,14,2]="oper";
+     kkmx=0;
+     got_rpn_eqn[kmx, ++kkmx,"val"]=100;
+     got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+     got_rpn_eqn[kmx, ++kkmx, "val"]=tolower("UOPS_RETIRED.RETIRE_SLOTS");
+     got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+     got_rpn_eqn[kmx, ++kkmx, "val"]="*";   # 100 * uop_ret
+     got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+     got_rpn_eqn[kmx, ++kkmx, "val"]=4.0;
+     got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+     got_rpn_eqn[kmx, ++kkmx, "val"]="cycles"
+     got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+     got_rpn_eqn[kmx, ++kkmx, "val"]=thr_per_core;
+     got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+     got_rpn_eqn[kmx, ++kkmx, "val"]="/";   # clk_unh.thr_any / thr_cou
+     got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+     got_rpn_eqn[kmx, ++kkmx, "val"]="*";    # * 4
+     got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+     got_rpn_eqn[kmx, ++kkmx, "val"]="/";
+     got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+     got_rpn_eqn[kmx, ++kkmx, "val"]="cycles"
+     got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+     got_rpn_eqn[kmx, ++kkmx, "val"]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");
+     got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+     got_rpn_eqn[kmx, ++kkmx, "val"]="/";
+     got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+     got_rpn_eqn[kmx, ++kkmx, "val"]="*";
+     got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+     got_rpn_eqn[kmx,      1,"max"]=kkmx;
      lkfor[kmx,1]=tolower("UOPS_RETIRED.RETIRE_SLOTS");
      lkfor[kmx,2]="cycles";  # get the instances from the first lkfor event
      lkfor[kmx,3]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
@@ -554,33 +541,34 @@ function rpn_eval(x) {
      got_lkfor[kmx,5]=1; # instances
      got_lkfor[kmx,6]=""; # 
 #    rpn operations
-     got_rpn_eqn[kmx,1]=14;
-     got_rpn_eqn[kmx,2,1]=100;
-     got_rpn_eqn[kmx,2,2]="push_val";
-     got_rpn_eqn[kmx,3,1]="idq_uops_not_delivered.core";
-     got_rpn_eqn[kmx,3,2]="push_row_val";
-     got_rpn_eqn[kmx,4,1]="*";   # 100 * uop_re
-     got_rpn_eqn[kmx,4,2]="oper";
-     got_rpn_eqn[kmx,5,1]=4.0;
-     got_rpn_eqn[kmx,5,2]="push_val";
-     got_rpn_eqn[kmx,6,1]="cycles"
-     got_rpn_eqn[kmx,6,2]="push_row_val";
-     got_rpn_eqn[kmx,7,1]=thr_per_core;
-     got_rpn_eqn[kmx,7,2]="push_val";
-     got_rpn_eqn[kmx,8,1]="/";   # clk_unh.thr_any / thr_cou
-     got_rpn_eqn[kmx,8,2]="oper";
-     got_rpn_eqn[kmx,9,1]="*";    # * 4
-     got_rpn_eqn[kmx,9,2]="oper";
-     got_rpn_eqn[kmx,10,1]="/";
-     got_rpn_eqn[kmx,10,2]="oper";
-     got_rpn_eqn[kmx,11,1]="cycles"
-     got_rpn_eqn[kmx,11,2]="push_row_val";
-     got_rpn_eqn[kmx,12,1]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");
-     got_rpn_eqn[kmx,12,2]="push_row_val";
-     got_rpn_eqn[kmx,13,1]="/";
-     got_rpn_eqn[kmx,13,2]="oper";
-     got_rpn_eqn[kmx,14,1]="*";
-     got_rpn_eqn[kmx,14,2]="oper";
+     kkmx = 0;
+     got_rpn_eqn[kmx, ++kkmx, "val"]=100;
+     got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+     got_rpn_eqn[kmx, ++kkmx, "val"]="idq_uops_not_delivered.core";
+     got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+     got_rpn_eqn[kmx, ++kkmx, "val"]="*";   # 100 * uop_re
+     got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+     got_rpn_eqn[kmx, ++kkmx, "val"]=4.0;
+     got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+     got_rpn_eqn[kmx, ++kkmx, "val"]="cycles"
+     got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+     got_rpn_eqn[kmx, ++kkmx, "val"]=thr_per_core;
+     got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+     got_rpn_eqn[kmx, ++kkmx, "val"]="/";   # clk_unh.thr_any / thr_cou
+     got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+     got_rpn_eqn[kmx, ++kkmx, "val"]="*";    # * 4
+     got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+     got_rpn_eqn[kmx, ++kkmx, "val"]="/";
+     got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+     got_rpn_eqn[kmx, ++kkmx, "val"]="cycles"
+     got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+     got_rpn_eqn[kmx, ++kkmx, "val"]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");
+     got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+     got_rpn_eqn[kmx, ++kkmx, "val"]="/";
+     got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+     got_rpn_eqn[kmx, ++kkmx, "val"]="*";
+     got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+     got_rpn_eqn[kmx,      1,"max"]=kkmx;
      lkfor[kmx,1]=tolower("IDQ_UOPS_NOT_DELIVERED.CORE");
      lkfor[kmx,2]="cycles";  # get the instances from the first lkfor event
      lkfor[kmx,3]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
@@ -595,17 +583,18 @@ function rpn_eval(x) {
      got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
      got_lkfor[kmx,5]=1; # instances
      got_lkfor[kmx,6]=""; # 
-     got_rpn_eqn[kmx,1]=6;
-     got_rpn_eqn[kmx,2,1]=100;
-     got_rpn_eqn[kmx,2,2]="push_val";
-     got_rpn_eqn[kmx,3,1]="TMAM_Retiring(%)"
-     got_rpn_eqn[kmx,3,2]="push_row_val";
-     got_rpn_eqn[kmx,4,1]="TMAM_Frontend_Bound(%)"
-     got_rpn_eqn[kmx,4,2]="push_row_val";
-     got_rpn_eqn[kmx,5,1]="+";
-     got_rpn_eqn[kmx,5,2]="oper";
-     got_rpn_eqn[kmx,6,1]="-";
-     got_rpn_eqn[kmx,6,2]="oper";
+     kkmx = 0;
+     got_rpn_eqn[kmx, ++kkmx, "val"]=100;
+     got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+     got_rpn_eqn[kmx, ++kkmx, "val"]="TMAM_Retiring(%)"
+     got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+     got_rpn_eqn[kmx, ++kkmx, "val"]="TMAM_Frontend_Bound(%)"
+     got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+     got_rpn_eqn[kmx, ++kkmx, "val"]="+";
+     got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+     got_rpn_eqn[kmx, ++kkmx, "val"]="-";
+     got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+     got_rpn_eqn[kmx,      1,"max"]=kkmx;
      lkfor[kmx,1]=tolower("UOPS_RETIRED.RETIRE_SLOTS");
      lkfor[kmx,2]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
      lkfor[kmx,3]=tolower("IDQ_UOPS_NOT_DELIVERED.CORE");
@@ -925,45 +914,7 @@ function rpn_eval(x) {
            prt_it=1;
            rpn_err = "";
            rpn_sp = 0;
-           for(la=2; la <= got_rpn_eqn[k,1]; la++) {
-              if (got_rpn_eqn[k,la,2]=="push_val") {
-                  rpn_eval(got_rpn_eqn[k,la,1]+0.0);
-                  #printf("rpn_eqn k= %d, la= %d, hdr= %s init %s\n", k, la, nwfor[k,1], val0) > "/dev/stderr";
-                  continue;
-              }
-              if (got_rpn_eqn[k,la,2]=="push_row_val") {
-                  val1= "";
-                  if (got_rpn_eqn[k,la,3]=="") {
-                    for (lc=0; lc <= col_hdr_mx; lc++) {
-                      if (col_hdr[lc] == got_rpn_eqn[k,la,1]) {
-                         got_rpn_eqn[k,la,3] = lc;
-                         break;
-                      }
-                    }
-                    if (got_rpn_eqn[k,la,3]=="") {
-                      got_rpn_eqn[k,la,3] = -1;
-                    }
-                  }
-                  if (got_rpn_eqn[k,la,3] != -1) {
-                    lc = got_rpn_eqn[k,la,3];
-                    val1=rw_data[lc];
-                    rpn_eval(val1+0.0);
-                  }
-                  if (val1 == "") {
-                     prt_it = 0;
-                     break;
-                  }
-              }
-              if (got_rpn_eqn[k,la,2]=="oper") {
-                  rpn_eval(got_rpn_eqn[k,la,1]);
-                  #printf("rpn_eqn k= %d, la= %d, hdr= %s, get_col %s val= %f nw_val= %f\n", k, la, nwfor[k,1], col_hdr[lc], val1, val0) > "/dev/stderr";
-              }
-           }
-           if (prt_it == 1) {
-             val = rpn_top()
-           } else {
-             printf("rpn_err: %s rpn_eqn k= %d, la= %d, hdr= %s\n", rpn_err, k, la, nwfor[k,1]) > "/dev/stderr";
-           }
+           val = rpn_rtn(val, k, got_rpn_eqn, col_hdr_mx, col_hdr, rw_data);
          }
          if (prt_it == 1) {
            if (got_lkfor[k,6] == "div_by_interval") {
