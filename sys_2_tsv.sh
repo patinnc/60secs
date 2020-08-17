@@ -412,7 +412,9 @@ trows++; printf("\n") > NFL;
     fi
     pwd
     echo "========SPIN_TXT5= $SPIN_TXT dir= $DIR i= $i, average= $AVERAGE, NCPUS= $NCPUS, MET_FL= $MET_FL, MET_AV= $MET_AV" > /dev/stderr
-    awk -v sum_tmam="$SUM_TMAM_FILE" -v options="$OPTIONS" -v tm_beg_in="$BEG_TM_IN" -v tm_end_in="$END_TM" -v do_avg="$AVERAGE" -v sum_file="$SUM_FILE" -v metric_file="$MET_FL" -v metric_avg="$MET_AV" -v pfx="$PFX" '
+    export AWKPATH=$SCR_DIR
+    awk  -v sum_tmam="$SUM_TMAM_FILE" -v options="$OPTIONS" -v tm_beg_in="$BEG_TM_IN" -v tm_end_in="$END_TM" -v do_avg="$AVERAGE" -v sum_file="$SUM_FILE" -v metric_file="$MET_FL" -v metric_avg="$MET_AV" -v pfx="$PFX" '
+      @include "rpn.awk"
       BEGIN{
          beg=1;
          mx=0
@@ -583,19 +585,20 @@ trows++; printf("\n") > NFL;
           printf("\n") > NFL;
          }
        }
-#metric_L1D MPI (includes data+rfo w/ prefetches)
-#metric_L1D demand data read hits per instr
-#metric_L1-I code read misses (w/ prefetches) per instr
-#metric_L2 demand data read hits per instr
-#metric_L2 MPI (includes code+data+rfo w/ prefetches)
-#metric_L2 demand data read MPI
-#metric_L2 demand code MPI
-#metric_LLC MPI
-#metric_LLC code read MPI (demand+prefetch)
-#metric_LLC data read MPI (demand+prefetch)
-#metric_LLC total HITM (per instr)
-#metric_LLC total HIT clean line forwards (per instr)
-
+       kmx  = 1; 
+       kkmx = 0;
+       got_rpn_eqn[kmx, ++kkmx, "val"] = 2;
+       got_rpn_eqn[kmx,   kkmx, "opr"] = "push_val";
+       got_rpn_eqn[kmx, ++kkmx, "val"] = 3;
+       got_rpn_eqn[kmx,   kkmx, "opr"] = "push_val";
+       got_rpn_eqn[kmx, ++kkmx, "val"] = "*";
+       got_rpn_eqn[kmx,   kkmx, "opr"] = "oper";
+       got_rpn_eqn[kmx, ++kkmx, "val"] = "b";
+       got_rpn_eqn[kmx,   kkmx, "opr"] = "push_row_val";
+       got_rpn_eqn[kmx, ++kkmx, "val"] = "+";
+       got_rpn_eqn[kmx,   kkmx, "opr"] = "oper";
+       got_rpn_eqn[kmx,      1, "max"] = kkmx;
+       
        GIPS_col_freq = -1;
        GIPS_col_CPI  = -1;
        CPU_util_col  = -1;
@@ -607,7 +610,125 @@ trows++; printf("\n") > NFL;
        printf("metric_out: num_cpus= %d\n", num_cpus) > "/dev/stderr";
        hn = split(hdr, harr, ",");
        extr_col = 1;
+
+       emx = 0;
+       eemx = 0
+       eqn_arr[++emx, ++eemx, "lkfor"] = "metric_CPU operating frequency (in GHz)";
+       eqn_arr[  emx, ++eemx, "lkfor"] = "metric_CPU utilization %";
+       eqn_arr[  emx, ++eemx, "lkfor"] = "metric_CPI";
+       eqn_arr[  emx,      1, "max"]   = eemx;
+       eqn_arr[  emx,      1, "hdr"]   = "Instr/sec (1e9 instr/sec)";
+       kkmx = 0
+       got_rpn_eqn[emx, ++kkmx, "val"] = num_cpus;
+       got_rpn_eqn[emx,   kkmx, "opr"] = "push_val";
+       got_rpn_eqn[emx, ++kkmx, "val"] = eqn_arr[emx, 1, "lkfor"];
+       got_rpn_eqn[emx,   kkmx, "opr"] = "push_row_val";
+       got_rpn_eqn[emx, ++kkmx, "val"] = "*";
+       got_rpn_eqn[emx,   kkmx, "opr"] = "oper";
+       got_rpn_eqn[emx, ++kkmx, "val"] = eqn_arr[emx, 2, "lkfor"];
+       got_rpn_eqn[emx,   kkmx, "opr"] = "push_row_val";
+       got_rpn_eqn[emx, ++kkmx, "val"] = "*";
+       got_rpn_eqn[emx,   kkmx, "opr"] = "oper";
+       got_rpn_eqn[emx, ++kkmx, "val"] = 0.01;
+       got_rpn_eqn[emx,   kkmx, "opr"] = "push_val";
+       got_rpn_eqn[emx, ++kkmx, "val"] = "*";
+       got_rpn_eqn[emx,   kkmx, "opr"] = "oper";
+       got_rpn_eqn[emx, ++kkmx, "val"] = eqn_arr[emx, 3, "lkfor"];
+       got_rpn_eqn[emx,   kkmx, "opr"] = "push_row_val";
+       got_rpn_eqn[emx, ++kkmx, "val"] = "/";
+       got_rpn_eqn[emx,   kkmx, "opr"] = "oper";
+       got_rpn_eqn[emx,      1, "max"] = kkmx;
+
+       eemx = 0
+       kkmx = 0
+       eqn_arr[++emx, ++eemx, "lkfor"] = "metric_L1D demand data read hits per instr";
+       eqn_arr[  emx, ++eemx, "lkfor"] = "metric_L1D MPI (includes data+rfo w/ prefetches)";
+       eqn_arr[  emx,      1, "max"]   = eemx;
+       eqn_arr[  emx,      1, "hdr"]   = "L1 data hit% (hits/(hits+miss))";
+       got_rpn_eqn[emx, ++kkmx, "val"] = 100.0;
+       got_rpn_eqn[emx,   kkmx, "opr"] = "push_val";
+       got_rpn_eqn[emx, ++kkmx, "val"] = eqn_arr[emx, 1, "lkfor"];
+       got_rpn_eqn[emx,   kkmx, "opr"] = "push_row_val";
+       got_rpn_eqn[emx, ++kkmx, "val"] = "*";
+       got_rpn_eqn[emx,   kkmx, "opr"] = "oper";
+       got_rpn_eqn[emx, ++kkmx, "val"] = eqn_arr[emx, 1, "lkfor"];
+       got_rpn_eqn[emx,   kkmx, "opr"] = "push_row_val";
+       got_rpn_eqn[emx, ++kkmx, "val"] = eqn_arr[emx, 2, "lkfor"];
+       got_rpn_eqn[emx,   kkmx, "opr"] = "push_row_val";
+       got_rpn_eqn[emx, ++kkmx, "val"] = "+";
+       got_rpn_eqn[emx,   kkmx, "opr"] = "oper";
+       got_rpn_eqn[emx, ++kkmx, "val"] = "/";
+       got_rpn_eqn[emx,   kkmx, "opr"] = "oper";
+       got_rpn_eqn[emx,      1, "max"] = kkmx;
+
+       eemx = 0
+       kkmx = 0
+       eqn_arr[++emx, ++eemx, "lkfor"] = "metric_L2 demand data read hits per instr";
+       eqn_arr[  emx, ++eemx, "lkfor"] = "metric_L2 demand data read MPI";
+       eqn_arr[  emx,      1, "max"]   = eemx;
+       eqn_arr[  emx,      1, "hdr"]   = "L2 data hit% (hits/(hits+miss))";
+       got_rpn_eqn[emx, ++kkmx, "val"] = 100.0;
+       got_rpn_eqn[emx,   kkmx, "opr"] = "push_val";
+       got_rpn_eqn[emx, ++kkmx, "val"] = eqn_arr[emx, 1, "lkfor"];
+       got_rpn_eqn[emx,   kkmx, "opr"] = "push_row_val";
+       got_rpn_eqn[emx, ++kkmx, "val"] = "*";
+       got_rpn_eqn[emx,   kkmx, "opr"] = "oper";
+       got_rpn_eqn[emx, ++kkmx, "val"] = eqn_arr[emx, 1, "lkfor"];
+       got_rpn_eqn[emx,   kkmx, "opr"] = "push_row_val";
+       got_rpn_eqn[emx, ++kkmx, "val"] = eqn_arr[emx, 2, "lkfor"];
+       got_rpn_eqn[emx,   kkmx, "opr"] = "push_row_val";
+       got_rpn_eqn[emx, ++kkmx, "val"] = "+";
+       got_rpn_eqn[emx,   kkmx, "opr"] = "oper";
+       got_rpn_eqn[emx, ++kkmx, "val"] = "/";
+       got_rpn_eqn[emx,   kkmx, "opr"] = "oper";
+       got_rpn_eqn[emx,      1, "max"] = kkmx;
+
+       eemx = 0
+       kkmx = 0
+       eqn_arr[++emx, ++eemx, "lkfor"] = "metric_LLC total HITM (per instr)";
+       eqn_arr[  emx, ++eemx, "lkfor"] = "metric_LLC total HIT clean line forwards (per instr)"
+       eqn_arr[  emx, ++eemx, "lkfor"] = "metric_LLC MPI (includes code+data+rfo w/ prefetches)";
+       eqn_arr[  emx,      1, "max"]   = eemx;
+       eqn_arr[  emx,      1, "hdr"]   = "LLC data hit% (hits/(hits+miss))";
+       got_rpn_eqn[emx, ++kkmx, "val"] = 100.0;
+       got_rpn_eqn[emx,   kkmx, "opr"] = "push_val";
+       got_rpn_eqn[emx, ++kkmx, "val"] = eqn_arr[emx, 1, "lkfor"];
+       got_rpn_eqn[emx,   kkmx, "opr"] = "push_row_val";
+       got_rpn_eqn[emx, ++kkmx, "val"] = eqn_arr[emx, 2, "lkfor"];
+       got_rpn_eqn[emx,   kkmx, "opr"] = "push_row_val";
+       got_rpn_eqn[emx, ++kkmx, "val"] = "+";
+       got_rpn_eqn[emx,   kkmx, "opr"] = "oper";
+       got_rpn_eqn[emx, ++kkmx, "val"] = "*";
+       got_rpn_eqn[emx,   kkmx, "opr"] = "oper";
+       got_rpn_eqn[emx, ++kkmx, "val"] = eqn_arr[emx, 1, "lkfor"];
+       got_rpn_eqn[emx,   kkmx, "opr"] = "push_row_val";
+       got_rpn_eqn[emx, ++kkmx, "val"] = eqn_arr[emx, 2, "lkfor"];
+       got_rpn_eqn[emx,   kkmx, "opr"] = "push_row_val";
+       got_rpn_eqn[emx, ++kkmx, "val"] = "+";
+       got_rpn_eqn[emx,   kkmx, "opr"] = "oper";
+       got_rpn_eqn[emx, ++kkmx, "val"] = eqn_arr[emx, 3, "lkfor"];
+       got_rpn_eqn[emx,   kkmx, "opr"] = "push_row_val";
+       got_rpn_eqn[emx, ++kkmx, "val"] = "+";
+       got_rpn_eqn[emx,   kkmx, "opr"] = "oper";
+       got_rpn_eqn[emx, ++kkmx, "val"] = "/";
+       got_rpn_eqn[emx,   kkmx, "opr"] = "oper";
+       got_rpn_eqn[emx,      1, "max"] = kkmx;
+
+       eemx_extra_cols = 0;
+
        for (i=1; i <= hn; i++) {
+          for (j=1; j <= emx; j++) {
+             for (k=1; k <= eqn_arr[j, 1, "max"]; k++) {
+               if (index(harr[i], eqn_arr[j, k, "lkfor"]) > 0) {
+                 eqn_arr[j, k, "col"] = i;
+                 eqn_arr[j, 1, "got"]++;
+                 if (eqn_arr[j, 1, "got"] == eqn_arr[j, 1, "max"]) {
+                    eemx_extra_cols++;
+                    eqn_arr[j, 1, "new_col"] = hn + eemx_extra_cols + extr_col;
+                 }
+               }
+             }
+          }
           if (index(harr[i], "metric_CPU operating frequency (in GHz)") > 0) {
              GIPS_col_freq = i+extr_col;
              got_GIPS++;
@@ -622,8 +743,6 @@ trows++; printf("\n") > NFL;
              GIPS_col_CPI = i+extr_col;
              got_GIPS++;
           }
-#metric_L1D MPI (includes data+rfo w/ prefetches)
-#metric_L1D demand data read hits per instr
           if (index(harr[i], "metric_L1D demand data read hits per instr") > 0) {
              L1_data_hit_ratio_mx++;
              L1_data_hit_ratio_col[1] = i+extr_col;
@@ -632,10 +751,6 @@ trows++; printf("\n") > NFL;
              L1_data_hit_ratio_mx++;
              L1_data_hit_ratio_col[2] = i+extr_col;
           }
-#metric_L2 demand data read hits per instr
-#metric_L2 MPI (includes code+data+rfo w/ prefetches)
-#metric_L2 demand data read MPI
-#metric_L2 demand code MPI
           if (index(harr[i], "metric_L2 demand data read hits per instr") > 0) {
              L2_data_hit_ratio_mx++;
              L2_data_hit_ratio_col[1] = i+extr_col;
@@ -644,9 +759,6 @@ trows++; printf("\n") > NFL;
              L2_data_hit_ratio_mx++;
              L2_data_hit_ratio_col[2] = i+extr_col;
           }
-#metric_LLC MPI
-#metric_LLC total HITM (per instr)
-#metric_LLC total HIT clean line forwards (per instr)
           if (index(harr[i], "metric_LLC total HITM (per instr)") > 0) {
              L3_data_hit_ratio_mx++;
              L3_data_hit_ratio_col[1] = i+extr_col;
@@ -660,13 +772,16 @@ trows++; printf("\n") > NFL;
              L3_data_hit_ratio_col[3] = i+extr_col;
           }
        }
+       for (j=1; j <= emx; j++) {
+         printf("eqn_arr[j,1,"max"]= %d, got= %d\n", eqn_arr[j,1,"max"], eqn_arr[j,1,"got"]);
+       }
        GIPS_extra_col = 0;
        tot_extra_col = 0;
        if (got_GIPS == 2) {
          GIPS_extra_col = 1;
          GIPS_hdr = "Instr/sec (1e9 instr/sec)";
-         GIPS_col_num = hn + 1 + extr_col;
          tot_extra_col++;
+         GIPS_col_num = hn + tot_extra_col + extr_col;
        }
        L1_data_hit_ratio_extra_col = 0;
        if (L1_data_hit_ratio_mx == 2) {
@@ -1069,12 +1184,22 @@ trows++; printf("\n") > NFL;
        printf("\titp\t%s\t%s\n", "4", "data_col_key") >> sum_file;
        printf("\titp_metric_itp\t%s\t%s\n", "itp_metric_itp", "data_sheet") >> sum_file;
        if (do_avg == "1") {
-          for (j=1; j <= (amx+tot_extra_col); j++) {
-            printf("\titp\t%s\t%s", sv_aln_valu[1,j], sv_aln_lkup[j]) >> sum_file;
+          for (j=1; j <= (amx); j++) {
+            rw_data[j] = sv_aln_valu[1,j];
+            col_hdr[j] = sv_aln_lkup[j];
+            printf("\titp1\t%s\t%s", sv_aln_valu[1,j], sv_aln_lkup[j]) >> sum_file;
             for (m=2; m <= avg_file_mx; m++) {
                 printf("\t%s", sv_aln_valu[m,j]) >> sum_file;
             }
             printf("\n") >> sum_file;
+          }
+          for (j=1; j <= emx; j++) {
+#abcd
+            if (eqn_arr[j,1,"max"] == eqn_arr[j,1,"got"]) {
+               val = rpn_rtn(val, j, got_rpn_eqn, amx, col_hdr, rw_data);
+               printf("\titp3\t%f\t%s", val, eqn_arr[j,1,"hdr"]) >> sum_file;
+               printf("\n") >> sum_file;
+            }
           }
        } else {
        for (j=1; j <= (hn+tot_extra_col); j++) {
@@ -1082,7 +1207,7 @@ trows++; printf("\n") > NFL;
           frm4 = sprintf("INDIRECT(ADDRESS(ROW()-%d, column()-1, 4, 1))", j);
           frm1 = sprintf("=INDIRECT(ADDRESS(%d, %d, 1, 1, %s))", trows_top, j+3, frm3);
           frm2 = sprintf("=INDIRECT(ADDRESS(%d, %d, 1, 1, %s))", trows_top+1, j+3, frm4);
-          printf("\titp\t%s\t%s\n", frm1, frm2) >> sum_file;
+          printf("\titp2\t%s\t%s\n", frm1, frm2) >> sum_file;
        }
        }
        printf("\n") >> sum_file;
