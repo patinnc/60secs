@@ -142,6 +142,11 @@ awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v 
      evt_idx=-1;
      months="  JanFebMarAprMayJunJulAugSepOctNovDec";
      date_str="";
+     got_add_all_to_summary = 0;
+     if (index(options, "add_all_to_summary") > 0) {
+       got_add_all_to_summary = 1;
+     }
+     printf("got_add_all_to_summary= %d\n", got_add_all_to_summary) > "/dev/stderr";
      ts_initial = 0.0;
      ts_beg += 0.0;
      ts_end += 0.0;
@@ -816,7 +821,7 @@ awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v 
        ts_prev = sv[i,1]
        use_epoch = sv[i,0];
        #if (ts_beg > 0.0 && use_epoch < ts_beg) {
-          #continue; # TBD, this is a different use of tm_beg
+       #   continue; # TBD, this is a different use of tm_beg
        #}
        if (ts_beg > 0.0) {
           use_epoch = ts_beg + sv[i,1];
@@ -829,6 +834,8 @@ awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v 
        rw_data[rw_col++] = sv[i,1];
        rw_data[rw_col++] = sv[i,1];
        rw_data[rw_col++] = interval;
+       use_row[i] = 1;
+       sv_intrvl[i] = interval;
        cols = 4;
        for (k=1; k <= kmx; k++) { 
          sum[k]=0.0;
@@ -1027,6 +1034,38 @@ awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v 
           vl = nwfor[k,3] / nwfor[k,4];
           printf("%s\t%s\t%f\t%s\n", "average", "perf_stat", vl, ky) >> sum_file;
        }
+     }
+     if (got_add_all_to_summary == 1) {
+        sm2 = 0.0;
+        n   = 0;
+        for (i=1; i <= row; i++) {
+          if (use_row[i] == 1) {
+           sm2 += sv_intrvl[i];
+           n++;
+          }
+        }
+        avg = 0;
+        if (n > 0) {
+          avg = sm2 / n;
+          #avg = sm2
+        }
+        printf("%s\t%s\t%d\t%s\n", "average", "entries",  n, "entries") >> sum_file;
+        printf("%s\t%s\t%f\t%s\n", "average", "interval", avg, "avg.interval") >> sum_file;
+      for (k=0; k <= evt_idx; k++) {
+        sm2 = 0.0;
+        n   = 0;
+        for (i=1; i <= row; i++) {
+          if (use_row[i] == 1) {
+            sm2 += sv[i,k+3];
+            n++;
+          }
+        }
+        avg = 0;
+        if (n > 0) {
+          avg = sm2 / n;
+        }
+        printf("%s\t%s\t%f\t%s\n", "average", "perf_stat", avg, evt_lkup[k]) >> sum_file;
+      }
      }
    }' $FILES $SPECINT_LOG
 
