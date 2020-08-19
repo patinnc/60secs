@@ -80,6 +80,17 @@ awk '
            printf("zero for instr? line= %s %s\n", FNR, $0);
         }
      }
+     if (prev_evt == "CPU_CLK_THREAD_UNHALTED.ONE_THREAD_ACTIVE" && evt == "CPU_CLK_THREAD_UNHALTED.REF_XCLK_ANY") {
+        avg1 = prev_val/prev_tm;
+        avgx = val/intrvl;
+        if (avgx > 0.0) {
+          #bth_det[++bth_mx] = avg1/avgx;
+          bth_sum += avg1/avgx;
+          ++bth_mx;
+        } else {
+           printf("zero for xclk_any? line= %s %s\n", FNR, $0);
+        }
+     }
      pre_prev_evt = prev_evt;
      pre_prev_val = prev_val;
      pre_prev_tm = prev_tm;
@@ -89,19 +100,31 @@ awk '
   }
   END{
     printf("cpi_avg= %f\n", cpi_sum/cpi_mx);
-    lst[1]=evt_list["CPU_CLK_UNHALTED.THREAD_ANY"];
-    lst[2]=evt_list["instructions"];
-    lst[3]=evt_list["cpu-cycles"];
-    lst[4]=evt_list["ref-cycles"];
-    ea = 1;
-    ei = 2;
-    ec = 3;
-    er = 4;
-    for (i=1; i <= 4; i++) {
+    printf("bth_sum= %f, bth_mx= %f\n", bth_sum,bth_mx);
+    printf("bth_avg= %f, metric_bth= %f%%\n", bth_sum/bth_mx, 100.0*(1-bth_sum/bth_mx/2.0));
+    lst[++emx]=evt_list["CPU_CLK_UNHALTED.THREAD_ANY"];
+    ea  = emx;
+    lst[++emx]=evt_list["instructions"];
+    ei  = emx;
+    lst[++emx]=evt_list["cpu-cycles"];
+    ec  = emx;
+    lst[++emx]=evt_list["CPU_CLK_THREAD_UNHALTED.ONE_THREAD_ACTIVE"];
+    e1  = emx;
+    lst[++emx]=evt_list["CPU_CLK_THREAD_UNHALTED.REF_XCLK_ANY"];
+    ex  = emx;
+    lst[++emx]=evt_list["ref-cycles"];
+    er  = emx;
+    #printf("emx= %d\n", emx); 
+    #exit;
+    for (i=1; i <= emx; i++) {
       j = lst[i];
       tot = 1.0e-9 * evt_arr[j,"tot"];
       tm  =  evt_arr[j,"tm"];
       n  =  evt_arr[j,"n"];
+      if ( tm == 0 ) {
+        printf("no values for event %s, n= %d\n", evt_lkup[j], n);
+        continue;
+      }
       val = tot/tm;
       #val = val/n;
       varr[i,1] = val;
@@ -127,8 +150,12 @@ awk '
          cavg  = varr[ec,"ps"];  # weighted by number of samples
          iavg  = varr[ei,"ps"];
          htavg = varr[ea,"ps"];
+         ht2avg = varr[ea,"ps"]/varr[ec,"ps"]/2.0;
          coreIPC = iavg*(thrds_per_core/htavg);
-         printf("coreIPC= %f, cavg= %f, iavg= %f, htavg= %f, instr/s using cIPC= %f\n", coreIPC, cavg, iavg, htavg, coreIPC*tot_cpus*varr[ea,"ps"]/thrds_per_core);
+         printf("coreIPC= %f, cavg= %f, iavg= %f, htavg= %f, ht2avg= %f, instr/s using cIPC= %f\n", coreIPC, cavg, iavg, htavg, ht2avg, coreIPC*tot_cpus*varr[ea,"ps"]/thrds_per_core);
+         printf("ps:  metric_TMAM_Info_cycles_both_threads_active= %f%%\n", 100.0*(1- (varr[e1,"ps"]/varr[ex,"ps"]/2.0)));
+         printf("tot: metric_TMAM_Info_cycles_both_threads_active= %f%%\n", 100.0*(1- (varr[e1,"tot"]/varr[ex,"tot"]/2.0)));
+         #"expression" : "100 * ( (1 - ([CPU_CLK_THREAD_UNHALTED.ONE_THREAD_ACTIVE] / ([CPU_CLK_THREAD_UNHALTED.REF_XCLK_ANY] / 2)) ) if [const_thread_count] > 1 else 0)"
       }
     }
     #printf("last tm= %f, tot_instr_tm= %f tm2= %f\n", tm, tot_tm, tot_tm2);
