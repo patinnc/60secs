@@ -364,6 +364,7 @@ for bmi in range(base_mx+1):
    if verbose:
       print("file list remainder= ", remainder, file=sys.stderr)
 
+   drow_end = -1
    for x in remainder:
       if verbose:
          print("do x fo= %d file= %s" % (fo, x), file=sys.stderr)
@@ -478,6 +479,39 @@ for bmi in range(base_mx+1):
          wksheet_nms[wrksh_nm] = 1
          bold = workbook.add_format({'bold': 1})
    
+      def find_drow_end(data, ch_arr, c, drow_beg, drow_end):
+          drw  = ch_arr[c][1][1]
+          mcol_num_cols = len(data[drw])
+          dcol_cat = -1
+          skipped = 0
+          if mcol_num_cols > 5 and int(data[drw][5]) > -1:
+             dcol_cat = int(data[drw][5])
+          if mcol_num_cols > 5 and int(data[drw][5]) > -1:
+             dcol_cat = int(data[drw][5])
+          if drow_end == -1:
+             jjj = dcol_cat-1
+             for i in range(drow_beg, len(data)):
+                 if i > drow_beg and len(data[i]) == 0:
+                    break
+                 if i > drow_beg:
+                    drow_end = i
+                 else:
+                    drow_end = i+1
+                 if 1==1 and dcol_cat != -1 and len(data[i]) > jjj and i >= drow_beg:
+                    if not (data[i][jjj] is None or data[i][jjj] == ''):
+                       tval = float(data[i][jjj])
+                       skip_it = False
+                       if ts_beg != -1.0 and tval < ts_beg:
+                          skip_it = True
+                       if ts_end != -1.0 and tval > ts_end:
+                          skip_it = True
+                       if skip_it:
+                          skipped += 1
+                          #for ij in range(len(data[i])):
+                          #    worksheet.write_blank(i, ph_add+ij, None, bold0)
+                          continue
+          data[drw][3] = str(drow_end)
+          return drow_end
 
       for c in range(chrts):
           #print("got chrt[%d] for x= %s\n" % (c, x))
@@ -499,30 +533,32 @@ for bmi in range(base_mx+1):
           if mcol_num_cols > 5 and int(data[drw][5]) > -1:
              dcol_cat = int(data[drw][5])
           if drow_end == -1:
-             jjj = dcol_cat-1
-             for i in range(drow_beg, len(data)):
-                 if 1==1 and dcol_cat != -1 and len(data[i]) > jjj and i >= drow_beg:
-                    if not (data[i][jjj] is None or data[i][jjj] == ''):
-                       tval = float(data[i][jjj])
-                       skip_it = False
-                       if ts_beg != -1.0 and tval < ts_beg:
-                          skip_it = True
-                       if ts_end != -1.0 and tval > ts_end:
-                          skip_it = True
-                       if skip_it:
-                          skipped += 1
-                          #for ij in range(len(data[i])):
-                          #    worksheet.write_blank(i, ph_add+ij, None, bold0)
-                          continue
-                 if len(data[i]) == 0:
-                    break
-                 if i > drow_beg:
-                    drow_end = i
-                 else:
-                    drow_end = i+1
-             data[drw][3] = str(drow_end)
+             drow_end = find_drow_end(data, ch_arr, c, drow_beg, drow_end)
+#             jjj = dcol_cat-1
+#             for i in range(drow_beg, len(data)):
+#                 if 1==1 and dcol_cat != -1 and len(data[i]) > jjj and i >= drow_beg:
+#                    if not (data[i][jjj] is None or data[i][jjj] == ''):
+#                       tval = float(data[i][jjj])
+#                       skip_it = False
+#                       if ts_beg != -1.0 and tval < ts_beg:
+#                          skip_it = True
+#                       if ts_end != -1.0 and tval > ts_end:
+#                          skip_it = True
+#                       if skip_it:
+#                          skipped += 1
+#                          #for ij in range(len(data[i])):
+#                          #    worksheet.write_blank(i, ph_add+ij, None, bold0)
+#                          continue
+#                 if len(data[i]) == 0:
+#                    break
+#                 if i > drow_beg:
+#                    drow_end = i
+#                 else:
+#                    drow_end = i+1
+#             data[drw][3] = str(drow_end)
              if verbose:
                 print("found end data row= %d" % (drow_end))
+             print("found end data row= %d" % (drow_end))
           dcol_end = int(data[drw][4])+1
           for i in range(dcol_beg, dcol_end):
              ch_cols_used[i] = 1
@@ -653,6 +689,7 @@ for bmi in range(base_mx+1):
                    write_rows += 1
          print("---- skipped2a= %d, write_rows= %d, write_rows3= %d" % (skipped, write_rows, write_rows3), file=sys.stderr)
       
+      printed_no_data_for_chart_msg = False
       for c in range(chrts):
           dcol_cat = -1
           title_rw = ch_arr[c][0][1]
@@ -675,8 +712,13 @@ for bmi in range(base_mx+1):
                 ch_orient_vert = True
           if options_all_charts_one_row == True:
              ch_orient_vert = False
+          if drow_end == -1:
+             drow_end = find_drow_end(data, ch_arr, c, drow_beg, drow_end)
+             print("ck data for chart! sheet_nm= %s, title= %s ch_typ= %s, file= %s, drow_beg= %d, drow_end= %d, hcol_beg= %d, hcol_end= %d ts_beg= %f ts_end= %f len(data)= %d" % (sheet_nm, title, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end, ts_beg, ts_end, len(data)), file=sys.stderr)
           if drow_end == -1 or drow_beg >= drow_end:
-             print("no data for chart! sheet_nm= %s, ch_typ= %s, file= %s, drow_beg= %d, drow_end= %d, hcol_beg= %d, hcol_end= %d" % (sheet_nm, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end), file=sys.stderr)
+             if printed_no_data_for_chart_msg == False:
+                print("no data for chart! sheet_nm= %s, title= %s ch_typ= %s, file= %s, drow_beg= %d, drow_end= %d, hcol_beg= %d, hcol_end= %d ts_beg= %f ts_end= %f" % (sheet_nm, title, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end, ts_beg, ts_end), file=sys.stderr)
+                printed_no_data_for_chart_msg = True
              # didn't find any data in table
              continue
           use_cats = False
