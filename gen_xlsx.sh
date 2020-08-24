@@ -598,11 +598,11 @@ for i in $LST; do
    FLS=`ls -1 $i/muttley*.json.tsv`
    echo -e "${FLS}" >> $ALST
  fi
- MYA=($i/sum_all.tsv)
- if [ "${#MYA}" != "0" ]; then
-   FLS=`ls -1 $i/sum_all.tsv`
-   echo -e "${FLS}" >> $ALST
- fi
+# MYA=($i/sum_all.tsv)
+# if [ "${#MYA}" != "0" ]; then
+#   FLS=`ls -1 $i/sum_all.tsv`
+#   echo -e "${FLS}" >> $ALST
+# fi
  echo -e "" >> $ALST
  if [ "$FCTRS" != "" ]; then
    FCTRS="$FCTRS,"
@@ -615,8 +615,13 @@ done
 fi
 
 SUM_ALL=sum_all.tsv
+if [ -e $SUM_ALL ]; then
+  MYDIR=`pwd`
+  MYSUMALL="$MYDIR/$SUM_ALL"
+  echo "got sum_all $SUM_ALL in $MYDIR"
+fi
 if [ "$INPUT_FILE_LIST" != "" ]; then
-  echo "$SUM_ALL" >> $ALST
+  echo "___$MYSUMALL" >> $ALST
   cat $INPUT_FILE_LIST >> $ALST
   DIR_1ST_DIR=`head -1 $INPUT_FILE_LIST`
   NUM_DIRS=2
@@ -637,8 +642,9 @@ if [ $NUM_DIRS -gt 1 ]; then
     rm $SUM_ALL
   fi
   echo "ALST= $ALST" > /dev/stderr
-  echo "awk -v input_file=\"$ALST\" -v sum_all=\"$SUM_ALL\" -v sum_file=\"$SUM_FILE\""
-  awk -v input_file="$ALST" -v sum_all="$SUM_ALL" -v sum_file="$SUM_FILE" -v sum_all_avg_by_metric="$SUM_ALL_AVG_BY_METRIC" '
+  got_pwd=`pwd`
+  echo "awk -v input_file=\"$ALST\" -v sum_all=\"$SUM_ALL\" -v sum_file=\"$SUM_FILE\" -v curdir=\"$got_pwd\" "
+  awk -v input_file="$ALST" -v sum_all="$SUM_ALL" -v sum_file="$SUM_FILE" -v sum_all_avg_by_metric="$SUM_ALL_AVG_BY_METRIC" -v curdir="$got_pwd" '
     BEGIN{sum_files=0;fls=0; fld_m=3;fld_v=4; got_avgby=0;}
     { if (index($0, sum_file) > 0 || index($0, sum_all) > 0) {
         flnm = $0;
@@ -655,11 +661,12 @@ if [ $NUM_DIRS -gt 1 ]; then
                 if (hdrs[3] == "Value" && hdrs[4] == "Metric") {
                    fld_m=4; 
                    fld_v=3; 
+                   printf("sum_all2 metric fld= %d nf= %d\n", 3, nh) > "/dev/stderr";
                 }
-                if (hdrs[3] == "Metric" && hdrs[4] == "0") {
+                if (hdrs[3] == "Metric") {
                    fld_m=3; 
                    fld_v=4; 
-                   printf("sum_all metric fld= %d nf= %d\n", 3, nh) > "/dev/stderr";
+                   printf("sum_all3 metric fld= %d nf= %d\n", 3, nh) > "/dev/stderr";
                    if (nh > 4) {
                      nflds= nh;
                    }
@@ -893,7 +900,6 @@ if [ $NUM_DIRS -gt 1 ]; then
       }
   ' $ALST
 
-  got_pwd=`pwd`
       if [ "$BEG_TM_IN" != "" ]; then
         BEG_TM=$BEG_TM_IN
       fi
@@ -973,7 +979,8 @@ if [ $NUM_DIRS -gt 1 ]; then
           echo "try muttley_a file= $f" > /dev/stderr
           if [ -e $f ]; then
              echo "try muttley log $f" 
-             $SCR_DIR/resp_2_tsv.sh -b $BEG_TM -e $END_TM -f $f -s $SUM_ALL $OPT_M
+             echo $SCR_DIR/resp_2_tsv.sh -b $BEG_TM -e $END_TM -f $f -s $SUM_ALL $OPT_M > /dev/stderr
+                   $SCR_DIR/resp_2_tsv.sh -b $BEG_TM -e $END_TM -f $f -s $SUM_ALL $OPT_M
           fi
           if [ -e $f.tsv ]; then
             echo "++++++++++ got $f.tsv "
