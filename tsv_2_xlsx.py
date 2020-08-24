@@ -193,6 +193,7 @@ for fo2 in range(len(fl_options)):
    for x in remainder:
       base = os.path.basename(x)
       if got_sum_all > 0 and got_drop_summary and len(base) >= 7 and base[0:7] == "summary":
+         print("skip sum_file x= %s" % (x), file=sys.stderr)
          continue
       if not base in base_lkup:
          base_mx += 1
@@ -444,6 +445,7 @@ for bmi in range(base_mx+1):
           #print("")
       
       if got_sum_all > 0 and got_drop_summary and len(sheet_nm) >= 7 and sheet_nm[0:7] == "summary":
+         #print("skip2 sum_file x= %s" % (x), file=sys.stderr)
          continue
       if fo in prefix_dict:
          prefix = prefix_dict[fo]
@@ -457,11 +459,19 @@ for bmi in range(base_mx+1):
       if len(prefix) > 0:
          wrksh_nm = sheet_nm + "_" + prefix
       suffix = ""
+      #if sheet_nm == "sum_all":
+      #   print("use sum_file x= %s" % (x), file=sys.stderr)
+      #   worksheet = worksheet_sum_all
+      #   wrksh_nm  = worksheet_sum_all_nm
+      #   wksheet_nms[wrksh_nm] = 1
+      #   bold = workbook.add_format({'bold': 1})
       if do_avg == False or do_avg_write == True:
          if sheet_nm == "sum_all":
+            print("use sum_file x= %s" % (x), file=sys.stderr)
             worksheet = worksheet_sum_all
             wrksh_nm  = worksheet_sum_all_nm
-         else:
+         #else:
+         if sheet_nm != "sum_all":
             # make sure worksheet name is unique (allow 100 versions of base name)
             if wrksh_nm in wksheet_nms:
              for i in range(200):
@@ -511,8 +521,9 @@ for bmi in range(base_mx+1):
                           #    worksheet.write_blank(i, ph_add+ij, None, bold0)
                           continue
           data[drw][3] = str(drow_end)
-          return drow_end
+          return drow_end, dcol_cat
 
+      dcol_cat = -1
       for c in range(chrts):
           #print("got chrt[%d] for x= %s\n" % (c, x))
           title_rw = ch_arr[c][0][1]
@@ -533,7 +544,7 @@ for bmi in range(base_mx+1):
           if mcol_num_cols > 5 and int(data[drw][5]) > -1:
              dcol_cat = int(data[drw][5])
           if drow_end == -1:
-             drow_end = find_drow_end(data, ch_arr, c, drow_beg, drow_end)
+             drow_end, dcol_cat = find_drow_end(data, ch_arr, c, drow_beg, drow_end)
 #             jjj = dcol_cat-1
 #             for i in range(drow_beg, len(data)):
 #                 if 1==1 and dcol_cat != -1 and len(data[i]) > jjj and i >= drow_beg:
@@ -660,6 +671,8 @@ for bmi in range(base_mx+1):
             if len(wrksh_nm) >= 7 and wrksh_nm[0:7] == "sum_all":
                doing_sum_all = True
             skipped = 0
+            ts_first = -1.0
+            ts_last  = -1.0
             jjj = dcol_cat-1
             for i in range(len(data)):
               if doing_sum_all and len(data[i]) >= 3 and data[i][2] == "goto_sheet":
@@ -675,6 +688,9 @@ for bmi in range(base_mx+1):
                        if data[i][jjj] is None or data[i][jjj] == '':
                           continue
                        tval = data[i][jjj]
+                       if ts_first == -1.0:
+                          ts_first = tval
+                       ts_last  = tval
                        skip_it = False
                        if ts_beg != -1.0 and tval < ts_beg:
                           skip_it = True
@@ -687,7 +703,7 @@ for bmi in range(base_mx+1):
                           continue
                    worksheet.write_row(i, ph_add, data[i])
                    write_rows += 1
-         print("---- skipped2a= %d, write_rows= %d, write_rows3= %d" % (skipped, write_rows, write_rows3), file=sys.stderr)
+         #print("---- skipped2a= %d, write_rows= %d, write_rows3= %d, ts_beg= %f, ts_end= %f ts_first= %f ts_last= %f" % (skipped, write_rows, write_rows3, ts_beg, ts_end, ts_first, ts_last), file=sys.stderr)
       
       printed_no_data_for_chart_msg = False
       for c in range(chrts):
@@ -713,7 +729,7 @@ for bmi in range(base_mx+1):
           if options_all_charts_one_row == True:
              ch_orient_vert = False
           if drow_end == -1:
-             drow_end = find_drow_end(data, ch_arr, c, drow_beg, drow_end)
+             drow_end, dcol_cat = find_drow_end(data, ch_arr, c, drow_beg, drow_end)
              print("ck data for chart! sheet_nm= %s, title= %s ch_typ= %s, file= %s, drow_beg= %d, drow_end= %d, hcol_beg= %d, hcol_end= %d ts_beg= %f ts_end= %f len(data)= %d" % (sheet_nm, title, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end, ts_beg, ts_end, len(data)), file=sys.stderr)
           if drow_end == -1 or drow_beg >= drow_end:
              if printed_no_data_for_chart_msg == False:
@@ -906,6 +922,7 @@ for bmi in range(base_mx+1):
             rw = rw - 1
             cl = cl + 1
    
+print("python: got to bottom. ck close file %s\n" % (output_filename), file=sys.stderr)
 if closed_wkbk == False:
     print("python: close workbook %s\n" % (output_filename), file=sys.stderr)
     workbook.close()
