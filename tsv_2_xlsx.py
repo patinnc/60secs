@@ -599,7 +599,7 @@ for bmi in range(base_mx+1):
                   if not ij in fn_bs_sum[fn_bs_i]:
                      fn_bs_sum[fn_bs_i][ij] = {}
                      fn_bs_n[fn_bs_i][ij] = {}
-                  if (len(data[ij]) > h):
+                  if (ij < len(data) and len(data[ij]) > h):
                       if h >= len(data[ij]):
                          print("dude, idx= ", ij, ", h= ", h, ", len(data[idx])= ", len(data[ij]), " drow: ", data[ij])
                       is_num = is_number(data[ij][h])
