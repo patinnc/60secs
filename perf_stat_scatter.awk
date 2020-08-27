@@ -346,7 +346,7 @@ function dt_to_epoch(offset) {
    kmx++;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
    got_lkfor[kmx,2]=2; # num of fields to look for
-   got_lkfor[kmx,3]=1e-9; # a factor
+   got_lkfor[kmx,3]=8e-9; # a factor
    got_lkfor[kmx,4]="sum"; # operation
    got_lkfor[kmx,5]=1; # instances
    got_lkfor[kmx,6]="div_by_interval"; # 
