@@ -79,9 +79,15 @@ trgt_arr2 = []
 ts_dict = {}
 lat_tot = 0.0
 rows=0
+json_stat = None
 for i in range(len(data)):
     #print("i= ", i, ", obj= ", data[i])
     trgt = data[i]['target']
+    if "tags" in data[i]:
+       if "stat" in data[i]['tags']:
+          json_stat = data[i]['tags']['stat']
+          if json_stat == "muttley.node.calls":
+             json_stat = "muttley node calls/sec"
     trgt_arr2.append(trgt)
     if hdr == "latency":
        trgt = data[i]['tags']['bucket']
@@ -168,7 +174,8 @@ if sheet_nm == "" and hdr != "":
 line_typ = "scatter_straight"
 if options_str != "" and options_str.find("line_for_scatter") >= 0:
    line_typ = "line"
-
+if hdr == "" and json_stat != None:
+   hdr = json_stat
 of = open(flnm+".tsv","w+")
 rw = 0
 of.write("title\t%s\tsheet\t%s\ttype\t%s\n" % (hdr, sheet_nm, line_typ))
@@ -234,30 +241,70 @@ if hdr != "latency":
 
 of.write("\n")
 rw += 1
-of.write("title\t%%total time by response time bucket\tsheet\t%s\ttype\tcolumn\n" % (hdr))
-rw += 1
-of.write("hdrs\t%d\t%d\t%d\t%d\t%d\n" % (rw+1, 3, rw+len(trgt_arr)+1, 3, 4))
-rw += 1
-of.write("%s\t%s\t%s\t%s\t%s\n" % ("Latency", "calls", "tot_time(ms)", "%tot_time", "bucket"))
-rw += 1
 tm_tot_lo = 0
 tot_calls = 0
 tm_tot_hi = 0
+lat_tot_mid = 0.0
+calls_tot = 0.0
 if lat_tot == 0:
    lat_tot = 1
+
+for j in range(len(trgt_arr)):
+    trgt = trgt_arr[j]
+    tm_nxt = 0
+    tm_cur = trgt_ts[trgt]
+    calls_tot += trgt_tot[trgt]
+    if (j+1) < len(trgt_arr):
+       trgtp1 = trgt_arr[j+1]
+       tm_nxt = trgt_ts[trgtp1]
+    if tm_nxt != 0:
+       mid_pt = tm_cur + 0.5*(tm_nxt - tm_cur)
+    else:
+       mid_pt = tm_cur
+    lat_tot_mid += trgt_tot[trgt] * mid_pt
+if lat_tot_mid == 0:
+    lat_tot_mid = 1.0
+
+of.write("title\t%%total time by response time bucket\tsheet\t%s\ttype\tcolumn\n" % (hdr))
+rw += 1
+of.write("hdrs\t%d\t%d\t%d\t%d\t%d\n" % (rw+1, 3, rw+len(trgt_arr)+1, 4, 3))
+rw += 1
+of.write("%s\t%s\t%s\t%s\t%s\n" % ("Latency", "calls", "tot_time(ms)", "%tot_time", "bucket"))
+rw += 1
+tm_rq_arr = []
 for j in range(len(trgt_arr)):
     trgt = trgt_arr[j]
     tot_calls += trgt_tot[trgt]
     tm_cur = trgt_ts[trgt]*trgt_tot[trgt]
     tm_nxt = 0
+    mid_pt = trgt_ts[trgt]
     if (j+1) < len(trgt_arr):
        trgtp1 = trgt_arr[j+1]
        tm_nxt = trgt_ts[trgtp1]*trgt_tot[trgt]
+       mid_pt = trgt_ts[trgt] + 0.5*(trgt_ts[trgtp1] - trgt_ts[trgt])
+    cur_tot = trgt_tot[trgt] * mid_pt
     tm_tot_lo = tm_tot_lo + tm_cur
     tm_tot_hi = tm_tot_hi + tm_nxt
-    of.write("%d\t%d\t%d\t%.3f\t%s\t\t=%d\t=%d\n" % (trgt_ts[trgt], trgt_tot[trgt], trgt_tot_tm[trgt], 100.0*trgt_tot_tm[trgt]/lat_tot, trgt, tm_cur, tm_nxt))
+    tm_rq_arr.append([trgt, 100.0*cur_tot/lat_tot_mid, 100.0*trgt_tot[trgt]/calls_tot])
+    of.write("%d\t%d\t%d\t%s\t%.3f\t=%d\t=%d\n" % (trgt_ts[trgt], trgt_tot[trgt], trgt_tot_tm[trgt], trgt, 100.0*cur_tot/lat_tot_mid, tm_cur, tm_nxt))
     rw += 1
 of.write("\n")
+rw += 1
+of.write("title\t%%cumulative calls and response time by response time bucket\tsheet\t%s\ttype\tline\n" % (hdr))
+rw += 1
+of.write("hdrs\t%d\t%d\t%d\t%d\t%d\n" % (rw+1, 0, rw+len(trgt_arr)+1, 2, 0))
+rw += 1
+of.write("%s\t%s\t%s\n" % ("bucket", "%p_calls", "%p_time"))
+rw += 1
+time_cumu = 0.0
+calls_cumu = 0.0
+for j in range(len(tm_rq_arr)):
+    time_cumu += tm_rq_arr[j][1]
+    calls_cumu += tm_rq_arr[j][2]
+    of.write("%s\t%f\t%f\n" % (tm_rq_arr[j][0], time_cumu, calls_cumu))
+    rw += 1
+of.write("\n")
+rw += 1
 tm_tot_lo = tm_tot_lo * 0.001
 tm_tot_hi = tm_tot_hi * 0.001
 of.write("\t\t\t\t\ttot_calls\t=%d\n" % (tot_calls))
