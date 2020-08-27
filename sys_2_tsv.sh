@@ -176,6 +176,20 @@ RPS=`echo $TDIR | sed 's/rps_v/rpsv/' | sed 's/rps.*_.*/rps/' | sed 's/.*_//'`
 RPS="${RPS}"
 FCTR=`echo $RPS | sed 's/rps//'`
 printf "DIR= $DIR, RPS= %s\n", $RPS > "/dev/stderr"
+CURDIR=`pwd`
+HOSTNM=`awk -v curdir="$CURDIR" '
+  BEGIN{
+    n = split(curdir, arr, "/");
+    for (i=n; i > 2; i--) {
+       if (arr[i] == arr[i-2] && index(arr[i-1], "-") > 0) {
+          printf("%s\n", arr[i-1]);
+          exit;
+       }
+    }
+    printf("missed_hostnm\n");
+    exit;
+  }'`
+printf "host\thostname\t%s\thostname\n"  "$HOSTNM" >> $SUM_FILE;
 
 if [ -e run.log ]; then
  MYA=(sys_*_perf_stat.txt)
