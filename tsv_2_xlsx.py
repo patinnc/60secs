@@ -338,11 +338,6 @@ for bmi in range(base_mx+1):
        workbook = xlsxwriter.Workbook(output_filename)
        bold0 = workbook.add_format({'bold': 0})
        opened_wkbk = True
-       if options_str.find("chart_sheet") >= 0:
-          wrksh_nm = "charts"
-          worksheet_charts = workbook.add_worksheet(wrksh_nm)
-          worksheet_charts_nm = wrksh_nm
-          ch_sh_row = -1
        if got_sum_all > 0:
           if fo in prefix_dict:
              prefix = prefix_dict[fo]
@@ -358,6 +353,11 @@ for bmi in range(base_mx+1):
           worksheet_sum_all_nm = wrksh_nm
           wksheet_nms[wrksh_nm] = 1
           bold = workbook.add_format({'bold': 1})
+       if options_str.find("chart_sheet") >= 0:
+          wrksh_nm = "charts"
+          worksheet_charts = workbook.add_worksheet(wrksh_nm)
+          worksheet_charts_nm = wrksh_nm
+          ch_sh_row = -1
    
 #   if fake_file_list > 0:
 #      remainder = [file_list[fo]["flnm"]]
@@ -900,6 +900,7 @@ for bmi in range(base_mx+1):
                         ch_sh_arr.append([ch_top_at_row, ch_left_at_col])
                      ch_top_at_row = ch_sh_arr[ch_sh_row][0]
              if worksheet_charts != None:
+                worksheet_charts.write(ch_top_at_row -1, ch_left_at_col+1, title);
                 rc = worksheet_charts.insert_chart(ch_top_at_row, ch_left_at_col, chart1, ch_opt)
                 if options_all_charts_one_row == True:
                    all_charts_one_row[fo2][2] += 1
