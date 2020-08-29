@@ -11,6 +11,7 @@ TYP_IN=
 SHEET_NM=
 OPTIONS=
 MATCH_INTRVL=
+OSTYP=$OSTYPE
 
 while getopts "hvf:b:e:m:o:s:S:t:" opt; do
   case ${opt} in
@@ -65,6 +66,16 @@ if [ "$FILE" == "" ]; then
 fi
 if [ ! -e $FILE ]; then
   echo "didn't find -f $FILE json file"
+  exit
+fi
+SZ_CMD=" -c%s "
+if [[ "$OSTYP" == "darwin"* ]]; then
+   # Mac OSX
+   SZ_CMD=" -f %z "
+fi
+FILESIZE=$(stat $SZ_CMD "$FILE" | awk '{print $1}')
+echo "file $FILE has size $FILESIZE"
+if [ "$FILESIZE" == "0" ]; then
   exit
 fi
 TYP=$HDR
