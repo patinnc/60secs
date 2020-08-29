@@ -509,8 +509,11 @@ for bmi in range(base_mx+1):
                     drow_end = i+1
                  if 1==1 and dcol_cat != -1 and len(data[i]) > jjj and i >= drow_beg:
                     if not (data[i][jjj] is None or data[i][jjj] == ''):
-                       tval = float(data[i][jjj])
                        skip_it = False
+                       if (is_number(data[i][jjj])):
+                          tval = float(data[i][jjj])
+                       else:
+                          continue
                        if ts_beg != -1.0 and tval < ts_beg:
                           skip_it = True
                        if ts_end != -1.0 and tval > ts_end:
