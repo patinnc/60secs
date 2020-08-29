@@ -8,6 +8,7 @@ echo "SCR_DIR= $SCR_DIR" > /dev/stderr
 declare -a REGEX
 DIR=
 PHASE_FILE=
+OPT_OPT_DEF=chart_new,dont_sum_sockets
 XLSX_FILE=
 END_TM=
 SKIP_XLS=0
@@ -126,6 +127,7 @@ while getopts "hvASa:b:c:D:d:e:F:g:I:m:N:o:P:r:X:x:" opt; do
       echo "   -m max_val    any value in chart > this value will be replaced by 0.0"
       echo "   -N number_of_dirs  if you have more than 1 directories then you can limit the num of dirs with this option. Default process all"
       echo "   -o options       comma separated options."
+      echo "         'do_sum_sockets' if the perf stat data is per-socket then sum per-socket data to the system level"
       echo "         'dont_sum_sockets' if the perf stat data is per-socket then don't sum per-socket data to the system level"
       echo "         'line_for_scatter' substitute line charts for the scatter plots"
       echo "         'drop_summary' don't add a sheet for each summary sheet (if you are doing more than 1 dir). Just do the sum_all sheet"
@@ -476,7 +478,9 @@ for i in $LST; do
  fi
  OPT_OPT=
  if [ "$OPTIONS" != "" ]; then
-   OPT_OPT=",$OPTIONS "
+   OPT_OPT="$OPTIONS "
+ else
+   OPT_OPT=$OPT_OPT_DEF
  fi
  OPT_A=
  if [ "$AVERAGE" != "0" ]; then
@@ -494,13 +498,12 @@ for i in $LST; do
  fi
  if [ "$SKIP_SYS_2_TSV" == "0" ]; then
    if [ $VERBOSE -gt 0 ]; then
-     echo "$SCR_DIR/sys_2_tsv.sh $OPT_a $OPT_A $OPT_G -p \"$RPS\" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i \"*.png\" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets$OPT_OPT $OPT_PH -t $DIR &> tmp.jnk" &
+     echo "$SCR_DIR/sys_2_tsv.sh $OPT_a $OPT_A $OPT_G -p \"$RPS\" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i \"*.png\" -s $SUM_FILE -x $XLS.xlsx -o $OPT_OPT $OPT_PH -t $DIR &> tmp.jnk" &
    fi
-     #echo "$SCR_DIR/sys_2_tsv.sh $OPT_a $OPT_A $OPT_G -p \"$RPS\" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i \"*.png\" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets$OPT_OPT $OPT_PH -t $DIR &> tmp.jnk" &
    if [ "$BACKGROUND" -le "0" ]; then
-          $SCR_DIR/sys_2_tsv.sh $OPT_a $OPT_A $OPT_G -p "$RPS" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets$OPT_OPT $OPT_PH -t $DIR &> tmp.jnk 
+          $SCR_DIR/sys_2_tsv.sh $OPT_a $OPT_A $OPT_G -p "$RPS" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o $OPT_OPT $OPT_PH -t $DIR &> tmp.jnk 
    else
-          $SCR_DIR/sys_2_tsv.sh $OPT_a $OPT_A $OPT_G -p "$RPS" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o chart_new,dont_sum_sockets$OPT_OPT $OPT_PH -t $DIR &> tmp.jnk &
+          $SCR_DIR/sys_2_tsv.sh $OPT_a $OPT_A $OPT_G -p "$RPS" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o $OPT_OPT $OPT_PH -t $DIR &> tmp.jnk &
      #PIDS_WAIT=$(($PIDS_WAIT+1))
    fi
      LOAD=`uptime | awk '{printf("%.0f\n", $(NF-2)+0.5);}'`
