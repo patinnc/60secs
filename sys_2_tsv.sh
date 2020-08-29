@@ -2658,7 +2658,7 @@ if [ "$END_TM" != "" ]; then
   OPT_END_TM=" -e $END_TM "
 fi
 echo "----------- top_dir= $TOP_DIR ----------" > /dev/stderr
-tst_files="latency_histo.log"
+tst_files="latency_histo.json"
 for f in $tst_files; do
   if [ -e $f ]; then
      echo "try latency log $f" > /dev/stderr
@@ -2669,7 +2669,7 @@ for f in $tst_files; do
      echo "got latency log $f.tsv" > /dev/stderr
   fi
 done
-tst_files="http-status.log"
+tst_files="http-status.json"
 for f in $tst_files; do
   if [ -e $f ]; then
      echo "try http-status log $f" > /dev/stderr
@@ -2681,7 +2681,7 @@ for f in $tst_files; do
      grep title $f.tsv > /dev/stderr
   fi
 done
-tst_files="RPS.log response_time.log"
+tst_files="RPS.json response_time.json"
 for f in $tst_files; do
   OPT_S=
   if [ "$SUM_FILE" != "" ]; then
