@@ -198,7 +198,12 @@ function dt_to_epoch(offset) {
         printf("ts_end= %s\n", ts_end) > "/dev/stderr";
     }
   } else {
-    inst=arr[3];
+    if (options != "" && index(options, "do_sum_sockets") > 0) {
+      inst=arr[3];
+      skt="S0";
+    } else {
+      inst=arr[3];
+    }
   }
   val=arr[2+skt_incr];
   evt=arr[4+skt_incr];
@@ -222,9 +227,10 @@ function dt_to_epoch(offset) {
     skt_lkup[skt_idx]=skt;
     printf("skt_lkup[%d]= %s\n", skt_idx, skt) > "/dev/stderr";
   }
-  if ( evts[evt] != evt) {
+  if (!(evt in evts)) {
     evts[evt] = evt;
     evt_idx++;
+    printf("add event %s evt_idx= %d\n", evt, evt_idx) > "/dev/stderr";
     evt_num[evt]=evt_idx;
     evt_lkup[evt_idx]=evt;
     evt_inst[evt_idx]=0;
@@ -629,9 +635,11 @@ function dt_to_epoch(offset) {
        #}
      }
      if (got_lkfor[k,1] == got_lkfor[k,2] || (got_lkfor[k,"typ_match"] == "require_any" && got_lkfor[k,1] > 0)) {
+        printf("use nwfor[%d,1,hdr]=%s, extra_cols= %d\n", k, nwfor[k,1,"hdr"], extra_cols) > "/dev/stderr";
         extra_cols++;
      }
    }
+   printf("perf_stat_scatter.awk: extra_cols= %d\n", extra_cols) > "/dev/stderr";
 
 #abcd
    rows=1;
