@@ -12,9 +12,16 @@ if [ ! -e $IN_FILE ]; then
   exit
 fi
 
-awk '
+TM_END="-1"
+if [ "$2" != "" ]; then
+  TM_END=$2
+  echo "time end= $2, (relative time stamp, not epoch)"
+fi
+
+awk -v tm_end="$TM_END" '
   BEGIN{
     skip=1;
+    tm_end += 0.0;
   }
   /TSC Frequency.MHz.,/ {
      n = split($0, arr, ",");
@@ -50,6 +57,9 @@ awk '
      }
      n = split($0, arr, ",");
      tm_off = arr[1]+0.0;
+     if (tm_end != -1.0 && tm_off >= tm_end) {
+       exit;
+     }
      evt = arr[4];
      intrvl = arr[5] * 1.0e-9;
      pct = arr[6] + 0.0;
