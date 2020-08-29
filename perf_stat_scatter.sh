@@ -39,18 +39,19 @@ while getopts "hvb:c:D:e:f:o:p:s:S:l:" opt; do
       SUM_FILE=$OPTARG
       ;;
     o )
-      if [[ $OPTARG == *"dont_sum_sockets"* ]]; then
         OPTIONS=$OPTARG
-      else
-        if [[ $OPTARG == *"chart_new"* ]]; then
-           OPTIONS=$OPTARG
-        else
-        if [ "$OPTARG" != "" ]; then
-          echo "sorry but only -o option supported now is '-o dont_sum_sockets'. You entered -o $OPTARG"
-          exit
-        fi
-        fi
-      fi
+      #if [[ $OPTARG == *"dont_sum_sockets"* ]]; then
+      #  OPTIONS=$OPTARG
+      #else
+      #  if [[ $OPTARG == *"chart_new"* ]]; then
+      #     OPTIONS=$OPTARG
+      #  else
+        #if [ "$OPTARG" != "" ]; then
+        #  echo "sorry but only -o option supported now is '-o dont_sum_sockets'. You entered -o $OPTARG"
+        #  exit
+        #fi
+      #  fi
+      #fi
       ;;
     f )
       if [ "$OPTARG" == "" ]; then
@@ -149,6 +150,7 @@ echo "++++++++++++++++++++got CPU2017files= $CPU2017files" > /dev/stderr
 
 export AWKPATH=$SCR_DIR
 
+echo awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s|memory},LLC-misses PKI{|memory},%not_halted{|CPU},avg_freq{avg_freq GHz|CPU},QPI_BW{QPI_BW GB/s|memory interconnect},power_pkg {power pkg (watts)|power}" -f $SCR_DIR/perf_stat_scatter.awk $FILES $CPU2017files > /dev/stderr
 awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s|memory},LLC-misses PKI{|memory},%not_halted{|CPU},avg_freq{avg_freq GHz|CPU},QPI_BW{QPI_BW GB/s|memory interconnect},power_pkg {power pkg (watts)|power}" -f $SCR_DIR/perf_stat_scatter.awk $FILES $CPU2017files
 
 # $FILES $SPECINT_LOG $CPU2017files
