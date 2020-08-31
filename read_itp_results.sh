@@ -2,6 +2,7 @@
 
 IN_FILE=$1
 
+
 if [ "$1" == "" ]; then
   echo "missing results.csv path filename"
   exit
@@ -11,6 +12,34 @@ if [ ! -e $IN_FILE ]; then
   echo "didn't find file $IN_FILE"
   exit
 fi
+
+if [[ "$IN_FILE" == *"/result.csv" ]]; then
+  echo "ends in result.csv"
+else
+  echo "path doesn't end in result.csv"
+  if [ -d $IN_FILE ]; then
+    RESP=`find $IN_FILE -name result.csv`
+    if [ "$RESP" != "" ]; then
+       if [ ! -e $RESP ]; then
+          echo "ddidn't find result.csv unter dir $IN_FILE"
+          exit
+       fi
+       IN_FILE=$RESP
+    fi
+  fi
+fi
+if [[ "$IN_FILE" == *"/result.csv" ]]; then
+  echo "got result.csv $RESP"
+  else
+  echo "didn't find $IN_FILE"
+  exit
+fi
+if [ ! -e $IN_FILE ]; then
+  echo "didn't find file $IN_FILE"
+  exit
+fi
+
+echo "------- using file $IN_FILE"
 
 TM_END="-1"
 if [ "$2" != "" ]; then
@@ -22,6 +51,7 @@ awk -v tm_end="$TM_END" '
   BEGIN{
     skip=1;
     tm_end += 0.0;
+    got_unc_c_clk = 0;
   }
   /TSC Frequency.MHz.,/ {
      n = split($0, arr, ",");
@@ -61,6 +91,12 @@ awk -v tm_end="$TM_END" '
        exit;
      }
      evt = arr[4];
+     if (index(evt, "UNC_C_CLOCKTICKS.") > 0 || index(evt, "UNC_CHA_CLOCKTICKS") > 0) {
+        if (!(evt in uncclk_list)) {
+          uncclk_list[evt] = ++uncclk_max;
+          uncclk_lkup[uncclk_max] = evt;
+        }
+     }
      intrvl = arr[5] * 1.0e-9;
      pct = arr[6] + 0.0;
      val = arr[2] * 0.01 * pct;
@@ -120,6 +156,9 @@ awk -v tm_end="$TM_END" '
     ec  = emx;
     lst[++emx]=evt_list["CPU_CLK_THREAD_UNHALTED.ONE_THREAD_ACTIVE"];
     e1  = emx;
+    for(i=1; i <= uncclk_max; i++) {
+      lst[++emx]=evt_list[uncclk_lkup[i]];
+    }
     lst[++emx]=evt_list["CPU_CLK_THREAD_UNHALTED.REF_XCLK_ANY"];
     ex  = emx;
     lst[++emx]=evt_list["ref-cycles"];
