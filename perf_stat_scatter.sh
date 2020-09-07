@@ -94,10 +94,12 @@ while getopts "hvb:c:D:e:f:o:p:s:S:l:" opt; do
       exit
       ;;
     : )
-      echo "Invalid option: $OPTARG requires an argument" 1>&2
+      echo "Invalid option: $OPTARG requires an argument cmdline= ${@}" 1>&2
+      exit 1
       ;;
     \? )
-      echo "Invalid option: $OPTARG" 1>&2
+      echo "Invalid option: $OPTARG. cmdline= ${@}" 1>&2
+      exit 1
       ;;
   esac
 done
@@ -116,7 +118,7 @@ fi
 if [ "$DEBUG_OPT" != "" ]; then
   if [[ $DEBUG_OPT == *"skip_perf_stat_scatter"* ]]; then
      echo "skipping $0 due do $DEBUG_OPT"
-     exit
+     exit 1
   fi
 fi
 
@@ -152,6 +154,11 @@ export AWKPATH=$SCR_DIR
 
 echo awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s|memory},LLC-misses PKI{|memory},%not_halted{|CPU},avg_freq{avg_freq GHz|CPU},QPI_BW{QPI_BW GB/s|memory interconnect},power_pkg {power pkg (watts)|power}" -f $SCR_DIR/perf_stat_scatter.awk $FILES $CPU2017files > /dev/stderr
 awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s|memory},LLC-misses PKI{|memory},%not_halted{|CPU},avg_freq{avg_freq GHz|CPU},QPI_BW{QPI_BW GB/s|memory interconnect},power_pkg {power pkg (watts)|power}" -f $SCR_DIR/perf_stat_scatter.awk $FILES $CPU2017files
+          RC=$?
+          if [ $RC -gt 0 ]; then
+            echo "$0: got non-zero RC at $LINENO" > /dev/stderr
+            exit 1
+          fi
 
 # $FILES $SPECINT_LOG $CPU2017files
 
