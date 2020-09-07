@@ -19,6 +19,7 @@ sheet_nm=""
 options_str=""
 match_intrvl = 0
 verbose = 0
+#print("%f\n" % (1.0/0.0)) # force error to test error handling
 
 for opt, arg in options:
     if opt in ('-v', '--verbose'):
@@ -48,6 +49,39 @@ if verbose > 0:
 #end=float(sys.argv[3])
 #if len(sys.argv) >= 5:
 #   hdr=sys.argv[4]
+
+sheets_for_files = []
+sheets_limit = []
+arr = options_str.split(",")
+print("options_str= ", options_str, ", options arr= ", arr)
+if len(options_str) > 0:
+  lkfor = "sheet_for_file{"
+  lkfor2 = "sheet_limit{"
+  arr = options_str.split(",")
+  print("options arr= ", arr)
+  for opt in arr:
+    i = opt.find(lkfor)
+    print("opt= ", opt, ", i=", i)
+    if i == 0:
+       str2 = opt[len(lkfor):]
+       i = str2.find("}")
+       str2 = str2[0:i]
+       arr2 = str2.split("=")
+       sheets_for_files.append([arr2[0], arr2[1]])
+       print("opt= %s, lkfor= %s, str2= %s" % (opt, lkfor, str2), file=sys.stderr)
+       continue
+    i = opt.find(lkfor2)
+    if i == 0:
+       str2 = opt[len(lkfor2):]
+       i = str2.find("}")
+       str2 = str2[0:i]
+       arr2 = str2.split(";")
+       print("opt= %s, lkfor= %s, str2= %s" % (opt, lkfor2, str2), ", arr2=", arr2, file=sys.stderr)
+       sheets_limit.append([arr2[0], arr2[1], int(arr2[2]) ]) # sheetnm, type_limit, val
+       print("opt= %s, lkfor= %s, str2= %s" % (opt, lkfor, str2), ", arr2= ", arr2, file=sys.stderr)
+
+print("sheets_for_files= ", sheets_for_files)
+print("sheets_limit= ", sheets_limit)
 
 with open(flnm) as f:
   data = json.load(f)
@@ -171,6 +205,22 @@ if hdr == "" and len(trgt_arr2) == 1:
 if sheet_nm == "" and hdr != "":
    sheet_nm = hdr
 
+if sheet_nm == "":
+   for i in range(len(sheets_for_files)):
+      if flnm.find(sheets_for_files[i][0]) != -1:
+         sheet_nm = sheets_for_files[i][1]
+         print("set sheet_nm= %s" % (sheet_nm))
+         break
+
+# sheet_limit{endpoints;cols_max;100}
+sheet_limit_cols = -1
+for i in range(len(sheets_limit)):
+    if sheets_limit[i][0] == sheet_nm and sheets_limit[i][1] == "cols_max":
+       sheet_limit_cols = sheets_limit[i][2]
+       print("sheet_limit sheet_nm= %s, mx_col= %d, len(trgt_arr)= %d" % (sheet_nm, sheet_limit_cols, len(trgt_arr)))
+       #print("%f" % (1.0/0.0))
+       break
+
 line_typ = "scatter_straight"
 if options_str != "" and options_str.find("line_for_scatter") >= 0:
    line_typ = "line"
@@ -180,12 +230,48 @@ of = open(flnm+".tsv","w+")
 rw = 0
 of.write("title\t%s\tsheet\t%s\ttype\t%s\n" % (hdr, sheet_nm, line_typ))
 rw += 1
-of.write("hdrs\t%d\t%d\t%d\t%d\t1\n" % (rw+1, 2, len(odata)+rw+1, 1+len(trgt_arr)))
+
+endp_list = {}
+endp_lkup = {}
+endp_map  = {}
+endp_mx   = -1
+mx_col = len(trgt_arr)
+if sheet_limit_cols != -1 and mx_col > (sheet_limit_cols):
+   if sheet_nm == "endpoints":
+      #trgt_arr[mx_col-1] = "__other__"
+      for j in range(len(trgt_arr)):
+          if trgt_arr[j] == "":
+             trgt_arr[j] = "__blank__"
+          endp = trgt_arr[j]
+          jj = endp.find("/")
+          if jj != -1:
+             endp = endp[0:jj]
+          jj = endp.find("--")
+          if jj != -1:
+             endp = endp[0:jj]
+          if not endp in endp_list:
+             endp_mx += 1
+             endp_list[endp] = endp_mx
+             endp_lkup[endp_mx] = endp
+          k = endp_list[endp]
+          #print("endp[%d]= %s, k= %d" % (j, endp, k))
+          endp_map[j] = k
+      mx_col = endp_mx
+      print("endp_map: ", endp_map)
+      print("endp_mx= %d" % (endp_mx), ", endp_lkup= ", endp_lkup)
+      #print("%f" % (1.0/0.0))
+      #if endp_mx > sheet_limit_cols:
+      #   mx_col = sheet_limit_cols
+      print("sheet_limit sheet_nm= %s, mx_col= %d, len(trgt_arr)= %d, endp_mx= %d" % (sheet_nm, mx_col, len(trgt_arr), endp_mx))
+of.write("hdrs\t%d\t%d\t%d\t%d\t1\n" % (rw+1, 2, len(odata)+rw+1, mx_col+1))
 #hdrs	3	24	-1	35
 rw += 1
 of.write("ts\toffset")
-for j in range(len(trgt_arr)):
-    of.write("\t%s" % (trgt_arr[j]))
+for j in range(mx_col):
+    if endp_mx != -1:
+       of.write("\t%s" % (endp_lkup[j]))
+    else:
+       of.write("\t%s" % (trgt_arr[j]))
 of.write("\n")
 rw += 1
 
@@ -196,8 +282,35 @@ for j in range(len(trgt_arr)):
     avg_n.append(0.0)
     
 tm_last = -1.0
+dline = []
+for j in range(len(trgt_arr)):
+    dline.append(0.0)
+
 for i in range(len(odata)):
-    for j in range(len(trgt_arr)):
+    if endp_mx != -1:
+       for j in range(len(trgt_arr)):
+           dline[j] = 0.0
+       for j in range(len(trgt_arr)):
+           k = endp_map[j]
+           dline[k] += odata[i][2+j]
+       for j in range(endp_mx+1):
+           if j == 0:
+              of.write("%f\t%f\t%f" % (odata[i][0], odata[i][1], dline[j]))
+              tm_last = odata[i][1]
+           else:
+              #of.write("\t%f" % (odata[i][2+j]))
+              of.write("\t%f" % (dline[j]))
+           avg_sum[j] += dline[j]
+           avg_n[j] += 1.0
+       of.write("\n")
+       rw += 1
+       continue
+
+    if mx_col < len(trgt_arr):
+       for j in range(mx_col+1, len(trgt_arr)):
+           odata[i][2+mx_col] += odata[i][2+j]
+       
+    for j in range(mx_col):
         if j == 0:
            of.write("%f\t%f\t%f" % (odata[i][0], odata[i][1], odata[i][2]))
            tm_last = odata[i][1]
@@ -228,12 +341,27 @@ if hdr == "http_status" and sum_file != "":
    sf.write("%s\t%s\t=%f\t%s\n" % ("software errs", hdr, not_200, not_200))
 
 if sum_file != "" and hdr != "latency" and hdr != "http_status":
-   for j in range(0, len(trgt_arr)):
+   if endp_mx != -1:
+     for j in range(0, endp_mx):
+       str = hdr
+       str2 = endp_lkup[j]
+       if len(str) == 0 and len(str2) > 0:
+           str = "RPS "+str2
+       #sf.write("\t%s\t%s\t=%f\n" % ("software utilization", hdr, avg_sum[j]/avg_n[j], trgt_arr[j]))
+       if len(str) > 0 and len(str2) > 0:
+          sf.write("\t%s\t\"%s\"\t=%f\n" % (str, str2, avg_sum[j]/avg_n[j]))
+       else:
+          sf.write("\t%s\t%s\t=%f\n" % ("software utilization", str, avg_sum[j]/avg_n[j]))
+   else:
+     for j in range(0, mx_col):
        str = hdr
        if len(str) == 0 and len(trgt_arr[j]) > 0:
            str = "RPS "+trgt_arr[j]
        #sf.write("\t%s\t%s\t=%f\n" % ("software utilization", hdr, avg_sum[j]/avg_n[j], trgt_arr[j]))
-       sf.write("\t%s\t%s\t=%f\n" % ("software utilization", str, avg_sum[j]/avg_n[j]))
+       if len(str) > 0 and len(trgt_arr[j]) > 0:
+          sf.write("\t%s\t\"%s\"\t=%f\n" % (str, trgt_arr[j], avg_sum[j]/avg_n[j]))
+       else:
+          sf.write("\t%s\t%s\t=%f\n" % ("software utilization", str, avg_sum[j]/avg_n[j]))
 
 
 if hdr != "latency":
@@ -314,9 +442,10 @@ if tm_last > 0.0:
    tm_tot_lo = tm_tot_lo / tm_last
    tm_tot_hi = tm_tot_hi / tm_last
    of.write("\t\t\t\t\ttm_tot_lo/s\t=%f\t=%f\ttm_tot_hi/s\n" % (tm_tot_lo, tm_tot_hi))
-   sf.write("software utilization\tresponse_time_est_total\t=%f\tlo_est/s\n" % (tm_tot_lo))
-   sf.write("software utilization\tresponse_time_est_total\t=%f\thi_est/s\n" % (tm_tot_hi))
+   sf.write("software utilization\tresponse_time_est_total\tlo_est/s\t=%f\n" % (tm_tot_lo))
+   sf.write("software utilization\tresponse_time_est_total\thi_est/s\t=%f\n" % (tm_tot_hi))
    tm_tot_lo = tm_tot_lo / 32
    tm_tot_hi = tm_tot_hi / 32
    of.write("\t\t\t\t32 cpus\tfrac_of_32_cpus_lo\t=%f\t=%f\tfrac_of_32_cpus_hi\n" % (tm_tot_lo, tm_tot_hi))
 of.write("\n")
+sys.exit(0)
