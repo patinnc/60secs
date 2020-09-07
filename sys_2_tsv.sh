@@ -29,6 +29,15 @@ AVG_DIR=
 G_SUM=()
 #echo "$0: cmdline= ${@}"
 
+ck_last_rc() {
+   local RC=$1
+   local FROM=$2
+   if [ $RC -gt 0 ]; then
+      echo "$0: got non-zero RC=$RC at $LINENO. called from line $FROM" > /dev/stderr
+      exit $RC
+   fi
+}
+
 while getopts "hvASa:b:c:D:d:e:g:i:m:o:P:p:s:t:x:" opt; do
   case ${opt} in
     A )
@@ -118,7 +127,7 @@ while getopts "hvASa:b:c:D:d:e:g:i:m:o:P:p:s:t:x:" opt; do
       echo "   -S   skip creating detail xlsx file. Useful for when we are doing multiple directories"
       echo "   -t top_dir  top directory"
       echo "   -v verbose mode"
-      exit
+      exit 1
       ;;
     : )
       echo "Invalid option: $OPTARG requires an argument" 1>&2
@@ -134,11 +143,11 @@ shift $((OPTIND -1))
 
 if [ "$DIR" == "" ]; then
   echo "you must enter a dir '-d dir_path' containing sys_*_*.txt files created by 60secs.sh"
-  exit
+  exit 1
 fi
 if [ ! -d $DIR ]; then
   echo "didn't find dir $DIR"
-  exit
+  exit 1
 fi
 echo "dir= $DIR"
 
@@ -189,6 +198,11 @@ HOSTNM=`awk -v curdir="$CURDIR" '
     printf("missed_hostnm\n");
     exit;
   }'`
+   RC=$?
+   if [ $RC -gt 0 ]; then
+      echo "$0: got non-zero RC at $LINENO" > /dev/stderr
+      exit 1
+   fi
 printf "host\thostname\t%s\thostname\n"  "$HOSTNM" >> $SUM_FILE;
 
 if [ -e run.log ]; then
@@ -209,7 +223,7 @@ if [ -e run.log ]; then
             next;
          }
       }
-      printf("NR= %s, %s\n", NR, $0);
+      printf("%s\n", $0);
       next;
    }
    / end /{
@@ -234,6 +248,11 @@ if [ -e run.log ]; then
      }
      }
    }' run.log`
+   RC=$?
+   if [ $RC -gt 0 ]; then
+      echo "$0: got non-zero RC at $LINENO" > /dev/stderr
+      exit 1
+   fi
    }
    get_date_arr "day_str"
    DATE_ARR[0]="$RESP"
@@ -244,9 +263,9 @@ if [ -e run.log ]; then
    echo "got run.log DATE_ARR0= ${DATE_ARR[0]}"
    echo "got run.log DATE_ARR1= ${DATE_ARR[1]}"
    echo "got run.log DATE_ARR2= ${DATE_ARR[2]}"
-   printf "time\titp_run\t%s\tday_beg\n"  "${DATE_ARR[0]}" >> $SUM_FILE;
-   printf "time\titp_run\t%s\tdate_beg\n" "${DATE_ARR[1]}" >> $SUM_FILE;
-   printf "time\titp_run\t%s\tdate_end\n" "${DATE_ARR[2]}" >> $SUM_FILE;
+   printf "time\titp_run\t\"%s\"\tday_beg\n"  "${DATE_ARR[0]}" >> $SUM_FILE;
+   printf "time\titp_run\t\"%s\"\tdate_beg\n" "${DATE_ARR[1]}" >> $SUM_FILE;
+   printf "time\titp_run\t\"%s\"\tdate_end\n" "${DATE_ARR[2]}" >> $SUM_FILE;
  fi
 fi
 
@@ -299,6 +318,11 @@ BEG_ADJ=`cat $DIR/60secs.log | awk '
      exit;
     }
     '`
+   RC=$?
+   if [ $RC -gt 0 ]; then
+      echo "$0: got non-zero RC at $LINENO" > /dev/stderr
+      exit 1
+   fi
 if [ "$BEG_TM_IN" != "" ]; then
   BEG=$BEG_TM_IN
   echo "$0 set BEG_TM= $BEG_TM_IN"
@@ -384,6 +408,11 @@ trows++; printf("\n") > NFL;
        close(NFL);
      }
    ' $i
+   RC=$?
+   if [ $RC -gt 0 ]; then
+      echo "$0: got non-zero RC at $LINENO" > /dev/stderr
+      exit 1
+   fi
    SHEETS="$SHEETS $i.tsv"
   fi
 
@@ -767,6 +796,11 @@ trows++; printf("\t$ power") > NFL;
           }
      }
    ' $i
+   RC=$?
+   if [ $RC -gt 0 ]; then
+      echo "$0: got non-zero RC at $LINENO" > /dev/stderr
+      exit 1
+   fi
    SHEETS="$SHEETS $i.tsv"
   fi
   if [[ $i == *"_vmstat.txt"* ]]; then
@@ -983,6 +1017,11 @@ trows++; printf("\t\n") > NFL;
        }
        }
    ' $i
+   RC=$?
+   if [ $RC -gt 0 ]; then
+      echo "$0: got non-zero RC at $LINENO" > /dev/stderr
+      exit 1
+   fi
    SHEETS="$SHEETS $i.tsv"
   fi
   if [[ $i == *"_mpstat.txt"* ]]; then
@@ -1130,6 +1169,11 @@ trows++; printf("\n") > NFL;
        close(NFL);
      }
    ' $i
+   RC=$?
+   if [ $RC -gt 0 ]; then
+      echo "$0: got non-zero RC at $LINENO" > /dev/stderr
+      exit 1
+   fi
    SHEETS="$SHEETS $i.tsv"
   fi
   if [[ $i == *"_pidstat.txt"* ]]; then
@@ -1149,8 +1193,9 @@ trows++; printf("\n") > NFL;
 #Average:      112     43282      17      80  muttley-active
 #Average:    100001     51570      18     776  m3collector
 #aaaa
-    awk -v ts_beg="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" -v typ="pidstat" '
-     BEGIN{beg=1;
+    awk -v max_cpus=100 -v sum_file="$SUM_FILE" -v options="$OPTIONS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" -v typ="pidstat" '
+     BEGIN{
+        beg=1;
         grp_mx=0;
         hdr_mx=0;
         chart=typ;
@@ -1162,6 +1207,10 @@ trows++; printf("\n") > NFL;
         num_cpus = 0;
         num_cpus_pct = 0;
         tot_first=1;
+        pidstat_dont_add_pid = 0;
+        if (index(options, "pidstat_dont_add_pid") > 0) {
+           pidstat_dont_add_pid = 1;
+        }
       }
       function dt_to_epoch(hhmmss, ampm) {
          # the epoch seconds from the date time info in the file is local time,not UTC.
@@ -1229,12 +1278,17 @@ trows++; printf("\n") > NFL;
        printf("title\t%s\tsheet\t%s\ttype\tcolumn\n", title, chart) > NFL;
        ++row;
        n = split(hdr, arr, "\t");
-       printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", row+1, 0, -1, n-2, n-1) > NFL;
+       printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", row+1, 0, row+1+nf_mx, n-1, 0) > NFL;
        ++row;
        printf("%s\n", hdr) > NFL;
        for (i=1; i <= nf_mx; i++) {
          ++row;
-         printf("%s\n", sv_nf[i]) > NFL;
+         n = split(sv_nf[i], arr, "\t");
+         printf("%s", arr[n]) > NFL;
+         for (j=1; j < n; j++) {
+           printf("\t%s", arr[j]) > NFL;
+         }
+         printf("\n") > NFL;
        }
        return row;
      }
@@ -1289,7 +1343,15 @@ trows++; printf("\n") > NFL;
               next;
            }
            if ( area == "cpu" && $1 != "Average:") {
-             nm  = $10 " " $4; # process_name + pid
+             if (pidstat_dont_add_pid == 0) {
+               nm  = $10 " " $4; # process_name + pid
+             } else {
+               nm  = $10; # process_name 
+             }
+             i = index(nm, "/");
+             if (i > 0) {
+               nm = substr(nm, 1, i-1);
+             }
              if (!(nm in nm_arr)) {
                if (tot_first == 1) {
                  tot_first = 0;
@@ -1308,18 +1370,28 @@ trows++; printf("\n") > NFL;
              nmi = nm_arr[nm];
              pct = $8+0; # %cpu
              if (pct > num_cpus_pct) {
-               # it is misleading to set it to 0 as it makes me think the process is blocked and not running in this interval.
-               # The numbers "look like" they could be 1000x too big...this is a real hack
-               npct = pct * 0.001;
-               if (npct > num_cpus_pct) { npct = 0.0; }
-               printf("pidstat: trying to fixup too high %CPU: pct= %f num_cpus_pct= %f, npct= %f, tm_rw= %d, i= %d, pid[%d,%s]= %s, nm= %s\n", pct, num_cpus_pct, npct, tm_rw, i, i,nmi, pid[i,nmi], nm) > "/dev/stderr";
-               pct = npct;
+               pct = 0.0; # just set it zero
+               ## it is misleading to set it to 0 as it makes me think the process is blocked and not running in this interval.
+               ## The numbers "look like" they could be 1000x too big...this is a real hack
+               #npct = pct * 0.001;
+               #if (npct > num_cpus_pct) { npct = 0.0; }
+               #printf("pidstat: trying to fixup too high %CPU: pct= %f num_cpus_pct= %f, npct= %f, tm_rw= %d, i= %d, pid[%d,%s]= %s, nm= %s\n", pct, num_cpus_pct, npct, tm_rw, i, i,nmi, pid[i,nmi], nm) > "/dev/stderr";
+               #pct = npct;
              }
              pid[tm_rw,nmi] = pct;
              nm_tot[nmi] += pct;
            }
            if ( area == "io" && $1 != "Average:") {
-             nm  = $9 " " $4; # process_name + pid
+             #nm  = $9 " " $4; # process_name + pid
+             if (pidstat_dont_add_pid == 0) {
+               nm  = $9 " " $4; # process_name + pid
+             } else {
+               nm  = $9; # process_name 
+             }
+             i = index(nm, "/");
+             if (i > 0) {
+               nm = substr(nm, 1, i-1);
+             }
              if (!(nm in nm_arr)) {
                if (tot_first == 1) {
                  tot_first = 0;
@@ -1370,13 +1442,44 @@ trows++; printf("\n") > NFL;
           next;
         }
         if (area == "cpu") {
-          sv_cpu[++mx_cpu]=sprintf("%s\t%s", $7, $9 " " $3);
+          proc = $9;
+          i = index(proc, "/");
+          if (i > 0) {
+             proc = substr(proc, 1, i-1);
+          }
+          if (!(proc in proc_list)) {
+             proc_list[proc] = ++proc_mx;
+             proc_lkup[proc_mx] = proc;
+             proc_tot[proc_mx] = 0.0;
+          }
+          pct = $7+0.0;
+          if (pct > num_cpus_pct) {
+             pct = 0.0; # just set it zero
+          }
+          if (pidstat_dont_add_pid == 0) {
+            sv_cpu[++mx_cpu]=sprintf("%s\t%s", pct, $9 " " $3);
+          } else {
+            proc_idx = proc_list[proc];
+            proc_tot[proc_idx] += pct;
+            sv_cpu[proc_idx]=sprintf("%s\t%s", proc_tot[proc_idx], proc);
+            if (mx_cpu < proc_idx) {
+               mx_cpu = proc_idx;
+            }
+          }
         }
         if (area == "cs") {
-          sv_cs[++mx_cs]=sprintf("%s\t%s\t%s", $4, $5, $6 " " $3);
+          if (pidstat_dont_add_pid == 0) {
+            sv_cs[++mx_cs]=sprintf("%s\t%s\t%s", $4, $5, $6 " " $3);
+          } else {
+            sv_cs[++mx_cs]=sprintf("%s\t%s\t%s", $4, $5, $6);
+          }
         }
         if (area == "threads") {
-          sv_threads[++mx_threads]=sprintf("%s\t%s\t%s", $4, $5, $6 " " $3);
+          if (pidstat_dont_add_pid == 0) {
+            sv_threads[++mx_threads]=sprintf("%s\t%s\t%s", $4, $5, $6 " " $3);
+          } else {
+            sv_threads[++mx_threads]=sprintf("%s\t%s\t%s", $4, $5, $6);
+          }
         }
         next;
      }
@@ -1452,7 +1555,12 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
        ++row;
        printf("\n") > NFL;
 
-       row = bar_data(row, sv_cpu, mx_cpu, chart " average %CPU", sv_cpu[1], 40);
+       row = bar_data(row, sv_cpu, mx_cpu, chart " average %CPU", "process\tavg.%CPUS", 40);
+       for (i=1; i <= nf_mx; i++) {
+         n = split(sv_nf[i], arr, "\t");
+         printf("pidstat\tavg %%cpu\t%s\t%%cpu %s\n", arr[1], arr[2]) >> sum_file;
+       }
+       close(sum_file);
        ++row;
        printf("\n") > NFL;
        if (mx_cs > 0) {
@@ -1465,12 +1573,17 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
          ++row;
          printf("\n") > NFL;
        }
-       for (i=1; i <= sv_mx; i++) {
+       if (verbose > 0) {
+        # print the data
+        for (i=1; i <= sv_mx; i++) {
           printf("%s\n", sv[i]) > NFL;
+        }
        }
        close(NFL);
+       #printf("%f\n", 1.0/0.0);  # cause an awk exception to test error handling
      }
    ' $i
+   ck_last_rc $? $LINENO
    SHEETS="$SHEETS $i.tsv"
  fi
   if [[ $i == *"_iostat.txt"* ]]; then
@@ -1753,6 +1866,7 @@ row += trows;
        }
      }
    ' $i
+   ck_last_rc $? $LINENO
    SHEETS="$SHEETS $i.tsv"
  fi
   if [[ $i == *"_sar_dev.txt"* ]]; then
@@ -2009,6 +2123,7 @@ row+= trows;
        close(NFL);
      }
    ' $i
+   ck_last_rc $? $LINENO
    SHEETS="$SHEETS $i.tsv"
  fi
   if [[ $i == *"_sar_tcp.txt"* ]]; then
@@ -2174,6 +2289,7 @@ row += trows;
        close(NFL);
      }
    ' $i
+   ck_last_rc $? $LINENO
    SHEETS="$SHEETS $i.tsv"
  fi
 
@@ -2187,8 +2303,9 @@ row += trows;
        OPT_TME=" -e $END_TM "
     fi
     echo "do perf_stat data $i with BEG= $BEG, end= $END_TM" > /dev/stderr
-    echo "time $SCR_DIR/perf_stat_scatter.sh $OPT_D -b "$BEG"  $OPT_TME  -o "$OPTIONS"  -f $i -S $SUM_FILE > $i.tsv"
-          time $SCR_DIR/perf_stat_scatter.sh $OPT_D -b "$BEG"  $OPT_TME  -o "$OPTIONS"  -f $i -S $SUM_FILE > $i.tsv
+    echo "$SCR_DIR/perf_stat_scatter.sh $OPT_D -b "$BEG"  $OPT_TME  -o "$OPTIONS"  -f $i -S $SUM_FILE > $i.tsv"
+          $SCR_DIR/perf_stat_scatter.sh $OPT_D -b "$BEG"  $OPT_TME  -o "$OPTIONS"  -f $i -S $SUM_FILE > $i.tsv
+          ck_last_rc $? $LINENO
   fi
   if [[ $i == *"_perf_stat.txt.tsv"* ]]; then
     SHEETS="$SHEETS $i"
@@ -2277,6 +2394,7 @@ row += trows;
        close(NFL);
      }
    ' $i
+   ck_last_rc $? $LINENO
    SHEETS="$SHEETS $i.tsv"
  fi
   if [[ $i == *"_watch.txt"* ]]; then
@@ -2382,6 +2500,7 @@ row += trows;
        close(NFL);
    }
    ' $i
+   ck_last_rc $? $LINENO
    SHEETS="$SHEETS $i.tsv"
   fi
   if [[ $i == *"_interrupts.txt"* ]]; then
@@ -2498,6 +2617,7 @@ row += trows;
        close(NFL);
    }
    ' $i
+   ck_last_rc $? $LINENO
    SHEETS="$SHEETS $i.tsv"
   fi
 #02:53:57    InKB   OutKB   InSeg  OutSeg Reset  AttF %ReTX InConn OutCon Drops
@@ -2650,6 +2770,7 @@ row += trows;
        }
    }
    ' $i.hdr $i
+   ck_last_rc $? $LINENO
    SHEETS="$SHEETS $i.tsv"
   fi
 done
@@ -2663,6 +2784,7 @@ for f in $tst_files; do
   if [ -e $f ]; then
      echo "try latency log $f" > /dev/stderr
      $SCR_DIR/resp_2_tsv.sh -f $f -s $SUM_FILE $OPT_END_TM
+     ck_last_rc $? $LINENO
   fi
   if [ -e $f.tsv ]; then
      SHEETS="$SHEETS $f.tsv"
@@ -2674,6 +2796,7 @@ for f in $tst_files; do
   if [ -e $f ]; then
      echo "try http-status log $f" > /dev/stderr
      $SCR_DIR/resp_2_tsv.sh -f $f -s $SUM_FILE  $OPT_END_TM
+     ck_last_rc $? $LINENO
   fi
   if [ -e $f.tsv ]; then
      SHEETS="$SHEETS $f.tsv"
@@ -2689,6 +2812,7 @@ for f in $tst_files; do
   fi
   if [ -e $f ]; then
      $SCR_DIR/resp_2_tsv.sh -f $f $OPT_S $OPT_END_TM
+     ck_last_rc $? $LINENO
   fi
   if [ -e $f.tsv ]; then
      SHEETS="$SHEETS $f.tsv"
@@ -2705,6 +2829,7 @@ fi
 GC_FILE=gc.log.0.current
 if [ -e $GC_FILE ]; then
   $SCR_DIR/java_gc_log_2_tsv.sh -f $GC_FILE $OPT_END_TM  > $GC_FILE.tsv
+  ck_last_rc $? $LINENO
   SHEETS="$SHEETS $GC_FILE.tsv"
 fi
 JAVA_COL=java.collapsed
@@ -2824,6 +2949,7 @@ if [ "$SUM_FILE" != "" ]; then
        #close(sum_file);
      }
    ' 
+   ck_last_rc $? $LINENO
 fi
 if [ "$CPU2017LOG" != "" -a "$PHASE_FILE" == "" ]; then
   RESP=$CPU2017LOG
@@ -2860,6 +2986,7 @@ if [ "$CPU2017LOG" != "" -a "$PHASE_FILE" == "" ]; then
         #printf("%s %s %s %.3f\n", bm, tm_beg, s, s-tm_beg);
     }
     ' $RESP`
+   ck_last_rc $? $LINENO
   echo  -e "$PH" > phase_cpu2017.txt
   PHASE_FILE=phase_cpu2017.txt
 fi
@@ -2878,6 +3005,8 @@ fi
 
   RESP=`find . -name "muttley*.json.tsv" | wc -l | awk '{$1=$1;print}'`
   echo "find muttley RESP= $RESP"
+  if [ "1" == "2" ]; then
+    # lets not do this right now
   if [ "$RESP" != "0" ]; then
     RESP=`find . -name "muttley*.json.tsv" | xargs`
     echo "+++++++++++++++ multtley RESP= $RESP"
@@ -2894,7 +3023,7 @@ fi
        /^1/ {
          n = split($0, arr, "\t");
          for (i=3; i <= NF; i++) {
-         val = arr[i];
+         val = arr[i]+0.0;
          if (sv[mx,"max"] == "" || sv[mx,"max"] < val) {
              sv[mx,"max"] = val;
          }
@@ -2910,7 +3039,9 @@ fi
             printf("\tm3\t%s\tmin %s\n", sv[i,"title"], sv[i,"min"]) >> sum_file;
          }
        }' $RESP
+    ck_last_rc $? $LINENO
     SHEETS="$SHEETS $RESP"
+  fi
   fi
 
 echo "SHEETS= $SHEETS SKIP_XLS= $SKIP_XLS, xls_fl= $XLSX_FILE avg= $AVERAGE"
@@ -2964,6 +3095,8 @@ if [ "$SHEETS" != "" -a "$SKIP_XLS" == "0" ]; then
      # default chart size is pretty small, scale chart size x,y by 2 each. def 1,1 seems to be about 15 rows high (on my MacBook)
      echo python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" $OPT_I $OPT_TM $OPT_a $OPT_O $OPT_M -o $XLSX_FILE $OPT_C $OPT_PH -i "$IMAGE_STR" $SHEETS > /dev/stderr
           python $SCR_DIR/tsv_2_xlsx.py -s 2,2 -p "$PFX" $OPT_I $OPT_TM $OPT_a $OPT_O $OPT_M -o $XLSX_FILE $OPT_C $OPT_PH -i "$IMAGE_STR" $SHEETS
+          ck_last_rc $? $LINENO
+          echo "$0: tsv_2_xlsx.py exit with RC= $RC at line= $LINENO" > /dev/stderr
      if [ "$DIR" == "." ];then
        UDIR=`pwd`
      else
@@ -2973,4 +3106,5 @@ if [ "$SHEETS" != "" -a "$SKIP_XLS" == "0" ]; then
      echo "$UDIR/$XLSX_FILE" > /dev/stderr
    fi
 fi
+exit 0
 
