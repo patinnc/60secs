@@ -37,6 +37,8 @@ all_charts_one_row_hash = {}
 all_charts_one_row_max = -1
 desc = None
 
+#print("%f" % (1.0/0.0))  # force an error for testing to check error handling
+
 options, remainder = getopt.getopt(sys.argv[1:], 'Aa:b:c:d:e:f:i:m:o:O:P:p:s:v', [
                                                          'average',
                                                          'avg_dir',
@@ -97,6 +99,23 @@ else:
 if options_str.find("all_charts_one_row") >= 0:
    options_all_charts_one_row = True
 
+sheets_limit = []
+arr = options_str.split(",")
+print("options_str= ", options_str, ", options arr= ", arr)
+if len(options_str) > 0:
+  lkfor = "sheet_limit{"
+  arr = options_str.split(",")
+  print("options arr= ", arr)
+  for opt in arr:
+    i = opt.find(lkfor)
+    print("opt= ", opt, ", i=", i)
+    if i == 0:
+       str2 = opt[len(lkfor):-1]
+       arr2 = str2.split(";")
+       sheets_limit.append([arr2[0], arr2[1],arr[2]])
+       print("opt= %s, lkfor= %s, str2= %s" % (opt, lkfor, str2), file=sys.stderr)
+
+print("sheets_limit= ", sheets_limit)
 opt_fl = []
 fl_options = []
 file_list1 = []
@@ -153,6 +172,12 @@ fn_bs_data = {}  # file_number basename data
 fn_bs_lkup = {}
 fn_bs_sum  = {}
 fn_bs_n    = {}
+fn_bs_hdr_list  = {}
+fn_bs_hdr_lkup  = {}
+fn_bs_hdr_rows  = {}
+fn_bs_hdr_chrt  = {}
+fn_bs_hdr_map   = {}
+fn_bs_hdr_max   = {}
 fn_bs_lkup_mx = -1
 
 #do_avg = False
@@ -175,8 +200,9 @@ def is_number(s):
 for fo2 in range(len(fl_options)):
    fo = fo2
    print("fo= ", fo)
-   options, remainder = getopt.getopt(fl_options[fo][1:], 'Ab:c:d:e:i:m:o:O:P:p:s:v', [
+   options, remainder = getopt.getopt(fl_options[fo][1:], 'Aa:b:c:d:e:i:m:o:O:P:p:s:v', [
                                                             'average',
+                                                            'avg_dir',
                                                             'begin',
                                                             'clip=',
                                                             'desc=',
@@ -231,8 +257,9 @@ for bmi in range(base_mx+1):
    #   continue
    print("fo= ", fo)
    #options, remainder = getopt.getopt(sys.argv[1:], 'i:o:p:v', ['images=',
-   options, remainder = getopt.getopt(fl_options[fo][1:], 'Ab:c:d:e:i:m:o:O:P:p:s:v', [
+   options, remainder = getopt.getopt(fl_options[fo][1:], 'Aa:b:c:d:e:i:m:o:O:P:p:s:v', [
                                                             'average',
+                                                            'avg_dir',
                                                             'begin=',
                                                             'clip=',
                                                             'desc=',
@@ -390,6 +417,12 @@ for bmi in range(base_mx+1):
          fn_bs_lkup[base] = fn_bs_lkup_mx
          fn_bs_sum[fn_bs_lkup_mx] = {}
          fn_bs_n[fn_bs_lkup_mx] = {}
+         fn_bs_hdr_list[fn_bs_lkup_mx] = {}
+         fn_bs_hdr_lkup[fn_bs_lkup_mx] = {}
+         fn_bs_hdr_rows[fn_bs_lkup_mx] = {}
+         fn_bs_hdr_chrt[fn_bs_lkup_mx] = {}
+         fn_bs_hdr_map[fn_bs_lkup_mx] = {}
+         fn_bs_hdr_max[fn_bs_lkup_mx] = {}
       fn_bs_i = fn_bs_lkup[base]
 
       base_i = base_lkup[base]
@@ -548,31 +581,13 @@ for bmi in range(base_mx+1):
              dcol_cat = int(data[drw][5])
           if drow_end == -1:
              drow_end, dcol_cat = find_drow_end(data, ch_arr, c, drow_beg, drow_end)
-#             jjj = dcol_cat-1
-#             for i in range(drow_beg, len(data)):
-#                 if 1==1 and dcol_cat != -1 and len(data[i]) > jjj and i >= drow_beg:
-#                    if not (data[i][jjj] is None or data[i][jjj] == ''):
-#                       tval = float(data[i][jjj])
-#                       skip_it = False
-#                       if ts_beg != -1.0 and tval < ts_beg:
-#                          skip_it = True
-#                       if ts_end != -1.0 and tval > ts_end:
-#                          skip_it = True
-#                       if skip_it:
-#                          skipped += 1
-#                          #for ij in range(len(data[i])):
-#                          #    worksheet.write_blank(i, ph_add+ij, None, bold0)
-#                          continue
-#                 if len(data[i]) == 0:
-#                    break
-#                 if i > drow_beg:
-#                    drow_end = i
-#                 else:
-#                    drow_end = i+1
-#             data[drw][3] = str(drow_end)
              if verbose:
                 print("found end data row= %d" % (drow_end))
              print("found end data row= %d" % (drow_end))
+          title = data[title_rw][title_cl+1]
+          #if title == "pid_stat %CPU by proc" and hrow_beg > 0 and hrow_end < len(data):
+          #   print("hdr row: ", data[hrow_beg])
+          #   print(1.0/0.0)
           dcol_end = int(data[drw][4])+1
           for i in range(dcol_beg, dcol_end):
              ch_cols_used[i] = 1
@@ -588,9 +603,25 @@ for bmi in range(base_mx+1):
           if mx > len(data):
              print("dude, mx= ", mx, ", len(data)= ", len(data))
         
+          if not hrow_beg in fn_bs_hdr_rows[fn_bs_i]:
+             fn_bs_hdr_max[fn_bs_i][hrow_beg] = -1
+             fn_bs_hdr_map[fn_bs_i][hrow_beg] = {}
+             fn_bs_hdr_list[fn_bs_i][hrow_beg] = {}
+             fn_bs_hdr_list[fn_bs_i][hrow_beg] = {}
+             fn_bs_hdr_lkup[fn_bs_i][hrow_beg] = {}
+             fn_bs_hdr_rows[fn_bs_i][hrow_beg] = 0
+          for i in range(len(data[hrow_beg])):
+              hstr = data[hrow_beg][i]
+              if not hstr in fn_bs_hdr_list[fn_bs_i][hrow_beg]:
+                 fn_bs_hdr_max[fn_bs_i][hrow_beg] += 1
+                 print("sheet %s added header[%d][%d][%d]= %s, file= %s" % (sheet_nm, fn_bs_i, hrow_beg, fn_bs_hdr_max[fn_bs_i][hrow_beg], hstr, x))
+                 fn_bs_hdr_list[fn_bs_i][hrow_beg][hstr] = fn_bs_hdr_max[fn_bs_i][hrow_beg]
+                 fn_bs_hdr_lkup[fn_bs_i][hrow_beg][fn_bs_hdr_max[fn_bs_i][hrow_beg]] = hstr
+              hdr_idx = fn_bs_hdr_list[fn_bs_i][hrow_beg][hstr]
+              fn_bs_hdr_map[fn_bs_i][hrow_beg][i] = hdr_idx
           for i in range(drow_end-drow_beg+1):
               ij = i+drow_beg
-              if len(wrksh_nm) >= 7 and wrksh_nm[0:7] == "summary" and len(data[ij]) >= 4:
+              if len(wrksh_nm) >= 7 and wrksh_nm[0:7] == "summary" and ij < len(data) and len(data[ij]) >= 4:
                   #print("---- got1 summary wrk_sh= %s suffix= %s len= %d col3= %s" % (wrksh_nm, suffix, len(data[ij]), data[ij][3]), file=sys.stderr)
                   if data[ij][3] == "data_sheet" and suffix != "" and len(data[ij][2]) > len(suffix) and data[ij][2][-len(suffix)] != suffix:
                      # so we haven't already added the suffix to the sheet name
@@ -606,20 +637,21 @@ for bmi in range(base_mx+1):
                       if h >= len(data[ij]):
                          print("dude, idx= ", ij, ", h= ", h, ", len(data[idx])= ", len(data[ij]), " drow: ", data[ij])
                       is_num = is_number(data[ij][h])
+                      use_idx = fn_bs_hdr_map[fn_bs_i][hrow_beg][h]
                       if is_num:
                          data[ij][h] = float(data[ij][h])
                          if ck_max:
                             if data[ij][h] > max_val:
                                data[ij][h] = 0.0
-                         if not h in fn_bs_sum[fn_bs_i][ij]:
+                         if not use_idx in fn_bs_sum[fn_bs_i][ij]:
                             #fn_bs_sum[fn_bs_i][ij] = {}
-                            fn_bs_sum[fn_bs_i][ij][h] = 0.0;
-                            fn_bs_n[fn_bs_i][ij][h] = 0;
-                         fn_bs_sum[fn_bs_i][ij][h] += data[ij][h]
-                         fn_bs_n[fn_bs_i][ij][h] += 1;
+                            fn_bs_sum[fn_bs_i][ij][use_idx] = 0.0;
+                            fn_bs_n[fn_bs_i][ij][use_idx] = 0;
+                         fn_bs_sum[fn_bs_i][ij][use_idx] += data[ij][h]
+                         fn_bs_n[fn_bs_i][ij][use_idx] += 1;
                       else:
-                         fn_bs_sum[fn_bs_i][ij][h] = data[ij][h]
-                         fn_bs_n[fn_bs_i][ij][h] = -1;
+                         fn_bs_sum[fn_bs_i][ij][use_idx] = data[ij][h]
+                         fn_bs_n[fn_bs_i][ij][use_idx] = -1;
       
       ph_add = 0
       ph_done = 0
@@ -635,6 +667,8 @@ for bmi in range(base_mx+1):
             ndata = [row[:] for row in data]
             skipped = 0
             for i in fn_bs_sum[fn_bs_i]:
+                #if i == hrow_beg:
+                #   print("tsv_2_xlsx.ph: at 1 sheet_nm= ", sheet_nm, ", hdr_len= ", len(fn_bs_hdr_lkup[fn_bs_i]), ", write header row= ", fn_bs_hdr_lkup[fn_bs_i])
                 #print("row[%d].len= %d" % (i, len(fn_bs_sum[fn_bs_i][i])), file=sys.stderr)
                 write_rows3 += 1
                 for j in fn_bs_sum[fn_bs_i][i]:
@@ -644,19 +678,43 @@ for bmi in range(base_mx+1):
                    if num > 0:
                       val /= num;
                    worksheet.write(i, j, val)
-                   if i >= len(ndata) or j >= len(ndata[i]):
-                      print("bad idx: i= %d, len(ndata)= %d, j= %d, len(ndata[%d])= %d, val= %f, num= %d" % (i, len(ndata), j, i, len(ndata[i]), val, num), file=sys.stderr)
+                   if i >= len(ndata):
+                      is_num = is_number(val)
+                      if is_num:
+                         print("bad idx: i= %d, len(ndata)= %d, j= %d, flt_val= %f, num= %d" % (i, len(ndata), j, val, num), file=sys.stderr)
+                      else:
+                         print("bad idx: i= %d, len(ndata)= %d, j= %d, str_val= %s, num= %d" % (i, len(ndata), j, val, num), file=sys.stderr)
                       ii = i
                       if i >= len(ndata):
                          for ii in (len(ndata), i+1):
                             ndata.append([])
-                      if j >= len(ndata[i]):
-                         for ii in (len(ndata[i]), j+1):
-                            ndata[i].append(0.0)
+                   if j >= len(ndata[i]):
+                      #for ii in (len(ndata[i]), j+1):
+                      ii = j - len(ndata[i]) + 1
+                      #print("tsv_2_xlsx.py: going to add %d cols to ndata[%d], len(ndata[%d])= %d, j= %d" % (ii, i, i, len(ndata[i]), j))
+                      while ii >= 0:
+                         ii -= 1
+                         ndata[i].append(0.0)
+                         if len(ndata[i]) > 1000:
+                            sys.exit(1)
+                   if i >= len(ndata):
+                      print("tsv_2_xlsx.py: bad row idx i: i= %d, len(ndata)= %d, j= %d, str_val= %s, num= %d" % (i, len(ndata), j, val, num), file=sys.stderr)
+                   if j >= len(ndata[i]):
+                      print("tsv_2_xlsx.py: bad col idx j: i= %d, len(ndata)= %d, j= %d, len(ndata[%d])= %d, str_val= %s, num= %d" % (i, len(ndata), j, i, len(ndata[i]), val, num), file=sys.stderr)
                    ndata[i][j] = val
             for i in range(len(data)):
                 if not i in fn_bs_sum[fn_bs_i]:
-                   worksheet.write_row(i, ph_add, data[i])
+                   if i in fn_bs_hdr_rows[fn_bs_i]:
+                      for k in range(i, i+2):  # allow for a little shifting of rows
+                          if fn_bs_hdr_lkup[fn_bs_i][i][0] == data[k][0]: # look for match on 1st col of header row
+                             print("tsv_2_xlsx.ph: at 2 sheet_nm= ", sheet_nm, ",i=",i,",k=",k,", outfile= ", output_filename, ", hdr_len= ", len(fn_bs_hdr_lkup[fn_bs_i][i]), ", write header row= ", fn_bs_hdr_lkup[fn_bs_i][i])
+                             for j in range(fn_bs_hdr_max[fn_bs_i][i]+1):
+                                 if sheet_nm == "pidstat":
+                                    print("tsv_2_xlsx.ph: at 2.1 sheet_nm= %s, hdr[%d, %d]= %s" % (sheet_nm, i, j, fn_bs_hdr_lkup[fn_bs_i][i][j]))
+                                 worksheet.write(i, j, fn_bs_hdr_lkup[fn_bs_i][i][j])
+                             break
+                   else:
+                      worksheet.write_row(i, ph_add, data[i])
                    write_rows += 1
             print("----  write_rows2= %d, write_rows3= %d" % (write_rows, write_rows3), file=sys.stderr)
             #with open('new_tsv.tsv', 'w', newline='') as csvfile:
