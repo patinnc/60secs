@@ -21,15 +21,15 @@ while getopts "hvf:b:e:s:" opt; do
       echo "$0 split data files into columns"
       echo "Usage: $0 [-h] -f json_file -t header [ -b beg_timestamp -e end_timestamp ] -s summary_filename [-v]"
       echo "   -v verbose mode"
-      exit
+      exit 1
       ;;
     : )
-      echo "Invalid option: $OPTARG requires an argument" 1>&2
-      exit
+      echo "$0: Invalid option: $OPTARG requires an argument. cmdline= ${@}" 1>&2
+      exit 1
       ;;
     \? )
-      echo "Invalid option: $OPTARG" 1>&2
-      exit
+      echo "Invalid option: $OPTARG. cmdline= ${@}" 1>&2
+      exit 1
       ;;
   esac
 done
@@ -38,16 +38,16 @@ shift $((OPTIND -1))
 FL=$FILE
 if [ "$FL" == "" ]; then
   echo "arg1 (path to java gc log file) is missing. Bye"
-  exit
+  exit 1
 fi
 if [ ! -e "$FL" ]; then
   echo "can't find file $FL. Bye"
-  exit
+  exit 1
 fi
 PRF_FILE=(sys_*_perf_stat.txt)
 if [ ! -e $PRF_FILE ]; then
   echo "sorry but $0 depends (currently) on the $PRF_FILE existing in the cur dir"
-  exit
+  exit 1
 fi
 BEG=`cat 60secs.log | awk '{n=split($0, arr);printf("%s\n", arr[n]);exit;}'`
 DURA=`tail -1 $PRF_FILE | awk '{n=split($0, arr, ";");printf("%s\n", arr[1]);exit;}'`
@@ -126,3 +126,5 @@ awk -v tm_beg="$BEG" -v tm_end="$END" -v tz="$TZ" 'BEGIN{
   }
  END {;}
   ' $FL
+  RC=$?
+  exit $RC
