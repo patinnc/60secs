@@ -25,6 +25,9 @@ AVG_DIR=
 DESC_FILE=
 OSTYP=$OSTYPE
 NUM_CPUS=0
+FAIL=0
+BK_PID=()
+BK_DIR=()
 if [[ "$OSTYP" == "linux-gnu"* ]]; then
    NUM_CPUS=`grep -c processor /proc/cpuinfo`
 elif [[ "$OSTYP" == "darwin"* ]]; then
@@ -51,7 +54,7 @@ BACKGROUND=$(($NUM_CPUS+2))  # setting this to 0 turns off launching sys_2_tsv.s
 echo "$0 ${@}"
 echo "BACKGROUND= $NUM_CPUS"
 
-while getopts "hvASa:b:c:D:d:e:F:g:I:m:N:o:P:r:X:x:" opt; do
+while getopts "hvASa:b:B:c:D:d:e:F:g:I:m:N:o:P:r:X:x:" opt; do
   case ${opt} in
     A )
       AVERAGE=1
@@ -67,6 +70,9 @@ while getopts "hvASa:b:c:D:d:e:F:g:I:m:N:o:P:r:X:x:" opt; do
       ;;
     b )
       BEG_TM_IN=$OPTARG
+      ;;
+    B )
+      BACKGROUND_IN=$OPTARG
       ;;
     c )
       CLIP=$OPTARG
@@ -97,7 +103,7 @@ while getopts "hvASa:b:c:D:d:e:F:g:I:m:N:o:P:r:X:x:" opt; do
       NUM_DIR=$OPTARG
       ;;
     o )
-      OPTIONS=$OPTARG
+      OPTIONS="$OPTARG"
       ;;
     P )
       PHASE_FILE=$OPTARG
@@ -118,6 +124,7 @@ while getopts "hvASa:b:c:D:d:e:F:g:I:m:N:o:P:r:X:x:" opt; do
       echo "   -A   flag indicating you want to average the same file from multiple dirs into 1 sheet."
       echo "          The default is to create 1 sheet per file per directory"
       echo "   -b begin_timestamp  exclude data until this timestamp (UTC timestamp)"
+      echo "   -B background_processs_allowed  max background processes allowed. if 0 then no background processes. default is $BACKGROUND"
       echo "   -d dir containing sys_XX_* files created by 60secs.sh"
       echo "   -D debug_opt_strings    used for debugging"
       echo "   -F desc_file  file containing 1 line of text describing the results dir. Currently this is just the gen_xls.sh cmdline."
@@ -137,6 +144,7 @@ while getopts "hvASa:b:c:D:d:e:F:g:I:m:N:o:P:r:X:x:" opt; do
       echo "           say the perf stat interval is 30 seconds and the muttley interval is 10 seconds. You might want to have the same number of rows of data"
       echo "           in the muttley tables as in perf stat data. So there are 3 muttley records for every 1 perf stat record. So only use the 3rd muttley record."
       echo "           this requires getting the perf stat interval from the run_itp.log file"
+      echo "         'pidstat_dont_add_pid' don't add the pid to process name. Allows better matching if doing multple servers"
       echo "   -P phase_file"
       echo "   -r regex   regex expression to select directories"
       echo "   -S    skip creating detail xlsx file, just do the summary all spreadsheet"
@@ -161,10 +169,23 @@ done
 shift $((OPTIND -1))
 remaining_args="$@"
 
+ck_last_rc() {
+   local RC=$1
+   local FROM=$2
+   if [ $RC -gt 0 ]; then
+      echo "$0: got non-zero RC=$RC at $LINENO. called from line $FROM" > /dev/stderr
+      exit $RC
+   fi
+}
+
 if [ "$remaining_args" != "" ]; then
   echo "remaining args= $remaining_args"
   echo "got args leftover. Usually due to * in -d dir_name option"
   exit
+fi
+
+if [ "$BACKGROUND_IN" != "" ]; then
+   BACKGROUND=$BACKGROUND_IN
 fi
 
 SUM_ALL_AVG_BY_METRIC=
@@ -200,6 +221,41 @@ get_abs_filename() {
   echo "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
 }
 
+get_dir_list() {
+   local CKF=$1
+   DIR=$2
+   local RESP
+   echo "get_dir_list: found $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one."
+   #RESP=`find $DIR -name $CKF -print0 | sort -z | xargs -0 cat`
+   if [ "$REGEX_LEN" != "0" ]; then
+      RESP2=`find $DIR -name $CKF -print | sort`
+      RESP=$RESP2
+      local ii
+      for ii in ${REGEX[@]}; do
+         RESP=`echo -e "$RESP" | grep "$ii"`
+      done
+      mydir=`echo -e "$RESP" | wc -l`
+      echo "mydir count= $mydir"
+   else
+      RESP=`find $DIR -name $CKF -print | sort | xargs `
+   fi
+   echo "get_dir_list: found $CKF file in dir $DIR:"
+   local STR=
+   local j=0
+   for ii in $RESP; do
+      NM=$(dirname $ii)
+      j=$((j+1))
+      if [ "$NUM_DIR" != "" -a "$NUM_DIR" != "0" -a $NUM_DIR -gt 0 -a $j -ge $NUM_DIR ]; then
+         echo "limit number of dirs with $CKF due to -N $NUM_DIR option"
+         break
+      fi
+      STR="$STR $NM"
+   done
+   DIR=$STR
+   echo "get_dir_list: j= $j DIR= $DIR"
+}
+
+
 OPT_a=
 if [ "$AVG_DIR" != "" ]; then
   if [ "$AVERAGE" == "0" ]; then
@@ -223,9 +279,16 @@ if [ "$INPUT_FILE_LIST" != "" ]; then
     echo "got input_file_list= $INPUT_FILE_LIST"
   fi
 else
-if [ ! -e $DIR/60SECS.LOG ]; then
    DIR_ORIG=$DIR
-   RESP=`find $DIR -name 60secs.log | wc -l | awk '{$1=$1;print}'`
+   CKF=60secs.log
+   GOT_DIR=0
+   RESP=`find $DIR -name $CKF | wc -l | awk '{$1=$1;print}'`
+   echo "RESP= 60secs.log = $RESP"
+   if [ $RESP -gt 0 ]; then
+       get_dir_list $CKF $DIR
+       echo "found_44 $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one."
+       GOT_DIR=1
+   fi
    if [ $RESP -eq 0 ]; then
      echo "didn't find 60secs.log file under dir $DIR. Bye"
      CKF="metric_out"
@@ -246,44 +309,47 @@ if [ ! -e $DIR/60SECS.LOG ]; then
      fi
      if [ "$RESP" != "0" ]; then
        echo "found $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one."
-       #RESP=`find $DIR -name $CKF -print0 | sort -z | xargs -0 cat`
-       if [ "$REGEX_LEN" != "0" ]; then
-         RESP2=`find $DIR -name $CKF -print | sort`
-         RESP=$RESP2
-         for ii in ${REGEX[@]}; do
-            RESP=`echo -e "$RESP" | grep "$ii"`
-         done
-         mydir=`echo -e "$RESP" | wc -l`
-         echo "mydir count= $mydir"
-       else
-         RESP=`find $DIR -name $CKF -print | sort | xargs `
-       fi
-       echo "found $CKF file in dir $DIR"
-       STR=
-       j=0
-       for ii in $RESP; do
-         NM=$(dirname $ii)
-           j=$((j+1))
-           if [ "$NUM_DIR" != "" -a "$NUM_DIR" != "0" -a $NUM_DIR -gt 0 -a $j -ge $NUM_DIR ]; then
-              echo "limit number of dirs with $CKF due to -N $NUM_DIR option"
-              break
-           fi
-         STR="$STR $NM"
-       done
-       DIR=$STR
-       #DIR=$(dirname $RESP)
+       get_dir_list $CKF $DIR
+       GOT_DIR=1
+#       #RESP=`find $DIR -name $CKF -print0 | sort -z | xargs -0 cat`
+#       if [ "$REGEX_LEN" != "0" ]; then
+#         RESP2=`find $DIR -name $CKF -print | sort`
+#         RESP=$RESP2
+#         for ii in ${REGEX[@]}; do
+#            RESP=`echo -e "$RESP" | grep "$ii"`
+#         done
+#         mydir=`echo -e "$RESP" | wc -l`
+#         echo "mydir count= $mydir"
+#       else
+#         RESP=`find $DIR -name $CKF -print | sort | xargs `
+#       fi
+#       echo "found $CKF file in dir $DIR"
+#       STR=
+#       j=0
+#       for ii in $RESP; do
+#         NM=$(dirname $ii)
+#           j=$((j+1))
+#           if [ "$NUM_DIR" != "" -a "$NUM_DIR" != "0" -a $NUM_DIR -gt 0 -a $j -ge $NUM_DIR ]; then
+#              echo "limit number of dirs with $CKF due to -N $NUM_DIR option"
+#              break
+#           fi
+#         STR="$STR $NM"
+#       done
+#       DIR=$STR
+#       #DIR=$(dirname $RESP)
        echo "using1 DIR= $DIR, orig DIR= $DIR_ORIG"
-     else
+     fi
+     if [ "$GOT_DIR" == "0" ]; then
        CKF="sys_*_perf_stat.txt"
        RESP=`find $DIR -name "$CKF" | wc -l | awk '{$1=$1;print}'`
-       echo "got $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one." > /dev/stderr
+       echo "got29 $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one." > /dev/stderr
        if [ "$RESP" == "0" ]; then
        CKF="sys_*_perf_stat.txt*"
        RESP=`find $DIR -name "$CKF" | wc -l | awk '{$1=$1;print}'`
        echo "got $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one." > /dev/stderr
        fi
        if [ "$RESP" != "0" ]; then
-         echo "found $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one." > /dev/stderr
+         echo "found41 $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one." > /dev/stderr
          RESP=`find $DIR -name "$CKF"|sort`
          if [ "$REGEX_LEN" != "0" ]; then
            RESP=`find $DIR -name "$CKF" | sort`
@@ -293,7 +359,7 @@ if [ ! -e $DIR/60SECS.LOG ]; then
            RESP3=`echo "$RESP" | wc -l`
            echo "mydir count= $mydir, resplines= $RESP3"
          fi
-         echo "found $CKF file in dir $DIR"
+         echo "found51 $CKF file in dir $DIR"
          STR=
          j=0
          for ii in $RESP; do
@@ -353,19 +419,20 @@ if [ ! -e $DIR/60SECS.LOG ]; then
        fi
      fi
    else
-     echo "found $RESP 60secs.log file(s) under dir $DIR. Using the dir of first one if more than one."
+     if [ "$GOT_DIR" == "0" ]; then
+     echo "found54 $RESP 60secs.log file(s) under dir $DIR. Using the dir of first one if more than one."
      RESP=`find $DIR -name 60secs.log | head -1`
-     echo "found 60secs.log file in dir $RESP"
+     echo "found55 60secs.log file in dir $RESP"
      DIR=$(dirname $RESP)
      echo "using3 DIR= $DIR, orig DIR= $DIR_ORIG"
+     fi
    fi
 fi
-fi
 
-
-PIDS_WAIT=0
 
 LST=$DIR
+echo "DIR at 35: $DIR"
+#exit
 
 CDIR=`pwd`
 ALST=$CDIR/tmp1.jnk
@@ -384,7 +451,7 @@ FCTRS=
 SVGS=
 SUM_FILE=sum.tsv
 
-#echo "LST= $LST" > /dev/stderr
+echo "LST= $LST" > /dev/stderr
 
 DIR_1ST_DIR=
 if [ "$INPUT_FILE_LIST" == "" ]; then
@@ -502,9 +569,14 @@ for i in $LST; do
    fi
    if [ "$BACKGROUND" -le "0" ]; then
           $SCR_DIR/sys_2_tsv.sh $OPT_a $OPT_A $OPT_G -p "$RPS" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o $OPT_OPT $OPT_PH -t $DIR &> tmp.jnk 
+          RC=$?
+          ck_last_rc $RC $LINENO
    else
           $SCR_DIR/sys_2_tsv.sh $OPT_a $OPT_A $OPT_G -p "$RPS" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o $OPT_OPT $OPT_PH -t $DIR &> tmp.jnk &
-     #PIDS_WAIT=$(($PIDS_WAIT+1))
+          LPID=$!
+          RC=$?
+          BK_DIR[$LPID]=$i
+          echo "LPID= $LPID, RC= $RC"
    fi
      LOAD=`uptime | awk '{printf("%.0f\n", $(NF-2)+0.5);}'`
      jbs=0
@@ -520,14 +592,18 @@ for i in $LST; do
      do
        echo "wait for jobs (jbs= $jbs) pid= $job"
        jbs=$((jbs-1))
-       wait $job || let "FAIL+=1"
+       wait $job
+       RC=$?
+       if [ "$RC" != "0" ]; then
+          echo "$0: sys_2_tsv.sh got error! bye at $LINENO" > /dev/stderr
+          echo "$0: look at tmp.jnk file in last data dir for error messages" > /dev/stderr
+          echo "$0: dir= ${BK_DIR[$job]}"
+          exit 1
+       fi
        if [ "$jbs" -lt "$BACKGROUND" ]; then
          break
        fi
      done
-     echo "$0: do wait PIDS_WAIT= $jbs  load= $LOAD" > /dev/stderr
-     #wait
-     #PIDS_WAIT=0
    fi
  fi
  TS_CUR=`date +%s`
@@ -536,8 +612,27 @@ for i in $LST; do
  DIR_NUM=$(($DIR_NUM+1))
  popd
 done
-wait
-PIDS_WAIT=0
+
+wait_for_all() {
+     jbs=0
+     for job in `jobs -p`
+     do
+       echo "wait for jobs (jbs= $jbs) pid= $job"
+       wait $job
+       RC=$?
+       #if [ "$RC" == "1" -o "$RC" == "2" ]; then
+       if [ "$RC" != "0" ]; then
+          echo "$0: sys_2_tsv.sh got error RC= \"$RC\"! at $LINENO. bye. called by line $1" > /dev/stderr
+          echo "$0: look at tmp.jnk file in last data dir for error messages" > /dev/stderr
+          echo "$0: dir= ${BK_DIR[$job]}"
+          tail -20 ${BK_DIR[$job]}/tmp.jnk
+          exit 1
+       fi
+     done
+}
+
+wait_for_all $LINENO
+
 for i in $LST; do
  pushd $i
  SM_FL=
@@ -630,14 +725,11 @@ if [ "$INPUT_FILE_LIST" != "" ]; then
   NUM_DIRS=2
 fi
 
-   wait
- if [ $PIDS_WAIT -gt 0 ]; then
-   wait
-   PIDS_WAIT=0
- fi
+wait_for_all $LINENO
 
 if [ "$SVGS" != "" ]; then
   $SCR_DIR/svg_to_html.sh $SVGS -r $FCTRS > tmp.html
+  ck_last_rc $? $LINENO
 fi
   
 if [ $NUM_DIRS -gt 1 ]; then
@@ -646,8 +738,25 @@ if [ $NUM_DIRS -gt 1 ]; then
   fi
   echo "ALST= $ALST" > /dev/stderr
   got_pwd=`pwd`
-  echo "awk -v input_file=\"$ALST\" -v sum_all=\"$SUM_ALL\" -v sum_file=\"$SUM_FILE\" -v curdir=\"$got_pwd\" "
-  awk -v input_file="$ALST" -v sum_all="$SUM_ALL" -v sum_file="$SUM_FILE" -v sum_all_avg_by_metric="$SUM_ALL_AVG_BY_METRIC" -v curdir="$got_pwd" '
+  RESP=`grep sum.tsv $ALST | sed 's/sum.tsv/sum_all2.tsv/'`
+  FLS=
+  for ii in $RESP; do
+    if [ -e $ii ]; then
+      FLS="$FLS -i $ii"
+    fi
+  done
+  if [ "$FLS" != "" ]; then
+    echo "---------- got_pwd= $got_pwd --------------------"
+    echo $SCR_DIR/compare_summary_table.sh $FLS -s sum_all.tsv -S "\t"
+         $SCR_DIR/compare_summary_table.sh $FLS -s sum_all.tsv -S "\t"
+    ck_last_rc $? $LINENO
+    MK_SUM_ALL=0
+  else
+    MK_SUM_ALL=1
+  fi
+
+  echo "$0: awk -v mk_sum_all="$MK_SUM_ALL" -v input_file=\"$ALST\" -v sum_all=\"$SUM_ALL\" -v sum_file=\"$SUM_FILE\" -v curdir=\"$got_pwd\" "
+  awk -v mk_sum_all="$MK_SUM_ALL" -v input_file="$ALST" -v sum_all="$SUM_ALL" -v sum_file="$SUM_FILE" -v sum_all_avg_by_metric="$SUM_ALL_AVG_BY_METRIC" -v curdir="$got_pwd" '
     BEGIN{sum_files=0;fls=0; fld_m=3;fld_v=4; got_avgby=0;}
     { if (index($0, sum_file) > 0 || index($0, sum_all) > 0) {
         flnm = $0;
@@ -789,6 +898,7 @@ if [ $NUM_DIRS -gt 1 ]; then
  }
 
     END {
+      if (mk_sum_all == 1) {
       ofile = sum_all;
       #printf("ofile= %s\n", ofile) > "/dev/stderr";
       printf("title\tsum_all\tsheet\tsum_all\ttype\tcopy\n")  > ofile;
@@ -872,6 +982,7 @@ if [ $NUM_DIRS -gt 1 ]; then
         printf("\n") > ofile;
       }
       close(ofile);
+      }
       flnm = input_file;
       printf("======---- input_file= %s\n", input_file) > "/dev/stderr";
         ln = 0;
@@ -902,6 +1013,7 @@ if [ $NUM_DIRS -gt 1 ]; then
         close(flnm)
       }
   ' $ALST
+      ck_last_rc $? $LINENO
 
       if [ "$BEG_TM_IN" != "" ]; then
         BEG_TM=$BEG_TM_IN
@@ -911,6 +1023,22 @@ if [ $NUM_DIRS -gt 1 ]; then
       fi
   echo "=========== pwd = $got_pwd ========="
     USE_DIR=
+    RESP=`find $DIR_1ST_DIR -name 60secs.log | head -1 | wc -l | awk '{$1=$1;print}'`
+    BTM=
+    ETM=
+    GOT_BE_TM=0
+    if [ "$RESP" != "0" ]; then
+       RESP=`find $DIR_1ST_DIR -name 60secs.log | head -1`
+       #start vmstat at Tue Sep  1 15:52:53 UTC 2020 1598975573.042925368
+       BTM=`awk '/^start /{if (NF==10){printf("%d\n", $10); exit;}}' $RESP`
+       RESP=`find $DIR_1ST_DIR -name run.log | head -1`
+       if [ "$RESP" != "" ]; then
+         ETM=`awk -v beg="$BTM" '/end elapsed_secs/{printf("%d\n", beg+$4+1.0);}' $RESP`
+         GOT_BE_TM=1
+         BEG_TM=$BTM
+         END_TM=$ETM
+       fi
+    fi
     RESP=`find $DIR_1ST_DIR -name run.log | head -1 | wc -l | awk '{$1=$1;print}'`
     if [ "$RESP" == "0" ]; then
       RESP=`find $INPUT_DIR -name run.log | head -1 | wc -l | awk '{$1=$1;print}'`
@@ -918,9 +1046,9 @@ if [ $NUM_DIRS -gt 1 ]; then
     else
       USE_DIR=$DIR_1ST_DIR
     fi
-    echo "find run.log RESP= $RESP"
+    echo "find_401 run.log RESP= $RESP"
     ITP_INTRVL=0
-    if [ "$RESP" != "0" ]; then
+    if [ "$GOT_BE_TM" == 0 -a "$RESP" != "0" ]; then
       RUN_LOG=`find $USE_DIR -name run.log | head -1`
       echo "run_log file= $RUN_LOG"
       if [ "$BEG_TM_IN" != "" ]; then
@@ -960,7 +1088,7 @@ if [ $NUM_DIRS -gt 1 ]; then
   else
     echo "find $INPUT_DIR -name muttley*.json | wc -l | awk '{$1=$1;print}'"
     RESP=`find $INPUT_DIR -name "muttley*.json" | wc -l | awk '{$1=$1;print}'`
-    echo "find muttley RESP= \"$RESP\"" 
+    echo "find_51 muttley RESP= \"$RESP\"" 
   fi
   if [ "$RESP" != "0" ]; then
       OPT_M=
@@ -981,9 +1109,14 @@ if [ $NUM_DIRS -gt 1 ]; then
         for f in $tst_files; do
           echo "try muttley_a file= $f" > /dev/stderr
           if [ -e $f ]; then
+             OPT_O=
+             if [ "$OPTIONS" != "" ]; then
+               OPT_O=" -o \"$OPTIONS\" "
+             fi
              echo "try muttley log $f" 
-             echo $SCR_DIR/resp_2_tsv.sh -b $BEG_TM -e $END_TM -f $f -s $SUM_ALL $OPT_M > /dev/stderr
-                   $SCR_DIR/resp_2_tsv.sh -b $BEG_TM -e $END_TM -f $f -s $SUM_ALL $OPT_M
+             echo $SCR_DIR/resp_2_tsv.sh -b $BEG_TM -e $END_TM -f $f -s $SUM_ALL $OPT_O $OPT_M > /dev/stderr
+                  $SCR_DIR/resp_2_tsv.sh -b $BEG_TM -e $END_TM -f $f -s $SUM_ALL $OPT_O $OPT_M
+                   ck_last_rc $? $LINENO
           fi
           if [ -e $f.tsv ]; then
             echo "++++++++++ got $f.tsv "
@@ -1023,8 +1156,9 @@ if [ $NUM_DIRS -gt 1 ]; then
   echo "elap_tm= $TS_DFF"
   echo "about to do tsv_2_xls.py" > /dev/stderr
   echo "python $SCR_DIR/tsv_2_xlsx.py $OPT_a $OPT_A $OPT_TM $OPT_OPTIONS $OPT_M -f $ALST > tmp2.jnk"
-        python $SCR_DIR/tsv_2_xlsx.py $OPT_a $OPT_A $OPT_TM $OPT_OPTIONS $OPT_M -f $ALST $SHEETS > tmp2.jnk &
+        python $SCR_DIR/tsv_2_xlsx.py $OPT_a $OPT_A $OPT_TM $OPT_OPTIONS $OPT_M -f $ALST $SHEETS &> tmp2.jnk &
         PY_PID=$!
+        echo "$0: tsv_2_xlsx.py exit with RC= $RC at line= $LINENO" > /dev/stderr
         echo $PY_PID >> tsv_2_xlsx.pid
         
   TS_CUR=`date +%s`
