@@ -28,7 +28,7 @@ while getopts "hvf:b:e:m:o:s:S:t:" opt; do
       MATCH_INTRVL=$OPTARG
       ;;
     o )
-      OPTIONS=$OPTARG
+      OPTIONS="$OPTARG"
       ;;
     S )
       SHEET_NM=$OPTARG
@@ -46,27 +46,27 @@ while getopts "hvf:b:e:m:o:s:S:t:" opt; do
       echo "$0 split data files into columns"
       echo "Usage: $0 [-h] -f json_file -t header [ -b beg_timestamp -e end_timestamp ] -s summary_filename [-v]"
       echo "   -v verbose mode"
-      exit
+      exit 1
       ;;
     : )
-      echo "Invalid option: $OPTARG requires an argument" 1>&2
-      exit
+      echo "$0: Invalid option: $OPTARG requires an argument. cmdline= ${@}" 1>&2
+      exit 1
       ;;
     \? )
-      echo "Invalid option: $OPTARG" 1>&2
-      exit
+      echo "$0: Invalid option: $OPTARG, cmdline= ${@}" 1>&2
+      exit 1
       ;;
   esac
 done
 shift $((OPTIND -1))
 
 if [ "$FILE" == "" ]; then
-  echo "need -f json_filename"
-  exit
+  echo "$0: need -f json_filename"
+  exit 1
 fi
 if [ ! -e $FILE ]; then
-  echo "didn't find -f $FILE json file"
-  exit
+  echo "$0: didn't find -f $FILE json file"
+  exit 1
 fi
 SZ_CMD=" -c%s "
 if [[ "$OSTYP" == "darwin"* ]]; then
@@ -76,7 +76,8 @@ fi
 FILESIZE=$(stat $SZ_CMD "$FILE" | awk '{print $1}')
 echo "file $FILE has size $FILESIZE"
 if [ "$FILESIZE" == "0" ]; then
-  exit
+  echo "$0: filesize $FILE is zero"
+  exit 0
 fi
 TYP=$HDR
 FORCE_BEG=$BEG_IN
@@ -85,7 +86,7 @@ PRF_FILE=(sys_*_perf_stat.txt)
 if [ ! -e $PRF_FILE ]; then
   if [ "$FORCE_BEG" == "" ]; then
   echo "sorry but $0 depends (currently) on the $PRF_FILE existing in the cur dir, or get the 1st timestamp from the json file and pass it as arg3 to this script"
-  exit
+  exit 1
   fi
 fi
 if [ "$FORCE_BEG" == "" -o "$FORCE_END" == "" ]; then
@@ -115,7 +116,7 @@ if [ "$TYP" != "" ]; then
 fi
 O_OPT=
 if [ "$OPTIONS" != "" ]; then
-  O_OPT=" -o $OPTIONS "
+  O_OPT=" -o \"$OPTIONS\" "
 fi
 O_MATCH=
 if [ "$MATCH_INTRVL" != "" ]; then
@@ -127,4 +128,6 @@ if [ "$SHEET_NM" != "" ]; then
 fi
 echo "python $SCR_DIR/json_2_tsv.py -f $FILE $O_OPT $O_MATCH -s $SUM_FILE $O_BEG $O_END $O_TYP $OPT_SHEET_NM " > /dev/stderr
       python $SCR_DIR/json_2_tsv.py -f $FILE $O_OPT $O_MATCH -s $SUM_FILE $O_BEG $O_END $O_TYP $OPT_SHEET_NM
+      RC=$?
+      exit $RC
 #python ../json_2_tsv.py response_time.json $BEG $END
