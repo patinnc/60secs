@@ -13,7 +13,7 @@ while getopts "hd:f:l:r:" opt; do
     f )
       if [ ! -e $OPTARG ]; then
       echo "didn't find svg file file: $OPTARG"
-      exit
+      exit 1
       fi
       SVG_FILE="$SVG_FILE $OPTARG"
       ;;
@@ -23,12 +23,12 @@ while getopts "hd:f:l:r:" opt; do
     d )
       if [ ! -d $OPTARG ]; then
       echo "didn't find svg dir: $OPTARG"
-      exit
+      exit 1
       fi
       RESP=`find $OPTARG -name "*.svg"`
       if [ "$RESP" == "" ]; then
         echo "didn't find any SVG files in dir $OPTARG"
-        exit
+        exit 1
       fi
       SVG_DIR=$OPTARG
       SVG_FILE=$RESP
@@ -42,15 +42,15 @@ while getopts "hd:f:l:r:" opt; do
       echo "   -d dir_with_svg_files  Currently all the SVGs in the dir will be processed"
       echo "   -r rps  a factor for each file (like the RPS for each svg)"
       echo "   -v verbose mode"
-      exit
+      exit 1
       ;;
     : )
       echo "Invalid option: $OPTARG requires an argument, cmdline args: ${@}" 1>&2
-      exit
+      exit 1
       ;;
     \? )
       echo "Invalid option: $OPTARG , cmdline args: ${@}" 1>&2
-      exit
+      exit 1
       ;;
   esac
 done
@@ -160,7 +160,7 @@ awk -v rps="$RPS" '
    }
    if (fctr_mx != nf_mx) {
      printf("screwed up logic here, fctr_mx= %d, nf_mx= %d\n", fctr_mx, nf_mx) > "/dev/stderr";
-     exit;
+     exit 1
    }
    for (i=1; i <= nf_mx; i++) {
       printf("file[%d]= %s fctr[%d]= %f\n", i, ARGV[i], i, fctr_arr[i]) > "/dev/stderr";
@@ -392,5 +392,7 @@ awk -v rps="$RPS" '
    printf("</html>\n");
   }
   ' $SVG_FILE
+  RC=$?
+  exit $RC
 #  ' flmgrf_v2_jdk8_remote_1grps_24thrds/20-01-13_220942/perf-10800_5.1k.svg flmgrf_v2_jdk8_remote_1grps_24thrds/20-01-13_220942/perf-10800_10.3k.svg flmgrf_v2_jdk8_remote_1grps_24thrds/20-01-13_220942/perf-10800_15.2k.svg flmgrf_v2_jdk8_remote_1grps_24thrds/20-01-13_220942/perf-10800_20.0k.svg flmgrf_v2_jdk8_remote_1grps_24thrds/20-01-13_220942/perf-10800_25.2k.svg
 # $@
