@@ -28,7 +28,7 @@ while getopts "hvf:b:e:m:o:s:S:t:" opt; do
       MATCH_INTRVL=$OPTARG
       ;;
     o )
-      OPTIONS="$OPTARG"
+      OPTIONS=$OPTARG
       ;;
     S )
       SHEET_NM=$OPTARG
@@ -116,7 +116,7 @@ if [ "$TYP" != "" ]; then
 fi
 O_OPT=
 if [ "$OPTIONS" != "" ]; then
-  O_OPT=" -o \"$OPTIONS\" "
+  O_OPT=" -o $OPTIONS "
 fi
 O_MATCH=
 if [ "$MATCH_INTRVL" != "" ]; then
