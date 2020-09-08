@@ -103,7 +103,7 @@ while getopts "hvASa:b:B:c:D:d:e:F:g:I:m:N:o:P:r:X:x:" opt; do
       NUM_DIR=$OPTARG
       ;;
     o )
-      OPTIONS="$OPTARG"
+      OPTIONS=$OPTARG
       ;;
     P )
       PHASE_FILE=$OPTARG
@@ -145,6 +145,8 @@ while getopts "hvASa:b:B:c:D:d:e:F:g:I:m:N:o:P:r:X:x:" opt; do
       echo "           in the muttley tables as in perf stat data. So there are 3 muttley records for every 1 perf stat record. So only use the 3rd muttley record."
       echo "           this requires getting the perf stat interval from the run_itp.log file"
       echo "         'pidstat_dont_add_pid' don't add the pid to process name. Allows better matching if doing multple servers"
+      echo "         'sum_file_no_formula' for non-combined summary sheets, don't use the excel formula to compute the average on the summary sheet"
+      echo "           this can be useful if you are using compare_summary_table.sh to create a comparison of multiple summary sheets"
       echo "   -P phase_file"
       echo "   -r regex   regex expression to select directories"
       echo "   -S    skip creating detail xlsx file, just do the summary all spreadsheet"
