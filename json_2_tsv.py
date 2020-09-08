@@ -236,7 +236,8 @@ endp_lkup = {}
 endp_map  = {}
 endp_mx   = -1
 mx_col = len(trgt_arr)
-if sheet_limit_cols != -1 and mx_col > (sheet_limit_cols):
+#if sheet_limit_cols != -1 and mx_col > (sheet_limit_cols):
+if sheet_limit_cols != -1:
    if sheet_nm == "endpoints":
       #trgt_arr[mx_col-1] = "__other__"
       for j in range(len(trgt_arr)):
@@ -262,15 +263,20 @@ if sheet_limit_cols != -1 and mx_col > (sheet_limit_cols):
       #print("%f" % (1.0/0.0))
       #if endp_mx > sheet_limit_cols:
       #   mx_col = sheet_limit_cols
-      print("sheet_limit sheet_nm= %s, mx_col= %d, len(trgt_arr)= %d, endp_mx= %d" % (sheet_nm, mx_col, len(trgt_arr), endp_mx))
-of.write("hdrs\t%d\t%d\t%d\t%d\t1\n" % (rw+1, 2, len(odata)+rw+1, mx_col+1))
+      print("sheet_limit sheet_nm= %s, mx_col= %d, len(trgt_arr)= %d, endp_mx= %d" % (sheet_nm, mx_col, len(trgt_arr), endp_mx), ", endp_lkup= ", endp_lkup)
+
+if endp_mx != -1:
+   of.write("hdrs\t%d\t%d\t%d\t%d\t1\n" % (rw+1, 2, len(odata)+rw+1, endp_mx+2))
+else:
+   of.write("hdrs\t%d\t%d\t%d\t%d\t1\n" % (rw+1, 2, len(odata)+rw+1, len(trgt_arr)+2))
 #hdrs	3	24	-1	35
 rw += 1
 of.write("ts\toffset")
-for j in range(mx_col):
-    if endp_mx != -1:
+if endp_mx != -1:
+   for j in range(endp_mx+1):
        of.write("\t%s" % (endp_lkup[j]))
-    else:
+else:
+   for j in range(len(trgt_arr)):
        of.write("\t%s" % (trgt_arr[j]))
 of.write("\n")
 rw += 1
@@ -306,11 +312,7 @@ for i in range(len(odata)):
        rw += 1
        continue
 
-    if mx_col < len(trgt_arr):
-       for j in range(mx_col+1, len(trgt_arr)):
-           odata[i][2+mx_col] += odata[i][2+j]
-       
-    for j in range(mx_col):
+    for j in range(len(trgt_arr)):
         if j == 0:
            of.write("%f\t%f\t%f" % (odata[i][0], odata[i][1], odata[i][2]))
            tm_last = odata[i][1]
