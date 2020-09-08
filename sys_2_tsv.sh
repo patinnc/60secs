@@ -198,11 +198,7 @@ HOSTNM=`awk -v curdir="$CURDIR" '
     printf("missed_hostnm\n");
     exit;
   }'`
-   RC=$?
-   if [ $RC -gt 0 ]; then
-      echo "$0: got non-zero RC at $LINENO" > /dev/stderr
-      exit 1
-   fi
+   ck_last_rc $? $LINENO
 printf "host\thostname\t%s\thostname\n"  "$HOSTNM" >> $SUM_FILE;
 
 if [ -e run.log ]; then
@@ -248,11 +244,7 @@ if [ -e run.log ]; then
      }
      }
    }' run.log`
-   RC=$?
-   if [ $RC -gt 0 ]; then
-      echo "$0: got non-zero RC at $LINENO" > /dev/stderr
-      exit 1
-   fi
+   ck_last_rc $? $LINENO
    }
    get_date_arr "day_str"
    DATE_ARR[0]="$RESP"
@@ -318,11 +310,7 @@ BEG_ADJ=`cat $DIR/60secs.log | awk '
      exit;
     }
     '`
-   RC=$?
-   if [ $RC -gt 0 ]; then
-      echo "$0: got non-zero RC at $LINENO" > /dev/stderr
-      exit 1
-   fi
+   ck_last_rc $? $LINENO
 if [ "$BEG_TM_IN" != "" ]; then
   BEG=$BEG_TM_IN
   echo "$0 set BEG_TM= $BEG_TM_IN"
@@ -408,11 +396,7 @@ trows++; printf("\n") > NFL;
        close(NFL);
      }
    ' $i
-   RC=$?
-   if [ $RC -gt 0 ]; then
-      echo "$0: got non-zero RC at $LINENO" > /dev/stderr
-      exit 1
-   fi
+   ck_last_rc $? $LINENO
    SHEETS="$SHEETS $i.tsv"
   fi
 
@@ -458,6 +442,7 @@ trows++; printf("\n") > NFL;
     export AWKPATH=$SCR_DIR
     echo awk  -v verbose="$VERBOSE" -v sum_tmam="$SUM_TMAM_FILE" -v options="$OPTIONS" -v tm_beg_in="$BEG_TM_IN" -v tm_end_in="$END_TM" -v do_avg="$AVERAGE" -v sum_file="$SUM_FILE" -v metric_file="$MET_FL" -v metric_avg="$MET_AV" -v pfx="$PFX" -f $SCR_DIR/itp_2_tsv.awk $CPU2017files $DIR/result.csv $DIR/$MET_AV $i $SPIN_TXT
     awk  -v sum_tmam="$SUM_TMAM_FILE" -v options="$OPTIONS" -v tm_beg_in="$BEG_TM_IN" -v tm_end_in="$END_TM" -v do_avg="$AVERAGE" -v sum_file="$SUM_FILE" -v metric_file="$MET_FL" -v metric_avg="$MET_AV" -v pfx="$PFX" -f $SCR_DIR/itp_2_tsv.awk $CPU2017files $DIR/result.csv $DIR/$MET_AV $i $SPIN_TXT
+    ck_last_rc $? $LINENO
    pwd
    echo "cpu2017log= $CPU2017LOG"
    for ii in ${CPU2017LOG[@]}; do
@@ -796,11 +781,7 @@ trows++; printf("\t$ power") > NFL;
           }
      }
    ' $i
-   RC=$?
-   if [ $RC -gt 0 ]; then
-      echo "$0: got non-zero RC at $LINENO" > /dev/stderr
-      exit 1
-   fi
+   ck_last_rc $? $LINENO
    SHEETS="$SHEETS $i.tsv"
   fi
   if [[ $i == *"_vmstat.txt"* ]]; then
@@ -1017,11 +998,7 @@ trows++; printf("\t\n") > NFL;
        }
        }
    ' $i
-   RC=$?
-   if [ $RC -gt 0 ]; then
-      echo "$0: got non-zero RC at $LINENO" > /dev/stderr
-      exit 1
-   fi
+   ck_last_rc $? $LINENO
    SHEETS="$SHEETS $i.tsv"
   fi
   if [[ $i == *"_mpstat.txt"* ]]; then
@@ -1169,11 +1146,7 @@ trows++; printf("\n") > NFL;
        close(NFL);
      }
    ' $i
-   RC=$?
-   if [ $RC -gt 0 ]; then
-      echo "$0: got non-zero RC at $LINENO" > /dev/stderr
-      exit 1
-   fi
+   ck_last_rc $? $LINENO
    SHEETS="$SHEETS $i.tsv"
   fi
   if [[ $i == *"_pidstat.txt"* ]]; then
