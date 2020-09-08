@@ -149,6 +149,7 @@ function trim(s) { return rtrim(ltrim(s)); }
      NFL=FNM ".tsv";
      if (hdr == "") {
         hdr = $0;
+        metric_file_hdr = $0;
         printf("hdr= %s\n", hdr);
         next;
      } else {
@@ -871,7 +872,32 @@ END{
   printf("\titp\t%s\t%s\n", "3", "data_col_value") >> sum_file;
   printf("\titp\t%s\t%s\n", "4", "data_col_key") >> sum_file;
   printf("\titp_metric_itp\t%s\t%s\n", "itp_metric_itp", "data_sheet") >> sum_file;
+  if (options != "" && index(options, "sum_file_no_formula") > 0) {
+     do_avg=1;
+     printf("using computed averages for summary file\n") > "/dev/stderr";
+  }
   if (do_avg == "1") {
+     n = split(metric_file_hdr, mf_hdr, ",");
+     for (j=1; j <= mx_cols; j++) {
+         n = sm_arr[j,"n"];
+         val = 0.0;
+         if (n > 0) {
+           val = sm_arr[j,"sum"]/n;
+         }
+         printf("\titp1\t%f\t%s\n", val, mf_hdr[j]) >> sum_file;
+     }
+     for (j=1; j <= emx; j++) {
+       if (eqn_arr[j,1,"got"] == eqn_arr[j,1,"max"] && eqn_arr[j,1,"use"] == "rpn") {
+         n = eqn_arr[j,1,"sum_n"];
+         val = 0.0;
+         if (n > 0) {
+           val = eqn_arr[j,1,"sum_tot"]/n;
+         }
+         printf("\titp3\t%f\t%s\n", val, eqn_arr[j,1,"hdr"]) >> sum_file;
+       }
+     }
+
+     if (1==2) {
      for (j=1; j <= (amx); j++) {
        rw_data[j] = sv_aln_valu[1,j];
        col_hdr[j] = sv_aln_lkup[j];
@@ -893,6 +919,7 @@ END{
           printf("\titp3\t%f\t%s", val, eqn_arr[j,1,"hdr"]) >> sum_file;
           printf("\n") >> sum_file;
        }
+     }
      }
   } else {
   for (j=1; j <= (hn+tot_extra_col); j++) {
