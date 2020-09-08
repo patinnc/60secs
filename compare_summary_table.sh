@@ -9,8 +9,9 @@ INF=
 NUM_INF=0
 NUM_SKU=0
 SKU_IN=()
+XLS_IN=()
 
-while getopts "hvb:d:e:i:l:n:o:r:s:S:t:u:" opt; do
+while getopts "hvb:d:e:i:l:n:o:r:s:S:t:u:x:" opt; do
   case ${opt} in
     i )
       INF="$INF $OPTARG"
@@ -51,6 +52,11 @@ while getopts "hvb:d:e:i:l:n:o:r:s:S:t:u:" opt; do
       echo "skuin= $OPTARG"
       NUM_SKU=$(($NUM_SKU+1))
       ;;
+    x )
+      XLS_IN+=("$OPTARG")
+      echo "xlsin= $OPTARG"
+      NUM_XLS=$(($NUM_XLS+1))
+      ;;
     h )
       echo "$0 combine summary files columns"
       echo "Usage: $0 [-h] TBD [-v]"
@@ -83,6 +89,13 @@ for ((i=0; i < ${#SKU_IN[@]}; i++)); do
   #echo "sku_in \"${SKU_IN[$i]}\""
 done
 echo "sku_str= $SKU_STR"
+
+XLS_STR=
+for ((i=0; i < ${#XLS_IN[@]}; i++)); do
+  XLS_STR="$XLS_STR;${XLS_IN[$i]}"
+  #echo "sku_in \"${XLS_IN[$i]}\""
+done
+echo "xls_str= $XLS_STR"
 
 if [ "$OUT_FILE" == "" ]; then
   echo "$0: you must specify output file '-s out_file'"
@@ -127,7 +140,7 @@ if [ $NUM_INF -gt 1 ]; then
   LAYOUT=1
 fi
 
-awk -v sku_str="$SKU_STR" -v ratio_cols="$RATIO_COLS" -v out_file="$OUT_FILE" -v layout="$LAYOUT" -v sep="$SEPARATOR" '
+awk -v xls_str="$XLS_STR" -v sku_str="$SKU_STR" -v ratio_cols="$RATIO_COLS" -v out_file="$OUT_FILE" -v layout="$LAYOUT" -v sep="$SEPARATOR" '
  BEGIN{
       did_metric = 0;
       ky = 2;
@@ -142,6 +155,10 @@ awk -v sku_str="$SKU_STR" -v ratio_cols="$RATIO_COLS" -v out_file="$OUT_FILE" -v
          sku_str = substr(sku_str, 2, length(sku_str));
       }
       n=split(sku_str, sku_arr, ";");
+      if (xls_str != "" && substr(xls_str, 1, 1) == ";") {
+         xls_str = substr(xls_str, 2, length(xls_str));
+      }
+      n=split(xls_str, xls_arr, ";");
     }
 function _ord_init(    low, high, i, t) {
     low = sprintf("%c", 7) # BEL is ascii 7
@@ -200,6 +217,10 @@ function _ord_init(    low, high, i, t) {
           mx_fl++;
           if (sku_str != "") {
             sku[mx_fl]=sku_arr[mx_fl];
+          }
+          if (xls_str != "") {
+            got_xlsx = 1;
+            xls[mx_fl]=xls_arr[mx_fl];
           }
           prev_ARGIND = ARGIND;
        }
@@ -322,24 +343,26 @@ function tot_compare(i1, v1, i2, v2,    l, r)
      printf("hdrs\t2\t0\t-1\t%d\t-1\n", fls+3) > out_file;
      rows = 2;
      if (layout == 1) {
-        offset = 8;
+        offset = 6;
        printf("%s%s%s%s%s%s", "", sep, "", sep, "", sep) > out_file;
        printf("%s%s%s%s", "average", sep, "", sep) > out_file;
+       lc = 5;
      } else {
+      lc = 0;
       for (fl=1; fl <= mx_fl-1; fl++) {
         printf("%s%s", "", sep) > out_file;
+        lc++;
       }
      }
      printf("ratio numer col") > out_file;
+     lc++;
      for (i=1; i <= ratio_cols; i++) {
-       printf("%s%d", sep, i+offset) > out_file;
+       printf("%s%d", sep, i+ratio_cols+lc) > out_file;
      }
      for (fl=1; fl < mx_fl; fl++) {
         printf("%s", sep) > out_file;
      }
      printf("\n") > out_file;
-     rows++;
-     row_top=rows;
 # excel subtotal
 #101 AVERAGE
 #102 COUNT
@@ -352,18 +375,25 @@ function tot_compare(i1, v1, i2, v2,    l, r)
 #109 SUM
 #110 VAR
 #111 VARP
+     rows++;
+     lc = 0;
+     row_top=rows;
      if (layout == 1) {
        printf("%s%s%s%s%s%s", "", sep, "", sep, "", sep) > out_file;
+       lc = 3;
        CLL="D"row_top;
        printf("\"=IF(%s=\"\"average\"\",101,IF(%s=\"\"SUM\"\",109,IF(%s=\"\"COUNT\"\",102,NA())))\"%s%s%s", CLL, CLL, CLL, sep, "", sep) > out_file;
+       lc += 2;
      } else {
       for (fl=1; fl <= mx_fl-1; fl++) {
         printf("%s%s", "", sep) > out_file;
+        lc++;
       }
      }
      printf("ratio denom col") > out_file;
+     lc++;
      for (i=1; i <= ratio_cols; i++) {
-       printf("%s%d", sep, i+1+offset) > out_file;
+       printf("%s%d", sep, 1+i+lc+ratio_cols) > out_file;
      }
      #if (layout == 1) {
      #  for (i=1; i <= ratio_cols; i++) {
@@ -372,32 +402,65 @@ function tot_compare(i1, v1, i2, v2,    l, r)
      #}
      printf("\n") > out_file;
      rows++;
+     lc = 0;
      if (layout == 0) {
       for (fl=1; fl <= mx_fl; fl++) {
         printf("col %d%s", fl, sep) > out_file;
+        lc++;
       }
       printf("\n") > out_file;
       rows++;
+      lc = 0;
      }
      if (layout == 1) {
        printf("%s%s%s%s%s%s", "", sep, "", sep, "", sep) > out_file;
        printf("%s%s%s%s%s%s", "", sep, "", sep, "", sep) > out_file;
+       lc = 6;
      } else {
       for (fl=1; fl <= mx_fl; fl++) {
         printf("%s%s", sku[fl], sep) > out_file;
+        lc++;
       }
      }
      for (i=1; i <= ratio_cols; i++) {
        printf("ratio %d%s", i, sep) > out_file;
+       lc++;
      }
      if (layout == 1) {
       for (fl=1; fl <= mx_fl; fl++) {
-        printf("%s%s", offset+fl, sep) > out_file;
+        printf("col %s%s", lc+fl, sep) > out_file;
       }
      }
      plst = 0;
      printf("desc\n") > out_file;
      rows++;
+     lc = 0;
+     if (layout == 1 && sku_str != "") {
+       if (layout == 1) {
+         printf("%s%s%s%s%s%s", "", sep, "", sep, "", sep) > out_file;
+         printf("%s%s%s%s%s%s", "", sep, "", sep, "", sep) > out_file;
+         lc += 6;
+       } else {
+        for (fl=1; fl <= mx_fl; fl++) {
+          printf("%s%s", sku[fl], sep) > out_file;
+          lc++;
+        }
+       }
+       for (i=1; i <= ratio_cols-1; i++) {
+         printf("%s", sep) > out_file;
+         lc++;
+       }
+       if (layout == 1) {
+        printf("sku%s", sep) > out_file;
+        for (fl=1; fl <= mx_fl; fl++) {
+          printf("%s%s", sku[fl], sep) > out_file;
+          lc++;
+        }
+       }
+       printf("desc\n") > out_file;
+       rows++;
+       lc =0;
+     }
      if (layout == 0) {
         gstr_mx = 1;
      }
@@ -408,7 +471,7 @@ function tot_compare(i1, v1, i2, v2,    l, r)
         got_2 = 0;
         prtd=0;
         if (layout == 1) {
-        got_gstr = 0;
+         got_gstr = 0;
          for (fl=1; fl <= mx_fl; fl++) {
           j = lbl_arr[i,fl];
           if (sv[j,fl,3] == g) {
@@ -438,14 +501,21 @@ function tot_compare(i1, v1, i2, v2,    l, r)
               fnc_avg=109; # sum
               fnc_avg=101; # avg
               fnc_avg="D"(row_top+1); # cell holding number
-              frm_avg="=SUBTOTAL("fnc_avg", INDIRECT(ADDRESS(ROW(), COLUMN()+5, 1)):INDIRECT(ADDRESS(ROW(), COLUMN()+4+"mx_fl",1)))"
-              frm_min="=SUBTOTAL(105, INDIRECT(ADDRESS(ROW(), COLUMN()+4, 1)):INDIRECT(ADDRESS(ROW(), COLUMN()+3+"mx_fl",1)))"
-              frm_max="=SUBTOTAL(104, INDIRECT(ADDRESS(ROW(), COLUMN()+3, 1)):INDIRECT(ADDRESS(ROW(), COLUMN()+2+"mx_fl",1)))"
+              cbeg=3+ratio_cols;
+              cend=cbeg+mx_fl;
+              frm_avg="=SUBTOTAL("fnc_avg", INDIRECT(ADDRESS(ROW(), COLUMN()+"cbeg", 1)):INDIRECT(ADDRESS(ROW(), COLUMN()+"cend",1)))"
+              cbeg=2+ratio_cols;
+              cend=cbeg+mx_fl;
+              frm_min="=SUBTOTAL(105, INDIRECT(ADDRESS(ROW(), COLUMN()+"cbeg", 1)):INDIRECT(ADDRESS(ROW(), COLUMN()+"cend",1)))"
+              cbeg=1+ratio_cols;
+              cend=cbeg+mx_fl;
+              frm_max="=SUBTOTAL(104, INDIRECT(ADDRESS(ROW(), COLUMN()+"cbeg", 1)):INDIRECT(ADDRESS(ROW(), COLUMN()+"cend",1)))"
             }
             printf("%s%s%s%s%s%s\"%s\"%s\"%s\"%s\"%s\"%s", gstr_lkup1[g], sep, gstr_lkup2[g], sep, lstr, sep, frm_avg, sep, frm_min, sep, frm_max, sep) > out_file;
+            lc = 6;
          for (fl=1; fl <= ratio_cols; fl++) {
           if (1==1) {
-            col = sprintf("%c", fl-3+offset+ _ord_["a"]);
+            col = sprintf("%c", fl+lc-1+ _ord_["a"]);
             CLL = col""row_top;
             CLL2 = col""(row_top+1);
             #printf("\"=IF(AND(ISNUMBER(INDIRECT(ADDRESS(ROW(),%s1,4,1))),ISNUMBER(INDIRECT(ADDRESS(ROW(),%s2,4,1))),INDIRECT(ADDRESS(ROW(),%s2,4,1))>0),INDIRECT(ADDRESS(ROW(),%s1,4,1))/INDIRECT(ADDRESS(ROW(),%s2,4,1)),\"\"\"\")\"%s", col,col,col, col, col, sep) > out_file;;
@@ -471,7 +541,12 @@ function tot_compare(i1, v1, i2, v2,    l, r)
              got_2++;
           }
           if (layout == 1 && gstr_lkup1[g] == "time") {
-            printf("\"%s\"%s", str, sep) > out_file;
+            if (index(str, "\"") == 0) {
+               printf("\"%s\"%s", str, sep) > out_file;
+            } else {
+               printf("%s%s", str, sep) > out_file;
+               printf("%s%s\n", str, sep) > "/dev/stderr"
+            }
           } else {
             printf("%s%s", str, sep) > out_file;
           }
