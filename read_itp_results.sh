@@ -5,12 +5,12 @@ IN_FILE=$1
 
 if [ "$1" == "" ]; then
   echo "missing results.csv path filename"
-  exit
+  exit 1
 fi
 
 if [ ! -e $IN_FILE ]; then
   echo "didn't find file $IN_FILE"
-  exit
+  exit 1
 fi
 
 if [[ "$IN_FILE" == *"/result.csv" ]]; then
@@ -22,7 +22,7 @@ else
     if [ "$RESP" != "" ]; then
        if [ ! -e $RESP ]; then
           echo "ddidn't find result.csv unter dir $IN_FILE"
-          exit
+          exit 1
        fi
        IN_FILE=$RESP
     fi
@@ -32,11 +32,11 @@ if [[ "$IN_FILE" == *"/result.csv" ]]; then
   echo "got result.csv $RESP"
   else
   echo "didn't find $IN_FILE"
-  exit
+  exit 1
 fi
 if [ ! -e $IN_FILE ]; then
   echo "didn't find file $IN_FILE"
-  exit
+  exit 1
 fi
 
 echo "------- using file $IN_FILE"
@@ -210,4 +210,5 @@ awk -v tm_end="$TM_END" '
     #printf("last tm= %f, tot_instr_tm= %f tm2= %f\n", tm, tot_tm, tot_tm2);
   }
   ' $IN_FILE
+  exit $?
     
