@@ -13,7 +13,7 @@ catch_signal() {
 trap 'catch_signal' SIGINT
 
 MYBASHPID=$BASHPID
-echo "$BASHPID" > /root/60secs.pid
+echo "$BASHPID" > ~/60secs.pid
 
 SCR_DIR=`dirname "$(readlink -f "$0")"`
 WAIT=60
@@ -249,6 +249,10 @@ if [ "$WAIT_IN" != "" ]; then
   RESP=`echo $WAIT_IN | sed 's/m//i'`
   if [ "$RESP" != "$WAIT_IN" ]; then
     WAIT_IN=$((RESP*60))
+  fi
+  RESP=`echo $WAIT_IN | sed 's/h//i'`
+  if [ "$RESP" != "$WAIT_IN" ]; then
+    WAIT_IN=$((RESP*3600))
   fi
   re='^[0-9]+$'
   if ! [[ $WAIT_IN =~ $re ]] ; then
@@ -854,7 +858,7 @@ if [ "$BKGRND" == "1" ]; then
   echo "PIDS_NC= $PID_LST_NC" >> watch.log
   echo "PIDS_BSH= $BASHPID" >> watch.log
   if [ "$PID_LST_NC" != "" ]; then
-    echo "$PID_LST_NC" >> /root/60secs.pid
+    echo "$PID_LST_NC" >> ~/60secs.pid
   fi
 fi
 if [ "$WAIT_AT_END" == "1" -a "$PID_LST_NC" != "" ]; then
@@ -863,7 +867,7 @@ if [ "$WAIT_AT_END" == "1" -a "$PID_LST_NC" != "" ]; then
   j=0
     BDT=`date +%s`
     EDT=$((BDT+$WAIT))
-  CK_STOP=/root/60secs.stop
+  CK_STOP=~/60secs.stop
   for i in `seq 1 $WAIT`; do
     #echo "i= $i of $WAIT"
     printf "i= %d of %d\n" $i $WAIT
@@ -908,7 +912,7 @@ if [ "$WAIT_AT_END" == "1" -a "$PID_LST_NC" != "" ]; then
     fi
     sleep $INTRVL
     if [ -e $CK_STOP ]; then
-      CKPID=`cat $CK_STOP`
+      CKPID=`head -1 $CK_STOP`
       if [ "$CKPID" == "$MYBASHPID" ]; then
          echo "GOT $CK_STOP with pid $CKPID. Bye" > /dev/stderr
          GOT_QUIT=1
