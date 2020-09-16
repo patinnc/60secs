@@ -5,7 +5,8 @@ import sys
 import os
 
 
-options, remainder = getopt.getopt(sys.argv[1:], 'vf:b:e:m:o:S:s:t:', ['verbose', 'file=', 'beg=',
+options, remainder = getopt.getopt(sys.argv[1:], 'vf:b:d:e:m:o:S:s:t:', ['verbose', 'file=', 'beg=',
+                                                         'desc=',
                                                          'end=',
                                                          'match=',
                                                          'options=',
@@ -13,10 +14,13 @@ options, remainder = getopt.getopt(sys.argv[1:], 'vf:b:e:m:o:S:s:t:', ['verbose'
                                                          'summary=',
                                                          'type=',
                                                          ])
-hdr=""
-sum_file=""
-sheet_nm=""
-options_str=""
+hdr = ""
+sum_file = ""
+sheet_nm = ""
+options_str = ""
+desc = ""
+beg = 0.0
+end = 0.0
 match_intrvl = 0
 verbose = 0
 #print("%f\n" % (1.0/0.0)) # force error to test error handling
@@ -28,6 +32,9 @@ for opt, arg in options:
         flnm = arg
     if opt in ('-b', '--beg'):
         beg = float(arg)
+    if opt in ('-d', '--desc'):
+        desc = arg
+        print("________json_2_tsv.py: got desc= %s" % (desc), file=sys.stderr)
     if opt in ('-e', '--end'):
         end = float(arg)
     if opt in ('-m', '--match'):
@@ -169,7 +176,7 @@ for i in range(len(data)):
               continue
            else:
               use_this = 0
-        if tm >= beg and tm <= end:
+        if (beg == 0.0 and end == 0.0) or (tm >= beg and tm <= end):
            if data[i]['datapoints'][j][0] == None:
               val = 0.0
            else:
@@ -228,6 +235,9 @@ if hdr == "" and json_stat != None:
    hdr = json_stat
 of = open(flnm+".tsv","w+")
 rw = 0
+if desc != "":
+  of.write("\tchart querypad string\t%s\n" % (desc))
+  rw += 1
 of.write("title\t%s\tsheet\t%s\ttype\t%s\n" % (hdr, sheet_nm, line_typ))
 rw += 1
 
@@ -298,7 +308,8 @@ for i in range(len(odata)):
            dline[j] = 0.0
        for j in range(len(trgt_arr)):
            k = endp_map[j]
-           dline[k] += odata[i][2+j]
+           if i < len(odata) and (2+j) < len(odata[i]):
+              dline[k] += odata[i][2+j]
        for j in range(endp_mx+1):
            if j == 0:
               of.write("%f\t%f\t%f" % (odata[i][0], odata[i][1], dline[j]))
@@ -317,12 +328,15 @@ for i in range(len(odata)):
            of.write("%f\t%f\t%f" % (odata[i][0], odata[i][1], odata[i][2]))
            tm_last = odata[i][1]
         else:
-           of.write("\t%f" % (odata[i][2+j]))
-        avg_sum[j] = avg_sum[j] + odata[i][j+2]
-        avg_n[j] = avg_n[j] + 1.0
+           if i < len(odata) and (2+j) < len(odata[i]):
+              of.write("\t%f" % (odata[i][2+j]))
+        if i < len(odata) and (2+j) < len(odata[i]):
+           avg_sum[j] = avg_sum[j] + odata[i][j+2]
+           avg_n[j] = avg_n[j] + 1.0
     of.write("\n")
     rw += 1
 
+sf = None
 if sum_file != "":
    sf = open(sum_file,"a+")
 
@@ -338,9 +352,10 @@ if hdr == "http_status" and sum_file != "":
           not_200_str = not_200_str + not_200_sep + trgt_arr[j]
           not_200_sep = ", "
    for j in range(0, len(trgt_arr)):
-       if trgt_arr[j] == "200":
+       if sf != None and trgt_arr[j] == "200":
           sf.write("%s\t%s\t=%f\t%s\n" % ("software successs", hdr, avg_sum[j]/avg_n[j], trgt_arr[j]))
-   sf.write("%s\t%s\t=%f\t%s\n" % ("software errs", hdr, not_200, not_200))
+   if sf != None:
+       sf.write("%s\t%s\t=%f\t%s\n" % ("software errs", hdr, not_200, not_200))
 
 if sum_file != "" and hdr != "latency" and hdr != "http_status":
    if endp_mx != -1:
@@ -350,20 +365,22 @@ if sum_file != "" and hdr != "latency" and hdr != "http_status":
        if len(str) == 0 and len(str2) > 0:
            str = "RPS "+str2
        #sf.write("\t%s\t%s\t=%f\n" % ("software utilization", hdr, avg_sum[j]/avg_n[j], trgt_arr[j]))
-       if len(str) > 0 and len(str2) > 0:
-          sf.write("\t%s\t\"%s\"\t=%f\n" % (str, str2, avg_sum[j]/avg_n[j]))
-       else:
-          sf.write("\t%s\t%s\t=%f\n" % ("software utilization", str, avg_sum[j]/avg_n[j]))
+       if sf != None:
+          if len(str) > 0 and len(str2) > 0:
+             sf.write("\t%s\t\"%s\"\t=%f\n" % (str, str2, avg_sum[j]/avg_n[j]))
+          else:
+             sf.write("\t%s\t%s\t=%f\n" % ("software utilization", str, avg_sum[j]/avg_n[j]))
    else:
      for j in range(0, mx_col):
        str = hdr
        if len(str) == 0 and len(trgt_arr[j]) > 0:
            str = "RPS "+trgt_arr[j]
        #sf.write("\t%s\t%s\t=%f\n" % ("software utilization", hdr, avg_sum[j]/avg_n[j], trgt_arr[j]))
-       if len(str) > 0 and len(trgt_arr[j]) > 0:
-          sf.write("\t%s\t\"%s\"\t=%f\n" % (str, trgt_arr[j], avg_sum[j]/avg_n[j]))
-       else:
-          sf.write("\t%s\t%s\t=%f\n" % ("software utilization", str, avg_sum[j]/avg_n[j]))
+       if sf != None:
+          if len(str) > 0 and len(trgt_arr[j]) > 0:
+             sf.write("\t%s\t\"%s\"\t=%f\n" % (str, trgt_arr[j], avg_sum[j]/avg_n[j]))
+          else:
+             sf.write("\t%s\t%s\t=%f\n" % ("software utilization", str, avg_sum[j]/avg_n[j]))
 
 
 if hdr != "latency":
@@ -444,8 +461,9 @@ if tm_last > 0.0:
    tm_tot_lo = tm_tot_lo / tm_last
    tm_tot_hi = tm_tot_hi / tm_last
    of.write("\t\t\t\t\ttm_tot_lo/s\t=%f\t=%f\ttm_tot_hi/s\n" % (tm_tot_lo, tm_tot_hi))
-   sf.write("software utilization\tresponse_time_est_total\tlo_est/s\t=%f\n" % (tm_tot_lo))
-   sf.write("software utilization\tresponse_time_est_total\thi_est/s\t=%f\n" % (tm_tot_hi))
+   if sf != None:
+      sf.write("software utilization\tresponse_time_est_total\tlo_est/s\t=%f\n" % (tm_tot_lo))
+      sf.write("software utilization\tresponse_time_est_total\thi_est/s\t=%f\n" % (tm_tot_hi))
    tm_tot_lo = tm_tot_lo / 32
    tm_tot_hi = tm_tot_hi / 32
    of.write("\t\t\t\t32 cpus\tfrac_of_32_cpus_lo\t=%f\t=%f\tfrac_of_32_cpus_hi\n" % (tm_tot_lo, tm_tot_hi))
