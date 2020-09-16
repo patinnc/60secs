@@ -4,6 +4,7 @@ SCR_DIR=`dirname $0`
 echo "arg1 is RPS.json or response.json, arg2 is string for header, arg3 and arg4 are optional begin and end timestamp (usually from the json file itself"
 
 FILE=
+DESC=
 BEG_IN=
 END_IN=
 SUM_FILE=
@@ -13,13 +14,16 @@ OPTIONS=
 MATCH_INTRVL=
 OSTYP=$OSTYPE
 
-while getopts "hvf:b:e:m:o:s:S:t:" opt; do
+while getopts "hvf:b:d:e:m:o:s:S:t:" opt; do
   case ${opt} in
     f )
       FILE=$OPTARG
       ;;
     b )
       BEG_IN=$OPTARG
+      ;;
+    d )
+      DESC=$OPTARG
       ;;
     e )
       END_IN=$OPTARG
@@ -67,6 +71,15 @@ fi
 if [ ! -e $FILE ]; then
   echo "$0: didn't find -f $FILE json file"
   exit 1
+fi
+if [ "$DESC" == "" ]; then
+  CK_TXT=`echo $FILE | sed 's/.json$/.txt/'`
+  if [ "$CK_TXT" != "$FILE" ]; then
+    if [ -e $CK_TXT ]; then
+      DESC=`head -1 $CK_TXT`
+      echo "$0: CK_TXT= $CK_TXT  DESC= $DESC" > /dev/stderr
+    fi
+  fi
 fi
 SZ_CMD=" -c%s "
 if [[ "$OSTYP" == "darwin"* ]]; then
@@ -126,8 +139,8 @@ OPT_SHEET_NM=
 if [ "$SHEET_NM" != "" ]; then
   OPT_SHEET_NM=" -S $SHEET_NM "
 fi
-echo "python $SCR_DIR/json_2_tsv.py -f $FILE $O_OPT $O_MATCH -s $SUM_FILE $O_BEG $O_END $O_TYP $OPT_SHEET_NM " > /dev/stderr
-      python $SCR_DIR/json_2_tsv.py -f $FILE $O_OPT $O_MATCH -s $SUM_FILE $O_BEG $O_END $O_TYP $OPT_SHEET_NM
+echo "python $SCR_DIR/json_2_tsv.py -f $FILE $O_OPT -d \"$DESC\" $O_MATCH -s $SUM_FILE $O_BEG $O_END $O_TYP $OPT_SHEET_NM " > /dev/stderr
+      python $SCR_DIR/json_2_tsv.py -f $FILE $O_OPT -d "$DESC" $O_MATCH -s $SUM_FILE $O_BEG $O_END $O_TYP $OPT_SHEET_NM
       RC=$?
       exit $RC
 #python ../json_2_tsv.py response_time.json $BEG $END
