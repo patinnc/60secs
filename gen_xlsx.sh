@@ -366,6 +366,12 @@ else
          j=0
          for ii in $RESP; do
            NM=$(dirname $ii)
+           NUM_LINES=`head -10 $ii | wc -l |awk '{$1=$1;printf("%d\n", $1);}'`
+           if [ $NUM_LINES -lt 10 ]; then
+             # the sys_*_perf_stat.txt file can get created with just one line in it if perf isn't present
+             # so don't include dirs with empty data
+             continue
+           fi
            if [ $j -eq 0 ]; then
              TS_INIT=`awk '
   function dt_to_epoch(offset) {
