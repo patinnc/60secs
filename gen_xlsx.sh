@@ -26,6 +26,7 @@ DESC_FILE=
 OSTYP=$OSTYPE
 NUM_CPUS=0
 FAIL=0
+PY_PID=
 BK_PID=()
 BK_DIR=()
 if [[ "$OSTYP" == "linux-gnu"* ]]; then
@@ -53,8 +54,9 @@ fi
 BACKGROUND=$(($NUM_CPUS+2))  # setting this to 0 turns off launching sys_2_tsv.sh in the background
 echo "$0 ${@}"
 echo "BACKGROUND= $NUM_CPUS"
+JOB_ID=0
 
-while getopts "hvASa:b:B:c:D:d:e:F:g:I:m:N:o:P:r:X:x:" opt; do
+while getopts "hvASa:b:B:c:D:d:e:F:g:I:j:m:N:o:P:r:X:x:" opt; do
   case ${opt} in
     A )
       AVERAGE=1
@@ -96,6 +98,9 @@ while getopts "hvASa:b:B:c:D:d:e:F:g:I:m:N:o:P:r:X:x:" opt; do
     I )
       INPUT_FILE_LIST=$OPTARG
       ;;
+    j )
+      JOB_ID=$OPTARG
+      ;;
     m )
       MAX_VAL=$OPTARG
       ;;
@@ -131,6 +136,7 @@ while getopts "hvASa:b:B:c:D:d:e:F:g:I:m:N:o:P:r:X:x:" opt; do
       echo "      this file can be used to identify breaks in the chart_sheet rows of charts. All charts with the same desc_file will be put be put on the same line"
       echo "   -g key=val    key value pairs to be added to summary sheet. use multiple -g k=v options to specify multiple key value pairs"
       echo "   -I file_with_list_of_input_files   used for getting a specify list of file proccessed"
+      echo "   -j job_id   if you are doing more than 1 dir and running jobs in background then this id is used to create unique input filenames for tsv_2_xlsx.py"
       echo "   -m max_val    any value in chart > this value will be replaced by 0.0"
       echo "   -N number_of_dirs  if you have more than 1 directories then you can limit the num of dirs with this option. Default process all"
       echo "   -o options       comma separated options."
@@ -443,7 +449,7 @@ echo "DIR at 35: $DIR"
 #exit
 
 CDIR=`pwd`
-ALST=$CDIR/tmp1.jnk
+ALST=$CDIR/tsv_2_xlsx_${JOB_ID}.inp
 #echo "ALST= $ALST"
 if [ -e $ALST ]; then
   rm $ALST
@@ -720,6 +726,7 @@ for i in $LST; do
 done
 fi
 
+#SUM_ALL=sum_all_${JOB_ID}.tsv
 SUM_ALL=sum_all.tsv
 if [ -e $SUM_ALL ]; then
   MYDIR=`pwd`
@@ -755,8 +762,8 @@ if [ $NUM_DIRS -gt 1 ]; then
   done
   if [ "$FLS" != "" ]; then
     echo "---------- got_pwd= $got_pwd --------------------"
-    echo $SCR_DIR/compare_summary_table.sh $FLS -s sum_all.tsv -S "\t"
-         $SCR_DIR/compare_summary_table.sh $FLS -s sum_all.tsv -S "\t"
+    echo $SCR_DIR/compare_summary_table.sh $FLS -s $SUM_ALL -S "\t"
+         $SCR_DIR/compare_summary_table.sh $FLS -s $SUM_ALL -S "\t"
     ck_last_rc $? $LINENO
     MK_SUM_ALL=0
   else
@@ -1155,6 +1162,7 @@ if [ $NUM_DIRS -gt 1 ]; then
   if [ "$END_TM" != "" ]; then
      OPT_TM="$OPT_TM -e $END_TM "
   fi
+
       
   echo "====== begin $ALST ========"
   #cat $ALST
@@ -1163,13 +1171,24 @@ if [ $NUM_DIRS -gt 1 ]; then
   TS_DFF=$(($TS_CUR-$TS_BEG))
   echo "elap_tm= $TS_DFF"
   echo "about to do tsv_2_xls.py" > /dev/stderr
-  echo "python $SCR_DIR/tsv_2_xlsx.py $OPT_a $OPT_A $OPT_TM $OPT_OPTIONS $OPT_M -f $ALST > tmp2.jnk"
-        python $SCR_DIR/tsv_2_xlsx.py $OPT_a $OPT_A $OPT_TM $OPT_OPTIONS $OPT_M -f $ALST $SHEETS &> tmp2.jnk &
+  FSTDOUT="tmp_${JOB_ID}.jnk"
+  echo "python $SCR_DIR/tsv_2_xlsx.py $OPT_a $OPT_A $OPT_TM $OPT_OPTIONS $OPT_M -f $ALST > $FSTDOUT"
+        python $SCR_DIR/tsv_2_xlsx.py $OPT_a $OPT_A $OPT_TM $OPT_OPTIONS $OPT_M -f $ALST $SHEETS &> $FSTDOUT &
         PY_PID=$!
-        echo "$0: tsv_2_xlsx.py exit with RC= $RC at line= $LINENO" > /dev/stderr
+        sleep 1
+        (wait $PY_PID && RC=$? && echo $RC > tsv_2_xls_${JOB_ID}.rc && echo "tsv_2_xls.py $PYPID rc= $RC at $LINENO" > /dev/stderr) &
+        echo "$0: tsv_2_xlsx.py started with pid= $PY_PID at line= $LINENO" > /dev/stderr
         echo $PY_PID >> tsv_2_xlsx.pid
+        #if [ ! -e /proc/$PY_PID ]; then
+        #   echo "$0: ================== at line $LINENO: error in tsv_2_xlsx.py. py_pid= $PY_PID. See log $FSTDOUT. Bye =================" > /dev/stderr
+        #   tail -20 $FSTDOUT
+        #   exit 1
+        #else
+        #   echo "/proc/$PY_PID exists"
+        #fi
         
   TS_CUR=`date +%s`
   TS_DFF=$(($TS_CUR-$TS_BEG))
   echo "elap_tm= $TS_DFF"
 fi
+exit 0
