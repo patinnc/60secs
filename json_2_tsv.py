@@ -65,17 +65,20 @@ if len(options_str) > 0:
   lkfor = "sheet_for_file{"
   lkfor2 = "sheet_limit{"
   arr = options_str.split(",")
-  print("options arr= ", arr)
+  if verbose > 0:
+     print("options arr= ", arr)
   for opt in arr:
     i = opt.find(lkfor)
-    print("opt= ", opt, ", i=", i)
+    if verbose > 0:
+       print("opt= ", opt, ", i=", i)
     if i == 0:
        str2 = opt[len(lkfor):]
        i = str2.find("}")
        str2 = str2[0:i]
        arr2 = str2.split("=")
        sheets_for_files.append([arr2[0], arr2[1]])
-       print("opt= %s, lkfor= %s, str2= %s" % (opt, lkfor, str2), file=sys.stderr)
+       if verbose > 0:
+          print("opt= %s, lkfor= %s, str2= %s" % (opt, lkfor, str2), file=sys.stderr)
        continue
     i = opt.find(lkfor2)
     if i == 0:
@@ -83,9 +86,11 @@ if len(options_str) > 0:
        i = str2.find("}")
        str2 = str2[0:i]
        arr2 = str2.split(";")
-       print("opt= %s, lkfor= %s, str2= %s" % (opt, lkfor2, str2), ", arr2=", arr2, file=sys.stderr)
+       if verbose > 0:
+          print("opt= %s, lkfor= %s, str2= %s" % (opt, lkfor2, str2), ", arr2=", arr2, file=sys.stderr)
        sheets_limit.append([arr2[0], arr2[1], int(arr2[2]) ]) # sheetnm, type_limit, val
-       print("opt= %s, lkfor= %s, str2= %s" % (opt, lkfor, str2), ", arr2= ", arr2, file=sys.stderr)
+       if verbose > 0:
+          print("opt= %s, lkfor= %s, str2= %s" % (opt, lkfor, str2), ", arr2= ", arr2, file=sys.stderr)
 
 print("sheets_for_files= ", sheets_for_files)
 print("sheets_limit= ", sheets_limit)
@@ -149,7 +154,8 @@ for i in range(len(data)):
              lwr_bnd_str = trgt[:mspos]
              lwr_bnd = 1000*float(lwr_bnd_str)
        trgt_ts[trgt] = lwr_bnd
-       print("target= %s, lwr_bnd= %d" % (trgt, lwr_bnd))
+       if verbose > 0:
+          print("target= %s, lwr_bnd= %d" % (trgt, lwr_bnd))
     tm_diff = 0
     use_every = 1
     use_this  = 0
@@ -268,12 +274,13 @@ if sheet_limit_cols != -1:
           #print("endp[%d]= %s, k= %d" % (j, endp, k))
           endp_map[j] = k
       mx_col = endp_mx
-      print("endp_map: ", endp_map)
-      print("endp_mx= %d" % (endp_mx), ", endp_lkup= ", endp_lkup)
+      if verbose > 0:
+         print("endp_map: ", endp_map)
+         print("endp_mx= %d" % (endp_mx), ", endp_lkup= ", endp_lkup)
       #print("%f" % (1.0/0.0))
       #if endp_mx > sheet_limit_cols:
       #   mx_col = sheet_limit_cols
-      print("sheet_limit sheet_nm= %s, mx_col= %d, len(trgt_arr)= %d, endp_mx= %d" % (sheet_nm, mx_col, len(trgt_arr), endp_mx), ", endp_lkup= ", endp_lkup)
+         print("sheet_limit sheet_nm= %s, mx_col= %d, len(trgt_arr)= %d, endp_mx= %d" % (sheet_nm, mx_col, len(trgt_arr), endp_mx), ", endp_lkup= ", endp_lkup)
 
 if endp_mx != -1:
    of.write("hdrs\t%d\t%d\t%d\t%d\t1\n" % (rw+1, 2, len(odata)+rw+1, endp_mx+2))
