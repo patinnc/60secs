@@ -108,12 +108,14 @@ if len(options_str) > 0:
   print("options arr= ", arr)
   for opt in arr:
     i = opt.find(lkfor)
-    print("opt= ", opt, ", i=", i)
+    if verbose > 0:
+       print("opt= ", opt, ", i=", i)
     if i == 0:
        str2 = opt[len(lkfor):-1]
        arr2 = str2.split(";")
        sheets_limit.append([arr2[0], arr2[1],arr[2]])
-       print("opt= %s, lkfor= %s, str2= %s" % (opt, lkfor, str2), file=sys.stderr)
+       if verbose > 0:
+          print("opt= %s, lkfor= %s, str2= %s" % (opt, lkfor, str2), file=sys.stderr)
 
 print("sheets_limit= ", sheets_limit)
 opt_fl = []
@@ -244,7 +246,8 @@ for fo2 in range(len(fl_options)):
 
 for bmi in range(base_mx+1):
 
- print("doing bmi= %d of %d" % (bmi, base_mx+1))
+ if verbose > 0:
+    print("doing bmi= %d of %d" % (bmi, base_mx+1))
  fn_bs_data[bmi] = {}
  #if fake_file_list > 0:
    #print("bmi= ", bmi, " file_list= ",file_list[bmi])
@@ -255,7 +258,8 @@ for bmi in range(base_mx+1):
    #if fake_file_list > 0 and fo != file_list[fn]["fl_opt"]:
    #   print("skip fo= ", fo, ", fn= ", fn, " file_list= ",file_list[fo])
    #   continue
-   print("fo= ", fo)
+   if verbose > 0:
+      print("fo= ", fo)
    #options, remainder = getopt.getopt(sys.argv[1:], 'i:o:p:v', ['images=',
    options, remainder = getopt.getopt(fl_options[fo][1:], 'Aa:b:c:d:e:i:m:o:O:P:p:s:v', [
                                                             'average',
@@ -284,7 +288,8 @@ for bmi in range(base_mx+1):
    # If the 1st hdr row number is > 35 then ch_orient_vert will be set to false.
    ch_orient_vert = True
    
-   print('OPTIONS   :', options)
+   if verbose > 0:
+      print('OPTIONS   :', options)
    ch_array = []
    opt_phase_in = []
    opt_phase = []
@@ -498,6 +503,10 @@ for bmi in range(base_mx+1):
       #   wrksh_nm  = worksheet_sum_all_nm
       #   wksheet_nms[wrksh_nm] = 1
       #   bold = workbook.add_format({'bold': 1})
+      if sheet_nm == "sum_all":
+            worksheet = worksheet_sum_all
+            wrksh_nm  = worksheet_sum_all_nm
+            print("ckck use sum_file wrksh_nm= %s x= %s" % (wrksh_nm, x), file=sys.stderr)
       if do_avg == False or do_avg_write == True:
          if sheet_nm == "sum_all":
             print("use sum_file x= %s" % (x), file=sys.stderr)
@@ -614,14 +623,15 @@ for bmi in range(base_mx+1):
               hstr = data[hrow_beg][i]
               if not hstr in fn_bs_hdr_list[fn_bs_i][hrow_beg]:
                  fn_bs_hdr_max[fn_bs_i][hrow_beg] += 1
-                 print("sheet %s added header[%d][%d][%d]= %s, file= %s" % (sheet_nm, fn_bs_i, hrow_beg, fn_bs_hdr_max[fn_bs_i][hrow_beg], hstr, x))
+                 if verbose > 0:
+                    print("sheet %s added header[%d][%d][%d]= %s, file= %s" % (sheet_nm, fn_bs_i, hrow_beg, fn_bs_hdr_max[fn_bs_i][hrow_beg], hstr, x))
                  fn_bs_hdr_list[fn_bs_i][hrow_beg][hstr] = fn_bs_hdr_max[fn_bs_i][hrow_beg]
                  fn_bs_hdr_lkup[fn_bs_i][hrow_beg][fn_bs_hdr_max[fn_bs_i][hrow_beg]] = hstr
               hdr_idx = fn_bs_hdr_list[fn_bs_i][hrow_beg][hstr]
               fn_bs_hdr_map[fn_bs_i][hrow_beg][i] = hdr_idx
           for i in range(drow_end-drow_beg+1):
               ij = i+drow_beg
-              if len(wrksh_nm) >= 7 and wrksh_nm[0:7] == "summary" and ij < len(data) and len(data[ij]) >= 4:
+              if wrksh_nm is not None and len(wrksh_nm) >= 7 and wrksh_nm[0:7] == "summary" and ij < len(data) and len(data[ij]) >= 4:
                   #print("---- got1 summary wrk_sh= %s suffix= %s len= %d col3= %s" % (wrksh_nm, suffix, len(data[ij]), data[ij][3]), file=sys.stderr)
                   if data[ij][3] == "data_sheet" and suffix != "" and len(data[ij][2]) > len(suffix) and data[ij][2][-len(suffix)] != suffix:
                      # so we haven't already added the suffix to the sheet name
@@ -697,9 +707,9 @@ for bmi in range(base_mx+1):
                          ndata[i].append(0.0)
                          if len(ndata[i]) > 1000:
                             sys.exit(1)
-                   if i >= len(ndata):
+                   if verbose > 0 and i >= len(ndata):
                       print("tsv_2_xlsx.py: bad row idx i: i= %d, len(ndata)= %d, j= %d, str_val= %s, num= %d" % (i, len(ndata), j, val, num), file=sys.stderr)
-                   if j >= len(ndata[i]):
+                   if verbose > 0 and j >= len(ndata[i]):
                       print("tsv_2_xlsx.py: bad col idx j: i= %d, len(ndata)= %d, j= %d, len(ndata[%d])= %d, str_val= %s, num= %d" % (i, len(ndata), j, i, len(ndata[i]), val, num), file=sys.stderr)
                    ndata[i][j] = val
             for i in range(len(data)):
@@ -707,10 +717,10 @@ for bmi in range(base_mx+1):
                    if i in fn_bs_hdr_rows[fn_bs_i]:
                       for k in range(i, i+2):  # allow for a little shifting of rows
                           if fn_bs_hdr_lkup[fn_bs_i][i][0] == data[k][0]: # look for match on 1st col of header row
-                             print("tsv_2_xlsx.ph: at 2 sheet_nm= ", sheet_nm, ",i=",i,",k=",k,", outfile= ", output_filename, ", hdr_len= ", len(fn_bs_hdr_lkup[fn_bs_i][i]), ", write header row= ", fn_bs_hdr_lkup[fn_bs_i][i])
+                             print("tsv_2_xlsx.py: at 2 sheet_nm= ", sheet_nm, ",i=",i,",k=",k,", outfile= ", output_filename, ", hdr_len= ", len(fn_bs_hdr_lkup[fn_bs_i][i]), ", write header row= ", fn_bs_hdr_lkup[fn_bs_i][i])
                              for j in range(fn_bs_hdr_max[fn_bs_i][i]+1):
-                                 if sheet_nm == "pidstat":
-                                    print("tsv_2_xlsx.ph: at 2.1 sheet_nm= %s, hdr[%d, %d]= %s" % (sheet_nm, i, j, fn_bs_hdr_lkup[fn_bs_i][i][j]))
+                                 if verbose > 0 and sheet_nm == "pidstat":
+                                    print("tsv_2_xlsx.py: at 2.1 sheet_nm= %s, hdr[%d, %d]= %s" % (sheet_nm, i, j, fn_bs_hdr_lkup[fn_bs_i][i][j]))
                                  worksheet.write(i, j, fn_bs_hdr_lkup[fn_bs_i][i][j])
                              break
                    else:
@@ -990,5 +1000,6 @@ if closed_wkbk == False:
     workbook.close()
     closed_wkbk = True
     
+print("python: exit with rc 0 for file %s\n" % (output_filename), file=sys.stderr)
 sys.exit(0)
 
