@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SCR_DIR=`dirname $0`
-echo "arg1 is RPS.json or response.json, arg2 is string for header, arg3 and arg4 are optional begin and end timestamp (usually from the json file itself"
+#echo "arg1 is RPS.json or response.json, arg2 is string for header, arg3 and arg4 are optional begin and end timestamp (usually from the json file itself"
 
 FILE=
 DESC=
@@ -13,6 +13,7 @@ SHEET_NM=
 OPTIONS=
 MATCH_INTRVL=
 OSTYP=$OSTYPE
+VERBOSE=0
 
 while getopts "hvf:b:d:e:m:o:s:S:t:" opt; do
   case ${opt} in
@@ -77,7 +78,9 @@ if [ "$DESC" == "" ]; then
   if [ "$CK_TXT" != "$FILE" ]; then
     if [ -e $CK_TXT ]; then
       DESC=`head -1 $CK_TXT`
-      echo "$0: CK_TXT= $CK_TXT  DESC= $DESC" > /dev/stderr
+      if [ $VERBOSE -gt 0 ]; then
+        echo "$0: CK_TXT= $CK_TXT  DESC= $DESC" > /dev/stderr
+      fi
     fi
   fi
 fi
@@ -87,7 +90,9 @@ if [[ "$OSTYP" == "darwin"* ]]; then
    SZ_CMD=" -f %z "
 fi
 FILESIZE=$(stat $SZ_CMD "$FILE" | awk '{print $1}')
-echo "file $FILE has size $FILESIZE"
+if [ $VERBOSE -gt 0 ]; then
+  echo "file $FILE has size $FILESIZE"
+fi
 if [ "$FILESIZE" == "0" ]; then
   echo "$0: filesize $FILE is zero"
   exit 0
@@ -114,7 +119,9 @@ else
   END=$FORCE_END
 fi
 
-echo "beg= $BEG, DURA= $DURA, end= $END"
+if [ $VERBOSE -gt 0 ]; then
+  echo "beg= $BEG, DURA= $DURA, end= $END"
+fi
 O_BEG=
 if [ "$BEG" != "" ]; then
   O_BEG=" -b $BEG "
@@ -139,8 +146,10 @@ OPT_SHEET_NM=
 if [ "$SHEET_NM" != "" ]; then
   OPT_SHEET_NM=" -S $SHEET_NM "
 fi
-echo "python $SCR_DIR/json_2_tsv.py -f $FILE $O_OPT -d \"$DESC\" $O_MATCH -s $SUM_FILE $O_BEG $O_END $O_TYP $OPT_SHEET_NM " > /dev/stderr
-      python $SCR_DIR/json_2_tsv.py -f $FILE $O_OPT -d "$DESC" $O_MATCH -s $SUM_FILE $O_BEG $O_END $O_TYP $OPT_SHEET_NM
+if [ $VERBOSE -gt 0 ]; then
+  echo "python $SCR_DIR/json_2_tsv.py -f $FILE $O_OPT -d \"$DESC\" $O_MATCH -s $SUM_FILE $O_BEG $O_END $O_TYP $OPT_SHEET_NM " > /dev/stderr
+fi
+        python $SCR_DIR/json_2_tsv.py -f $FILE $O_OPT -d "$DESC" $O_MATCH -s $SUM_FILE $O_BEG $O_END $O_TYP $OPT_SHEET_NM
       RC=$?
       exit $RC
 #python ../json_2_tsv.py response_time.json $BEG $END
