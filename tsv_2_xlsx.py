@@ -36,10 +36,13 @@ all_charts_one_row = []
 all_charts_one_row_hash = {}
 all_charts_one_row_max = -1
 desc = None
+got_sum_all = 0
+sum_all_file = ""
+sum_all_base = ""
 
 #print("%f" % (1.0/0.0))  # force an error for testing to check error handling
 
-options, remainder = getopt.getopt(sys.argv[1:], 'Aa:b:c:d:e:f:i:m:o:O:P:p:s:v', [
+options, remainder = getopt.getopt(sys.argv[1:], 'Aa:b:c:d:e:f:i:m:o:O:P:p:s:S:v', [
                                                          'average',
                                                          'avg_dir',
                                                          'begin=',
@@ -54,6 +57,7 @@ options, remainder = getopt.getopt(sys.argv[1:], 'Aa:b:c:d:e:f:i:m:o:O:P:p:s:v',
                                                          'phase=',
                                                          'prefix=',
                                                          'size=',
+                                                         'sum_all=',
                                                          'verbose'
                                                          ])
 sv_remainder = remainder
@@ -89,6 +93,11 @@ for opt, arg in options:
         #print("options_str_top= ", options_str_top, file=sys.stderr)
     elif opt in ('-m', '--max'):
         max_val = float(arg)
+    elif opt in ('-S', '--sum_file'):
+        #got_sum_all += 1
+        sum_all_file = arg
+        sum_all_base = os.path.basename(sum_all_file)
+        print("sum_all_base= %s" % (sum_all_base))
     elif opt in ('-v', '--verbose'):
         verbose = True
 
@@ -101,11 +110,13 @@ if options_str.find("all_charts_one_row") >= 0:
 
 sheets_limit = []
 arr = options_str.split(",")
-print("options_str= ", options_str, ", options arr= ", arr)
+if verbose > 0:
+   print("options_str= ", options_str, ", options arr= ", arr)
 if len(options_str) > 0:
   lkfor = "sheet_limit{"
   arr = options_str.split(",")
-  print("options arr= ", arr)
+  if verbose > 0:
+     print("options arr= ", arr)
   for opt in arr:
     i = opt.find(lkfor)
     if verbose > 0:
@@ -117,11 +128,11 @@ if len(options_str) > 0:
        if verbose > 0:
           print("opt= %s, lkfor= %s, str2= %s" % (opt, lkfor, str2), file=sys.stderr)
 
-print("sheets_limit= ", sheets_limit)
+if verbose > 0:
+   print("sheets_limit= ", sheets_limit)
 opt_fl = []
 fl_options = []
 file_list1 = []
-got_sum_all = 0
 
 if options_filename != "":
    opt_fl = []
@@ -132,7 +143,8 @@ if options_filename != "":
 if len(opt_fl) > 0:
    fl_opt = 0
    fl_options.append([sys.argv[0]])
-   print("len(fl_options)= %d at 20, len(opt_fl)= %d" % (len(fl_options), len(opt_fl)), file=sys.stderr)
+   if verbose > 0:
+      print("len(fl_options)= %d at 20, len(opt_fl)= %d" % (len(fl_options), len(opt_fl)), file=sys.stderr)
    for i in range(len(opt_fl)):
        # use blank lines to mark groups, might have multiple consecutive blanks so only use change from non-blank to blank
        if len(opt_fl[i]) == 0 and i > 0 and len(opt_fl[i-1]) > 0:
@@ -141,10 +153,11 @@ if len(opt_fl) > 0:
           #print("len(fl_options)= %d at 22" % (len(fl_options)), file=sys.stderr)
           continue
        if len(opt_fl[i]) == 1 and opt_fl[i][0][0] != "-":
-          print("path? try= ", opt_fl[i][0])
+          if verbose > 0:
+             print("path? try= ", opt_fl[i][0])
           base = os.path.basename(opt_fl[i][0])
           file_list1.append({"fl_opt":fl_opt, "flnm":opt_fl[i][0], "base":base, "done":0})
-          if base == "sum_all.tsv":
+          if sum_all_base != "" and base == sum_all_base:
              got_sum_all += 1
        for j in range(len(opt_fl[i])):
            fl_options[fl_opt].append(opt_fl[i][j])
@@ -155,12 +168,14 @@ else:
    for i in range(len(sys.argv)):
        fl_options[fl_opt].append(sys.argv[i])
 
-print("len(fl_options)= %d at 50" % (len(fl_options)), file=sys.stderr)
+if verbose > 0:
+   print("len(fl_options)= %d at 50" % (len(fl_options)), file=sys.stderr)
 
 print("got number of sum_all.tsv files= ", got_sum_all)
 #file_list = sorted(file_list1, key=lambda x: (x["base"], x["fl_opt"]))
 file_list = file_list1
-print(file_list)
+if verbose > 0:
+   print("tsv_2_xls.py: file_list: ", file_list)
 
 fake_file_list = len(file_list)
 if fake_file_list == 0:
@@ -201,8 +216,9 @@ def is_number(s):
    
 for fo2 in range(len(fl_options)):
    fo = fo2
-   print("fo= ", fo)
-   options, remainder = getopt.getopt(fl_options[fo][1:], 'Aa:b:c:d:e:i:m:o:O:P:p:s:v', [
+   if verbose > 0:
+      print("fo= ", fo)
+   options, remainder = getopt.getopt(fl_options[fo][1:], 'Aa:b:c:d:e:i:m:o:O:P:p:s:S:v', [
                                                             'average',
                                                             'avg_dir',
                                                             'begin',
@@ -216,6 +232,7 @@ for fo2 in range(len(fl_options)):
                                                             'phase=',
                                                             'prefix=',
                                                             'size=',
+                                                            'sum_all=',
                                                             'verbose',
                                                             ])
    for x in remainder:
@@ -230,7 +247,8 @@ for fo2 in range(len(fl_options)):
          base_count[base_mx] = 0
          base_done[base_mx] = 0
          base_fl_opt[base_mx] = {}
-         print("adding base_lkup[%s]= %d" % (base, base_mx))
+         if verbose > 0:
+            print("adding base_lkup[%s]= %d" % (base, base_mx))
       base_i = base_lkup[base]
       base_count[base_i] += 1
       #base_fl_opt[base_i][fo] = 1
@@ -239,7 +257,8 @@ worksheet_sum_all = None
 worksheet_sum_all_nm = None
 
 for i in range(base_mx+1):
-    print("base_lkup[%s] = %d, count= %d" % (base_list[i], i, base_count[i]))
+    if verbose > 0:
+       print("base_lkup[%s] = %d, count= %d" % (base_list[i], i, base_count[i]))
 
 for fo2 in range(len(fl_options)):
    all_charts_one_row.append([-1, 1, 0, None])
@@ -440,7 +459,8 @@ for bmi in range(base_mx+1):
       if fo2 in base_fl_opt[base_i]:
          continue
       base_fl_opt[base_i][fo2] = 1
-      print("doing bmi= %d, fo= %d, count= %d done= %d base= %s, x= %s" % (bmi, fo, base_count[base_i], base_done[base_i], base, x))
+      if verbose > 0:
+         print("doing bmi= %d, fo= %d, count= %d done= %d base= %s, x= %s" % (bmi, fo, base_count[base_i], base_done[base_i], base, x))
 
       if do_avg and base_count[base_i] == base_done[base_i]:
         do_avg_write = True
@@ -503,13 +523,10 @@ for bmi in range(base_mx+1):
       #   wrksh_nm  = worksheet_sum_all_nm
       #   wksheet_nms[wrksh_nm] = 1
       #   bold = workbook.add_format({'bold': 1})
-      if sheet_nm == "sum_all":
-            worksheet = worksheet_sum_all
-            wrksh_nm  = worksheet_sum_all_nm
-            print("ckck use sum_file wrksh_nm= %s x= %s" % (wrksh_nm, x), file=sys.stderr)
       if do_avg == False or do_avg_write == True:
          if sheet_nm == "sum_all":
-            print("use sum_file x= %s" % (x), file=sys.stderr)
+            if verbose > 0:
+               print("use sum_file x= %s" % (x), file=sys.stderr)
             worksheet = worksheet_sum_all
             wrksh_nm  = worksheet_sum_all_nm
          #else:
@@ -592,7 +609,6 @@ for bmi in range(base_mx+1):
              drow_end, dcol_cat = find_drow_end(data, ch_arr, c, drow_beg, drow_end)
              if verbose:
                 print("found end data row= %d" % (drow_end))
-             print("found end data row= %d" % (drow_end))
           title = data[title_rw][title_cl+1]
           #if title == "pid_stat %CPU by proc" and hrow_beg > 0 and hrow_end < len(data):
           #   print("hdr row: ", data[hrow_beg])
@@ -687,7 +703,8 @@ for bmi in range(base_mx+1):
                    num = fn_bs_n[fn_bs_i][i][j]
                    if num > 0:
                       val /= num;
-                   worksheet.write(i, j, val)
+                   if worksheet is not None:
+                      worksheet.write(i, j, val)
                    if i >= len(ndata):
                       is_num = is_number(val)
                       if is_num:
@@ -717,22 +734,27 @@ for bmi in range(base_mx+1):
                    if i in fn_bs_hdr_rows[fn_bs_i]:
                       for k in range(i, i+2):  # allow for a little shifting of rows
                           if fn_bs_hdr_lkup[fn_bs_i][i][0] == data[k][0]: # look for match on 1st col of header row
-                             print("tsv_2_xlsx.py: at 2 sheet_nm= ", sheet_nm, ",i=",i,",k=",k,", outfile= ", output_filename, ", hdr_len= ", len(fn_bs_hdr_lkup[fn_bs_i][i]), ", write header row= ", fn_bs_hdr_lkup[fn_bs_i][i])
+                             if verbose > 0:
+                                print("tsv_2_xlsx.py: at 2 sheet_nm= ", sheet_nm, ",i=",i,",k=",k,", outfile= ", output_filename, ", hdr_len= ", len(fn_bs_hdr_lkup[fn_bs_i][i]), ", write header row= ", fn_bs_hdr_lkup[fn_bs_i][i])
                              for j in range(fn_bs_hdr_max[fn_bs_i][i]+1):
                                  if verbose > 0 and sheet_nm == "pidstat":
                                     print("tsv_2_xlsx.py: at 2.1 sheet_nm= %s, hdr[%d, %d]= %s" % (sheet_nm, i, j, fn_bs_hdr_lkup[fn_bs_i][i][j]))
-                                 worksheet.write(i, j, fn_bs_hdr_lkup[fn_bs_i][i][j])
+                                 if worksheet is not None:
+                                    worksheet.write(i, j, fn_bs_hdr_lkup[fn_bs_i][i][j])
                              break
                    else:
-                      worksheet.write_row(i, ph_add, data[i])
+                      if worksheet is not None:
+                         worksheet.write_row(i, ph_add, data[i])
                    write_rows += 1
-            print("----  write_rows2= %d, write_rows3= %d" % (write_rows, write_rows3), file=sys.stderr)
+            if verbose > 0:
+               print("----  write_rows2= %d, write_rows3= %d" % (write_rows, write_rows3), file=sys.stderr)
             #with open('new_tsv.tsv', 'w', newline='') as csvfile:
             base = os.path.basename(x)
             nw_nm = base
             if avg_dir != None:
                nw_nm = avg_dir + "/" + nw_nm
-               print("---- got do_avg_write nw_nm= %s, rows= %d" % (nw_nm, len(data)), file=sys.stderr)
+               if verbose > 0:
+                  print("---- got do_avg_write nw_nm= %s, rows= %d" % (nw_nm, len(data)), file=sys.stderr)
                with open(nw_nm, 'w') as csvfile:
                   spamwriter = csv.writer(csvfile, dialect="excel-tab")
                   for i in range(len(ndata)):
@@ -748,11 +770,12 @@ for bmi in range(base_mx+1):
             for i in range(len(data)):
               if doing_sum_all and len(data[i]) >= 3 and data[i][2] == "goto_sheet":
                 #print("---- got1 summary wrk_sh= %s suffix= %s len= %d col3= %s" % (wrksh_nm, suffix, len(data[ij]), data[ij][3]), file=sys.stderr)
-                for j in range(len(data[i])):
-                   if j <= 2:
-                     worksheet.write(i, j, data[i][j])
-                   else:
-                     worksheet.write_url(i, j,  "internal:"+data[i][j]+"!A1")
+                if worksheet is not None:
+                   for j in range(len(data[i])):
+                      if j <= 2:
+                        worksheet.write(i, j, data[i][j])
+                      else:
+                        worksheet.write_url(i, j,  "internal:"+data[i][j]+"!A1")
                 write_rows3 += 1
               else:
                    if 1==1 and dcol_cat != -1 and len(data[i]) > jjj and i >= drow_beg and i <= (drow_end):
@@ -769,10 +792,12 @@ for bmi in range(base_mx+1):
                           skip_it = True
                        if skip_it:
                           skipped += 1
-                          for ij in range(len(data[i])):
+                          if worksheet is not None:
+                            for ij in range(len(data[i])):
                               worksheet.write_blank(i, ph_add+ij, None, bold0)
                           continue
-                   worksheet.write_row(i, ph_add, data[i])
+                   if worksheet is not None:
+                      worksheet.write_row(i, ph_add, data[i])
                    write_rows += 1
          #print("---- skipped2a= %d, write_rows= %d, write_rows3= %d, ts_beg= %f, ts_end= %f ts_first= %f ts_last= %f" % (skipped, write_rows, write_rows3, ts_beg, ts_end, ts_first, ts_last), file=sys.stderr)
       
@@ -942,7 +967,8 @@ for bmi in range(base_mx+1):
                 #print("++++__insert chart for sheet= %s, chart= %s, at_row= %d at_col= %d" % (sheet_nm, title, ch_top_at_row, ch_left_at_col), file=sys.stderr)
                 if worksheet_charts != None:
                    if options_all_charts_one_row == True and desc != None:
-                      print("++++__calc0  chart for sheet= %s, fo2= %d desc= %s" % (sheet_nm, fo2, all_charts_one_row[fo2][3]), file=sys.stderr)
+                      if verbose > 0:
+                         print("++++__calc0  chart for sheet= %s, fo2= %d desc= %s" % (sheet_nm, fo2, all_charts_one_row[fo2][3]), file=sys.stderr)
                       dsc = all_charts_one_row[fo2][3]
                       if dsc != None and not dsc in all_charts_one_row_hash:
                          all_charts_one_row_max += 1
@@ -962,7 +988,8 @@ for bmi in range(base_mx+1):
                          ch_left_at_col = all_charts_one_row[dsc_i][1]
                          all_charts_one_row_hash[dsc]["charts"] += 1
                          
-                      print("chart sheet= %s, row_beg= %d col= %d, title= %s" % (sheet_nm, ch_top_at_row, ch_left_at_col, title), file=sys.stderr)
+                      if verbose > 0:
+                         print("chart sheet= %s, row_beg= %d col= %d, title= %s" % (sheet_nm, ch_top_at_row, ch_left_at_col, title), file=sys.stderr)
                    else:
                      if c == 0:  # first chart of row
                         ch_sh_row += 1
