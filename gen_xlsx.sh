@@ -277,9 +277,13 @@ if [ "$AVG_DIR" != "" ]; then
   OPT_a=" -a $AVG_DIR "
 fi
 if [ "$DESC_FILE" != "" ]; then
-   echo "DESC_FILE= $DESC_FILE" > /dev/stderr
+   if [ $VERBOSE -gt 0 ]; then
+     echo "DESC_FILE= $DESC_FILE" > /dev/stderr
+   fi
    DESC_FILE=$(get_abs_filename "$DESC_FILE")
-   echo "DESC_FILE= $DESC_FILE" > /dev/stderr
+   if [ $VERBOSE -gt 0 ]; then
+     echo "DESC_FILE= $DESC_FILE" > /dev/stderr
+   fi
 fi
 
 if [ "$INPUT_FILE_LIST" != "" ]; then
@@ -350,14 +354,20 @@ else
      if [ "$GOT_DIR" == "0" ]; then
        CKF="sys_*_perf_stat.txt"
        RESP=`find $DIR -name "$CKF" | wc -l | awk '{$1=$1;print}'`
-       echo "got29 $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one." > /dev/stderr
+       if [ $VERBOSE -gt 0 ]; then
+         echo "got29 $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one." > /dev/stderr
+       fi
        if [ "$RESP" == "0" ]; then
-       CKF="sys_*_perf_stat.txt*"
-       RESP=`find $DIR -name "$CKF" | wc -l | awk '{$1=$1;print}'`
-       echo "got $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one." > /dev/stderr
+         CKF="sys_*_perf_stat.txt*"
+         RESP=`find $DIR -name "$CKF" | wc -l | awk '{$1=$1;print}'`
+         if [ $VERBOSE -gt 0 ]; then
+           echo "got $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one." > /dev/stderr
+         fi
        fi
        if [ "$RESP" != "0" ]; then
-         echo "found41 $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one." > /dev/stderr
+         if [ $VERBOSE -gt 0 ]; then
+           echo "found41 $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one." > /dev/stderr
+         fi
          RESP=`find $DIR -name "$CKF"|sort`
          if [ "$REGEX_LEN" != "0" ]; then
            RESP=`find $DIR -name "$CKF" | sort`
@@ -367,7 +377,9 @@ else
            RESP3=`echo "$RESP" | wc -l`
            echo "mydir count= $mydir, resplines= $RESP3"
          fi
-         echo "found51 $CKF file in dir $DIR"
+         if [ $VERBOSE -gt 0 ]; then
+           echo "found51 $CKF file in dir $DIR"
+         fi
          STR=
          j=0
          for ii in $RESP; do
@@ -445,7 +457,9 @@ fi
 
 
 LST=$DIR
-echo "DIR at 35: $DIR"
+if [ $VERBOSE -gt 0 ]; then
+  echo "DIR at 35: $DIR"
+fi
 #exit
 
 CDIR=`pwd`
@@ -465,7 +479,9 @@ FCTRS=
 SVGS=
 SUM_FILE=sum.tsv
 
-echo "LST= $LST" > /dev/stderr
+if [ $VERBOSE -gt 0 ]; then
+  echo "LST= $LST" > /dev/stderr
+fi
 
 DIR_1ST_DIR=
 if [ "$INPUT_FILE_LIST" == "" ]; then
@@ -497,7 +513,11 @@ for i in $LST; do
       fi
    fi
  fi
- pushd $i
+ if [ $VERBOSE -gt 0 ]; then
+   pushd $i
+ else
+   pushd $i > /dev/null
+ fi
  IFS="/" read -ra PARTS <<< "$(pwd)"
  XLS=
  for k in "${PARTS[@]}"; do
@@ -505,7 +525,9 @@ for i in $LST; do
        XLS=$k
     fi
  done
- echo "XLS= $XLS" > /dev/stderr
+ if [ $VERBOSE -gt 0 ]; then
+   echo "XLS= $XLS" > /dev/stderr
+ fi
  RPS=`echo $i | sed 's/rps_v/rpsv/' | sed 's/rps.*_.*/rps/' | sed 's/.*_//' | sed 's/\/.*//'`
  RPS="${RPS}"
  if [ "$RPS" == "" ]; then
@@ -518,7 +540,9 @@ for i in $LST; do
  fi
  FCTR=`echo $RPS | sed 's/rps//'`
  FCTR=`awk -v fctr="$FCTR" 'BEGIN{fctr += 0.0; mby=1.0; if (fctr >= 100.0) {mby=0.001;} if (fctr == 0.0) {fctr=1.0;mby=1.0;} printf("%.3f\n", mby*fctr); exit;}'`
- echo "rps= $RPS, fctr= $FCTR"
+ if [ $VERBOSE -gt 0 ]; then
+   echo "rps= $RPS, fctr= $FCTR"
+ fi
  if [ "$XLSX_FILE" != "" ]; then
    XLS=$XLSX_FILE
  fi
@@ -590,7 +614,9 @@ for i in $LST; do
           LPID=$!
           RC=$?
           BK_DIR[$LPID]=$i
-          echo "LPID= $LPID, RC= $RC"
+          if [ $VERBOSE -gt 0 ]; then
+            echo "LPID= $LPID, RC= $RC"
+          fi
    fi
      LOAD=`uptime | awk '{printf("%.0f\n", $(NF-2)+0.5);}'`
      jbs=0
@@ -622,9 +648,13 @@ for i in $LST; do
  fi
  TS_CUR=`date +%s`
  TS_DFF=$(($TS_CUR-$TS_BEG))
- echo -e "FLS: dir_num= ${DIR_NUM} of ${DIR_NUM_MX}, elap_tm= $TS_DFF secs, ${FLS}" > /dev/stderr
+ echo "FLS: job_id= $JOB_ID dir_num= ${DIR_NUM} of ${DIR_NUM_MX}, elap_tm= $TS_DFF secs, ${FLS}" > /dev/stderr
  DIR_NUM=$(($DIR_NUM+1))
- popd
+ if [ $VERBOSE -gt 0 ]; then
+   popd
+ else
+   popd > /dev/null
+ fi
 done
 
 wait_for_all() {
@@ -648,12 +678,18 @@ wait_for_all() {
 wait_for_all $LINENO
 
 for i in $LST; do
- pushd $i
+ if [ $VERBOSE -gt 0 ]; then
+   pushd $i
+ else
+   pushd $i > /dev/null
+ fi
  SM_FL=
  #if [ ! -e $SUM_FILE ]; then
    SM_FL=$i/$SUM_FILE
  #fi
- echo "$0 SM_FL= $SM_FL  SUM_FILE= $SUM_FILE"
+ if [ $VERBOSE -gt 0 ]; then
+   echo "$0 SM_FL= $SM_FL  SUM_FILE= $SUM_FILE"
+ fi
  echo -e "-p\t\"$RPS\"" >> $ALST
  echo -e "-s\t2,2" >> $ALST
  if [ "$AVERAGE" == "1" ]; then
@@ -688,7 +724,11 @@ for i in $LST; do
    #FLS=`ls -1 $i/metric_out.tsv`
    echo -e "${FLS}" >> $ALST
  fi
- popd
+ if [ $VERBOSE -gt 0 ]; then
+   popd
+ else
+   popd > /dev/null
+ fi
  FLS=`ls -1 $SM_FL $i/*txt.tsv`
  echo -e "${FLS}" >> $ALST
  MYA=($i/*log.tsv)
@@ -726,8 +766,8 @@ for i in $LST; do
 done
 fi
 
-#SUM_ALL=sum_all_${JOB_ID}.tsv
-SUM_ALL=sum_all.tsv
+SUM_ALL=sum_all_${JOB_ID}.tsv
+#SUM_ALL=sum_all.tsv
 if [ -e $SUM_ALL ]; then
   MYDIR=`pwd`
   MYSUMALL="$MYDIR/$SUM_ALL"
@@ -770,14 +810,18 @@ if [ $NUM_DIRS -gt 1 ]; then
     MK_SUM_ALL=1
   fi
 
+  if [ $VERBOSE -gt 0 ]; then
   echo "$0: awk -v mk_sum_all="$MK_SUM_ALL" -v input_file=\"$ALST\" -v sum_all=\"$SUM_ALL\" -v sum_file=\"$SUM_FILE\" -v curdir=\"$got_pwd\" "
-  awk -v mk_sum_all="$MK_SUM_ALL" -v input_file="$ALST" -v sum_all="$SUM_ALL" -v sum_file="$SUM_FILE" -v sum_all_avg_by_metric="$SUM_ALL_AVG_BY_METRIC" -v curdir="$got_pwd" '
+  fi
+  awk -v verbose="$VERBOSE" -v mk_sum_all="$MK_SUM_ALL" -v input_file="$ALST" -v sum_all="$SUM_ALL" -v sum_file="$SUM_FILE" -v sum_all_avg_by_metric="$SUM_ALL_AVG_BY_METRIC" -v curdir="$got_pwd" '
     BEGIN{sum_files=0;fls=0; fld_m=3;fld_v=4; got_avgby=0;}
     { if (index($0, sum_file) > 0 || index($0, sum_all) > 0) {
         flnm = $0;
         fls++;
         fls_mx = fls;
-        printf("got sumfile= %s sum_all= %s\n", flnm, sum_all) > "/dev/stderr";
+        if (verbose > 0) {
+           printf("got sumfile= %s sum_all= %s\n", flnm, sum_all) > "/dev/stderr";
+        }
         ln = -1;
         nflds=4;
         while ((getline line < flnm) > 0) {
@@ -788,12 +832,16 @@ if [ $NUM_DIRS -gt 1 ]; then
                 if (hdrs[3] == "Value" && hdrs[4] == "Metric") {
                    fld_m=4; 
                    fld_v=3; 
-                   printf("sum_all2 metric fld= %d nf= %d\n", 3, nh) > "/dev/stderr";
+                   if (verbose > 0) {
+                     printf("sum_all2 metric fld= %d nf= %d\n", 3, nh) > "/dev/stderr";
+                   }
                 }
                 if (hdrs[3] == "Metric") {
                    fld_m=3; 
                    fld_v=4; 
-                   printf("sum_all3 metric fld= %d nf= %d\n", 3, nh) > "/dev/stderr";
+                   if (verbose > 0) {
+                     printf("sum_all3 metric fld= %d nf= %d\n", 3, nh) > "/dev/stderr";
+                   }
                    if (nh > 4) {
                      nflds= nh;
                    }
@@ -879,7 +927,9 @@ if [ $NUM_DIRS -gt 1 ]; then
              if (fls_mx < (fls+nflds-5)) {
                fls_mx = fls+nflds-5;
              }
-             printf("fls= %d, flx_mx= %d\n", fls, fls_mx) > "/dev/stderr";
+             if (verbose > 0) {
+               printf("fls= %d, flx_mx= %d\n", fls, fls_mx) > "/dev/stderr";
+             }
            }
         }
         fls = fls_mx;
@@ -999,7 +1049,9 @@ if [ $NUM_DIRS -gt 1 ]; then
       close(ofile);
       }
       flnm = input_file;
-      printf("======---- input_file= %s\n", input_file) > "/dev/stderr";
+      if (verbose > 0) {
+        printf("======---- input_file= %s\n", input_file) > "/dev/stderr";
+      }
         ln = 0;
         last_non_blank = -1;
         first_blank = -1;
@@ -1036,7 +1088,9 @@ if [ $NUM_DIRS -gt 1 ]; then
       if [ "$END_TM_IN" != "" ]; then
         END_TM=$END_TM_IN
       fi
-  echo "=========== pwd = $got_pwd ========="
+    if [ $VERBOSE -gt 0 ]; then
+       echo "=========== pwd = $got_pwd ========="
+    fi
     USE_DIR=
     RESP=`find $DIR_1ST_DIR -name 60secs.log | head -1 | wc -l | awk '{$1=$1;print}'`
     BTM=
@@ -1061,11 +1115,15 @@ if [ $NUM_DIRS -gt 1 ]; then
     else
       USE_DIR=$DIR_1ST_DIR
     fi
-    echo "find_401 run.log RESP= $RESP"
+    if [ $VERBOSE -gt 0 ]; then
+      echo "find_401 run.log RESP= $RESP"
+    fi
     ITP_INTRVL=0
     if [ "$GOT_BE_TM" == 0 -a "$RESP" != "0" ]; then
       RUN_LOG=`find $USE_DIR -name run.log | head -1`
-      echo "run_log file= $RUN_LOG"
+       if [ $VERBOSE -gt 0 ]; then
+        echo "run_log file= $RUN_LOG"
+      fi
       if [ "$BEG_TM_IN" != "" ]; then
         BEG_TM=$BEG_TM_IN
       else
@@ -1076,9 +1134,11 @@ if [ $NUM_DIRS -gt 1 ]; then
       else
         END_TM=`awk '/ end /{printf("%s\n", $2);}' $RUN_LOG`
       fi
-      echo "beg_tm= $BEG_TM end_tm= $END_TM" > /dev/stderr
-      echo "$BEG_TM" | awk '{print strftime("beg_time: %c %Z",$1)}' > /dev/stderr
-      echo "$END_TM" | awk '{print strftime("end_time: %c %Z",$1)}' > /dev/stderr
+      if [ $VERBOSE -gt 0 ]; then
+        echo "beg_tm= $BEG_TM end_tm= $END_TM" > /dev/stderr
+        echo "$BEG_TM" | awk '{print strftime("beg_time: %c %Z",$1)}' > /dev/stderr
+        echo "$END_TM" | awk '{print strftime("end_time: %c %Z",$1)}' > /dev/stderr
+      fi
       RESP_ITP=`find $USE_DIR -name run_itp.log | wc -l | awk '{$1=$1;print}'`
       if [ "$RESP_ITP" != "0" ]; then
          ITP_LOG=`find $USE_DIR -name run_itp.log | head -1`
@@ -1087,7 +1147,9 @@ if [ $NUM_DIRS -gt 1 ]; then
             /perf\sstat/ {for (i=2; i < NF; i++) { if ($i == "-I" ) { intrvl= $(i+1); exit;}}}
             END{printf("%.0f\n", intrvl/1000);}
           ' $ITP_LOG`
-         echo "ITP_INTERVAL= $ITP_INTRVL, log= $ITP_LOG" > /dev/stderr
+         if [ $VERBOSE -gt 0 ]; then
+           echo "ITP_INTERVAL= $ITP_INTRVL, log= $ITP_LOG" > /dev/stderr
+         fi
       fi
       if [ "$ITP_INTRVL" == "0" ]; then
         if [ -e "$RUN_LOG" ]; then
@@ -1101,9 +1163,13 @@ if [ $NUM_DIRS -gt 1 ]; then
   if [ "$INPUT_FILE_LIST" != "" ]; then
     RESP=0
   else
-    echo "find $INPUT_DIR -name muttley*.json | wc -l | awk '{$1=$1;print}'"
+    if [ $VERBOSE -gt 0 ]; then
+       echo "find $INPUT_DIR -name muttley*.json | wc -l | awk '{$1=$1;print}'"
+    fi
     RESP=`find $INPUT_DIR -name "muttley*.json" | wc -l | awk '{$1=$1;print}'`
-    echo "find_51 muttley RESP= \"$RESP\"" 
+    if [ $VERBOSE -gt 0 ]; then
+      echo "find_51 muttley RESP= \"$RESP\"" 
+    fi
   fi
   if [ "$RESP" != "0" ]; then
       OPT_M=
@@ -1118,23 +1184,33 @@ if [ $NUM_DIRS -gt 1 ]; then
         echo -e "-d\t\"$DESC_FILE\"" >> $ALST
       fi
       tst_files=`find $INPUT_DIR -name "muttley*.json"|sort`
-      echo "find muttley*.json.tsv RESP= $tst_files"
-      echo "muttley files_0: $tst_files" > /dev/stderr
+      if [ $VERBOSE -gt 0 ]; then
+        echo "find muttley*.json.tsv RESP= $tst_files"
+        echo "muttley files_0: $tst_files" > /dev/stderr
+      fi
       if [ "$tst_files" != "" ]; then
         for f in $tst_files; do
-          echo "try muttley_a file= $f" > /dev/stderr
+          if [ $VERBOSE -gt 0 ]; then
+            echo "try muttley_a file= $f" > /dev/stderr
+          fi
           if [ -e $f ]; then
              OPT_O=
              if [ "$OPTIONS" != "" ]; then
                OPT_O=" -o \"$OPTIONS\" "
              fi
-             echo "try muttley log $f" 
-             echo $SCR_DIR/resp_2_tsv.sh -b $BEG_TM -e $END_TM -f $f -s $SUM_ALL $OPT_O $OPT_M > /dev/stderr
+             if [ $VERBOSE -gt 0 ]; then
+               echo "try muttley log $f" 
+             fi
+             if [ $VERBOSE -gt 0 ]; then
+                echo $SCR_DIR/resp_2_tsv.sh -b $BEG_TM -e $END_TM -f $f -s $SUM_ALL $OPT_O $OPT_M > /dev/stderr
+             fi
                   $SCR_DIR/resp_2_tsv.sh -b $BEG_TM -e $END_TM -f $f -s $SUM_ALL $OPT_O $OPT_M
                    ck_last_rc $? $LINENO
           fi
           if [ -e $f.tsv ]; then
-            echo "++++++++++ got $f.tsv "
+             if [ $VERBOSE -gt 0 ]; then
+                echo "++++++++++ got $f.tsv "
+             fi
              echo -e "$f.tsv" >> $ALST
              #SHEETS="$SHEETS $f.tsv"
              #echo "got latency log $f.tsv" > /dev/stderr
@@ -1155,6 +1231,10 @@ if [ $NUM_DIRS -gt 1 ]; then
   if [ "$MAX_VAL" != "" ]; then
     OPT_M=" -m $MAX_VAL "
   fi
+  OPT_SM=
+  if [ "$SUM_ALL" != "" ]; then
+    OPT_SM=" -S $SUM_ALL "
+  fi
   OPT_TM=
   if [ "$BEG_TM_IN" != "" ]; then
      OPT_TM=" -b $BEG_TM_IN "
@@ -1164,21 +1244,34 @@ if [ $NUM_DIRS -gt 1 ]; then
   fi
 
       
-  echo "====== begin $ALST ========"
   #cat $ALST
-  head -50 $ALST
-  echo "====== end $ALST ========"
+  echo "====== using input file $ALST ========"
+  if [ $VERBOSE -gt 0 ]; then
+    echo "====== begin $ALST ========"
+    head -50 $ALST
+    echo "====== end $ALST ========"
+  fi
   TS_DFF=$(($TS_CUR-$TS_BEG))
-  echo "elap_tm= $TS_DFF"
-  echo "about to do tsv_2_xls.py" > /dev/stderr
+  if [ $VERBOSE -gt 0 ]; then
+    echo "elap_tm= $TS_DFF"
+    echo "about to do tsv_2_xls.py" > /dev/stderr
+  fi
   FSTDOUT="tmp_${JOB_ID}.jnk"
-  echo "python $SCR_DIR/tsv_2_xlsx.py $OPT_a $OPT_A $OPT_TM $OPT_OPTIONS $OPT_M -f $ALST > $FSTDOUT"
-        python $SCR_DIR/tsv_2_xlsx.py $OPT_a $OPT_A $OPT_TM $OPT_OPTIONS $OPT_M -f $ALST $SHEETS &> $FSTDOUT &
+  if [ $VERBOSE -gt 0 ]; then
+    echo "python $SCR_DIR/tsv_2_xlsx.py $OPT_a $OPT_A $OPT_TM $OPT_OPTIONS $OPT_M -f $ALST > $FSTDOUT"
+  fi
+        python $SCR_DIR/tsv_2_xlsx.py $OPT_SM $OPT_a $OPT_A $OPT_TM $OPT_OPTIONS $OPT_M -f $ALST $SHEETS &> $FSTDOUT
+        PY_RC=$?
         PY_PID=$!
-        sleep 1
-        (wait $PY_PID && RC=$? && echo $RC > tsv_2_xls_${JOB_ID}.rc && echo "tsv_2_xls.py $PYPID rc= $RC at $LINENO" > /dev/stderr) &
-        echo "$0: tsv_2_xlsx.py started with pid= $PY_PID at line= $LINENO" > /dev/stderr
-        echo $PY_PID >> tsv_2_xlsx.pid
+        #sleep 1
+        #(wait $PY_PID && RC=$? && echo $RC > tsv_2_xls_${JOB_ID}.rc && echo "tsv_2_xls.py $PYPID rc= $RC at $LINENO" > /dev/stderr) &
+        #echo "$0: tsv_2_xlsx.py started with pid= $PY_PID at line= $LINENO" > /dev/stderr
+        #echo $PY_PID >> tsv_2_xlsx.pid
+        if [ "$PY_RC" != "0" ]; then
+           echo "$0: ================== at line $LINENO: error in tsv_2_xlsx.py. py RC= $PY_RC. See log $FSTDOUT. Bye =================" > /dev/stderr
+           tail -20 $FSTDOUT
+           exit 1
+        fi
         #if [ ! -e /proc/$PY_PID ]; then
         #   echo "$0: ================== at line $LINENO: error in tsv_2_xlsx.py. py_pid= $PY_PID. See log $FSTDOUT. Bye =================" > /dev/stderr
         #   tail -20 $FSTDOUT
