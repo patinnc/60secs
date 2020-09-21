@@ -34,7 +34,7 @@ for opt, arg in options:
         beg = float(arg)
     if opt in ('-d', '--desc'):
         desc = arg
-        print("________json_2_tsv.py: got desc= %s" % (desc), file=sys.stderr)
+        #print("________json_2_tsv.py: got desc= %s" % (desc), file=sys.stderr)
     if opt in ('-e', '--end'):
         end = float(arg)
     if opt in ('-m', '--match'):
@@ -60,7 +60,8 @@ if verbose > 0:
 sheets_for_files = []
 sheets_limit = []
 arr = options_str.split(",")
-print("options_str= ", options_str, ", options arr= ", arr)
+if verbose > 0:
+   print("options_str= ", options_str, ", options arr= ", arr)
 if len(options_str) > 0:
   lkfor = "sheet_for_file{"
   lkfor2 = "sheet_limit{"
@@ -92,14 +93,16 @@ if len(options_str) > 0:
        if verbose > 0:
           print("opt= %s, lkfor= %s, str2= %s" % (opt, lkfor, str2), ", arr2= ", arr2, file=sys.stderr)
 
-print("sheets_for_files= ", sheets_for_files)
-print("sheets_limit= ", sheets_limit)
+if verbose > 0:
+  print("sheets_for_files= ", sheets_for_files)
+  print("sheets_limit= ", sheets_limit)
 
 with open(flnm) as f:
   data = json.load(f)
 # Output: {'name': 'Bob', 'languages': ['English', 'Fench']}
 #print(data)
-print("len= ", len(data))
+if verbose > 0:
+   print("len= ", len(data))
 
 if hdr == "" and flnm.find("RPS") > -1:
    hdr="RPS"
@@ -162,7 +165,8 @@ for i in range(len(data)):
     json_ts = data[i]['step_size_ms']
     json_ts = json_ts / 1000;
     if match_intrvl > 0 and json_ts > match_intrvl:
-       print("________json_2_tsv.py: got match_intrvl= %d, but json_ts = %d secs so disabling matching interval" % (match_intrvl, json_ts), file=sys.stderr)
+       if verbose > 0:
+          print("________json_2_tsv.py: got match_intrvl= %d, but json_ts = %d secs so disabling matching interval" % (match_intrvl, json_ts), file=sys.stderr)
        match_intrvl = 0
 
     for j in range(len(data[i]['datapoints'])):
@@ -222,7 +226,8 @@ if sheet_nm == "":
    for i in range(len(sheets_for_files)):
       if flnm.find(sheets_for_files[i][0]) != -1:
          sheet_nm = sheets_for_files[i][1]
-         print("set sheet_nm= %s" % (sheet_nm))
+         if verbose > 0:
+            print("set sheet_nm= %s" % (sheet_nm))
          break
 
 # sheet_limit{endpoints;cols_max;100}
@@ -230,7 +235,8 @@ sheet_limit_cols = -1
 for i in range(len(sheets_limit)):
     if sheets_limit[i][0] == sheet_nm and sheets_limit[i][1] == "cols_max":
        sheet_limit_cols = sheets_limit[i][2]
-       print("sheet_limit sheet_nm= %s, mx_col= %d, len(trgt_arr)= %d" % (sheet_nm, sheet_limit_cols, len(trgt_arr)))
+       if verbose > 0:
+          print("sheet_limit sheet_nm= %s, mx_col= %d, len(trgt_arr)= %d" % (sheet_nm, sheet_limit_cols, len(trgt_arr)))
        #print("%f" % (1.0/0.0))
        break
 
