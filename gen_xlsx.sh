@@ -601,16 +601,24 @@ for i in $LST; do
    done
    echo "new g opt= $OPT_G"
  fi
+ if [ -e $CDIR/job_${JOB_ID}.stop ]; then
+    RESP=`head -1 $CDIR/job_${JOB_ID}.stop`
+    echo "$0: got job_$JOB_ID.stop pid= $RESP and bashpid= $$" > /dev/stderr
+    if [ "$RESP" == "$$" ]; then
+      echo "$0: quitting at line $LINENO due to job_$JOB_ID.stop having value PID= $$"
+      exit 1
+    fi
+ fi
  if [ "$SKIP_SYS_2_TSV" == "0" ]; then
    if [ $VERBOSE -gt 0 ]; then
-     echo "$SCR_DIR/sys_2_tsv.sh $OPT_a $OPT_A $OPT_G -p \"$RPS\" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i \"*.png\" -s $SUM_FILE -x $XLS.xlsx -o $OPT_OPT $OPT_PH -t $DIR &> tmp.jnk" &
+     echo "$SCR_DIR/sys_2_tsv.sh $OPT_a $OPT_A $OPT_G -j $JOB_ID -p \"$RPS\" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i \"*.png\" -s $SUM_FILE -x $XLS.xlsx -o $OPT_OPT $OPT_PH -t $DIR &> tmp.jnk" &
    fi
    if [ "$BACKGROUND" -le "0" ]; then
-          $SCR_DIR/sys_2_tsv.sh $OPT_a $OPT_A $OPT_G -p "$RPS" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o $OPT_OPT $OPT_PH -t $DIR &> tmp.jnk 
+          $SCR_DIR/sys_2_tsv.sh $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$RPS" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o $OPT_OPT $OPT_PH -t $DIR &> tmp.jnk 
           RC=$?
           ck_last_rc $RC $LINENO
    else
-          $SCR_DIR/sys_2_tsv.sh $OPT_a $OPT_A $OPT_G -p "$RPS" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o $OPT_OPT $OPT_PH -t $DIR &> tmp.jnk &
+          $SCR_DIR/sys_2_tsv.sh $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$RPS" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o $OPT_OPT $OPT_PH -t $DIR &> tmp.jnk &
           LPID=$!
           RC=$?
           BK_DIR[$LPID]=$i
@@ -630,7 +638,7 @@ for i in $LST; do
      #jbs=0
      for job in `jobs -p`
      do
-       echo "wait for jobs (jbs= $jbs) pid= $job"
+       echo "$0: job_id= $JOB_ID wait for jobs (jbs= $jbs) pid= $job"
        jbs=$((jbs-1))
        wait $job
        RC=$?
@@ -724,12 +732,18 @@ for i in $LST; do
    #FLS=`ls -1 $i/metric_out.tsv`
    echo -e "${FLS}" >> $ALST
  fi
+ #if [ -e infra_cputime.txt.tsv ]; then
+ #  FLS=$(get_abs_filename infra_cputime.txt.tsv)
+ #  echo -e "${FLS}" >> $ALST
+ #fi
  if [ $VERBOSE -gt 0 ]; then
    popd
  else
    popd > /dev/null
  fi
+ #FLS=`ls -1 $SM_FL $i/*txt.tsv | grep -v infra_cputime`
  FLS=`ls -1 $SM_FL $i/*txt.tsv`
+ FLS_IC=`ls -1  $i/*txt.tsv | grep infra_cputime`
  echo -e "${FLS}" >> $ALST
  MYA=($i/*log.tsv)
  if [ "${#MYA}" != "0" ]; then
@@ -781,9 +795,23 @@ if [ "$INPUT_FILE_LIST" != "" ]; then
 fi
 
 wait_for_all $LINENO
+ if [ -e job_${JOB_ID}.stop ]; then
+    RESP=`head -1 job_${JOB_ID}.stop`
+    echo "$0: got job_$JOB_ID.stop pid= $RESP and bashpid= $$" > /dev/stderr
+    if [ "$RESP" == "$$" ]; then
+      echo "$0: quitting at line $LINENO due to job_$JOB_ID.stop having value PID= $$"
+      exit 1
+    fi
+ fi
 
 if [ "$SVGS" != "" ]; then
   $SCR_DIR/svg_to_html.sh $SVGS -r $FCTRS > tmp.html
+  ck_last_rc $? $LINENO
+fi
+  
+if [ "$FLS_IC" != "" ]; then
+  echo $SCR_DIR/redo_chart_table.sh -f $ALST   -o infra_cputime_sum_${JOB_ID}.tsv   -g infra_cputime -m sum -r 50 -t __all__ 
+  $SCR_DIR/redo_chart_table.sh -f $ALST -o infra_cputime_sum_${JOB_ID}.tsv   -g infra_cputime -m sum -r 50 -t __all__ 
   ck_last_rc $? $LINENO
 fi
   
@@ -813,7 +841,7 @@ if [ $NUM_DIRS -gt 1 ]; then
   if [ $VERBOSE -gt 0 ]; then
   echo "$0: awk -v mk_sum_all="$MK_SUM_ALL" -v input_file=\"$ALST\" -v sum_all=\"$SUM_ALL\" -v sum_file=\"$SUM_FILE\" -v curdir=\"$got_pwd\" "
   fi
-  awk -v verbose="$VERBOSE" -v mk_sum_all="$MK_SUM_ALL" -v input_file="$ALST" -v sum_all="$SUM_ALL" -v sum_file="$SUM_FILE" -v sum_all_avg_by_metric="$SUM_ALL_AVG_BY_METRIC" -v curdir="$got_pwd" '
+  awk -v job_id="$JOB_ID" -v verbose="$VERBOSE" -v mk_sum_all="$MK_SUM_ALL" -v input_file="$ALST" -v sum_all="$SUM_ALL" -v sum_file="$SUM_FILE" -v sum_all_avg_by_metric="$SUM_ALL_AVG_BY_METRIC" -v curdir="$got_pwd" '
     BEGIN{sum_files=0;fls=0; fld_m=3;fld_v=4; got_avgby=0;}
     { if (index($0, sum_file) > 0 || index($0, sum_all) > 0) {
         flnm = $0;
@@ -1055,7 +1083,17 @@ if [ $NUM_DIRS -gt 1 ]; then
         ln = 0;
         last_non_blank = -1;
         first_blank = -1;
+        first_infra_cputime = -1;
         while ((getline line < flnm) > 0) {
+           if (index(line, "infra_cputime") > 0) {
+              ++first_infra_cputime;
+              if (first_infra_cputime == 0) {
+                line = "infra_cputime_sum_" job_id ".tsv";
+              } else {
+                continue;
+              }
+              # this line will be handled outside
+           }
            ln++;
            if (first_blank == -1 && length(line) == 0) {
              first_blank = ln;
@@ -1257,6 +1295,14 @@ if [ $NUM_DIRS -gt 1 ]; then
     echo "about to do tsv_2_xls.py" > /dev/stderr
   fi
   FSTDOUT="tmp_${JOB_ID}.jnk"
+ if [ -e job_${JOB_ID}.stop ]; then
+    RESP=`head -1 job_${JOB_ID}.stop`
+    echo "$0: got job_$JOB_ID.stop pid= $RESP and bashpid= $$" > /dev/stderr
+    if [ "$RESP" == "$$" ]; then
+      echo "$0: quitting at line $LINENO due to job_$JOB_ID.stop having value PID= $$"
+      exit 1
+    fi
+ fi
   if [ $VERBOSE -gt 0 ]; then
     echo "python $SCR_DIR/tsv_2_xlsx.py $OPT_a $OPT_A $OPT_TM $OPT_OPTIONS $OPT_M -f $ALST > $FSTDOUT"
   fi
