@@ -27,6 +27,7 @@ AVERAGE=0
 CLIP=
 AVG_DIR=
 G_SUM=()
+JOB_ID=0
 #echo "$0: cmdline= ${@}"
 
 ck_last_rc() {
@@ -38,7 +39,7 @@ ck_last_rc() {
    fi
 }
 
-while getopts "hvASa:b:c:D:d:e:g:i:m:o:P:p:s:t:x:" opt; do
+while getopts "hvASa:b:c:D:d:e:g:i:j:m:o:P:p:s:t:x:" opt; do
   case ${opt} in
     A )
       AVERAGE=1
@@ -67,6 +68,9 @@ while getopts "hvASa:b:c:D:d:e:g:i:m:o:P:p:s:t:x:" opt; do
       ;;
     i )
       IMAGE_STR=$OPTARG
+      ;;
+    j )
+      JOB_ID=$OPTARG
       ;;
     m )
       MAX_VAL=$OPTARG
@@ -328,20 +332,29 @@ if [ "$RESP" -ge "1" -a "$PHASE_FILE" == "" ]; then
   #j=0
   #for i in $RESP; do echo "echo j= $j CPU2017LOG $i ${CPU2017LOG[$j]}"; j=$((j+1)); done
 fi
-EXTRA_FILE=
+EXTRA_FILES=
 if [ -e $DIR/$METRIC_OUT ]; then
-  EXTRA_FILE=$DIR/$METRIC_OUT
+  EXTRA_FILES=$DIR/$METRIC_OUT
 else
   if [ -e $DIR/${METRIC_OUT}.csv ]; then
-    EXTRA_FILE=$DIR/${METRIC_OUT}.csv
+    EXTRA_FILES=$DIR/${METRIC_OUT}.csv
   fi
 fi
-FILES=`ls -1 $DIR/sys_*_*.txt $EXTRA_FILE`
+if [ -e $DIR/infra_cputime.txt ]; then
+  EXTRA_FILES="$EXTRA_FILES $DIR/infra_cputime.txt"
+  #echo "$0: got $DIR/infra_cputime.txt at $LINENO" > /dev/stderr
+fi
+FILES=`ls -1 $DIR/sys_*_*.txt $EXTRA_FILES`
 echo "FILES = $FILES"
 if [ "$FILES" == "" ]; then
    FILES=`ls -1 $DIR/*txt.tsv`
 fi
 for i in $FILES; do
+ if [ -e job_${JOB_ID}.stop ]; then
+    RESP=`head -1 job_${JOB_ID}.stop`
+    echo "$0: quitting at line $LINENO due to found job_$JOB_ID.stop having value PID= $RESP"
+    exit 1
+ fi
  echo $i
   if [[ $i == *"_uptime.txt"* ]]; then
     echo "do uptime"
@@ -2279,6 +2292,19 @@ row += trows;
     echo "$SCR_DIR/perf_stat_scatter.sh $OPT_D -b "$BEG"  $OPT_TME  -o "$OPTIONS"  -f $i -S $SUM_FILE > $i.tsv"
           $SCR_DIR/perf_stat_scatter.sh $OPT_D -b "$BEG"  $OPT_TME  -o "$OPTIONS"  -f $i -S $SUM_FILE > $i.tsv
           ck_last_rc $? $LINENO
+  fi
+  if [[ $i == *"infra_cputime.txt" ]]; then
+    #echo "$0: got $DIR/infra_cputime.txt at $LINENO" > /dev/stderr
+    INCPUS=0
+    if [ -e lscpu.txt ]; then
+     INCPUS=`awk '/^CPU.s.:/ { printf("%s\n", $2);exit;}' lscpu.txt`
+    fi
+    echo "$SCR_DIR/rd_infra_cputime.sh $i $INCPUS"
+          $SCR_DIR/rd_infra_cputime.sh $i $INCPUS
+          ck_last_rc $? $LINENO
+    if [ -e $i.tsv ]; then
+      SHEETS="$SHEETS $i.tsv"
+    fi
   fi
   if [[ $i == *"_perf_stat.txt.tsv"* ]]; then
     SHEETS="$SHEETS $i"
