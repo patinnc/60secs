@@ -2299,8 +2299,8 @@ row += trows;
     if [ -e lscpu.txt ]; then
      INCPUS=`awk '/^CPU.s.:/ { printf("%s\n", $2);exit;}' lscpu.txt`
     fi
-    echo "$SCR_DIR/rd_infra_cputime.sh $i $INCPUS"
-          $SCR_DIR/rd_infra_cputime.sh $i $INCPUS
+    echo "$SCR_DIR/rd_infra_cputime.sh -f $i -n $INCPUS -S $SUM_FILE"
+          $SCR_DIR/rd_infra_cputime.sh -f $i -n $INCPUS -S $SUM_FILE
           ck_last_rc $? $LINENO
     if [ -e $i.tsv ]; then
       SHEETS="$SHEETS $i.tsv"
