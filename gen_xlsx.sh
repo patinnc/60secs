@@ -811,7 +811,7 @@ fi
   
 if [ "$FLS_IC" != "" ]; then
   echo $SCR_DIR/redo_chart_table.sh -f $ALST   -o infra_cputime_sum_${JOB_ID}.tsv   -g infra_cputime -m sum -r 50 -t __all__ 
-  $SCR_DIR/redo_chart_table.sh -f $ALST -o infra_cputime_sum_${JOB_ID}.tsv   -g infra_cputime -m sum -r 50 -t __all__ 
+  $SCR_DIR/redo_chart_table.sh -f $ALST -o infra_cputime_sum_${JOB_ID}.tsv   -g infra_cputime -m sum_per_server -r 50 -t __all__ 
   ck_last_rc $? $LINENO
 fi
   
@@ -883,6 +883,12 @@ if [ $NUM_DIRS -gt 1 ]; then
            if (!(mtrc in mtrc_list)) {
               mtrc_list[mtrc] = ++mtrc_mx;
               mtrc_lkup[mtrc_mx] = mtrc;
+              if (fld_v > fld_m && fld_m > 1) {
+                mtrc_cat[mtrc_mx] = arr[fld_m-1];
+              }
+              if (fld_v < fld_m && fld_m > 1) {
+                mtrc_cat[mtrc_mx] = arr[fld_v-1];
+              }
            }
            mtrc_i = mtrc_list[mtrc];
            if (sum_all_avg_by_metric != "" && mtrc == sum_all_avg_by_metric) {
@@ -1016,7 +1022,9 @@ if [ $NUM_DIRS -gt 1 ]; then
         if (mtrc == "data_sheet") {
           printf("\t%s\t%s", mtrc_arr[1,i], mtrc) > ofile;
         } else {
-          printf("\titp\t%s", mtrc) > ofile;
+          mcat = "itp";
+          if (mtrc_cat[i] != "") { mcat = mtrc_cat[i]; }
+          printf("\t%s\t%s", mcat, mtrc) > ofile;
         }
         for (j=1; j <= fls; j++) {
           val = mtrc_arr[j,i];
