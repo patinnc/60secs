@@ -1,12 +1,55 @@
 #!/bin/bash
 
 #arg1 is infra_cputime.txt filename
+VERBOSE=0
 
-IN_FL=$1
+while getopts "hvf:n:o:O:S:" opt; do
+  case ${opt} in
+    f )
+      IN_FL=$OPTARG
+      ;;
+    o )
+      OUT_FL=$OPTARG
+      ;;
+    n )
+      NUM_CPUS=$OPTARG
+      ;;
+    O )
+      OPTIONS=$OPTARG
+      ;;
+    S )
+      SUM_FILE=$OPTARG
+      ;;
+    v )
+      VERBOSE=$((VERBOSE+1))
+      ;;
+    h )
+      echo "$0 read infra_cputime.txt file"
+      echo "Usage: $0 [ -v ] -f input_file [ -o out_file ] [ -n num_cpus ] [ -S sum_file ]"
+      echo "   -f input_file  like infra_cputime.txt"
+      echo "   -o out_file    assumed to be input_file with .tsv appended"
+      echo "   -n num_cpus    number of cpus on the server"
+      echo "   -S sum_file    summary file"
+      echo "   -v verbose mode"
+      exit 1
+      ;;
+    : )
+      echo "Invalid option: $OPTARG requires an argument. cmdline= ${@}" 1>&2
+      exit 1
+      ;;
+    \? )
+      echo "Invalid option: $OPTARG, cmdline= ${@} " 1>&2
+      exit 1
+      ;;
+  esac
+done
+shift $((OPTIND -1))
+
+#IN_FL=$1
 
 
 if [ "$IN_FL" == "" ]; then
-  echo "must pass arg1: the input filename (path_to/infra_cputime.txt)"
+  echo "must pass -i input_file where the input filename (path_to/infra_cputime.txt)"
   exit 1
 fi
 
@@ -14,11 +57,12 @@ if [ ! -e "$IN_FL" ]; then
   echo "can't find arg1 file $IN_FL"
   exit 1
 fi
+if [ "$OUT_FL" == "" ]; then
+  OUT_FL="${IN_FL}.tsv"
+fi
+#NUM_CPUS=$2
 
-OUT_FL="${IN_FL}.tsv"
-NUM_CPUS=$2
-
-awk -v num_cpus="$NUM_CPUS" -v ofile="$OUT_FL" '
+awk -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofile="$OUT_FL" '
   BEGIN {
    num_cpus += 0;
    ;
@@ -166,7 +210,7 @@ function tot_compare(i1, v1, i2, v2,    l, r)
 #hdrs    4       5       -1      31      1
 #epoch   ts      rel_ts  interval
     trow++;
-    printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", "infra_pid cpusecs", "infra_pids") > ofile;
+    printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", "infra procs cpus", "infra procs") > ofile;
     trow++;
     printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 2, -1, proc_mx+1, 1) > ofile;
     printf("proc_mx= %d\n", proc_mx);
@@ -199,7 +243,7 @@ function tot_compare(i1, v1, i2, v2,    l, r)
     trow++;
     printf("\n") > ofile;
     trow++;
-    printf("title\t%s\tsheet\t%s\ttype\tcolumn\n", "top infra_pid cpusecs", "infra_pids") > ofile;
+    printf("title\t%s\tsheet\t%s\ttype\tcolumn\n", "top infra procs cpus", "infra procs") > ofile;
     trow++;
     printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 1, -1, 1, 0) > ofile;
     trow++;
@@ -209,6 +253,17 @@ function tot_compare(i1, v1, i2, v2,    l, r)
       trow++;
       printf("%s\t%.3f\n", proc_lkup[j], tot[j]) > ofile;
     }
+    if (sum_file != "") {
+      printf("-------------sum_file= %s, proc_mx= %d\n", sum_file, proc_mx) > "/dev/stderr";
+      printf("sum_file= %s\n", sum_file);
+      for(i=1; i <= proc_mx; i++) {
+         j = res_i[i];
+         printf("infra_procs\tinfra procs cpusecs\t%.3f\t%s\n", tot[j], proc_lkup[j]) >> sum_file;
+      }
+      close(sum_file);
+      #printf("%f\n", 1.0/0.0); # force an error
+    }
+
   }
   ' $IN_FL
   RC=$?
