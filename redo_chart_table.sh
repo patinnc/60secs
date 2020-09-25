@@ -43,12 +43,12 @@ while getopts "hvc:f:g:m:n:o:O:r:s:t:" opt; do
       VERBOSE=$((VERBOSE+1))
       ;;
     h )
-      echo "$0 read chart table from files in -f file_list, match columns across files, average the data, sort by hi to low, regen table.
-      echo "Usage: $0 -f file_list [ -g grep_str ] -o out_file -s sheet_nm_to_find -t title_chart -c chart_typ
+      echo "$0 read chart table from files in -f file_list, match columns across files, average the data, sort by hi to low, regen table."
+      echo "Usage: $0 -f file_list [ -g grep_str ] -o out_file -s sheet_nm_to_find -t title_chart -c chart_typ"
       echo "   -c chart_type  chart_type to look for in TSV 'title' line. like column or scatter_line or line_stacked or line"
       echo "   -f file_list   this is the input file to tsv_2_xlsx.py"
       echo "   -g grep_str    string to use to grep the file_list to avoid reading all the TSVs."
-      echo "   -m metric      compute 'avg' or 'sum'. default is avg"
+      echo "   -m metric      compute 'avg', 'sum' 'sum_per_server'. default is avg"
       echo "   -n file_select_list  select files: enter string like 1 for file 1 in list (first file is 0) or 10-20 (for files 10 to 20) or 0,2,5-100 etc"
       echo "   -o output_file   filename for rebuilt chart table"
       echo "   -O options     currently only 'nosort' is supported"
@@ -124,8 +124,8 @@ if [ "$TITLE" != "__all__" ]; then
     exit 1
   fi
   
-  if [ "$METRIC" != "avg" -a "$METRIC" != "sum" ]; then
-    echo "$0: metric must be avg or sum. got -m $METRIC"
+  if [ "$METRIC" != "avg" -a "$METRIC" != "sum" -a "$METRIC" != "sum_per_server" ]; then
+    echo "$0: metric must be avg, sum or sum_per_server. got -m $METRIC"
     exit 1
   fi
 fi
@@ -537,6 +537,9 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
               if (metric == "sum" && num[i,k] > 0) {
                 avg[i,k] = val[i,k];
               }
+              if (metric == "sum_per_server" && num[i,k] > 0) {
+                avg[i,k] = val[i,k]/mx_fls;
+              }
            }
          }
          if (index(options, "nosort") > 0) {
@@ -560,12 +563,18 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
            if (metric == "sum" && num[i] > 0) {
               avg[i] = val[i];
            }
+           if (metric == "sum_per_server" && num[i] > 0) {
+              avg[i] = val[i]/mx_fls;
+           }
            for (j=1; j <= rws; j++) {
              if (metric == "avg" && rnum[i,j] > 0) {
                  ravg[i,j] = rval[i,j]/rnum[i,j];
              }
              if (metric == "sum" && rnum[i,j] > 0) {
                 ravg[i,j] = rval[i,j];
+             }
+             if (metric == "sum_per_server" && rnum[i,j] > 0) {
+                ravg[i,j] = rval[i,j]/mx_fls;
              }
            }
          }
@@ -601,7 +610,7 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
          #}
          cr = 0;
          printf("trow= %d, row_beg= %d\n", trow, row_beg);
-         ctbl[c,++cr] = sprintf("title\t%s\tsheet\t%s\ttype\t%s\n", title, sheet, ch_typ);
+         ctbl[c,++cr] = sprintf("title\t%s\tsheet\t%s\ttype\t%s\n", title " " metric, sheet, ch_typ);
          blnk_rows = 0;
          for (j=rws-1; j > 0; j--) {
            n = split(tbl[fl,c,"tbl",j], arr, "\t");
@@ -666,7 +675,7 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
        if (ch_typ == "column") {
          cr = 0;
          #printf("column chart= %d\n", c);
-         ctbl[c,++cr] = sprintf("title\t%s\tsheet\t%s\ttype\t%s\n", title, sheet, ch_typ);
+         ctbl[c,++cr] = sprintf("title\t%s\tsheet\t%s\ttype\t%s\n", title " " metric, sheet, ch_typ);
          #printf("column chart: %s", ctbl[c,cr]);
          ctbl[c,++cr] = sprintf("col hdrs\t%d\t%d\t%d\t%d\t%d\n", trow, col_beg, trow+gcat_mx[c], col_end, col_cat);
          mrws = 0;
@@ -717,9 +726,17 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
             cc = last_chrt;
             #printf("%s", ctbl[cc,1]);
 
-            printf("%s\n", hdrs[fl,cc,"title"]) > out_file;
             n = split(hdrs[fl,cc,"title"], arr, "\t");
             ch_typ= arr[6];
+            if (ch_typ == "column") {
+              if (index(arr[2], " cpus") > 0) {
+                gsub(" cpus", " cpu_secs", arr[2]);
+              }
+            }
+            arr[2] = arr[2] " " metric;
+            nstr = arr[1];
+            for (ij=2; ij <= n; ij++) { nstr = nstr "\t" arr[ij]; }
+            printf("%s\n", nstr) > out_file;
             ++trow;
 
             hr = hdrs[fl,cc,"hdrs_row"];
