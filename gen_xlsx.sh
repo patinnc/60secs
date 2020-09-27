@@ -814,8 +814,20 @@ if [ "$FLS_IC" != "" ]; then
   $SCR_DIR/redo_chart_table.sh -f $ALST -o infra_cputime_sum_${JOB_ID}.tsv   -g infra_cputime -m sum_per_server -r 50 -t __all__ 
   ck_last_rc $? $LINENO
 fi
-  
+
+DO_TSV_2_XLS=0
 if [ $NUM_DIRS -gt 1 ]; then
+  DO_TSV_2_XLS=1
+fi
+
+if [ "$DO_TSV_2_XLS" == "0" ]; then
+  if [ "$SKIP_XLS" == "1" ]; then
+    DO_TSV_2_XLS=1
+  fi
+fi
+
+  
+if [ "$DO_TSV_2_XLS" == "1" ]; then
   if [ -e $SUM_ALL ]; then
     rm $SUM_ALL
   fi
