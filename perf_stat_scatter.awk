@@ -767,12 +767,12 @@ function dt_to_epoch(offset) {
      interval = sv[i,1] - ts_prev;
      ts_prev = sv[i,1]
      use_epoch = sv[i,0];
-     #if (ts_beg > 0.0 && use_epoch < ts_beg) {
-     #   continue; # TBD, this is a different use of tm_beg
-     #}
-     if (ts_beg > 0.0) {
-        use_epoch = ts_beg + sv[i,1];
+     if (ts_beg > 0.0 && use_epoch < ts_beg) {
+        continue; # TBD, this is a different use of tm_beg
      }
+     #if (ts_beg > 0.0) {
+     #   use_epoch = ts_beg + sv[i,1];
+     #}
      if (ts_end > 0.0 && use_epoch > ts_end) {
        continue;
      }
