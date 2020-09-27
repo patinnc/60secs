@@ -663,6 +663,16 @@ for bmi in range(base_mx+1):
                       if h >= len(data[ij]):
                          print("dude, idx= ", ij, ", h= ", h, ", len(data[idx])= ", len(data[ij]), " drow: ", data[ij])
                       is_num = is_number(data[ij][h])
+                      if not fn_bs_i in fn_bs_hdr_map:
+                         print("dude, fn_bs_i: ", fn_bs_i, " not in fn_bs_hdr_map, error. bye", file=sys.stderr)
+                         sys.exit(1)
+                      if not hrow_beg in fn_bs_hdr_map[fn_bs_i]:
+                         print("dude, hrow_beg: ", hrow_beg, " not in fn_bs_hdr_map[",fn_bs_i,"] error. bye", file=sys.stderr)
+                         sys.exit(1)
+                      if not h in fn_bs_hdr_map[fn_bs_i][hrow_beg]:
+                         print("dude, h: ", h, " not in fn_bs_hdr_map[",fn_bs_i,"][",hrow_beg,"], data[",ij,"][",h,"]=",data[ij][h]," error. bye", file=sys.stderr)
+                         continue
+                         #sys.exit(1)
                       use_idx = fn_bs_hdr_map[fn_bs_i][hrow_beg][h]
                       if is_num:
                          data[ij][h] = float(data[ij][h])
