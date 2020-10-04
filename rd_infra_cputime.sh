@@ -61,10 +61,16 @@ if [ "$OUT_FL" == "" ]; then
   OUT_FL="${IN_FL}.tsv"
 fi
 #NUM_CPUS=$2
+#PID RSS    VSZ     TIME COMMAND
 
 awk -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofile="$OUT_FL" '
   BEGIN {
    num_cpus += 0;
+   col_pid = -1;
+   col_rss = -1;
+   col_vsz = -1;
+   col_tm  = -1;
+   col_cmd = -1;
    ;
   }
   /^__date__/ {
@@ -110,12 +116,27 @@ awk -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofile="$OUT_FL" '
     if (mx == 0 || NF == 0) {
       next;
     }
-    if ($1 == "PID" && $2 == "TTY") {
+    if ($1 == "PID") {
+      #PID RSS    VSZ     TIME COMMAND
+      for(i=1; i <= NF; i++) {
+        if ($(i) == "PID") { col_pid = i; continue; }
+        if ($(i) == "RSS") { col_rss = i; continue; }
+        if ($(i) == "VSZ") { col_vsz = i; continue; }
+        if ($(i) == "TIME") { col_tm = i; continue; }
+        if ($(i) == "COMMAND") { col_cmd = i; continue; }
+        if ($(i) == "CMD") { col_cmd = i; continue; }
+      }
       next;
     }
-    pid  = $1;
-    tmi  = $3;
-    proc = $4;
+    pid  = $(col_pid);
+    tmi  = $(col_tm);
+    proc = $(col_cmd);
+    if (col_rss != -1) {
+      rss  = $(col_rss);
+    }
+    if (col_vsz != -1) {
+      vsz  = $(col_vsz);
+    }
     if (!(pid in pid_list)) {
        pid_list[pid] = ++pid_mx;
        pid_lkup[pid_mx] = pid;
@@ -157,6 +178,12 @@ awk -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofile="$OUT_FL" '
     }
     if (dt_diff > 0.0) {
       sv[mx, proc_i] += (secs - secs_prev)/dt_diff;
+      if (col_rss != -1) {
+        sv_rss[mx, proc_i] += rss;
+      }
+      if (col_vsz != -1) {
+        sv_vsz[mx, proc_i] += vsz;
+      }
       tot[proc_i] += (secs - secs_prev)/dt_diff;
     }
     pid_prev[pid_i,"secs"] = secs
@@ -242,6 +269,56 @@ function tot_compare(i1, v1, i2, v2,    l, r)
     }
     trow++;
     printf("\n") > ofile;
+    if (col_rss != -1) {
+      trow++;
+      printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", "infra procs rss", "infra procs") > ofile;
+      trow++;
+      printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 2, -1, proc_mx+1, 1) > ofile;
+      printf("proc_mx= %d\n", proc_mx);
+      printf("epoch\tts") > ofile
+      for(i=1; i <= proc_mx; i++) {
+        j = res_i[i];
+        printf("\t%s", proc_lkup[j]) > ofile;
+      }
+      printf("\n") > ofile;
+      trow++;
+      for(k=1; k <= mx; k++) {
+        printf("%s\t%d", dt[k], (k > 1 ? dt[k]-dt[1] : 0)) > ofile;
+        for(i=1; i <= proc_mx; i++) {
+          j = res_i[i];
+          printf("\t%.3f", sv_rss[k,j]) > ofile;
+        }
+        printf("\n") > ofile;
+        trow++;
+      }
+      trow++;
+      printf("\n") > ofile;
+    }
+    if (col_vsz != -1) {
+      trow++;
+      printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", "infra procs vsz", "infra procs") > ofile;
+      trow++;
+      printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 2, -1, proc_mx+1, 1) > ofile;
+      printf("proc_mx= %d\n", proc_mx);
+      printf("epoch\tts") > ofile
+      for(i=1; i <= proc_mx; i++) {
+        j = res_i[i];
+        printf("\t%s", proc_lkup[j]) > ofile;
+      }
+      printf("\n") > ofile;
+      trow++;
+      for(k=1; k <= mx; k++) {
+        printf("%s\t%d", dt[k], (k > 1 ? dt[k]-dt[1] : 0)) > ofile;
+        for(i=1; i <= proc_mx; i++) {
+          j = res_i[i];
+          printf("\t%.3f", sv_vsz[k,j]) > ofile;
+        }
+        printf("\n") > ofile;
+        trow++;
+      }
+      trow++;
+      printf("\n") > ofile;
+    }
     trow++;
     printf("title\t%s\tsheet\t%s\ttype\tcolumn\n", "top infra procs cpus", "infra procs") > ofile;
     trow++;
