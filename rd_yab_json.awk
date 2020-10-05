@@ -265,10 +265,12 @@ str3="yab -P uns:...ompute-0:tchannel -t womfile   --concurrency 1  --per-peer-s
     if (verbose > 0) {
       printf("yb_lst_mx= %d, structs_mx= %d, yb_cmds_mx= %d, flds_mx= %d\n", yb_lst_mx, structs_mx, yb_cmds_mx, flds_mx);
     }
+#title   summary sheet   summary type    copy
+#hdrs    2       0       -1      7       -1
     trow++;
     printf("title\t%s\tsheet\t%s\ttype\tcopy\n", "yab table", "yab results") > ofile;
     trow++;
-    printf("hdrs\t%d\t%d\t%d\t%d\n", trow+3, 0, -1, flds_mx+yb_lst_mx+2) > ofile;
+    printf("hdrs\t%d\t%d\t%d\t%d\t-1\n", trow+3, 0, -1, flds_mx+yb_lst_mx+2) > ofile;
     printf("lscpu_num_cpus%s%s\n", sep_in, host_num_cpus) > ofile;
     printf("lscpu_cpu_model%s%s\n", sep_in, host_cpu_model) > ofile;
     printf("%s", "yab") > ofile; 
