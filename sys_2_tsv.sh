@@ -344,6 +344,10 @@ if [ -e $DIR/infra_cputime.txt ]; then
   EXTRA_FILES="$EXTRA_FILES $DIR/infra_cputime.txt"
   #echo "$0: got $DIR/infra_cputime.txt at $LINENO" > /dev/stderr
 fi
+if [ -e $DIR/../yab_cmds.json ]; then
+  EXTRA_FILES="$EXTRA_FILES $DIR/../yab_cmds.json"
+  echo "$0: got $DIR/../yab_cmds.json at $LINENO" > /dev/stderr
+fi
 FILES=`ls -1 $DIR/sys_*_*.txt $EXTRA_FILES`
 echo "FILES = $FILES"
 if [ "$FILES" == "" ]; then
@@ -2303,6 +2307,16 @@ row += trows;
           $SCR_DIR/rd_infra_cputime.sh -f $i -n $INCPUS -S $SUM_FILE
           ck_last_rc $? $LINENO
     if [ -e $i.tsv ]; then
+      SHEETS="$SHEETS $i.tsv"
+    fi
+  fi
+  if [[ $i == *"yab_cmds.json" ]]; then
+    echo "$0: got $DIR/../yab_cmds.json at $LINENO" > /dev/stderr
+    echo "$SCR_DIR/rd_yab_json.sh -f $i -S $SUM_FILE"
+          $SCR_DIR/rd_yab_json.sh -f $i -S $SUM_FILE
+          ck_last_rc $? $LINENO
+    if [ -e $i.tsv ]; then
+      echo "$0: SHEETS add file $i.tsv"
       SHEETS="$SHEETS $i.tsv"
     fi
   fi
