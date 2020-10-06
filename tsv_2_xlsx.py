@@ -13,12 +13,19 @@
 
 
 from __future__ import print_function
+from __future__ import unicode_literals
 import xlsxwriter
 import csv
 import getopt
 import sys
 import glob
 import os
+import io
+
+# the 2 statements below workaround a "UnicodeEncodeError: 'ascii' codec can't encode character u'\xb5' in position 21: ordinal not in range(128)"
+# error when I read yab cmd json files
+reload(sys)  
+sys.setdefaultencoding('utf8')
 
 output_filename = 'chart_line.xlsx'
 opened_wkbk = False
@@ -471,7 +478,9 @@ for bmi in range(base_mx+1):
 
       data = []
       if not fo in fn_bs_data[bmi]:
-         with open(x, 'rU') as tsv:
+         #with open(x, 'rU', encoding="utf-8") as tsv:
+         #with open(x, "rU") as tsv:
+         with io.open(x, "rU", encoding="utf-8") as tsv:
             for line in csv.reader(tsv, dialect="excel-tab"):
               data.append(line)
          fn_bs_data[bmi][fo] = data
