@@ -176,6 +176,15 @@ function dt_to_epoch(offset) {
   #   tst_epoch= -1
   next;
 }
+/<not supported>/ {
+  next;
+}
+/<not counted>/ {
+  next;
+}
+#  2879.939941800;<not supported>;Bytes;qpi_ctl_bandwidth_tx;0;100.00;;
+#  2879.947975321;<not counted>;;cpu-clock;69060526;100.00;;
+
 /;/{
   #          1        2          3   4          5           6
   # 120.003961364;1919857.169339;;cpu-clock;1919864513706;100.00;;
@@ -824,7 +833,11 @@ function dt_to_epoch(offset) {
      for (k=1; k <= kmx; k++) { 
        prt_it=0;
        if ((got_lkfor[k,4] == "div" || got_lkfor[k,4] == "div_and_by_interval") && got_lkfor[k,1] == got_lkfor[k,2]) {
-         val = numer[k]/denom[k] * got_lkfor[k,3];
+         if (denom[k] <= 0.0) {
+           val = 0.0;
+         } else {
+           val = (numer[k]/denom[k]) * got_lkfor[k,3];
+         }
          if (got_lkfor[k,4] == "div_and_by_interval") {
            val /= interval;
          }
