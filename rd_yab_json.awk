@@ -34,6 +34,13 @@
       flds_str[i,1]=arr[1];
       flds_str[i,2]=str2;
     }
+    cmd="cat "infile ;
+    infile_lines_mx=0;
+    while ((cmd | getline) > 0) {
+      ++infile_lines_mx;
+      infile_lines[infile_lines_mx] = $0;
+    }
+    close(cmd);
     for (i=1; i <= flds_mx; i++) {
       str1 = flds_str[i,1];
       str2 = flds_str[i,2];
@@ -273,8 +280,8 @@ str3="yab -P uns:...ompute-0:tchannel -t womfile   --concurrency 1  --per-peer-s
     printf("hdrs\t%d\t%d\t%d\t%d\t-1\n", trow+3, 0, -1, flds_mx+yb_lst_mx+2) > ofile;
     printf("lscpu_num_cpus%s%s\n", sep_in, host_num_cpus) > ofile;
     printf("lscpu_cpu_model%s%s\n", sep_in, host_cpu_model) > ofile;
-    printf("%s", "yab") > ofile; 
     sep = sep_in;
+    printf("%s%s", sep, "yab") > ofile; 
     printf("%s%s", sep, "CPUs used") > ofile;
     for (i=1; i <= flds_mx; i++) {
        str1 = flds_str[i,1];
@@ -286,7 +293,7 @@ str3="yab -P uns:...ompute-0:tchannel -t womfile   --concurrency 1  --per-peer-s
        printf("%s%s", sep, str) > ofile;;
     }
     printf("\n") > ofile;;
-    printf("%s", "host_num") > ofile;;
+    printf("%s%s%s", "run_num", sep, "host_num") > ofile;;
     printf("%s%s", sep, "avg.cpus") > ofile;
     sep = sep_in;
     for (i=1; i <= flds_mx; i++) {
@@ -310,7 +317,7 @@ str3="yab -P uns:...ompute-0:tchannel -t womfile   --concurrency 1  --per-peer-s
     printf("\n") > ofile;;
     sep = sep_in;
     for (j=1; j <= structs_mx; j++) {
-      printf("%s", host_num) > ofile;;
+      printf("%s%s%s", j-1, sep, host_num) > ofile;;
       printf("%s%.3f", sep, cpu_avg[j]) > ofile;
       for (i=1; i <= flds_mx; i++) {
         str = ln[i,j];
@@ -326,7 +333,20 @@ str3="yab -P uns:...ompute-0:tchannel -t womfile   --concurrency 1  --per-peer-s
     }
     printf("\n") > ofile;;
     for (i=1; i <= yb_cmds_mx; i++) {
-      printf("%s\n", yb_cmd_lines[i]) > ofile;;
+      printf("%s%s%s\n", i-1, sep, yb_cmd_lines[i]) > ofile;;
+      got_beg = 0;
+      for (j=1; j <= infile_lines_mx; j++) {
+        if (infile_lines[j] == "{" && index(infile_lines[j+1], "\"body\"") > 0) {
+          got_beg++;
+        }
+        if (got_beg > i) {
+           break;
+        }
+        if (got_beg == i) {
+           gsub("\"", "", infile_lines[j]);
+           printf("%s\"%s\"\n", sep_in, infile_lines[j]) > ofile;
+        }
+      }
     }
     exit;
   }
@@ -341,81 +361,8 @@ function tot_compare(i1, v1, i2, v2,    l, r)
     else
         return 1
 }
-  END {
+END {
     exit;
-    #ofile="tmp.tsv";
-    if (idle_mx > 0) {
-      proc = "idle";
-      proc_list[proc] = ++proc_mx;
-      proc_lkup[proc_mx] = proc;
-      tot[proc_mx] = idle_tot;
-      idle_idx = proc_mx;
-      sum = 0.0;
-      for (i=1; i < proc_mx; i++) {
-         sum += tot[i];
-      }
-      # idle_tot += ival;
-      if (num_cpus > 0) {
-        busy = uptm_tot - idle_tot - sum;
-        proc = "__other_busy__";
-        proc_list[proc] = ++proc_mx;
-        proc_lkup[proc_mx] = proc;
-        tot[proc_mx] = busy;
-        busy_idx = proc_mx;
-      }
-    }
-    for(i=1; i <= proc_mx; i++) {
-      idx[i] = i;
-    }
-    asorti(idx, res_i, "tot_compare")
-    trow = -1;
-#title   perf stat       sheet   perf stat       type    scatter_straight
-#hdrs    4       5       -1      31      1
-#epoch   ts      rel_ts  interval
-    #printf("proc_mx= %d\n", proc_mx);
-    trow++;
-    printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", "infra procs cpus", "infra procs") > ofile;
-    trow++;
-    printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 2, -1, proc_mx+1, 1) > ofile;
-    printf("epoch\tts") > ofile
-    for(i=1; i <= proc_mx; i++) {
-      j = res_i[i];
-      printf("\t%s", proc_lkup[j]) > ofile;
-    }
-    printf("\n") > ofile;
-    trow++;
-    for(k=1; k <= mx; k++) {
-      printf("%s\t%d", dt[k], (k > 1 ? dt[k]-dt[1] : 0)) > ofile;
-      sum = 0.0;
-      for(i=1; i < idle_idx; i++) {
-         sum += sv[k,i];
-      }
-      sv[k,idle_idx] = idle[k];
-      if (num_cpus > 0) {
-        i = idle_idx+1;
-        busy = uptm[k] - idle[k] - sum;
-        sv[k,i] = busy;
-      }
-      for(i=1; i <= proc_mx; i++) {
-        j = res_i[i];
-        printf("\t%.3f", sv[k,j]) > ofile;
-      }
-      printf("\n") > ofile;
-      trow++;
-    }
-    trow++;
-    printf("\n") > ofile;
-    trow++;
-    printf("title\t%s\tsheet\t%s\ttype\tcolumn\n", "top infra procs cpus", "infra procs") > ofile;
-    trow++;
-    printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 1, -1, 1, 0) > ofile;
-    trow++;
-    printf("process\tcpu_secs\n") > ofile;
-    for(i=1; i <= proc_mx; i++) {
-      j = res_i[i];
-      trow++;
-      printf("%s\t%.3f\n", proc_lkup[j], tot[j]) > ofile;
-    }
     if (sum_file != "") {
       printf("-------------sum_file= %s, proc_mx= %d\n", sum_file, proc_mx) > "/dev/stderr";
       printf("sum_file= %s\n", sum_file);
@@ -427,5 +374,4 @@ function tot_compare(i1, v1, i2, v2,    l, r)
       #printf("%f\n", 1.0/0.0); # force an error
     }
 
-  }
-
+}
