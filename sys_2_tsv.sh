@@ -205,6 +205,14 @@ HOSTNM=`awk -v curdir="$CURDIR" '
    ck_last_rc $? $LINENO
 printf "host\thostname\t%s\thostname\n"  "$HOSTNM" >> $SUM_FILE;
 
+LSCPU_FL=lscpu.txt
+if [ ! -e $LSCPU_FL ]; then
+  if [ -e ../$LSCPU_FL ]; then
+    LSCPU_FL=../lscpu.txt
+  else
+    LSCPU_FL=
+  fi
+fi
 if [ -e run.log ]; then
  MYA=(sys_*_perf_stat.txt)
  if [ "${#MYA}" != "0" ]; then
@@ -348,6 +356,10 @@ if [ -e $DIR/../yab_cmds.json ]; then
   EXTRA_FILES="$EXTRA_FILES $DIR/../yab_cmds.json"
   echo "$0: got $DIR/../yab_cmds.json at $LINENO" > /dev/stderr
 fi
+if [ -e $DIR/yab_cmds.json ]; then
+  EXTRA_FILES="$EXTRA_FILES $DIR/yab_cmds.json"
+  echo "$0: got $DIR/yab_cmds.json at $LINENO" > /dev/stderr
+fi
 FILES=`ls -1 $DIR/sys_*_*.txt $EXTRA_FILES`
 echo "FILES = $FILES"
 if [ "$FILES" == "" ]; then
@@ -421,8 +433,8 @@ trows++; printf("\n") > NFL;
     echo "do itp $DIR $METRIC_OUT $i"
     ls -l
     NCPUS=1
-    if [ -e lscpu.txt ]; then
-     NCPUS=`awk '/^CPU.s.:/ { printf("%s\n", $2);exit;}' lscpu.txt`
+    if [ "$LSCPU_FL" != "" ]; then
+     NCPUS=`awk '/^CPU.s.:/ { printf("%s\n", $2);exit;}' $LSCPU_FL`
     fi
     SPIN_TXT=
     CPU2017files=
@@ -2300,8 +2312,9 @@ row += trows;
   if [[ $i == *"infra_cputime.txt" ]]; then
     #echo "$0: got $DIR/infra_cputime.txt at $LINENO" > /dev/stderr
     INCPUS=0
-    if [ -e lscpu.txt ]; then
-     INCPUS=`awk '/^CPU.s.:/ { printf("%s\n", $2);exit;}' lscpu.txt`
+
+    if [ "$LSCPU_FL" != "" ]; then
+     INCPUS=`awk '/^CPU.s.:/ { printf("%s\n", $2);exit;}' $LSCPU_FL`
     fi
     echo "$SCR_DIR/rd_infra_cputime.sh -f $i -n $INCPUS -S $SUM_FILE"
           $SCR_DIR/rd_infra_cputime.sh -f $i -n $INCPUS -S $SUM_FILE
@@ -2311,7 +2324,7 @@ row += trows;
     fi
   fi
   if [[ $i == *"yab_cmds.json" ]]; then
-    echo "$0: got $DIR/../yab_cmds.json at $LINENO" > /dev/stderr
+    echo "$0: got yab_cmds.json $i at $LINENO" > /dev/stderr
     echo "$SCR_DIR/rd_yab_json.sh -f $i -S $SUM_FILE"
           $SCR_DIR/rd_yab_json.sh -f $i -S $SUM_FILE
           ck_last_rc $? $LINENO
