@@ -270,6 +270,7 @@ function dt_to_epoch(offset) {
   #  printf("%s\t%f\t%f\n", st_sv[ii,1], st_sv[ii,2], st_sv[ii,3]);
   #}
    kmx = 1;
+   def_inst = num_cpus;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
    got_lkfor[kmx,2]=6; # num of fields to look for
    got_lkfor[kmx,3]=64e-9; # a factor
@@ -864,7 +865,12 @@ function dt_to_epoch(offset) {
      for (k=1; k <= kmx; k++) { 
        prt_it=0;
        if (got_lkfor[k,4] == "div" && got_lkfor[k,1] == got_lkfor[k,2]) {
-         val = numer[k]/denom[k] * got_lkfor[k,3];
+         if (denom[k] == 0 && lkup[k,2] == -2) {
+          denom[k] = def_inst;  # this is for input data on a per process basis where instance is 0
+          printf("got zero for %s k= %s, numer= %f, lkup[%d,2]= %s, lkup[k,1]= %s evt_inst[lkup[k,1]]= %s, use def_inst= %s\n",
+            nwfor[k,1,"hdr"], k, numer[k], k, lkup[k,2], lkup[k,1], evt_inst[lkup[k,1]], num_cpus) > "/dev/stderr";
+         }
+         val = (numer[k]/denom[k]) * got_lkfor[k,3];
          prt_it=1;
        }
 
