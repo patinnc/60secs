@@ -112,6 +112,45 @@ awk -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofile="$OUT_FL" '
     id_prev = id;
     next;
   }
+  /^__net_snmp_udp__/ {
+    ++net_mx;
+    net_dt[net_mx] = $2;
+    net_dt_diff = 0.0;
+    if (net_mx > 1) {
+      net_dt_diff = net_dt[net_mx] - net_dt[net_mx-1];
+    }
+    getline;
+    if ($1 == "Tcp:") {
+      tcp_hdrs_mx = split($0, arr);
+      for (i=2; i <= tcp_hdrs_mx; i++) {
+        tcp_hdrs[i-1] = arr[i];
+      }
+      getline;
+      n = split($0, arr);
+      for (i=2; i <= tcp_hdrs_mx; i++) {
+        tcp[net_mx,i-1] = arr[i];
+      }
+      getline;
+    }
+    if ($1 == "Udp:") {
+      udp_hdrs_mx = split($0, arr);
+      for (i=2; i <= udp_hdrs_mx; i++) {
+        udp_hdrs[i-1] = arr[i];
+      }
+      getline;
+      n = split($0, arr);
+      for (i=2; i <= udp_hdrs_mx; i++) {
+        udp[net_mx,i-1] = arr[i];
+      }
+    }
+    next;
+  }
+#__net_snmp_udp__ 1602432740 1602432780
+#Tcp: RtoAlgorithm RtoMin RtoMax MaxConn ActiveOpens PassiveOpens AttemptFails EstabResets CurrEstab InSegs OutSegs RetransSegs InErrs OutRsts InCsumErrors
+#Tcp: 1 200 120000 -1 521191991 454317201 51842064 362196675 22957 91893628805 206234253530 24434738 187 251797531 0
+#Udp: InDatagrams NoPorts InErrors OutDatagrams RcvbufErrors SndbufErrors InCsumErrors IgnoredMulti
+#Udp: 25821967258 6786602 322210586 26150968358 322210586 0 0 7287
+
   {
     if (mx == 0 || NF == 0) {
       next;
@@ -269,6 +308,66 @@ function tot_compare(i1, v1, i2, v2,    l, r)
     }
     trow++;
     printf("\n") > ofile;
+    if (tcp_hdrs_mx > 0 && net_mx > 0) {
+      trow++;
+      printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", "infra TCP", "infra procs") > ofile;
+      trow++;
+      printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 2, -1, tcp_hdrs_mx+1, 1) > ofile;
+      printf("net_mx= %d\n", net_mx);
+      printf("epoch\tts") > ofile
+      for(i=1; i < tcp_hdrs_mx; i++) {
+        printf("\t%s", tcp_hdrs[i]) > ofile;
+      }
+      printf("\n") > ofile;
+      trow++;
+      for(k=2; k <= net_mx; k++) {
+        printf("%s\t%d", net_dt[k], net_dt[k]-net_dt[1]) > ofile;
+        for(i=1; i <= tcp_hdrs_mx; i++) {
+          dff = tcp[k,i]-tcp[k-1,i];
+          printf("\t%.0f", dff) > ofile;
+        }
+        printf("\n") > ofile;
+        trow++;
+      }
+      trow++;
+      printf("\n") > ofile;
+      if (sum_file != "") {
+         dff = net_dt[net_mx]-net_dt[1];
+         for(i=1; i < tcp_hdrs_mx; i++) {
+           printf("infra_procs\tinfra TCP\t%.3f\t%s/sec\n", (tcp[net_mx,i]-tcp[1,i])/dff, tcp_hdrs[i]) >> sum_file;
+         }
+      }
+    }
+    if (udp_hdrs_mx > 0 && net_mx > 0) {
+      trow++;
+      printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", "infra UDP", "infra procs") > ofile;
+      trow++;
+      printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 2, -1, udp_hdrs_mx+1, 1) > ofile;
+      printf("net_mx= %d\n", net_mx);
+      printf("epoch\tts") > ofile
+      for(i=1; i < udp_hdrs_mx; i++) {
+        printf("\t%s", udp_hdrs[i]) > ofile;
+      }
+      printf("\n") > ofile;
+      trow++;
+      for(k=2; k <= net_mx; k++) {
+        printf("%s\t%d", net_dt[k], net_dt[k]-net_dt[1]) > ofile;
+        for(i=1; i <= udp_hdrs_mx; i++) {
+          dff = udp[k,i]-udp[k-1,i];
+          printf("\t%.0f", dff) > ofile;
+        }
+        printf("\n") > ofile;
+        trow++;
+      }
+      trow++;
+      printf("\n") > ofile;
+      if (sum_file != "") {
+         dff = net_dt[net_mx]-net_dt[1];
+         for(i=1; i < udp_hdrs_mx; i++) {
+           printf("infra_procs\tinfra UDP\t%.3f\t%s/sec\n", (udp[net_mx,i]-udp[1,i])/dff, udp_hdrs[i]) >> sum_file;
+         }
+      }
+    }
     if (col_rss != -1) {
       trow++;
       printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", "infra procs rss", "infra procs") > ofile;
