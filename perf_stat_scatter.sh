@@ -127,7 +127,13 @@ echo "-------------------------------- in perf_stat_scatter.sh -----------------
 # didn't collect lscpu.log for most of the data
 TSC_FREQ="2.1"
 THR_PER_CORE=2
+if [ -e lscpu.txt ]; then
 LSCPU_FL="lscpu.log lscpu.txt"
+else
+ if [ -e ../lscpu.txt ]; then
+  LSCPU_FL="../lscpu.log ../lscpu.txt"
+ fi 
+fi 
 for i in $LSCPU_FL; do
   if [ -e $i ]; then
     TSC_FREQ=`cat $i |awk '/^Model name/{for (i=1;i<=NF;i++){pos=index($i, "GHz");if (pos > 0){print substr($i,1,pos-1);}}}'`
@@ -156,7 +162,8 @@ echo awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG
 awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s|memory},LLC-misses PKI{|memory},%not_halted{|CPU},avg_freq{avg_freq GHz|CPU},QPI_BW{QPI_BW GB/s|memory interconnect},power_pkg {power pkg (watts)|power}" -f $SCR_DIR/perf_stat_scatter.awk $FILES $CPU2017files
           RC=$?
           if [ $RC -gt 0 ]; then
-            echo "$0: got non-zero RC at $LINENO" > /dev/stderr
+            RESP=`pwd`
+            echo "$0: got non-zero RC at $LINENO. curdir= $RESP" > /dev/stderr
             exit 1
           fi
 
