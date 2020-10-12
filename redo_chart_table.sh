@@ -284,7 +284,9 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
        got_tbl = 0;
        got_hdr = 0;
        flnm[ARGIND] = ARGV[ARGIND];
-       printf("flnm[%d]= %s\n", ARGIND, flnm[ARGIND]);
+       if (verbose > 0) {
+         printf("flnm[%d]= %s\n", ARGIND, flnm[ARGIND]);
+       }
        prev_ARGIND = ARGIND;
        delete ch_rw;
      }
@@ -330,15 +332,21 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
          hdrs[ARGIND,chrt,"hdrs_row"] = rw;
          if (!(row_beg in ch_rw)) {
             ch_rw[row_beg] = chrt;
-            printf("chrt %d at rw= %d new reference chart %d\n", chrt, rw, chrt);
+            if (verbose > 0) {
+              printf("chrt %d at rw= %d new reference chart %d\n", chrt, rw, chrt);
+            }
          } else {
-            printf("chrt %d at rw= %d references chart %d\n", chrt, rw, ch_rw[row_beg]);
+            if (verbose > 0) {
+              printf("chrt %d at rw= %d references chart %d\n", chrt, rw, ch_rw[row_beg]);
+            }
          }
          hdrs[ARGIND,chrt,"chrt_ref"] = ch_rw[row_beg];
          diff = (row_beg+1) - rw;
          hdrs[ARGIND,chrt,"data_row_diff"] = diff;
          if (ARGIND == 1) {
-           printf("ARGIND= %d, chrt= %d rw= %d row_beg= %d row_end= %d, data_row_diff= %d\n", ARGIND, chrt, rw, row_beg, row_end, diff);
+           if (verbose > 0) {
+             printf("ARGIND= %d, chrt= %d rw= %d row_beg= %d row_end= %d, data_row_diff= %d\n", ARGIND, chrt, rw, row_beg, row_end, diff);
+           }
          }
        }
        if (got_hdr == 1 && row_end == -1 && rw >= row_beg && $0 == "") {
@@ -367,7 +375,9 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
      #     exit 1;
      #   }
      #}
-     printf("ch_mx= %d\n", ch_mx);
+     if (verbose > 0) {
+       printf("ch_mx= %d\n", ch_mx);
+     }
      for(c=1; c <= ch_mx; c++) {
        mx_rws = -1;
        mn_rws = -1;
@@ -505,7 +515,9 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
                 need_col_hdr = 1;
               }
               trow = hdrs[i,c,"title_row"];
-              printf("file= %d, ch= %d, title= %s trow= %d\n", i, c, arr[2], c, trow);
+              if (verbose > 0) {
+                printf("file= %d, ch= %d, title= %s trow= %d\n", i, c, arr[2], c, trow);
+              }
               got_hdrs= 0;
               continue;
            }
@@ -516,7 +528,9 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
               row_end = arr[4];
               col_end = arr[5];
               col_cat = arr[6];
-              printf("row_beg= %d, col_beg= %d, row_end= %d, col_end= %d\n", row_beg, col_beg, row_end, col_end);
+              if (verbose > 0) {
+                printf("row_beg= %d, col_beg= %d, row_end= %d, col_end= %d\n", row_beg, col_beg, row_end, col_end);
+              }
               break;
            }
          }
@@ -609,7 +623,9 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
          #  }
          #}
          cr = 0;
-         printf("trow= %d, row_beg= %d\n", trow, row_beg);
+         if (verbose > 0) {
+           printf("trow= %d, row_beg= %d\n", trow, row_beg);
+         }
          ctbl[c,++cr] = sprintf("title\t%s\tsheet\t%s\ttype\t%s\n", title " " metric, sheet, ch_typ);
          blnk_rows = 0;
          for (j=rws-1; j > 0; j--) {
@@ -621,7 +637,9 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
            }
          }
          ctbl[c,++cr] = sprintf("ln hdrs\t%d\t%d\t%d\t%d\t%d\n", row_beg, col_beg, row_beg+rws-blnk_rows, col_end, col_cat);
-         printf("ch[%d], rw[%d] = %s\n", c, cr, ctbl[c,cr]);
+         if (verbose > 0) {
+           printf("ch[%d], rw[%d] = %s\n", c, cr, ctbl[c,cr]);
+         }
          do_1st_data_row = -1;
          if (data_row_diff > 0) {
            do_1st_data_row = cr + data_row_diff;
@@ -639,7 +657,9 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
               #printf("j= %d, i=%d\t%s\n", j, crow, ftbl[fl,c,"row_data",crow+1]);
               #printf("j= %d, i=%d\t%s\n", j, j+1, ftbl[fl,c,"row_data",j+1]);
               #printf("j= %d, i=%d\t%s\n", j, j+2, ftbl[fl,c,"row_data",j+2]);
-              printf("chrt= %d, trow= %d j= %d\n", c, trow, j);
+              if (verbose > 0) {
+                printf("chrt= %d, trow= %d j= %d\n", c, trow, j);
+              }
               ctbl[c,cr] = ctbl[c,cr] " ab ";
               for(m=1; m <= (n); m++) {
                 ctbl[c,cr] = ctbl[c,cr] "" sprintf("%s%s", sep, arr[m]);
@@ -670,7 +690,9 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
            ctbl[c,cr] = ctbl[c,cr] "" sprintf("\n");
          }
          ctbl[c,"max"] = cr -2;
-         printf("line chart= %d, max= %d, for file= %d\n", c, cr, fl);
+         if (verbose > 0) {
+           printf("line chart= %d, max= %d, for file= %d\n", c, cr, fl);
+         }
        }
        if (ch_typ == "column") {
          cr = 0;
@@ -696,7 +718,9 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
            if (mrws >= mx_rws) { break; }
          }
          ctbl[c,"max"] = cr;
-         printf("column chart= %d, max= %d, for file= %d\n", c, cr, fl);
+         if (verbose > 0) {
+           printf("column chart= %d, max= %d, for file= %d\n", c, cr, fl);
+         }
        }
      } # charts on page
      #ftbl[ARGIND,"file_row",rw] = got_tbl;
