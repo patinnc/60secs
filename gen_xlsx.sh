@@ -722,10 +722,17 @@ for i in $LST; do
  #echo -e "-x\t$i.xlsx" >> $ALST
  #echo -e "-o\tchart_new,dont_sum_sockets" >> $ALST
  # itp files
+ # yab_cmd files might be in same dir or up 1 level
+ if [ -e yab_cmds.json.tsv ]; then
+   FLS=$(get_abs_filename yab_cmds.json.tsv)
+   #FLS=`ls -1 $i/metric_out.tsv`
+   echo -e "${FLS}" >> $ALST
+ else
  if [ -e ../yab_cmds.json.tsv ]; then
    FLS=$(get_abs_filename ../yab_cmds.json.tsv)
    #FLS=`ls -1 $i/metric_out.tsv`
    echo -e "${FLS}" >> $ALST
+ fi
  fi
  if [ -e metric_out.tsv ]; then
    FLS=$(get_abs_filename metric_out.tsv)
