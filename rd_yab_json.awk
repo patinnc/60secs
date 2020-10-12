@@ -257,7 +257,7 @@ str3="yab -P uns:...ompute-0:tchannel -t womfile   --concurrency 1  --per-peer-s
               if (v == "null") {
                 v = 0;
               } else {
-                v = length(v);
+                v = length(v)-2;
               }
            }
            yb_out[yb,i] = v;
@@ -281,19 +281,33 @@ str3="yab -P uns:...ompute-0:tchannel -t womfile   --concurrency 1  --per-peer-s
     printf("lscpu_num_cpus%s%s\n", sep_in, host_num_cpus) > ofile;
     printf("lscpu_cpu_model%s%s\n", sep_in, host_cpu_model) > ofile;
     sep = sep_in;
+    sm=0;
+    sm_ln[ ++sm, 1]="yab";
     printf("%s%s", sep, "yab") > ofile; 
+    sm_ln[ ++sm, 1]="yab";
+    sm_ln[ ++sm, 1]="yab";
+    printf("%s%s", sep, "yab") > ofile;
+    sm_ln[ ++sm, 1]="CPUs used";
     printf("%s%s", sep, "CPUs used") > ofile;
     for (i=1; i <= flds_mx; i++) {
        str1 = flds_str[i,1];
+       sm_ln[ ++sm, 1]=str1;
        str = flds_str[i,2];
        printf("%s%s", sep, str1) > ofile;
     }
     for (i=1; i <= yb_lst_mx; i++) {
        str = yb_lst_str[i,1];
+       sm_ln[ ++sm, 1]=str;
        printf("%s%s", sep, str) > ofile;;
     }
     printf("\n") > ofile;;
+    sm=0;
+    sm_ln[ ++sm, 2]="run_num";
+    sm_ln[ ++sm, 2]="host_num";
     printf("%s%s%s", "run_num", sep, "host_num") > ofile;;
+    sm_ln[ ++sm, 2]="protocol";
+    printf("%s%s", sep, "protocol") > ofile;
+    sm_ln[ ++sm, 2]="avg.cpus";
     printf("%s%s", sep, "avg.cpus") > ofile;
     sep = sep_in;
     for (i=1; i <= flds_mx; i++) {
@@ -308,25 +322,36 @@ str3="yab -P uns:...ompute-0:tchannel -t womfile   --concurrency 1  --per-peer-s
          if (index(str, "0.9995") > 0) { str = "p99.95";}
          if (index(str, "1.0000") > 0) { str = "p100";}
        }
+       sm_ln[ ++sm, 2]=str;
        printf("%s%s", sep, str) > ofile;;
     }
     for (i=1; i <= yb_lst_mx; i++) {
        str = yb_lst_str[i,2];
+       sm_ln[ ++sm, 2]=str;
        printf("%s%s", sep, str) > ofile;;
     }
     printf("\n") > ofile;;
     sep = sep_in;
+    sm=0;
     for (j=1; j <= structs_mx; j++) {
+      if (index(yb_cmd_lines[j], ":http") > 0) { proto="http"; } else { proto="tchan";}
+      sm_ln[ ++sm, 3]=j-1;
+      sm_ln[ ++sm, 3]=host_num;
       printf("%s%s%s", j-1, sep, host_num) > ofile;;
+      sm_ln[ ++sm, 3]=proto;
+      printf("%s%s", sep, proto) > ofile;
+      sm_ln[ ++sm, 3]=cpu_avg[j];
       printf("%s%.3f", sep, cpu_avg[j]) > ofile;
       for (i=1; i <= flds_mx; i++) {
         str = ln[i,j];
         if (str == "null") { str = ""; }
+        sm_ln[ ++sm, 3]=str;
         printf("%s%s", sep, str) > ofile;;
       }
       for (i=1; i <= yb_lst_mx; i++) {
         str = yb_out[j,i];
         if (str == "null") { str = ""; }
+        sm_ln[ ++sm, 3]=str;
         printf("%s%s", sep, str) > ofile;;
       }
       printf("\n") > ofile;;
@@ -348,6 +373,14 @@ str3="yab -P uns:...ompute-0:tchannel -t womfile   --concurrency 1  --per-peer-s
         }
       }
     }
+    printf("yab%slscpu num_cpus%s%s%s%s\n", sep_in, sep_in, host_num_cpus, sep_in, "yab num_cpus") >> sum_file;
+    for (i=1; i <= sm; i++) {
+      printf("%s%syab %s%s%s%s%s\n", "yab", sep_in, sm_ln[i,1], sep_in, sm_ln[i,3], sep_in, sm_ln[i,2]) >> sum_file;
+      if (sm_ln[i,2] == "avg.cpus"){
+        printf("%s%syab %s%s%s%s%s\n", "yab", sep_in, sm_ln[i,1], sep_in, 100.0*sm_ln[i,3]/host_num_cpus, sep_in, "%"sm_ln[i,2]) >> sum_file;
+      }
+    }
+    close(sum_file)
     exit;
   }
 function tot_compare(i1, v1, i2, v2,    l, r)
