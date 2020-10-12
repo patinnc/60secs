@@ -68,6 +68,9 @@ if [ -e $DIRNM/host_num.txt ]; then
   HOST_NUM=`cat $DIRNM/host_num.txt`
 fi
 LSCPU_FL=`find $DIRNM -name lscpu.txt | head -1`
+if [ "$LSCPU_FL" == "" ]; then
+  LSCPU_FL=`find ../$DIRNM -name lscpu.txt | head -1`
+fi
 INFRA_FL=`find $DIRNM -name infra_cputime.txt.tsv | head -1`
 
 awk -v verbose="$VERBOSE" -v infra_fl="$INFRA_FL" -v lscpu_file="$LSCPU_FL" -v host_num="$HOST_NUM" -v dirnm="$DIRNM" -v sep_in="\t" -v infile="$IN_FL" -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofile="$OUT_FL" -f $SCR_DIR/rd_yab_json.awk
