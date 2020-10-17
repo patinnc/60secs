@@ -62,7 +62,7 @@ while getopts "hvASa:b:B:c:D:d:e:F:g:I:j:m:N:o:P:r:X:x:" opt; do
       AVERAGE=1
       ;;
     S )
-      SKIP_XLS=1
+      SKIP_XLS=$(($SKIP_XLS+1))
       ;;
     v )
       VERBOSE=$((VERBOSE+1))
@@ -576,7 +576,7 @@ for i in $LST; do
     OPT_END_TM=" -e $END_TM_IN "
  fi
  OPT_SKIP=
- if [ "$SKIP_XLS" == "1" ]; then
+ if [ "$SKIP_XLS" -gt "0" ]; then
    OPT_SKIP=" -S "
  fi
  OPT_M=
@@ -648,7 +648,7 @@ for i in $LST; do
      #jbs=0
      for job in `jobs -p`
      do
-       echo "$0: job_id= $JOB_ID wait for jobs (jbs= $jbs) pid= $job"
+       echo "$0.$LINENO: job_id= $JOB_ID wait for jobs (jbs= $jbs) pid= $job, dir_num= $DIR_NUM of $DIR_NUM_MX"
        jbs=$((jbs-1))
        wait $job
        RC=$?
@@ -834,8 +834,11 @@ if [ "$SVGS" != "" ]; then
 fi
   
 if [ "$FLS_IC" != "" ]; then
-  echo $SCR_DIR/redo_chart_table.sh -f $ALST   -o infra_cputime_sum_${JOB_ID}.tsv   -g infra_cputime -m sum -r 50 -t __all__ 
-  $SCR_DIR/redo_chart_table.sh -f $ALST -o infra_cputime_sum_${JOB_ID}.tsv   -g infra_cputime -m sum_per_server -r 50 -t __all__ 
+  OPT_METRIC=" -m sum "
+  OPT_METRIC=" -m sum_per_server "
+  OPT_METRIC=" -m avg "
+  echo $SCR_DIR/redo_chart_table.sh -f $ALST   -o infra_cputime_sum_${JOB_ID}.tsv   -g infra_cputime $OPT_METRIC -r 50 -t __all__ 
+  $SCR_DIR/redo_chart_table.sh -f $ALST -o infra_cputime_sum_${JOB_ID}.tsv   -g infra_cputime $OPT_METRIC -r 50 -t __all__ 
   ck_last_rc $? $LINENO
 fi
 
@@ -845,7 +848,7 @@ if [ $NUM_DIRS -gt 1 ]; then
 fi
 
 if [ "$DO_TSV_2_XLS" == "0" ]; then
-  if [ "$SKIP_XLS" == "1" ]; then
+  if [ "$SKIP_XLS" -eq "1" ]; then
     DO_TSV_2_XLS=1
   fi
 fi
@@ -896,6 +899,7 @@ if [ "$DO_TSV_2_XLS" == "1" ]; then
                 if (hdrs[3] == "Value" && hdrs[4] == "Metric") {
                    fld_m=4; 
                    fld_v=3; 
+                   fld_mm1=2; 
                    if (verbose > 0) {
                      printf("sum_all2 metric fld= %d nf= %d\n", 3, nh) > "/dev/stderr";
                    }
@@ -903,6 +907,7 @@ if [ "$DO_TSV_2_XLS" == "1" ]; then
                 if (hdrs[3] == "Metric") {
                    fld_m=3; 
                    fld_v=4; 
+                   fld_mm1=2; 
                    if (verbose > 0) {
                      printf("sum_all3 metric fld= %d nf= %d\n", 3, nh) > "/dev/stderr";
                    }
@@ -916,9 +921,14 @@ if [ "$DO_TSV_2_XLS" == "1" ]; then
         #printf("got sum.tsv[%d][%d]= %s\n", fls, ln, line) > "/dev/stderr";
            n = split(line, arr, /\t/);
            mtrc = arr[fld_m];
-           if (!(mtrc in mtrc_list)) {
-              mtrc_list[mtrc] = ++mtrc_mx;
-              mtrc_lkup[mtrc_mx] = mtrc;
+           mtrcm1 = arr[fld_mm1];
+           str = mtrcm1 " " mtrc;
+           if (!(str in mtrc_list)) {
+              mtrc_list[str] = ++mtrc_mx;
+              mtrc_lkup[str] = mtrc;
+              mtrc_lkup[mtrc_mx] = str;
+              mtrc_lkup[mtrc_mx,1] = mtrc;
+              mtrc_lkup[mtrc_mx,2] = mtrcm1;
               if (fld_v > fld_m && fld_m > 1) {
                 mtrc_cat[mtrc_mx] = arr[fld_m-1];
               }
@@ -926,7 +936,7 @@ if [ "$DO_TSV_2_XLS" == "1" ]; then
                 mtrc_cat[mtrc_mx] = arr[fld_v-1];
               }
            }
-           mtrc_i = mtrc_list[mtrc];
+           mtrc_i = mtrc_list[str];
            if (sum_all_avg_by_metric != "" && mtrc == sum_all_avg_by_metric) {
               got_avgby = 1;
               avgby=arr[fld_v]; 
@@ -1053,7 +1063,8 @@ if [ "$DO_TSV_2_XLS" == "1" ]; then
       }
       printf("\n") > ofile;
       for (i=1; i <= mtrc_mx; i++) {
-        mtrc = mtrc_lkup[i];
+        mtrc   = mtrc_lkup[i,1];
+        mtrcm1 = mtrc_lkup[i,2];
         if (mtrc == "") { continue; }
         if (mtrc == "data_sheet") {
           printf("\t%s\t%s", mtrc_arr[1,i], mtrc) > ofile;
