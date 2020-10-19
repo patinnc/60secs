@@ -322,18 +322,29 @@ function tot_compare(i1, v1, i2, v2,    l, r)
        delete myhsh;
        for (i=1; i <= mx; i++) {
          lbl = sv[i,fl,1];
+         gi =  sv[i,fl,3];
+         a2 = gstr_lkup2[gi];
+         slbl = a2 " " lbl;
+         ulbl = lbl;
          if (lbl != "") {
            if (!(lbl in myhsh)) {
-             myhsh[lbl] = 0;
+             ulbl = lbl;
+             myhsh[ulbl] = 0;
            } else {
-             ++myhsh[lbl];
-             lbl = lbl "_" myhsh[lbl];
+             ulbl = slbl;
+             if (!(ulbl in myhsh)) {
+               myhsh[ulbl] = 0;
+             } else {
+               #printf("slbl= \"%s\", lbl= %s a2= %s, gi= %s, gs= %s\n", slbl, lbl, a2, gi, gstr_lkup[gi]) > "/dev/stderr";
+               ++myhsh[ulbl];
+               ulbl = ulbl "_" myhsh[ulbl];
+             }
            }
-           if (!(lbl in lbl_list)) {
-             lbl_list[lbl] = ++lbl_mx;
-             lbl_lkup[lbl_mx] = lbl;
+           if (!(ulbl in lbl_list)) {
+             lbl_list[ulbl] = ++lbl_mx;
+             lbl_lkup[lbl_mx] = ulbl;
            }
-           lbl_i = lbl_list[lbl];
+           lbl_i = lbl_list[ulbl];
            lbl_arr[lbl_i,fl]=i;
          }
        }
