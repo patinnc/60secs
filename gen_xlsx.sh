@@ -648,7 +648,9 @@ for i in $LST; do
      #jbs=0
      for job in `jobs -p`
      do
-       echo "$0.$LINENO: job_id= $JOB_ID wait for jobs (jbs= $jbs) pid= $job, dir_num= $DIR_NUM of $DIR_NUM_MX"
+       TS_CUR=`date +%s`
+       TS_DFF=$(($TS_CUR-$TS_BEG))
+       echo "$0.$LINENO: job_id= $JOB_ID wait for jobs (jbs= $jbs) pid= $job, dir_num= $DIR_NUM of $DIR_NUM_MX, elap_secs= $TS_DFF"
        jbs=$((jbs-1))
        wait $job
        RC=$?
