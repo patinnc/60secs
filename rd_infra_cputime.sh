@@ -507,7 +507,7 @@ function tot_compare(i1, v1, i2, v2,    l, r)
     }
     if (col_rss != -1) {
       trow++;
-      printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", "infra procs rss", "infra procs") > ofile;
+      printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", "infra procs rss mem (MBs)", "infra procs") > ofile;
       trow++;
       printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 2, -1, proc_mx+1, 1) > ofile;
       printf("proc_mx= %d\n", proc_mx);
@@ -524,7 +524,7 @@ function tot_compare(i1, v1, i2, v2,    l, r)
         printf("%s\t%d", dt[k], (k > 1 ? dt[k]-dt[1] : 0)) > ofile;
         for(i=1; i <= proc_mx; i++) {
           j = res_i[i];
-          printf("\t%.3f", sv_rss[k,j]) > ofile;
+          printf("\t%.3f", sv_rss[k,j]/1024.0) > ofile;
           rss_sum[j] += sv_rss[k,j];
           rss_n[j]++;
         }
@@ -540,13 +540,13 @@ function tot_compare(i1, v1, i2, v2,    l, r)
           if (rss_n[j] > 0) {
             avg = rss_sum[j]/rss_n[j];
           }
-          printf("infra_procs\trss avg\t%.3f\t%s\n", avg, proc_lkup[j]) >> sum_file;
+          printf("infra_procs\trss avg MBs\t%.3f\t%s\n", avg/1024.0, proc_lkup[j]) >> sum_file;
          }
       }
     }
     if (col_vsz != -1) {
       trow++;
-      printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", "infra procs vsz", "infra procs") > ofile;
+      printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", "infra procs virt mem (MBs)", "infra procs") > ofile;
       trow++;
       printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 2, -1, proc_mx+1, 1) > ofile;
       printf("proc_mx= %d\n", proc_mx);
@@ -563,7 +563,7 @@ function tot_compare(i1, v1, i2, v2,    l, r)
         printf("%s\t%d", dt[k], (k > 1 ? dt[k]-dt[1] : 0)) > ofile;
         for(i=1; i <= proc_mx; i++) {
           j = res_i[i];
-          printf("\t%.3f", sv_vsz[k,j]) > ofile;
+          printf("\t%.3f", sv_vsz[k,j]/1024.0) > ofile;
           vsz_sum[j] += sv_vsz[k,j];
           vsz_n[j]++;
         }
@@ -579,7 +579,7 @@ function tot_compare(i1, v1, i2, v2,    l, r)
           if (rss_n[j] > 0) {
             avg = vsz_sum[j]/vsz_n[j];
           }
-          printf("infra_procs\tvsz avg\t%.3f\t%s\n", avg, proc_lkup[j]) >> sum_file;
+          printf("infra_procs\tvsz avg MBs\t%.3f\t%s\n", avg/1024.0, proc_lkup[j]) >> sum_file;
          }
       }
     }
