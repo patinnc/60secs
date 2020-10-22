@@ -400,7 +400,7 @@ function tot_compare(i1, v1, i2, v2,    l, r)
       for(i=1; i <= proc_mx; i++) {
          j = res_i[i];
          if ( use_top_pct_cpu == 0) {
-           printf("infra_procs\tinfra procs cpusecs\t%.3f\t%s\n", tot[j], proc_lkup[j]) >> sum_file;
+           printf("infra_procs\tinfra procs cpus\t%.3f\t%s\n", tot[j], proc_lkup[j]) >> sum_file;
          } else {
            v = 100.0 * tot[j];
            printf("infra_procs\tinfra procs %%cpu\t%.3f\t%s\n", v, proc_lkup[j]) >> sum_file;
@@ -409,7 +409,7 @@ function tot_compare(i1, v1, i2, v2,    l, r)
       #close(sum_file);
       #printf("%f\n", 1.0/0.0); # force an error
     }
-    if (docker_mx > 0) {
+    if (docker_mx > 2) {
       trow++;
       printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", "docker containers", "infra procs") > ofile;
       trow++;
