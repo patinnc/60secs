@@ -41,10 +41,12 @@
       infile_lines[infile_lines_mx] = $0;
     }
     close(cmd);
+    if (index(infile, ".json") > 0) {
     for (i=1; i <= flds_mx; i++) {
       str1 = flds_str[i,1];
       str2 = flds_str[i,2];
       cmd="cat "infile" | jq '.|delpaths([path(..?) as $p | select(getpath($p) == null) | $p])|select(."str1")|."str1"."str2"'";
+      #printf("do jq cmd %s\n", cmd) > "/dev/stderr";
       j = 0;
       structs_mx = 0;
       while ((cmd | getline) > 0) {
@@ -92,12 +94,18 @@
       #system(cmd);
       close(cmd);
     }
+    }
 
     nfile="";
     i = length(infile);
+    if (index(infile, ".json") > 0) {
     sb = substr(infile, i-4, i);
     if (sb == ".json") {
       nfile=substr(infile, 1, i-5) ".txt";
+    }
+    }
+    else {
+      nfile = infile;
     }
     if (verbose > 0) {
       printf("nfile= %s, sb= %s\n", nfile, sb);
@@ -225,6 +233,11 @@ str3="yab -P uns:...ompute-0:tchannel -t womfile   --concurrency 1  --per-peer-s
     for (yb=1; yb <= yb_cmds_mx; yb++) {
       lkfor = "ignoredPayload";
       str = yb_cmds[yb];
+      i = index(str, "{\"req\": {");
+      if (i != 1) {
+         printf("req str[%d] is probably not a yab str, skipping= %s\n", yb, str) > "/dev/stderr";
+         continue;
+      }
       i = index(str, lkfor);
       if (i > 0) {
         n = split(str, arr, "");
@@ -249,6 +262,7 @@ str3="yab -P uns:...ompute-0:tchannel -t womfile   --concurrency 1  --per-peer-s
         yb_lst_str[i,1]=arr[1];
         yb_lst_str[i,2]=str2;
         cmd="echo '"str"' | jq '."arr[1]"."str2"'";
+        printf("do jq cmd %s\n", cmd) > "/dev/stderr";
         #printf("cmd= %s\n", cmd);
         while ((cmd | getline) > 0) {
            v = $0;
@@ -373,6 +387,7 @@ str3="yab -P uns:...ompute-0:tchannel -t womfile   --concurrency 1  --per-peer-s
         }
       }
     }
+    if (sum_file != "") {
     printf("yab%slscpu num_cpus%s%s%s%s\n", sep_in, sep_in, host_num_cpus, sep_in, "yab num_cpus") >> sum_file;
     for (i=1; i <= sm; i++) {
       printf("%s%syab %s%s%s%s%s\n", "yab", sep_in, sm_ln[i,1], sep_in, sm_ln[i,3], sep_in, sm_ln[i,2]) >> sum_file;
@@ -381,6 +396,7 @@ str3="yab -P uns:...ompute-0:tchannel -t womfile   --concurrency 1  --per-peer-s
       }
     }
     close(sum_file)
+    }
     exit;
   }
 function tot_compare(i1, v1, i2, v2,    l, r)
