@@ -101,6 +101,35 @@ awk -v options="$OPTIONS" -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofi
       }
     }
   }
+  /^__diskstats__ /{
+#   8       0 sda 8619575 32211 794372805 4523480 181006599 266524862 29481431352 1752692472 0 228989488 1760207280
+#   8       1 sda1 458 0 7240 104 910 2668 122392 9396 0 2924 9500
+#   8       2 sda2 8032146 32211 787926426 3685420 181005689 266522194 29481308960 1752683076 0 228198064 1759359684
+#   8       3 sda3 586582 0 6425142 837840 0 0 0 0 0 836788 837416
+# 253       0 dm-0 8064303 0 787785446 4614272 434995945 0 29481308960 2347715344 0 228140820 2352456704
+#   7       0 loop0 13838 0 111138 1328 3211 0 25624 504 0 76 988
+#   7       1 loop1 0 0 0 0 0 0 0 0 0 0 0
+# Field  1 -- # of reads completed. This is the total number of reads completed successfully.
+# Field  2 -- # of reads merged, field 6 -- # of writes merged Reads and writes which are adjacent to each other may be merged for
+#     efficiency.  Thus two 4K reads may become one 8K read before it is ultimately handed to the disk, and so it will be counted (and queued)
+#     as only one I/O.  This field lets you know how often this was done.
+# Field  3 -- # of sectors read.  This is the total number of sectors read successfully.
+# Field  4 -- # of milliseconds spent reading.  This is the total number of milliseconds spent by all reads (as measured from __make_request() to end_that_request_last()).
+# Field  5 -- # of writes completed.  This is the total number of writes completed successfully.
+# Field  6 -- # of writes merged.  See the description of field 2.
+# Field  7 -- # of sectors written. This is the total number of sectors written successfully.
+    diskstats_dt[++diskstats_mx] = $2;
+    diskstats_lns[diskstats_mx] = 0;
+    j = 0;
+    while ( getline  > 0) {
+      if ($0 == "" || (length($1) > 2 && substr($1, 1, 2) == "__")) {
+        break;
+      }
+      j++;
+      diskstats_lns[diskstats_mx] = j;
+      diskstats_data[diskstats_mx,j] = $0;
+    }
+  }
   /^__docker_ps__ /{
     docker_dt[++docker_mx] = $2;
     docker_lns[docker_mx] = 0;
@@ -593,20 +622,26 @@ function tot_compare(i1, v1, i2, v2,    l, r)
     }
     printf("title\t%s\tsheet\t%s\ttype\tcolumn\n", str, "infra procs") > ofile;
     trow++;
-    printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 1, -1, 1, 0) > ofile;
+    printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 0, -1, proc_mx-1, proc_mx) > ofile;
     trow++;
-    printf("process\t%s\n", str2) > ofile;
     for(i=1; i <= proc_mx; i++) {
       j = res_i[i];
-      trow++;
+      printf("%s\t", proc_lkup[j]) > ofile;
+    }
+    printf("%%cpus\n") > ofile;
+    trow++;
+    for(i=1; i <= proc_mx; i++) {
+      j = res_i[i];
       v = tot[j];
       fctr = 1.0;
       if ( use_top_pct_cpu == 1) {
         fctr = 100.0;
       }
       v = v * fctr;
-      printf("%s\t%.3f\n", proc_lkup[j], v) > ofile;
+      printf("%.3f\t", v) > ofile;
     }
+    printf("%%cpus\n") > ofile;
+    trow++;
     if (sum_file != "") {
       close(sum_file);
     }
