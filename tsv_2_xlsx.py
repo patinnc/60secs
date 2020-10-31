@@ -349,9 +349,10 @@ for bmi in range(base_mx+1):
        elif opt in ('-P', '--phase'):
            phase = arg
            print("phase file= %s" % (phase), file=sys.stderr)
-           with open(phase, 'rU') as tsv:
+           #with open(phase, 'rU') as tsv:
+           with io.open(phase, "rU", encoding="utf-8") as tsv:
               ln2 = [None, None, None]
-              for line in csv.reader(tsv, delimiter=' ', dialect="excel-tab"):
+              for line in csv.reader(tsv, delimiter=str(' '), dialect="excel-tab"):
                   if len(line) >= 3 and (line[0] == "beg" or line[0] == "end") and not is_number(line[1]):
                      if line[0] == "beg" and is_number(line[2]):
                         ln2[1] = float(line[2])
@@ -369,8 +370,9 @@ for bmi in range(base_mx+1):
                      #print("line2= '%s', len(line)= %d" % (line[2], len(line)), file=sys.stderr)
                      line[2] = float(line[2])
                      opt_phase_in.append(line)
+           tsv.close
            opt_phase = sorted(opt_phase_in, key=lambda x: x[1])
-           print("phase= ", opt_phase, file=sys.stderr)
+           #print("phase= ", opt_phase, file=sys.stderr)
        elif opt in ('-p', '--prefix'):
            prefix = arg
            prefix_dict[fo] = prefix
@@ -483,6 +485,7 @@ for bmi in range(base_mx+1):
          with io.open(x, "rU", encoding="utf-8") as tsv:
             for line in csv.reader(tsv, dialect="excel-tab"):
               data.append(line)
+         tsv.close
          fn_bs_data[bmi][fo] = data
       else:
          data = fn_bs_data[bmi][fo]
@@ -946,16 +949,20 @@ for bmi in range(base_mx+1):
                      continue
                   got_how_many_series_for_chart += 1
                   if do_avg == False or do_avg_write == True:
+                   use_drow_end = drow_end
+                   if ch_type == "column":
+                     print("ck col chart, sheet_nm= %s, ch_typ= %s, file= %s, drow_beg= %d drow_end= %d hcol_beg= %d, hcol_end= %d, ph_add= %d, h= %d" % (sheet_nm, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end, ph_add, h), file=sys.stderr)
+                     use_drow_end = drow_end - 1
                    if use_cats:
                      chart1.add_series({
                          'name':       [wrksh_nm, hrow_beg, h+ph_add],
-                         'categories': [wrksh_nm, drow_beg, dcol_cat+ph_add, drow_end, dcol_cat+ph_add],
-                         'values':     [wrksh_nm, drow_beg, h+ph_add, drow_end, h+ph_add],
+                         'categories': [wrksh_nm, drow_beg, dcol_cat+ph_add, use_drow_end, dcol_cat+ph_add],
+                         'values':     [wrksh_nm, drow_beg, h+ph_add, use_drow_end, h+ph_add],
                      })
                    else:
                      chart1.add_series({
                          'name':       [wrksh_nm, hrow_beg, h+ph_add],
-                         'values':     [wrksh_nm, drow_beg, h+ph_add, drow_end, h+ph_add],
+                         'values':     [wrksh_nm, drow_beg, h+ph_add, use_drow_end, h+ph_add],
                      })
           if got_how_many_series_for_chart == 0:
              print("What going on4, sheet_nm= %s, ch_typ= %s, file= %s, drow_beg= %d drow_end= %d hcol_beg= %d, hcol_end= %d" % (sheet_nm, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end), file=sys.stderr)
