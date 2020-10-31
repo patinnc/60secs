@@ -269,8 +269,50 @@ function dt_to_epoch(offset) {
   #for (ii=1; ii <= st_mx; ii++) {
   #  printf("%s\t%f\t%f\n", st_sv[ii,1], st_sv[ii,2], st_sv[ii,3]);
   #}
-   kmx = 1;
+   kmx = 0;
    def_inst = num_cpus;
+
+   if (amd_cpu == 0) {
+   kmx++;
+   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+   got_lkfor[kmx,2]=2; # num of fields to look for
+   got_lkfor[kmx,3]=100.0/(tsc_freq*1.0e9); # a factor
+   got_lkfor[kmx,4]="div"; # operation x/y
+   got_lkfor[kmx,5]=1; # instances
+   got_lkfor[kmx,6]="div_by_interval"; # 
+   lkfor[kmx,1]="ref-cycles";
+   lkfor[kmx,2]="instances";  # get the instances from the first lkfor event
+   nwfor[kmx,1,"hdr"]="%not_halted";
+   nwfor[kmx,1,"alias"]="metric_CPU utilization %";
+   }
+#    rpn operations
+#    AMD %unhalted calc. amd doesn't have ref-cycles so use tsc_freq and msr/mperf/
+   if (amd_cpu == 1) {
+   kmx++;
+   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+   got_lkfor[kmx,2]=1; # num of fields to look for
+   got_lkfor[kmx,3]=1.0; # 100.0 * mperf / (num_cpus * tsc_freq);
+   got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
+   got_lkfor[kmx,5]=1; # instances
+   got_lkfor[kmx,6]=""; # 
+   kkmx = 0;
+   got_rpn_eqn[kmx, ++kkmx, "val"]=100;
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="msr/mperf/"
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="*"; # 100 * mperf
+   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+   got_rpn_eqn[kmx, ++kkmx, "val"]= num_cpus * 1.0e6 * tsc_freq;
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="/";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+   got_rpn_eqn[kmx,      1,"max"]=kkmx;
+   lkfor[kmx,1]=tolower("msr/mperf/");
+   nwfor[kmx,1,"hdr"]="%not_halted";
+   nwfor[kmx,1,"alias"]="metric_CPU utilization %";
+   }
+
+   kmx++;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
    got_lkfor[kmx,2]=6; # num of fields to look for
    got_lkfor[kmx,3]=64e-9; # a factor
@@ -322,17 +364,7 @@ function dt_to_epoch(offset) {
    nwfor[kmx,1,"hdr"]="CPI";
    nwfor[kmx,1,"alias"]="metric_CPI";
 
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=2; # num of fields to look for
-   got_lkfor[kmx,3]=100.0/(tsc_freq*1.0e9); # a factor
-   got_lkfor[kmx,4]="div"; # operation x/y
-   got_lkfor[kmx,5]=1; # instances
-   got_lkfor[kmx,6]="div_by_interval"; # 
-   lkfor[kmx,1]="ref-cycles";
-   lkfor[kmx,2]="instances";  # get the instances from the first lkfor event
-   nwfor[kmx,1,"hdr"]="%not_halted";
-   nwfor[kmx,1,"alias"]="metric_CPU utilization %";
+
 
    kmx++;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
@@ -346,6 +378,7 @@ function dt_to_epoch(offset) {
    nwfor[kmx,1,"hdr"]="avg_freq (GHz)";
    nwfor[kmx,1,"alias"]="metric_CPU operating frequency (in GHz)";
 
+   if (amd_cpu == 0) {
    kmx++;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
    got_lkfor[kmx,2]=1; # num of fields to look for
@@ -388,6 +421,7 @@ function dt_to_epoch(offset) {
    nwfor[kmx,1,"alias"]="metric_UPI Data transmit BW (MB/sec) (only data)";
    nwfor[kmx,1,"alias_factor"]=1000.0;
    nwfor[kmx,1,"alias_oper"]="*";
+   }
 
    kmx++;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
@@ -421,6 +455,7 @@ function dt_to_epoch(offset) {
    lkfor[kmx,1]="cycles";
    nwfor[kmx,1,"hdr"]="cpu-cycles/sec (1e9 cycles/sec)";
 
+   if (amd_cpu == 0) {
 #"name"       : "metric_TMAM_Info_CoreIPC",
 #                        "expression" : "[instructions] / ([CPU_CLK_UNHALTED.THREAD_ANY] / [const_thread_count])"
    kmx++;
@@ -458,7 +493,8 @@ function dt_to_epoch(offset) {
    got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
    got_lkfor[kmx,5]=1; # instances
    got_lkfor[kmx,6]=""; # 
-   got_rpn_eqn[kmx, ++kkmx,"val"]=100;
+   # 100*${ITP_UOP}/(4*(${ITP_ANY}/${thr_per_core}))
+   got_rpn_eqn[kmx, ++kkmx, "val"]=100;
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
    got_rpn_eqn[kmx, ++kkmx, "val"]=tolower("UOPS_RETIRED.RETIRE_SLOTS");
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
@@ -466,23 +502,15 @@ function dt_to_epoch(offset) {
    got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
    got_rpn_eqn[kmx, ++kkmx, "val"]=4.0;
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="cycles"
+   got_rpn_eqn[kmx, ++kkmx, "val"]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="*";   # 100 * uop_ret
+   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
    got_rpn_eqn[kmx, ++kkmx, "val"]=thr_per_core;
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
    got_rpn_eqn[kmx, ++kkmx, "val"]="/";   # clk_unh.thr_any / thr_cou
    got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="*";    # * 4
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
    got_rpn_eqn[kmx, ++kkmx, "val"]="/";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="cycles"
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="/";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="*";
    got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
    got_rpn_eqn[kmx,      1,"max"]=kkmx;
    lkfor[kmx,1]=tolower("UOPS_RETIRED.RETIRE_SLOTS");
@@ -492,6 +520,7 @@ function dt_to_epoch(offset) {
 
 #            "name"       : "metric_TMAM_Frontend_Bound(%)",
 #            "expression" : "100 * [IDQ_UOPS_NOT_DELIVERED.CORE] / (4 * ([cpu-cycles] / [const_thread_count]))"
+#  "100 * [IDQ_UOPS_NOT_DELIVERED.CORE] / (4 * ([CPU_CLK_UNHALTED.THREAD_ANY] / [const_thread_count]))"
    kmx++;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
    got_lkfor[kmx,2]=3; # num of fields to look for
@@ -505,28 +534,48 @@ function dt_to_epoch(offset) {
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
    got_rpn_eqn[kmx, ++kkmx, "val"]="idq_uops_not_delivered.core";
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="*";   # 100 * uop_re
+   got_rpn_eqn[kmx, ++kkmx, "val"]="*";  
    got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
    got_rpn_eqn[kmx, ++kkmx, "val"]=4.0;
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="cycles"
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=thr_per_core;
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="/";   # clk_unh.thr_any / thr_cou
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="*";    # * 4
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="/";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="cycles"
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
    got_rpn_eqn[kmx, ++kkmx, "val"]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="*";   
+   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=thr_per_core;
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="/"; 
+   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
    got_rpn_eqn[kmx, ++kkmx, "val"]="/";
    got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="*";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+   got_rpn_eqn[kmx,      1,"max"]=kkmx;
+
+#  got_rpn_eqn[kmx, ++kkmx, "val"]=100;     # 100
+#  got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+#  got_rpn_eqn[kmx, ++kkmx, "val"]="idq_uops_not_delivered.core";  # 100; idq_uops..
+#  got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+#  got_rpn_eqn[kmx, ++kkmx, "val"]="*";   # 100 * idq_uops
+#  got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+#  got_rpn_eqn[kmx, ++kkmx, "val"]=4.0;         #  100*idq_uops; 4
+#  got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+#  got_rpn_eqn[kmx, ++kkmx, "val"]="cycles"     #  100*idq_uops; 4; cycles
+#  got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+#  got_rpn_eqn[kmx, ++kkmx, "val"]=thr_per_core; # 100*idq_uops; 4; cycles; thr_per_core;
+#  got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+#  got_rpn_eqn[kmx, ++kkmx, "val"]="/";   # 100*idq_uops; 4; cycles/thr_per_core
+#  got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+#  got_rpn_eqn[kmx, ++kkmx, "val"]="*";    # 100*idq_uops; 4*cycles/thr_per_core
+#  got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+#  got_rpn_eqn[kmx, ++kkmx, "val"]="/";    # 100*idq_uops/( 4*thr_per_core/cycles)
+#  got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+#  got_rpn_eqn[kmx, ++kkmx, "val"]="cycles"  # 100*idq_uops/( 4*thr_per_core/cycles); cycles
+#  got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+#  got_rpn_eqn[kmx, ++kkmx, "val"]=tolower("CPU_CLK_UNHALTED.THREAD_ANY"); # 100*idq_uops/( 4*thr_per_core/cycles); cycles; CPU_CLK_UNHALTED.THREAD_ANY
+#  got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+#  got_rpn_eqn[kmx, ++kkmx, "val"]="/"; # 100*idq_uops/( 4*thr_per_core/cycles); cycles/CPU_CLK_UNHALTED.THREAD_ANY
+#  got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+#  got_rpn_eqn[kmx, ++kkmx, "val"]="*";
+#  got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
    got_rpn_eqn[kmx,      1,"max"]=kkmx;
    lkfor[kmx,1]=tolower("IDQ_UOPS_NOT_DELIVERED.CORE");
    lkfor[kmx,2]="cycles";  # get the instances from the first lkfor event
@@ -559,6 +608,106 @@ function dt_to_epoch(offset) {
    lkfor[kmx,3]=tolower("IDQ_UOPS_NOT_DELIVERED.CORE");
    lkfor[kmx,4]="cycles";  # get the instances from the first lkfor event
    nwfor[kmx,1,"hdr"]="metric_TMAM_Backend_Bound_BadSpec(%)";
+   }
+
+   if (amd_cpu == 1) {
+#    rpn operations
+#    AMD backend bound
+   kmx++;
+   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+   got_lkfor[kmx,2]=2; # num of fields to look for
+   got_lkfor[kmx,3]="1.0";
+   got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
+   got_lkfor[kmx,5]=1; # instances
+   got_lkfor[kmx,6]=""; # 
+   kkmx = 0;
+   got_rpn_eqn[kmx, ++kkmx, "val"]=100;
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="stalled-cycles-backend"
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="*";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="cycles"
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="/";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+   got_rpn_eqn[kmx,      1,"max"]=kkmx;
+   lkfor[kmx,1]="stalled-cycles-backend";
+   lkfor[kmx,2]="cycles";  # get the instances from the first lkfor event
+   nwfor[kmx,1,"hdr"]="metric_TMAM_Backend_Bound_BadSpec(%)";
+
+#    AMD frontend bound
+   kmx++;
+   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+   got_lkfor[kmx,2]=2; # num of fields to look for
+   got_lkfor[kmx,3]="1.0";
+   got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
+   got_lkfor[kmx,5]=1; # instances
+   got_lkfor[kmx,6]=""; # 
+   kkmx = 0;
+   got_rpn_eqn[kmx, ++kkmx, "val"]=100;
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="stalled-cycles-frontend"
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="*";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="cycles"
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="/";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+   got_rpn_eqn[kmx,      1,"max"]=kkmx;
+   lkfor[kmx,1]="stalled-cycles-frontend";
+   lkfor[kmx,2]="cycles";  # get the instances from the first lkfor event
+   nwfor[kmx,1,"hdr"]="metric_TMAM_Frontend_Bound(%)";
+
+#    AMD %dispatch_stalls_0
+   kmx++;
+   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+   got_lkfor[kmx,2]=2; # num of fields to look for
+   got_lkfor[kmx,3]="1.0";
+   got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
+   got_lkfor[kmx,5]=1; # instances
+   got_lkfor[kmx,6]=""; # 
+   kkmx = 0;
+   got_rpn_eqn[kmx, ++kkmx, "val"]=100;
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="disp_stall_cycles_0";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="*";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="cycles"
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="/";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+   got_rpn_eqn[kmx,      1,"max"]=kkmx;
+   lkfor[kmx,1]="disp_stall_cycles_0";
+   lkfor[kmx,2]="cycles";  # get the instances from the first lkfor event
+   nwfor[kmx,1,"hdr"]="%dispatch_stalls_0";
+
+#    AMD %dispatch_stalls_1
+   kmx++;
+   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+   got_lkfor[kmx,2]=2; # num of fields to look for
+   got_lkfor[kmx,3]="1.0";
+   got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
+   got_lkfor[kmx,5]=1; # instances
+   got_lkfor[kmx,6]=""; # 
+   kkmx = 0;
+   got_rpn_eqn[kmx, ++kkmx, "val"]=100;
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="disp_stall_cycles_1";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="*";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="cycles"
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="/";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+   got_rpn_eqn[kmx,      1,"max"]=kkmx;
+   lkfor[kmx,1]="disp_stall_cycles_1";
+   lkfor[kmx,2]="cycles";  # get the instances from the first lkfor event
+   nwfor[kmx,1,"hdr"]="%dispatch_stalls_1";
+   }
 
    printf("perf_stat awk options= %s, skt_idx= %s\n", options, skt_idx) > "/dev/stderr";
 
@@ -682,7 +831,7 @@ function dt_to_epoch(offset) {
 #title	sar network IFACE dev eth0	sheet	sar network IFACE	type	line
 #hdrs	8	0	68	8
    bw_cols_mx = 0;
-   ipc_cols_mx = 0;not_halted
+   ipc_cols_mx = 0;
    unhalted_cols_mx = 0;
    col_hdr[0] = "epoch";
    col_hdr[1] = "ts";
@@ -711,6 +860,9 @@ function dt_to_epoch(offset) {
         if (index(nwfor[k,1,"hdr"], "not_halted") > 0 || index(nwfor[k,1,"hdr"], "TMAM") > 0 || index(nwfor[k,1,"hdr"], "power_pkg (watts)") > 0) {
           TMAM_cols[++TMAM_cols_mx] = cols;
         }
+        if (index(nwfor[k,1,"hdr"], "%dispatch_stalls_") > 0) {
+          TMAM_cols[++TMAM_cols_mx] = cols;
+        }
         if (nwfor[k,1,"hdr"] == "IPC" || index(nwfor[k,1,"hdr"], "GHz") > 0 || index(nwfor[k,1,"hdr"], "PKI") > 0) {
           ipc_cols[++ipc_cols_mx] = cols;
         }
@@ -719,6 +871,7 @@ function dt_to_epoch(offset) {
           ITP_lvl[got_mini_ITP,1] = cols;
           ITP_lvl[got_mini_ITP,2] = "bs";
         }
+
         if (index(nwfor[k,1,"hdr"], "metric_TMAM_Frontend_Bound") > 0) {
           ++got_mini_ITP;
           ITP_lvl[got_mini_ITP,1] = cols;
@@ -729,6 +882,16 @@ function dt_to_epoch(offset) {
           ITP_lvl[got_mini_ITP,1] = cols;
           ITP_lvl[got_mini_ITP,2] = "ret";
         }
+#       if (index(nwfor[k,1,"hdr"], "%dispatch_stalls_0") > 0) {
+#         ++got_mini_ITP;
+#         ITP_lvl[got_mini_ITP,1] = cols;
+#         ITP_lvl[got_mini_ITP,2] = "disp_0";
+#       }
+#       if (index(nwfor[k,1,"hdr"], "%dispatch_stalls_1") > 0) {
+#         ++got_mini_ITP;
+#         ITP_lvl[got_mini_ITP,1] = cols;
+#         ITP_lvl[got_mini_ITP,2] = "disp_1";
+#       }
         cols++;
      }
    }
@@ -864,6 +1027,9 @@ function dt_to_epoch(offset) {
      }
      for (k=1; k <= kmx; k++) { 
        prt_it=0;
+       if (got_lkfor[k,1] == 0) {
+         continue;
+       }
        if (got_lkfor[k,4] == "div" && got_lkfor[k,1] == got_lkfor[k,2]) {
          if (denom[k] == 0 && lkup[k,2] == -2) {
           denom[k] = def_inst;  # this is for input data on a per process basis where instance is 0
@@ -904,7 +1070,7 @@ function dt_to_epoch(offset) {
             if (sk == "") { sk= 1; }
            #not_halted_fctr[sk] = val/100.0;
             nhf = not_halted_fctr[sk];
-           #printf("a sk= %s, nhf= %f, skt_idx= %s interval= %f\n", sk, not_halted_fctr[sk], skt_idx, interval) > "/dev/stderr";
+            #printf("a sk= %s, nhf= %f, skt_idx= %s interval= %f\n", sk, not_halted_fctr[sk], skt_idx, interval) > "/dev/stderr";
             val = val / (interval*nhf);
          }
          if (got_lkfor[k,"max"] != "") {
@@ -940,7 +1106,8 @@ function dt_to_epoch(offset) {
        printf("hdrs\t%d\t%d\t%d\t%d\t1", rows+1, bcol+1, -1, evt_idx+extra_cols+4, ts_col);
        for (i=1; i <= got_mini_ITP; i++) {
        for (j=1; j <= got_mini_ITP; j++) {
-           if ((i == 1 && ITP_lvl[j,2] == "fe") || (i == 2 && ITP_lvl[j,2] == "bs") || (i == 3 && ITP_lvl[j,2] == "ret")) {
+           if ((i == 1 && ITP_lvl[j,2] == "fe") || (i == 2 && ITP_lvl[j,2] == "bs") || (i == 3 && ITP_lvl[j,2] == "ret") ||
+               (i == 4 && ITP_lvl[j,2] == "disp_0") || (i == 5 && ITP_lvl[j,2] == "disp_1")) {
            printf("\t%d\t%d", ITP_lvl[j,1], ITP_lvl[j,1]);
            }
        }
@@ -988,6 +1155,9 @@ function dt_to_epoch(offset) {
            if (sum_type[i_sum] == 1) {
               divi = sum_tmax[i_sum] - sum_tmin[i_sum];
            }
+           if (divi <= 0.0) {
+             continue;
+           }
            ky = sum_prt[i_sum];
            vl = (divi > 0 ? sum_tot[i_sum]/divi : 0.0);
            sum_tot[i_sum,"total"] = vl;
@@ -997,6 +1167,10 @@ function dt_to_epoch(offset) {
    }
    # print the computed columns which arent referenced in the sum_flds input list (and probably already printed out)
    for (k=1; k <= kmx; k++) {
+     if (got_lkfor[k,1] == 0) {
+        # no events found for this one
+        continue;
+     }
      if (nwfor[k,2] == 0 && nwfor[k,4] > 0) {
         ky = nwfor[k,1,"hdr"];
         vl = nwfor[k,3] / nwfor[k,4];
