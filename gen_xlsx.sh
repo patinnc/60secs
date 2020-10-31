@@ -1222,12 +1222,24 @@ if [ "$DO_TSV_2_XLS" == "1" ]; then
       if [ "$BEG_TM_IN" != "" ]; then
         BEG_TM=$BEG_TM_IN
       else
-        BEG_TM=`awk '/ start /{printf("%s\n", $2);}' $RUN_LOG`
+        BEG_TM=`awk '/ start /{printf("%d\n", $2);}' $RUN_LOG`
       fi
       if [ "$END_TM_IN" != "" ]; then
         END_TM=$END_TM_IN
       else
-        END_TM=`awk '/ end /{printf("%s\n", $2);}' $RUN_LOG`
+        END_TM=`awk '/ end /{printf("%d\n", $2);}' $RUN_LOG`
+      fi
+      echo "got RUN_LOG BEG_TM= $BEG_TM END_TM= $END_TM"
+      RUN_INFRA=`find $USE_DIR -name infra_cputime.txt | head -1`
+      if [ "$RUN_INFRA" != "" ]; then
+        BEG_TMI=`awk '/^__/{printf("%s\n", $2);exit}' $RUN_INFRA`
+        END_TMI=`awk '/^__/{tm=$2;}END{printf("%s\n", tm);}' $RUN_INFRA`
+        echo "got RUN_INF BEG_TM= $BEG_TMI END_TM= $END_TMI"
+        if [ "$END_TMI" != "" ]; then
+           if [ "$END_TM" -lt "$END_TMI" ]; then
+             END_TM=$END_TMI
+           fi
+        fi
       fi
       if [ $VERBOSE -gt 0 ]; then
         echo "$0.$LINENO beg_tm= $BEG_TM end_tm= $END_TM" > /dev/stderr
