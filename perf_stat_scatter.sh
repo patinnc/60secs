@@ -136,12 +136,25 @@ else
 fi 
 for i in $LSCPU_FL; do
   if [ -e $i ]; then
+#Vendor ID:             AuthenticAMD
+#CPU family:            23
+#Model:                 49
+#Model name:            AMD EPYC 7662 64-Core Processor
+#Stepping:              0
+#CPU MHz:               1496.962
+#CPU max MHz:           2000.0000
+    TSC_FREQ_AMD=`cat $i |awk '/^Vendor ID:/{if ($3 == "AuthenticAMD"){amd=1;}}/CPU max MHz:/{ freq= $4; if (amd==1){printf("%s\n", freq);exit;}}'`
     TSC_FREQ=`cat $i |awk '/^Model name/{for (i=1;i<=NF;i++){pos=index($i, "GHz");if (pos > 0){print substr($i,1,pos-1);}}}'`
     NUM_CPUS=`cat $i |awk '/^CPU.s.:/{printf("%s\n",$2);}'`
     THR_PER_CORE=`cat $i |awk '/^Thread.s. per core:/{printf("%s\n",$4);}'`
     #CPU(s):                32
   fi
 done
+AMD_CPU=0;
+if [ "$TSC_FREQ" == "" -a "$TSC_FREQ_AMD" != "" ]; then
+  TSC_FREQ=$TSC_FREQ_AMD
+  AMD_CPU=1;
+fi
 echo "TSC_FREQ= $TSC_FREQ NUM_CPUS= $NUM_CPUS" > /dev/stderr
 CPU2017LOG=()
 RESP=`find .. -name CPU2017.001.log`
@@ -158,8 +171,8 @@ echo "++++++++++++++++++++got CPU2017files= $CPU2017files" > /dev/stderr
 
 export AWKPATH=$SCR_DIR
 
-echo awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s|memory},LLC-misses PKI{|memory},%not_halted{|CPU},avg_freq{avg_freq GHz|CPU},QPI_BW{QPI_BW GB/s|memory interconnect},power_pkg {power pkg (watts)|power}" -f $SCR_DIR/perf_stat_scatter.awk $FILES $CPU2017files > /dev/stderr
-awk -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s|memory},LLC-misses PKI{|memory},%not_halted{|CPU},avg_freq{avg_freq GHz|CPU},QPI_BW{QPI_BW GB/s|memory interconnect},power_pkg {power pkg (watts)|power}" -f $SCR_DIR/perf_stat_scatter.awk $FILES $CPU2017files
+echo awk -v amd_cpu="$AMD_CPU" -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s|memory},LLC-misses PKI{|memory},%not_halted{|CPU},avg_freq{avg_freq GHz|CPU},QPI_BW{QPI_BW GB/s|memory interconnect},power_pkg {power pkg (watts)|power}" -f $SCR_DIR/perf_stat_scatter.awk $FILES $CPU2017files > /dev/stderr
+awk -v amd_cpu="$AMD_CPU" -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s|memory},LLC-misses PKI{|memory},%not_halted{|CPU},avg_freq{avg_freq GHz|CPU},QPI_BW{QPI_BW GB/s|memory interconnect},power_pkg {power pkg (watts)|power}" -f $SCR_DIR/perf_stat_scatter.awk $FILES $CPU2017files
           RC=$?
           if [ $RC -gt 0 ]; then
             RESP=`pwd`
