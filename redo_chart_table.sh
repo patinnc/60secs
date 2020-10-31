@@ -80,6 +80,7 @@ if [ ! -e $FILE_LIST ]; then
   exit 1
 fi
 FLS=()
+RESP=0
 if [ "$GREP_STR" != "" ]; then
   RESP=`grep $GREP_STR $FILE_LIST|wc -l|awk '{$1=$1;print($1)}'`
   if [ "$VERBOSE" != "0" ]; then
@@ -87,11 +88,13 @@ if [ "$GREP_STR" != "" ]; then
   fi
   if [ "$RESP" == "0" ]; then
     echo "$0: didn't find any line for grep $GREP_STR $FILE_LIST"
-    exit 1
-  fi
+    #exit 1
+  else
   FILES=`grep $GREP_STR $FILE_LIST`
   FLS=(`echo $FILES`)
-else
+  fi
+fi
+if [ "$RESP" == "0" ]; then
   FILES=`awk '{if ($0 != ""){v=substr($1, 1,1); if (v != "-" && v != "#") {print($0);}}}' $FILE_LIST`
   RESP=`echo "$FILES" |wc -l| awk '{$1=$1;print($1);}'`
   echo "got $RESP files"
