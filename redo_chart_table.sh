@@ -138,7 +138,8 @@ HOST_NUM_LIST=
 if [ "$NLIMIT" != "" ]; then
   NUM_HOST=${#FLS[@]}
   HOST_NUM=$NLIMIT
-  HOST_NUM_LIST=(`awk -v beg="0" -v end="$NUM_HOST" -v str="$HOST_NUM" '
+  HOST_NUM_LIST=(`awk -v scr_nm="$0" -v beg="0" -v end="$NUM_HOST" -v str="$HOST_NUM" '
+     @load "time"
      BEGIN{
         # handle 1 or 0-2 or 0,3 or 0,1-3,7
         # return array of value
@@ -244,7 +245,9 @@ if [ $j -lt 10 ]; then
 fi
 
 awk -v options="$OPTIONS" -v out_file="$FL_OUT" -v verbose="$VERBOSE" -v rows_max="$ROWS_MAX" -v metric="$METRIC" -v chrt_typ="$CHRT_TYP" -v sheet="$SHEET" -v title="$TITLE" '
+   @load "time"
    BEGIN {
+     gtod_beg = gettimeofday() + 0.0;
      search = sprintf("^title\t%s\tsheet\t%s\ttype\t%s", title, sheet, chrt_typ);
      if (title == "__all__") {
         search = "";
@@ -258,6 +261,8 @@ awk -v options="$OPTIONS" -v out_file="$FL_OUT" -v verbose="$VERBOSE" -v rows_ma
    }
 function sort_desc(i1, v1, i2, v2,   lhs, rhs)
 {
+    lhs = avg[i1,dindx];
+    rhs = avg[i2,dindx];
     lhs = avg[i1,dindx];
     rhs = avg[i2,dindx];
     if (lhs > rhs)
@@ -331,8 +336,13 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
          got_hdr=1;
          row_beg = arr[2]+0;
          row_end = arr[4]+0;
+         col_cat = arr[6]+0;
          hdrs[ARGIND,chrt,"hdrs"] = $0;
          hdrs[ARGIND,chrt,"hdrs_row"] = rw;
+         hdrs[ARGIND,chrt,"hdrs_cols_n"] = n;
+         for (i=1; i <= n; i++) {
+           hdrs[ARGIND,chrt,"hdrs_cols", i] = arr[i];
+         }
          if (!(row_beg in ch_rw)) {
             ch_rw[row_beg] = chrt;
             if (verbose > 0) {
@@ -367,20 +377,17 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
      ftbl[ARGIND,"row_data",rw] = $0;
    }
    END {
+        gtod_end_input = gettimeofday()+0.0;
+       printf("time to read input files= %f secs\n", (gtod_end_input-gtod_beg)) > "/dev/stderr";
        # ---------- above all the data has been read in
 #title   pidstat average %CPU    sheet   pidstat type    column
 #hdrs    829     0       870     1       0
-     #printf("tbls[1]= %d\n", tbls[1]);
-     #k = tbls[1];
-     #for(i=2; i <= mx_fls; i++) {
-     #   if (tbls[i] != k) {
-     #     printf("expected %d tables. got %d tbls in %s. Bye\n", k, tbls[i], flnm[i]);
-     #     exit 1;
-     #   }
-     #}
+     printf("ch_mx= %d, mx_fls= %d\n", ch_mx, mx_fls) > "/dev/stderr";
      if (verbose > 0) {
        printf("ch_mx= %d\n", ch_mx);
      }
+     lkfor_title="infra disk IO MB/sec";
+     lkfor_got = 0;
      for(c=1; c <= ch_mx; c++) {
        mx_rws = -1;
        mn_rws = -1;
@@ -407,11 +414,15 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
        }
        # ---------- now, for each chart, read each files data and hash the column names
        # ---------- store each files row/col data in the appropriate hash box.
+       gtod_beg_files = gettimeofday();
        for(i=1; i <= mx_fls; i++) {
          ky = i","c;
          if (!(ky in tbls_list)) {
             continue;
          }
+         gtod_beg_files3 = gettimeofday()+0.0;
+         iters = 0;
+         iters2 = 0;
          rws = tbl[i,c,"rows"];
          got_hdrs= 0;
          for (j=1; j <= rws; j++) {
@@ -426,26 +437,67 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
                 need_col_hdr = 1;
               }
               trow = hdrs[i,c,"title_row"];
-              #printf("trow[%d]= %d\n", c, trow);
+              #if (title == lkfor_title) {
+              #  lkfor_got = 1;
+              #  printf("trow[%d]= %d, fl= %d, c= %d ch_typ= %s, rws= %d, title= %s\n", c, trow, i, c, ch_typ, rws, title) > "/dev/stderr";
+              #} else {
+              #  lkfor_got = 0;
+              #}
+              #printf("trow[%d]= %d, fl= %d, c= %d ch_typ= %s\n", c, trow, i, c, ch_typ);
               got_hdrs= 0;
               continue;
            }
-           if (got_hdrs == 0 && arr[1] == "hdrs") {
+           crow = trow + j - 2;
+           if (arr[1] == "hdrs") {
               got_hdrs = 1;
               row_beg = arr[2];
               col_beg = arr[3];
               row_end = arr[4];
               col_end = arr[5];
               col_cat = arr[6];
-              #printf("row_beg= %d, col_beg= %d, row_end= %d, col_end= %d\n", row_beg, col_beg, row_end, col_end);
+              if (lfor_got == 1 ) {
+                printf("hdrs crow= %d, row_beg= %d, col_beg= %d, row_end= %d, col_end= %d\n", crow, row_beg, col_beg, row_end, col_end) > "/dev/stderr";
+              }
+              ghdrs_cols[i,c,0] = n;
+              for (k=1; k <= n; k++) {
+                ghdrs_cols[i,c,k] = arr[k];
+              }
+              if (fl_ch_row_beg[i,row_beg] == "" ) {
+                 fl_ch_row_beg[i,row_beg] = c;
+                 use_c = c;
+              } else {
+                 use_c = fl_ch_row_beg[i,row_beg];
+              }
+              #printf("hdrs c= %d, use_c= %d fl= %d, cur_row= %d, row_beg= %d\n", c, use_c, i, j, row_beg) > "/dev/stderr";
+               # this chart has no data itself and refers to a data table above
+               #use_c = ch_row_beg_list[row_beg];
+               n2 = ghdrs_cols[i,c,0];
+               #if (ch_typ == "line_stacked") {
+               #  printf("+++++++++ch_typ= %s, file= %d c= %d, use_c= %d n2= %d linedata: %s\n", ch_typ, i, c, use_c, n2, tbl[i,c,"tbl",j]) > "/dev/stderr";
+               #}
+               if ( n2 > 6) { # so we have extra col number references on the hdrs line
+                 gcat_col2cat_extra_cols[c,"col_n"] = n2;
+                 for (k=7; k <= n2; k++) {
+                   i2 = ghdrs_cols[i,c,k]+1; # add 1 since col num ref is relative to 0 (first col in row is col 0)
+                   cat_for_col_i2 = gcat_col2cat[i,use_c,i2];
+                   hdr_for_col_i2 = gcat_lkup[use_c,cat_for_col_i2];
+                   gcat_col2cat_extra_cols[c,"col_hdr",k] = hdr_for_col_i2;
+                   gcat_col2cat_extra_cols[c,"col_cat",k] = cat_for_col_i2;
+                   #if (ch_typ == "line_stacked") {
+                   #   printf("++ch_typ= %s, file= %d c= %d, use_c= %d col[%d]= %d maps_to_cat= %s maps_to_hdr= %s\n", ch_typ, i, c, use_c, k, i2, cat_for_col_i2, hdr_for_col_i2) > "/dev/stderr";
+                   #}
+                 }
+               }
               continue;
            }
-           if (need_col_hdr == 1) {
+           if (1==2 && need_col_hdr == 1) {
               gcol_category_line[c] = tbl[i,c,"tbl",j];
               need_col_hdr = 0;
               continue;
            }
-           crow = trow + j - 2;
+           #if (ch_typ == "column") {
+           #   printf("++++ch_typ= %s, crow= %d, row_beg= %d, n= %d, arr1= %s\n", ch_typ, crow, row_beg, n, arr[1]) > "/dev/stderr";
+           #}
            if (n == 0) { continue; }
            if (ch_typ == "scatter_straight" || ch_typ == "line" || ch_typ == "line_stacked") {
              #if(j < 10) {
@@ -457,50 +509,106 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
                 if (cat == "") {
                   cat = "__unk__";
                 }
+                gstr = c","cat;
+                if (!(gstr in gstr_cat_list)) {
+                   gstr_cat_list[gstr] = ++cat_mx;
+                   cat_list[cat] = cat_mx;
+                   cat_lkup[cat_mx] = cat;
+#bbb
+                   gcat_list[c,cat] = cat_mx;
+                   gcat_lkup[c,cat_mx] = cat;
+                   gcat_mx[c] = cat_mx;
+                   #if (ch_typ == "scatter_straight") {
+                   #  printf("add cat[%d][%d]= %s\n", c, cat_mx, cat) > "/dev/stderr";
+                   #}
+                }
+                col_lkup[k] = gcat_list[c,cat];
+                gcat_col2cat[i,c,k] = gcat_list[c,cat];
+                #if (lkfor_got == 1) {
+                #  printf("gcat_col2cat[%d,%d]= %d, cat= %s\n", c, k, gcat_list[c,cat], cat) > "/dev/stderr";
+                #}
+               }
+               # now the header row has been processed.
+               # Now we need to look back at the hdrs array which has references to column numbers.
+               # The col number reference can cause problems for combine-files logic since the col number may be different if the chart has different order
+               # if there are col numbers added to the hdrs row for this chart then map the column number to the cat now.
+               n2 = ghdrs_cols[i,c,0];
+               #if (ch_typ == "line_stacked") {
+               #  printf("+++++++++ch_typ= %s, file= %d c= %d, n2= %d\n", ch_typ, i, c, n2) > "/dev/stderr";
+               #}
+               if ( n2 > 6) { # so we have extra col number references on the hdrs line
+                 for (k=7; k <= n2; k++) {
+                   i2 = ghdrs_cols[i,c,k]+1; # add 1 since col num ref is relative to 0 (first col in row is col 0)
+                   hdr_for_col_i2 = arr[k];
+                   #if (ch_typ == "line_stacked") {
+                   #   printf("ch_typ= %s, file= %d c= %d, col[%d]= %d maps to hdr= %s\n", ch_typ, i, c, k, i2, hdr_for_col_i2) > "/dev/stderr";
+                   #}
+                 }
+               }
+               continue;
+             }
+             #if (crow >= (row_beg+10)) { exit; }
+             if (crow > row_beg && n > 0 && (row_end == -1 || crow <= row_end)) {
+               #if (lkfor_got == 1 && j < 20) { printf("row[%d]= %s, col_beg= %d, col_end= %d\n", j, tbl[i,c,"tbl",j], col_beg, col_end) > "/dev/stderr"; }
+               #gtod_beg_files2 = gettimeofday()+0.0;
+               iters++;
+               for (k=col_beg+1; k <= (col_end+1); k++) {
+                  cat_i = col_lkup[k];
+                  v = arr[k]+0.0;
+                  val[cat_i] += v;
+                  # if (lkfor_got == 1 && j < 20) { printf("row[%d,%d]= %f, cati= %s\n", j, k, v, cat_i) > "/dev/stderr"; }
+                  num[cat_i]++;
+                  rval[cat_i,j] += v;
+                  rnum[cat_i,j]++;
+                  iters2++;
+               }
+               #gtod_end_files2 = gettimeofday()+0.0;
+               #tdff += gtod_end_files2 - gtod_beg_files2;
+             }
+             continue;
+           }
+           if (ch_typ == "column") {
+             #printf("++++ch_typ= %s, fl= %d c= %d, crow= %d, row_beg= %d\n", ch_typ, i, c, crow, row_beg) > "/dev/stderr";
+             if (crow == row_beg) {
+             #printf("+++-ch_typ= %s, got header row fl= %d c= %d, crow= %d, row_beg= %d\n", ch_typ, i, c, crow, row_beg) > "/dev/stderr";
+              for (k=1; k <= (col_end+1); k++) {
+                cat = arr[k];
+                if (cat == "") {
+                  cat = "__unk__";
+                }
                 if (!(cat in cat_list)) {
                    cat_list[cat] = ++cat_mx;
                    cat_lkup[cat_mx] = cat;
                    gcat_list[c,cat] = cat_mx;
                    gcat_lkup[c,cat_mx] = cat;
                    gcat_mx[c] = cat_mx;
-                   #printf("add cat[%d][%d]= %s\n", c, cat_mx, cat);
                 }
-                col_lkup[k] = cat_list[cat];
-               }
-               continue;
-             }
-             #if (crow >= (row_beg+10)) { exit; }
-             if (crow > row_beg && n > 0 && (row_end == -1 || crow <= row_end)) {
-               for (k=col_beg+1; k <= (col_end+1); k++) {
-                  cat_i = col_lkup[k];
-                  val[cat_i] += arr[k];
-                  num[cat_i]++;
-                  rval[cat_i,j] += arr[k];
-                  rnum[cat_i,j]++;
-               }
-             }
-           }
-           if (ch_typ == "column" && col_cat != "") {
-              cat = arr[col_cat+1];
-              if (cat == "") {
-                cat = "__unk__";
+                gcat_col2cat[i,c,k] = gcat_list[c,cat];
+                #printf("ch_typ= %s, col[%d]= %s, cat= %d\n", ch_typ, k, cat, gcat_list[c,cat]) > "/dev/stderr";
               }
-              if (!(cat in cat_list)) {
-                 cat_list[cat] = ++cat_mx;
-                 cat_lkup[cat_mx] = cat;
-                 gcat_list[c,cat] = cat_mx;
-                 gcat_lkup[c,cat_mx] = cat;
-                 gcat_mx[c] = cat_mx;
-              }
-              cat_i = cat_list[cat];
+             }
+             if (crow > row_beg) {
+             #printf("++--ch_typ= %s, got header row fl= %d c= %d, crow= %d, row_beg= %d\n", ch_typ, i, c, crow, row_beg) > "/dev/stderr";
               for (k=1; k <= (col_end+1); k++) {
-                if (k == (col_cat+1)) { continue; }
-                val[cat_i,k] += arr[k];
-                num[cat_i,k]++;
+                cat_i = gcat_col2cat[i,c,k];
+                val[cat_i] += arr[k];
+                num[cat_i]++;
               }
+             }
            }
          }
+         gtod_end_files3 = gettimeofday()+0.0;
+         tdff3 = gtod_end_files3 - gtod_beg_files3;
+         if (tdff3 > 1.0) {
+           #printf("argc[%d]= %s, ch_typ= %s, title= %s, rws= %d tdff3= %f\n", i, ARGV[i], ch_typ, title, rws, tdff3) > "/dev/stderr";
+               col_diff= col_end-col_beg;
+           printf("argc[%d]: ch_typ= %s, title= %s, rws= %d tdff3= %f, iters= %d, iters2= %d, col_diff= %d\n", i, ch_typ, title, rws, tdff3, iters, iters2, col_diff) > "/dev/stderr";
+         }
        }  # end of loop over files
+       gtod_end_files = gettimeofday()+0.0;
+       #printf("time after c= %d loop over files, time= %f secs tdff= %f\n", c, gtod_end_files-gtod_beg_files, tdff) > "/dev/stderr";
+       tdff = 0.0;
+#bbb
        # ---------- summary tables have been created. hashes of variable names stored.
        # ---------- sort the values descending order
        i=1; 
@@ -543,6 +651,11 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
        if (ch_typ == "column") {
          for(i=1; i <= gcat_mx[c]; i++) {
            indx[i]=i;
+           if (num[i] > 0) {
+              avg[i] = val[i]/num[i];
+           } else {
+              avg[i] = 0.0;
+           }
            for(k=1; k <= (col_end+1); k++) {
               avg[i,k] = 0;
               if ( dindx == -1 && num[i,k] > 0) {
@@ -564,7 +677,7 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
              srt_indx[i]=i;
            }
          } else {
-           asorti(indx, srt_indx, "sort_desc");
+           asorti(indx, srt_indx, "sort_a_desc");
          }
          for(i=1; i <= gcat_mx[c]; i++) {
            gsrt_indx[c,i] = srt_indx[i];
@@ -679,6 +792,9 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
              ii = gsrt_indx[c,m];
              if (do_1st_data_row > -1 && do_1st_data_row == cr) {
                 ctbl[c,cr] = ctbl[c,cr] "" sprintf("%s%s", sep, gcat_lkup[c,ii]);
+                ctbl_col_hdrs_list[c,gcat_lkup[c,ii]] = m;
+                #printf("ctbl_col_hdrs_list[%s,%s] = %s\n", c, gcat_lkup[c,ii], m) > "/dev/stderr";
+                ctbl_col_hdrs_lkup[c,m] = gcat_lkup[c,ii];
               } else {
                 vl = ravg[ii,j];
                 ivl = int(vl);
@@ -700,32 +816,38 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
        if (ch_typ == "column") {
          cr = 0;
          #printf("column chart= %d\n", c);
-         ctbl[c,++cr] = sprintf("title\t%s\tsheet\t%s\ttype\t%s\n", title " " metric, sheet, ch_typ);
          #printf("column chart: %s", ctbl[c,cr]);
+         ctbl[c,++cr] = sprintf("title\t%s\tsheet\t%s\ttype\t%s\n", title " " metric, sheet, ch_typ);
          ctbl[c,++cr] = sprintf("col hdrs\t%d\t%d\t%d\t%d\t%d\n", trow, col_beg, trow+gcat_mx[c], col_end, col_cat);
          mrws = 0;
+         sep = "";
+         ctbl[c,++cr] = "";
          for(m=1; m <= gcat_mx[c]; m++) {
-           sep = "";
-           ctbl[c,++cr] = "";
            i = gsrt_indx[c,m];
-           for(k=1; k <= (col_end+1); k++) {
-              if (k == (col_cat+1)) {
-                ctbl[c,cr] = ctbl[c,cr] "" sprintf("%s%s", sep, gcat_lkup[c,i]);
-              } else {
-                ctbl[c,cr] = ctbl[c,cr] "" sprintf("%s%f", sep, avg[i,k]);
-              }
-              sep = "\t";
-           }
-           ctbl[c,cr] = ctbl[c,cr] "" sprintf("\n");
-           mrws++;
-           if (mrws >= mx_rws) { break; }
+           ctbl[c,cr] = ctbl[c,cr] "" sprintf("%s%s", sep, gcat_lkup[c,i]);
+           sep = "\t";
          }
+         ctbl[c,cr] = ctbl[c,cr] "" sprintf("\n");
+         sep = "";
+         ctbl[c,++cr] = "";
+         for(m=1; m <= gcat_mx[c]; m++) {
+           i = gsrt_indx[c,m];
+           ctbl[c,cr] = ctbl[c,cr] "" sprintf("%s%f", sep, avg[i]);
+           sep = "\t";
+         }
+         ctbl[c,cr] = ctbl[c,cr] "" sprintf("\n");
          ctbl[c,"max"] = cr;
          if (verbose > 0) {
            printf("column chart= %d, max= %d, for file= %d\n", c, cr, fl);
          }
+         #printf("+++did chart %d of %d max charts, file= %d\n", c, ch_mx, i) > "/dev/stderr";
        }
+       gtod_end_loopc = gettimeofday();
+       #printf("time at bot loop c= %d, time= %f secs\n", c, gtod_end_loopc-gtod_end_input) > "/dev/stderr";
+       #printf("+++did chart %d of %d max charts\n", c, ch_mx) > "/dev/stderr";
      } # charts on page
+     gtod_end_loop1 = gettimeofday();
+     printf("time post-processing after loop1= %f secs\n", gtod_end_loop1-gtod_end_input) > "/dev/stderr";
      #ftbl[ARGIND,"file_row",rw] = got_tbl;
      #ftbl[ARGIND,"chrt_num",rw]  = chrt_num;
      #ftbl[ARGIND,"row_data",rw] = $0;
@@ -772,10 +894,13 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
             rw_diff = arr[2] - hr;
             #printf("rw_diff[%d]= %d\n", cc, rw_diff);
             arr[2] = trow + rw_diff + 1;
+            col_beg = arr[3];
             if (chrt_ref != cc) {
               ncr = split(hdrs[fl,chrt_ref,"hdrs"], cr_arr, "\t");
               arr[2] = cr_arr[2];
             }
+#bbb
+            #printf("hdrs[%d,%d,\"hdrs\"]= %s, n= %d\n", fl,chrt_ref, hdrs[fl,chrt_ref,"hdrs"], n) > "/dev/stderr";
             row_end= arr[4];
             mx = ctbl[cc,"max"];
             if (row_end != -1) {
@@ -792,15 +917,26 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
             }
             str = arr[1];
             for (j=2; j <= n; j++) {
-               str = str "" sprintf("\t%s", arr[j]);
+               kk = arr[j];
+               if (j > 6) {
+                   #gcat_col2cat_extra_cols[c,"col_hdr",k] = hdr_for_col_i2;
+                 kcat = gcat_col2cat_extra_cols[cc,"col_cat",j];
+                 kccat = gcat_lkup[chrt_ref,kcat];
+                 srtd_idx = gsrt_indx[chrt_ref,kcat];
+                 ncol = ctbl_col_hdrs_list[chrt_ref,kccat]+col_beg-1;
+                 kk = ncol;
+                 #printf("ch_typ= %s cc= %d, j= %d, kk1= %d kk= %d, kcat= %d, kccat= %s, k2= %s, ncol= %s\n", ch_typ, chrt_ref, j, kk1, kk, kcat, kccat, k2, ncol) > "/dev/stderr";
+               }
+               str = str "" sprintf("\t%s", kk);
             }
             printf("%s\n", str) > out_file;
             ++trow;
-            if (ch_typ == "column") {
-               printf("%s\n", gcol_category_line[cc]) > out_file;
-               ++trow;
-            }
-            #printf("chart[%d], max= %d\n", cc, mx);
+            #if (ch_typ == "column") {
+               #printf("%s\n", gcol_category_line[cc]) > out_file;
+              #printf("%s\n", ctbl[cc,2]) > out_file;
+              # ++trow;
+            #}
+            #printf("ch_typ= %s chart[%d], max= %d\n", ch_typ, cc, mx);
             for (j=3; j <= mx; j++) {
               #printf("ch[%d] rw[%d] %s", cc, j, ctbl[cc,j]) > out_file;
               printf("%s", ctbl[cc,j]) > out_file;
@@ -817,6 +953,8 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
      if (out_file != "") {
        close(out_file);
      }
+        gtod_end = gettimeofday();
+       printf("total awk time %f secs\n", gtod_end-gtod_beg) > "/dev/stderr";
    }
    ' $FILE_STR
    RC=$?
