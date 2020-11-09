@@ -125,9 +125,26 @@ awk -v options="$OPTIONS" -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofi
       if ($0 == "" || (length($1) > 2 && substr($1, 1, 2) == "__")) {
         break;
       }
+      #if ($2  == 0 && $3 != "dm-0") {
+      dev = $3;
+      dev_len = length(dev);
+#nvme0n1p1
+      use_it= 0;
+      if ((dev_len == 3 && substr(dev, 1, 2) == "sd") ||
+          (dev_len == 7 && substr(dev, 1, 4) == "nvme") ||
+          dev == "dm-0") {
+        use_it = 1;
+      }
+      if (use_it == 1) {
       j++;
       diskstats_lns[diskstats_mx] = j;
-      diskstats_data[diskstats_mx,j] = $0;
+      diskstats_data[diskstats_mx,j,"device"] = $3;
+      #diskstats_data[diskstats_mx,j,"reads"] = $4+0;
+      #diskstats_data[diskstats_mx,j,"read_bytes"] = 512*($6+0);
+      #diskstats_data[diskstats_mx,j,"writes"] = $8+0;
+      #diskstats_data[diskstats_mx,j,"write_bytes"] = 512*($10+0);
+      diskstats_data[diskstats_mx,j,"total_bytes"] = 512*($10+$6);
+      }
     }
   }
   /^__docker_ps__ /{
@@ -534,6 +551,49 @@ function tot_compare(i1, v1, i2, v2,    l, r)
          }
       }
     }
+    if (diskstats_mx > 0) {
+      trow++;
+      printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", "infra disk IO MB/sec", "infra procs") > ofile;
+      trow++;
+      devs = diskstats_lns[1];
+      printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 2, -1, 2+devs, 1) > ofile;
+      printf("epoch\tts") > ofile
+      for(i=1; i <= devs; i++) {
+        printf("\t%s", diskstats_data[1,i,"device"]) > ofile;
+        vsum[i] = 0.0;
+        vnum[i] = 0;
+      }
+      printf("\n") > ofile;
+      trow++;
+      for(k=2; k <= diskstats_mx; k++) {
+        printf("%s\t%d", diskstats_dt[k], diskstats_dt[k]-diskstats_dt[1]) > ofile;
+        tm_diff = diskstats_dt[k]-diskstats_dt[k-1];
+        for(i=1; i <= devs; i++) {
+          MB_diff = 1.0e-6 * (diskstats_data[k,i,"total_bytes"]-diskstats_data[k-1,i,"total_bytes"]);
+          val = MB_diff / tm_diff;
+          #printf("rd_infra_cputime.sh: k= %d dev[%d]= %s, perf= %f MB/s\n", k, i, diskstats_data[1,i,"device"], val) > "/dev/stderr";
+          vsum[i] += val;
+          vnum[i]++;
+          printf("\t%.3f", val) > ofile;
+        }
+        printf("\n") > ofile;
+        trow++;
+      }
+      trow++;
+      printf("\n") > ofile;
+      if (sum_file != "") {
+         for(i=1; i <= devs; i++) {
+          tm_diff = diskstats_dt[diskstats_mx]-diskstats_dt[1];
+          MB_diff = 1.0e-6 * (diskstats_data[diskstats_mx,i,"total_bytes"]-diskstats_data[1,i,"total_bytes"]);
+          v = MB_diff / tm_diff;
+           #v = 0.0;
+           #if (vnum[i] > 0) {
+           #  v = vsum[i]/vnum[i];
+           #}
+           printf("infra_procs\tIO stats\t%.3f\tIO MBs/sec %s\n", v, diskstats_data[1,i,"device"]) >> sum_file;
+         }
+      }
+    }
     if (col_rss != -1) {
       trow++;
       printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", "infra procs rss mem (MBs)", "infra procs") > ofile;
@@ -612,7 +672,6 @@ function tot_compare(i1, v1, i2, v2,    l, r)
          }
       }
     }
-    trow++;
     if ( use_top_pct_cpu == 0) {
       str = "top infra procs cpus (1=1cpu_busy)";
       str2 = "cpu_secs";
@@ -620,10 +679,10 @@ function tot_compare(i1, v1, i2, v2,    l, r)
       str = "top infra procs avg %cpus (100=1cpu_busy)";
       str2 = "%cpu";
     }
+    trow++;
     printf("title\t%s\tsheet\t%s\ttype\tcolumn\n", str, "infra procs") > ofile;
     trow++;
     printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 0, -1, proc_mx-1, proc_mx) > ofile;
-    trow++;
     for(i=1; i <= proc_mx; i++) {
       j = res_i[i];
       printf("%s\t", proc_lkup[j]) > ofile;
