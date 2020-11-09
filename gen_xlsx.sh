@@ -13,7 +13,8 @@ XLSX_FILE=
 END_TM=
 SKIP_XLS=0
 NUM_DIR=0
-AVERAGE=0
+NUM_DIR_BEG=
+AVERAGE_END=
 MAX_VAL=
 TS_INIT=
 VERBOSE=0
@@ -105,7 +106,7 @@ while getopts "hvASa:b:B:c:D:d:e:F:g:I:j:m:N:o:P:r:X:x:" opt; do
       MAX_VAL=$OPTARG
       ;;
     N )
-      NUM_DIR=$OPTARG
+      NUM_DIR_IN=$OPTARG
       ;;
     o )
       OPTIONS=$OPTARG
@@ -138,7 +139,8 @@ while getopts "hvASa:b:B:c:D:d:e:F:g:I:j:m:N:o:P:r:X:x:" opt; do
       echo "   -I file_with_list_of_input_files   used for getting a specify list of file proccessed"
       echo "   -j job_id   if you are doing more than 1 dir and running jobs in background then this id is used to create unique input filenames for tsv_2_xlsx.py"
       echo "   -m max_val    any value in chart > this value will be replaced by 0.0"
-      echo "   -N number_of_dirs  if you have more than 1 directories then you can limit the num of dirs with this option. Default process all"
+      echo "   -N number_of_dirs | beg_dir_num,end_dir_num  if you have more than 1 directories then you can limit the num of dirs with this option. Default process all"
+      echo "      if you enter beg_dir_num,end_dir_num  then dirs numbering from beg_dir_num to end_dir_num are selected."
       echo "   -o options       comma separated options."
       echo "         'do_sum_sockets' if the perf stat data is per-socket then sum per-socket data to the system level"
       echo "         'dont_sum_sockets' if the perf stat data is per-socket then don't sum per-socket data to the system level"
@@ -211,6 +213,20 @@ if [ "$OPTIONS" != "" ]; then
    fi
 fi
 
+if [ "$NUM_DIR_IN" != "" ]; then
+  NUM_DIR_ARR=()
+  IFS=',' read -r -a NUM_DIR_ARR <<< "$NUM_DIR_IN"
+  echo "NUM_DIR_ARR= ${NUM_DIR_ARR[@]}, BM0= ${NUM_DIR_ARR[0]}, BM1=${NUM_DIR_ARR[1]}" > /dev/stderr
+  NUM_DIR_BEG=${NUM_DIR_ARR[0]}
+  NUM_DIR_END=${NUM_DIR_ARR[1]}
+  if [ "$NUM_DIR_END" == "" ]; then
+    # only 1 value entered. Treat it as a 'read this many files' 
+    NUM_DIR=$NUM_DIR_BEG
+    NUM_DIR_BEG=
+  fi
+  echo "NUM_DIR_ARR= ${NUM_DIR_ARR[@]}, ND0= ${NUM_DIR_ARR[0]}, ND1=${NUM_DIR_ARR[1]} NUM_DIR_BEG= $NUM_DIR_BEG NUM_DIR_END= $NUM_DIR_END" > /dev/stderr
+fi
+
 REGEX_LEN=${#REGEX[@]}
 
 SKIP_SYS_2_TSV=0
@@ -256,15 +272,27 @@ get_dir_list() {
       NM=$(dirname $ii)
       j=$((j+1))
       if [ "$NUM_DIR" != "" -a "$NUM_DIR" != "0" -a $NUM_DIR -gt 0 -a $j -ge $NUM_DIR ]; then
-         echo "$0.$LINENO limit number of dirs with $CKF due to -N $NUM_DIR option"
+         echo "$0.$LINENO  job_id= $JOB_ID limit number of dirs with $CKF due to -N $NUM_DIR option"
          break
+      fi
+      if [ "$NUM_DIR_BEG" != "" ]; then
+         if [ "$j" -lt "$NUM_DIR_BEG" ]; then
+         echo "$0.$LINENO  job_id= $JOB_ID skip dir $j due to -N $NUM_DIR_IN option" > /dev/stderr
+         continue
+         fi
+      fi
+      if [ "$NUM_DIR_END" != "" ]; then
+         if [ "$j" -gt "$NUM_DIR_END" ]; then
+         echo "$0.$LINENO  job_id= $JOB_ID skip dir $j due to -N $NUM_DIR_IN option" > /dev/stderr
+         continue
+         fi
       fi
       STR="$STR $NM"
    done
    DIR=$STR
    echo "$0.$LINENO get_dir_list: j= $j DIR= $DIR"
+   exit 1
 }
-
 
 OPT_a=
 if [ "$AVG_DIR" != "" ]; then
@@ -440,10 +468,24 @@ else
              echo "$0.$LINENO first sys_*_perf_stat.txt TS_INIT= $TS_INIT"
             fi
            fi
-           STR="$STR $NM"
+      if [ "$NUM_DIR_BEG" != "" ]; then
+         if [ "$j" -lt "$NUM_DIR_BEG" ]; then
+         #echo "$0.$LINENO  job_id= $JOB_ID skip dir $j due to -N $NUM_DIR_IN option" > /dev/stderr
            j=$((j+1))
+         continue
+         fi
+      fi
+      if [ "$NUM_DIR_END" != "" ]; then 
+         if [ "$j" -gt "$NUM_DIR_END" ]; then
+         #echo "$0.$LINENO  job_id= $JOB_ID skip dir $j due to -N $NUM_DIR_IN option" > /dev/stderr
+           j=$((j+1))
+         continue
+         fi
+      fi
+           j=$((j+1))
+           STR="$STR $NM"
            if [ "$NUM_DIR" != "" -a $NUM_DIR -gt 0 -a $j -ge $NUM_DIR ]; then
-              echo "$0.$LINENO limit number of dirs due to -N $NUM_DIR option"
+              echo "$0.$LINENO  job_id= $JOB_ID limit number of dirs due to -N $NUM_DIR option"
               break
            fi
          done
@@ -839,8 +881,11 @@ if [ "$FLS_IC" != "" ]; then
   OPT_METRIC=" -m sum "
   OPT_METRIC=" -m sum_per_server "
   OPT_METRIC=" -m avg "
-  echo $SCR_DIR/redo_chart_table.sh -f $ALST   -o infra_cputime_sum_${JOB_ID}.tsv   -g infra_cputime $OPT_METRIC -r 50 -t __all__ 
-  $SCR_DIR/redo_chart_table.sh -f $ALST -o infra_cputime_sum_${JOB_ID}.tsv   -g infra_cputime $OPT_METRIC -r 50 -t __all__ 
+  echo "$SCR_DIR/redo_chart_table.sh -f $ALST -o infra_cputime_sum_${JOB_ID}.tsv   -g infra_cputime $OPT_METRIC -r 50 -t __all__"
+        $SCR_DIR/redo_chart_table.sh -f $ALST -o infra_cputime_sum_${JOB_ID}.tsv   -g infra_cputime $OPT_METRIC -r 50 -t __all__ 
+  ck_last_rc $? $LINENO
+  echo "$SCR_DIR/redo_chart_table.sh -f $ALST -o sys_perf_stat_sum_${JOB_ID}.tsv   -g perf_stat $OPT_METRIC -r 50 -t __all__"
+        $SCR_DIR/redo_chart_table.sh -f $ALST -o sys_perf_stat_sum_${JOB_ID}.tsv   -g perf_stat $OPT_METRIC -r 50 -t __all__ 
   ck_last_rc $? $LINENO
 fi
 
@@ -1141,11 +1186,21 @@ if [ "$DO_TSV_2_XLS" == "1" ]; then
         last_non_blank = -1;
         first_blank = -1;
         first_infra_cputime = -1;
+        first_perf_stat = -1;
         while ((getline line < flnm) > 0) {
            if (index(line, "infra_cputime") > 0) {
               ++first_infra_cputime;
               if (first_infra_cputime == 0) {
                 line = "infra_cputime_sum_" job_id ".tsv";
+              } else {
+                continue;
+              }
+              # this line will be handled outside
+           }
+           if (index(line, "perf_stat") > 0) {
+              ++first_perf_stat;
+              if (first_perf_stat == 0) {
+                line = "sys_perf_stat_sum_" job_id ".tsv";
               } else {
                 continue;
               }
@@ -1234,10 +1289,15 @@ if [ "$DO_TSV_2_XLS" == "1" ]; then
       if [ "$RUN_INFRA" != "" ]; then
         BEG_TMI=`awk '/^__/{printf("%s\n", $2);exit}' $RUN_INFRA`
         END_TMI=`awk '/^__/{tm=$2;}END{printf("%s\n", tm);}' $RUN_INFRA`
-        echo "got RUN_INF BEG_TM= $BEG_TMI END_TM= $END_TMI"
+        echo "got RUN_INF BEG_TM= $BEG_TMI END_TM= $END_TM END_TMI= $END_TMI"
         if [ "$END_TMI" != "" ]; then
-           if [ "$END_TM" -lt "$END_TMI" ]; then
-             END_TM=$END_TMI
+           if [ "$END_TM" == "" ]; then
+               # END_TM can be empty if the data dir is not yet done and the last date tm hasnt been written yet
+               END_TM=$END_TMI
+           else
+             if [ "$END_TM" -lt "$END_TMI" ]; then
+               END_TM=$END_TMI
+             fi
            fi
         fi
       fi
