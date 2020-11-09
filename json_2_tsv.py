@@ -454,7 +454,7 @@ of.write("title\t%%cumulative calls and response time by response time bucket\ts
 rw += 1
 of.write("hdrs\t%d\t%d\t%d\t%d\t%d\n" % (rw+1, 0, rw+len(trgt_arr)+1, 2, 0))
 rw += 1
-of.write("%s\t%s\t%s\n" % ("bucket", "%p_calls", "%p_time"))
+of.write("%s\t%s\t%s\n" % ("bucket", "%p_time", "%p_calls"))
 rw += 1
 time_cumu = 0.0
 calls_cumu = 0.0
