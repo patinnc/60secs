@@ -311,6 +311,7 @@ function dt_to_epoch(offset) {
    nwfor[kmx,1,"hdr"]="%not_halted";
    nwfor[kmx,1,"alias"]="metric_CPU utilization %";
    }
+
 #    rpn operations
 #    AMD %unhalted calc. amd doesn't have ref-cycles so use tsc_freq and msr/mperf/
    if (amd_cpu == 1) {
@@ -337,6 +338,18 @@ function dt_to_epoch(offset) {
    nwfor[kmx,1,"hdr"]="%not_halted";
    nwfor[kmx,1,"alias"]="metric_CPU utilization %";
    }
+
+   kmx++;
+   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+   got_lkfor[kmx,2]=2; # num of fields to look for
+   got_lkfor[kmx,3]=1.0e-9; # a factor
+   got_lkfor[kmx,4]="div"; # operation x/y/z
+   got_lkfor[kmx,5]=1; # instances
+   got_lkfor[kmx,6]="div_by_non_halted_interval"; # 
+   lkfor[kmx,1]=cpu_cycles_str;
+   lkfor[kmx,2]="instances";  # get the instances from the first lkfor event
+   nwfor[kmx,1,"hdr"]="avg_freq (GHz)";
+   nwfor[kmx,1,"alias"]="metric_CPU operating frequency (in GHz)";
 
    kmx++;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
@@ -391,18 +404,6 @@ function dt_to_epoch(offset) {
    nwfor[kmx,1,"alias"]="metric_CPI";
 
 
-
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=2; # num of fields to look for
-   got_lkfor[kmx,3]=1.0e-9; # a factor
-   got_lkfor[kmx,4]="div"; # operation x/y/z
-   got_lkfor[kmx,5]=1; # instances
-   got_lkfor[kmx,6]="div_by_non_halted_interval"; # 
-   lkfor[kmx,1]=cpu_cycles_str;
-   lkfor[kmx,2]="instances";  # get the instances from the first lkfor event
-   nwfor[kmx,1,"hdr"]="avg_freq (GHz)";
-   nwfor[kmx,1,"alias"]="metric_CPU operating frequency (in GHz)";
 
    if (amd_cpu == 0) {
      if (use_qpi_bw == 1) {
@@ -666,20 +667,32 @@ function dt_to_epoch(offset) {
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
    got_lkfor[kmx,2]=4; # num of fields to look for
    got_lkfor[kmx,3]="1.0";
-   got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
+#   got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
+   got_lkfor[kmx,4]="bc_eqn"; # operation x/y/z
    got_lkfor[kmx,5]=1; # instances
    got_lkfor[kmx,6]=""; # 
    kkmx = 0;
-   got_rpn_eqn[kmx, ++kkmx, "val"]=100;
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+#abc
+   got_rpn_eqn[kmx, ++kkmx, "val"]="100.0 - ( ";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
    got_rpn_eqn[kmx, ++kkmx, "val"]="metric_TMAM_Retiring(%)"
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" + ";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
    got_rpn_eqn[kmx, ++kkmx, "val"]="metric_TMAM_Frontend_Bound(%)"
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="+";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="-";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" ) ";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+
+#   got_rpn_eqn[kmx, ++kkmx, "val"]=100;
+#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+#   got_rpn_eqn[kmx, ++kkmx, "val"]="metric_TMAM_Retiring(%)"
+#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+#   got_rpn_eqn[kmx, ++kkmx, "val"]="+";
+#   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+#   got_rpn_eqn[kmx, ++kkmx, "val"]="-";
+#   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
    got_rpn_eqn[kmx,      1,"max"]=kkmx;
    lkfor[kmx,1]=tolower("UOPS_RETIRED.RETIRE_SLOTS");
    lkfor[kmx,2]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
@@ -879,7 +892,6 @@ function dt_to_epoch(offset) {
    }
    printf("perf_stat_scatter.awk: extra_cols= %d\n", extra_cols) > "/dev/stderr";
 
-#abcd
    rows=1;
    if (options != "" && index(options, "chart_sheet") == 0) {
      # make room for a row of charts
@@ -1125,7 +1137,11 @@ function dt_to_epoch(offset) {
        if (got_lkfor[k,4] == "div" && got_lkfor[k,1] == got_lkfor[k,2]) {
          if (denom[k] == 0 && lkup[k,2] == -2) {
           denom[k] = def_inst;  # this is for input data on a per process basis where instance is 0
-          printf("got zero for %s k= %s, numer= %f, lkup[%d,2]= %s, lkup[k,1]= %s evt_inst[lkup[k,1]]= %s, use def_inst= %s\n",
+          printf("got zero for %s k= %s, numer= %f, lkup[%d,2]= %s, lkup[k,1]= %s evt_inst[lkup[k,1]]= %s, use num_cpus= %s\n",
+            nwfor[k,1,"hdr"], k, numer[k], k, lkup[k,2], lkup[k,1], evt_inst[lkup[k,1]], num_cpus) > "/dev/stderr";
+         } else if (denom[k] == 0) {
+          denom[k] = def_inst;  # this is for input data on a per process basis where instance is 0
+          printf("got zero2 for %s k= %s, numer= %f, lkup[%d,2]= %s, lkup[k,1]= %s evt_inst[lkup[k,1]]= %s, use num_cpus= %s\n",
             nwfor[k,1,"hdr"], k, numer[k], k, lkup[k,2], lkup[k,1], evt_inst[lkup[k,1]], num_cpus) > "/dev/stderr";
          }
          val = (numer[k]/denom[k]) * got_lkfor[k,3];
@@ -1160,17 +1176,27 @@ function dt_to_epoch(offset) {
          }
          if (index(nwfor[k,1,"hdr"],"%not_halted") == 1) {
            sk = got_lkfor[k,7];
-            if (sk == "") { sk= 1; }
+           if (sk == "") { sk= 1; }
            not_halted_fctr[sk] = val/100.0;
            #printf("b sk= %d, nhf= %f\n", sk, not_halted_fctr[sk]) > "/dev/stderr";
          }
+            
          if (got_lkfor[k,6] == "div_by_non_halted_interval") {
             sk = got_lkfor[k,7];
             if (sk == "") { sk= 1; }
            #not_halted_fctr[sk] = val/100.0;
             nhf = not_halted_fctr[sk];
-            #printf("a sk= %s, nhf= %f, skt_idx= %s interval= %f\n", sk, not_halted_fctr[sk], skt_idx, interval) > "/dev/stderr";
-            val = val / (interval*nhf);
+            dnm = interval * nhf;
+            if (not_halted_fctr[sk] == 0.0) {
+              # you can get a ref-cycles value of 0
+              val = 0.0;
+            if (dnm <= 0.0) {
+              printf("got denom= 0.0 for sk= %s, nhf= %f, skt_idx= %s interval= %f eqn[%d]=%s\n",
+               sk, not_halted_fctr[sk], skt_idx, interval, k, nwfor[k,1,"hdr"]) > "/dev/stderr";
+            }
+            } else {
+            val = val / (dnm);
+            }
          }
          if (got_lkfor[k,"max"] != "") {
              if (val > got_lkfor[k,"max"]) {
