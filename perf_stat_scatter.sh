@@ -127,13 +127,18 @@ echo "-------------------------------- in perf_stat_scatter.sh -----------------
 # didn't collect lscpu.log for most of the data
 TSC_FREQ="2.1"
 THR_PER_CORE=2
+echo "$0.$LINENO ck_amd got here" > /dev/stderr
 if [ -e lscpu.txt ]; then
 LSCPU_FL="lscpu.log lscpu.txt"
+echo "$0.$LINENO ck_amd got here" > /dev/stderr
 else
+echo "$0.$LINENO ck_amd got here" > /dev/stderr
  if [ -e ../lscpu.txt ]; then
   LSCPU_FL="../lscpu.log ../lscpu.txt"
+echo "$0.$LINENO ck_amd got here" > /dev/stderr
  fi 
 fi 
+echo "$0.$LINENO ck_amd got here" > /dev/stderr
 for i in $LSCPU_FL; do
   if [ -e $i ]; then
 #Vendor ID:             AuthenticAMD
@@ -143,10 +148,11 @@ for i in $LSCPU_FL; do
 #Stepping:              0
 #CPU MHz:               1496.962
 #CPU max MHz:           2000.0000
-    TSC_FREQ_AMD=`cat $i |awk '/^Vendor ID:/{if ($3 == "AuthenticAMD"){amd=1;}}/CPU max MHz:/{ freq= $4; if (amd==1){printf("%s\n", freq);exit;}}'`
+    TSC_FREQ_AMD=`cat $i |awk '/^Vendor ID:/{if ($3 == "AuthenticAMD"){amd=1;}}/BogoMIPS:/{bogo=$2;}/CPU max MHz:/{ freq= $4; if (amd==1){printf("%s\n", freq);exit;}}END{if(amd==1){printf("%.3f\n",0.5*bogo);}}'`
     TSC_FREQ=`cat $i |awk '/^Model name/{for (i=1;i<=NF;i++){pos=index($i, "GHz");if (pos > 0){print substr($i,1,pos-1);}}}'`
     NUM_CPUS=`cat $i |awk '/^CPU.s.:/{printf("%s\n",$2);}'`
     THR_PER_CORE=`cat $i |awk '/^Thread.s. per core:/{printf("%s\n",$4);}'`
+    echo "$0.$LINENO tsc_freq_amd= $TSC_FREQ_AMD" > /dev/stderr
     #CPU(s):                32
   fi
 done
@@ -154,6 +160,7 @@ AMD_CPU=0;
 if [ "$TSC_FREQ" == "" -a "$TSC_FREQ_AMD" != "" ]; then
   TSC_FREQ=$TSC_FREQ_AMD
   AMD_CPU=1;
+  echo "$0.$LINENO got AMD cpu" > /dev/stderr
 fi
 echo "TSC_FREQ= $TSC_FREQ NUM_CPUS= $NUM_CPUS" > /dev/stderr
 CPU2017LOG=()
