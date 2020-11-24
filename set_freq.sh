@@ -40,8 +40,8 @@ while getopts "hg:f:" opt; do
       ;;
     h )
       echo "$0 run compute and disk benchmarks using config files in cfg_dir and put results in results dir"
-      echo "Usage: $0 [-h] [ -g performance|powersave|show ] [ -f freq_in_hex|allcore|reset ]"
-      echo "   -g performance|powersave|show"
+      echo "Usage: $0 [-h] [ -g performance|powersave|ondemand|show ] [ -f freq_in_hex|allcore|reset ]"
+      echo "   -g performance|powersave|ondemand|show  ondemand is for AMD"
       echo "   -f freq_in_hex|allcore|reset"
       exit
       ;;
@@ -56,6 +56,41 @@ while getopts "hg:f:" opt; do
   esac
 done
 
+
+function show_gov() {
+ echo "show gov $1"
+  DID_GOV=1
+  NUM_CPUS_M1=$((NUM_CPUS-1))
+  VALS=
+  for i in `seq 0 $NUM_CPUS_M1`; do
+    V[$i]=`cat /sys/devices/system/cpu/cpufreq/policy$i/scaling_governor`
+    if [ "$i" == "0" ]; then
+      VALS=${V[0]}
+    fi
+    if [ "${V[$i]}" != "${V[0]}" ]; then
+      VALS="$VALS ${V[$i]}"
+    fi
+  done
+  echo "governor cpus 0..$NUM_CPUS_M1 /sys/devices/system/cpu/cpufreq/policy*/scaling_governor to $VALS"
+ #exit
+}
+
+function set_gov() {
+ echo "set gov"
+ if [ "$1" == "performance" -o "$1" == "powersave"  -o "$1" == "ondemand" ]; then
+  DID_GOV=1
+  echo "set gov to $1"
+  NUM_CPUS_M1=$((NUM_CPUS-1))
+  for i in `seq 0 $NUM_CPUS_M1`; do
+    echo $1 > /sys/devices/system/cpu/cpufreq/policy$i/scaling_governor
+  done
+  show_gov $GOV_IN
+  #echo "set cpus 0..$NUM_CPUS_M1 /sys/devices/system/cpu/cpufreq/policy*/scaling_governor to $1"
+  if [ "$GOV_IN" != "" ]; then
+    exit
+  fi
+ fi
+}
 
 
 HST=`hostname`
@@ -201,8 +236,8 @@ if [ "$ACTION" == "set" ]; then
   fi
 fi
 if [ "$GOV_IN" != "" ]; then
- if [ "$GOV_IN" != "performance" -a "$GOV_IN" != "powersave" -a "$GOV_IN" != "show" ]; then
-  echo "arg -g arg must be performance or powersave or show. got -g $GOV_IN. bye"
+ if [ "$GOV_IN" != "performance" -a "$GOV_IN" != "powersave" -a "$GOV_IN" != "show" -a "$GOV_IN" != "ondemand" ]; then
+  echo "$0.$LINENO arg -g arg must be performance or powersave or show. got -g $GOV_IN. bye"
   exit
  fi
 fi
@@ -233,11 +268,18 @@ else
         MSR_LIST="0x1ad 0x1ae 0x1af"
         MSR_SEMA="0x1ac"
         if [ "$ACTION" != "show" ]; then
-          echo "only support Broadwell, Skylake and Cascade Lake for ACTION= $ACTION so far. Bye."
+          echo "$0.$LINENO only support Broadwell, Skylake and Cascade Lake for ACTION= $ACTION so far. Bye."
           exit
         fi
       else
-        echo "only support Broadwell, Skylake and Cascade Lake so far. Bye."
+        echo "$0.$LINENO only support Broadwell, Skylake and Cascade Lake so far. Bye."
+        if [ -e /sys/devices/system/cpu/cpufreq/policy0/scaling_governor ]; then
+          if [ "$GOV_IN" != "" ]; then
+            set_gov $GOV_IN
+          else
+            show_gov
+          fi
+        fi
         exit
       fi
     fi
@@ -272,41 +314,6 @@ function show_MSRs() {
       echo "all cpus have MSR $MSR == $first_val"
     fi
   done
-}
-
-function show_gov() {
- echo "show gov $1"
-  DID_GOV=1
-  NUM_CPUS_M1=$((NUM_CPUS-1))
-  VALS=
-  for i in `seq 0 $NUM_CPUS_M1`; do
-    V[$i]=`cat /sys/devices/system/cpu/cpufreq/policy$i/scaling_governor`
-    if [ "$i" == "0" ]; then
-      VALS=${V[0]}
-    fi
-    if [ "${V[$i]}" != "${V[0]}" ]; then
-      VALS="$VALS ${V[$i]}"
-    fi
-  done
-  echo "governor cpus 0..$NUM_CPUS_M1 /sys/devices/system/cpu/cpufreq/policy*/scaling_governor to $VALS"
- #exit
-}
-
-function set_gov() {
- echo "set gov"
- if [ "$1" == "performance" -o "$1" == "powersave" ]; then
-  DID_GOV=1
-  echo "set gov to $1"
-  NUM_CPUS_M1=$((NUM_CPUS-1))
-  for i in `seq 0 $NUM_CPUS_M1`; do
-    echo $1 > /sys/devices/system/cpu/cpufreq/policy$i/scaling_governor
-  done
-  show_gov $GOV_IN
-  #echo "set cpus 0..$NUM_CPUS_M1 /sys/devices/system/cpu/cpufreq/policy*/scaling_governor to $1"
-  if [ "$GOV_IN" != "" ]; then
-    exit
-  fi
- fi
 }
 
 if [ "$ACTION" == "reset" ]; then
