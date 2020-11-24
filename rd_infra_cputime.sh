@@ -3,10 +3,13 @@
 #arg1 is infra_cputime.txt filename
 VERBOSE=0
 
-while getopts "hvf:n:o:O:S:" opt; do
+while getopts "hvf:m:n:o:O:S:" opt; do
   case ${opt} in
     f )
       IN_FL=$OPTARG
+      ;;
+    m )
+      MUTT_OUT_FL=$OPTARG
       ;;
     o )
       OUT_FL=$OPTARG
@@ -27,6 +30,7 @@ while getopts "hvf:n:o:O:S:" opt; do
       echo "$0 read infra_cputime.txt file"
       echo "Usage: $0 [ -v ] -f input_file [ -o out_file ] [ -n num_cpus ] [ -S sum_file ]"
       echo "   -f input_file  like infra_cputime.txt"
+      echo "   -m muttley_out_file    muttley complete table of calls over time. format is like chart table without hdrs titles rows"
       echo "   -O options     comma separated list of options. No spaces"
       echo "   -o out_file    assumed to be input_file with .tsv appended"
       echo "   -n num_cpus    number of cpus on the server"
@@ -35,11 +39,11 @@ while getopts "hvf:n:o:O:S:" opt; do
       exit 1
       ;;
     : )
-      echo "Invalid option: $OPTARG requires an argument. cmdline= ${@}" 1>&2
+      echo "$0 Invalid option: $OPTARG requires an argument. cmdline= ${@}" 1>&2
       exit 1
       ;;
     \? )
-      echo "Invalid option: $OPTARG, cmdline= ${@} " 1>&2
+      echo "$0 Invalid option: $OPTARG, cmdline= ${@} " 1>&2
       exit 1
       ;;
   esac
@@ -63,8 +67,9 @@ if [ "$OUT_FL" == "" ]; then
 fi
 #NUM_CPUS=$2
 #PID RSS    VSZ     TIME COMMAND
+CUR_DIR=`pwd`
 
-awk -v options="$OPTIONS" -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofile="$OUT_FL" '
+awk -v script_nm="$0.$LINENO.awk" -v mutt_ofile="$MUTT_OUT_FL" -v cur_dir="$CUR_DIR" -v options="$OPTIONS" -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofile="$OUT_FL" '
   BEGIN {
    num_cpus += 0;
    col_pid = -1;
@@ -72,6 +77,7 @@ awk -v options="$OPTIONS" -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofi
    col_vsz = -1;
    col_tm  = -1;
    col_cmd = -1;
+   muttley_use_nm = "host.calls";
    use_top_pct_cpu = 0;
    if (index(options, "%cpu_like_top") > 0) {
      use_top_pct_cpu = 1;
@@ -181,6 +187,53 @@ awk -v options="$OPTIONS" -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofi
     docker_typ[docker_mx, 1] = k_infra;
     docker_typ[docker_mx, 2] = k_serv;
     docker_typ[docker_mx, 3] = k_other;
+  }
+  /^__muttley__ /{
+    ++muttley_mx;
+    muttley_dt[muttley_mx] = $2;
+    while ( getline  > 0) {
+      if ($0 == "" || (length($1) > 2 && substr($1, 1, 2) == "__")) {
+        break;
+      }
+      mutt_nm = $1;
+      mutt_num = $2+0;
+      if (muttley_use_nm != "" && mutt_nm == muttley_use_nm) {
+        if (!(mutt_nm in mutt_list)) {
+           mutt_list[mutt_nm] = ++mutt_mx;
+           mutt_lkup[mutt_mx] = mutt_nm;
+           mutt_calls_prev[mutt_mx] = mutt_num;
+        }
+        mutt_i = mutt_list[mutt_nm];
+        dff = mutt_num - mutt_calls_prev[mutt_i];
+        if (dff < 0) {
+           printf("%s: got neg diff= %s for mutt_nm= %s, file= %s, cur_dir= %s, timestamp= %s\n", script_nm, dff, mutt_nm, ARGV[ARGIND], cur_dir, muttley_dt[muttley_mx]) > "/dev/stderr";
+           #exit 1;
+           dff = 0;
+        }
+        mutt_calls[muttley_mx, mutt_i] = dff;
+        mutt_calls_tot[mutt_i] += dff;
+        mutt_calls_prev[mutt_i] = mutt_num;
+      }
+
+      if (!(mutt_nm in mutt_list2)) {
+         mutt_list2[mutt_nm] = ++mutt_mx2;
+         mutt_lkup2[mutt_mx2] = mutt_nm;
+         mutt_calls_prev2[mutt_mx2] = mutt_num;
+      }
+      mutt_i = mutt_list2[mutt_nm];
+      dff = mutt_num - mutt_calls_prev2[mutt_i];
+      if (dff < 0) {
+         printf("%s: got neg diff= %s for mutt_nm= %s, file= %s, cur_dir= %s, timestamp= %s\n", script_nm, dff, mutt_nm, ARGV[ARGIND], cur_dir, muttley_dt[muttley_mx]) > "/dev/stderr";
+         #exit 1;
+         dff = 0;
+      }
+      mutt_calls2[muttley_mx, mutt_i] = dff;
+      mutt_calls_tot2[mutt_i] += dff;
+      mutt_calls_prev2[mutt_i] = mutt_num;
+    }
+    if ($0 == "" ) {
+      next;
+    }
   }
   /^__uptime__/ {
     ++idle_mx;
@@ -329,7 +382,9 @@ awk -v options="$OPTIONS" -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofi
       secs_prev = secs;
     }
     if (dt_diff > 0.0) {
-      sv[mx, proc_i] += (secs - secs_prev)/dt_diff;
+      v = (secs - secs_prev)/dt_diff;
+      if (v < 0.0) { v = 0.0; }
+      sv[mx, proc_i] += v;
       if (col_rss != -1) {
         sv_rss[mx, proc_i] += rss;
       }
@@ -343,12 +398,6 @@ awk -v options="$OPTIONS" -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofi
     pid_prev[pid_i,"proc"] = proc;
     }
     }
-#  5655 ?        6-09:01:27 subd
-#  5661 ?        00:59:29 java
-#  5744 ?        4-04:15:10 auditbeat
-#  6260 ?        2-13:33:14 python2.7
-# 11560 ?        3-00:00:43 connmon-agent
-# 11770 ?        15-15:29:40 m3collector
   }
 function tot_compare(i1, v1, i2, v2,    l, r)
 {
@@ -361,14 +410,42 @@ function tot_compare(i1, v1, i2, v2,    l, r)
     else
         return 1
 }
+function mutt_tot_compare(i1, v1, i2, v2,    l, r)
+{
+    m1 = mutt_calls_tot[i1];
+    m2 = mutt_calls_tot[i2];
+    if (m2 < m1)
+        return -1
+    else if (m1 == m2)
+        return 0
+    else
+        return 1
+}
+function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
+{
+    m1 = mutt_calls_tot2[i1];
+    m2 = mutt_calls_tot2[i2];
+    if (m2 < m1)
+        return -1
+    else if (m1 == m2)
+        return 0
+    else
+        return 1
+}
   END {
     #ofile="tmp.tsv";
     if (idle_mx > 0) {
       elap_tm = sv_uptm[idle_mx]-sv_uptm[1];
       sum = 0.0;
+      if (elap_tm == 0.0) {
+         printf("skipping infra_file do to idle_mx= %s, arg[1]= %s, cur_dir= %s\n", idle_mx, ARGV[1], cur_dir) > "/dev/stderr";
+         exit;
+      }
       for (i=1; i <= proc_mx; i++) {
+         if (elap_tm > 0.0) {
          tot[i] /= elap_tm;
          sum += tot[i];
+         }
       }
       proc = "idle";
       proc_list[proc] = ++proc_mx;
@@ -381,6 +458,7 @@ function tot_compare(i1, v1, i2, v2,    l, r)
       # idle_tot += ival;
       if (num_cpus > 0) {
         busy = num_cpus - tot[idle_idx] - sum;
+        if (busy < 0.0) { busy = 0.0; }
         proc = "__other_busy__";
         printf("%s cpus= %s\n", proc, busy);
         proc_list[proc] = ++proc_mx;
@@ -419,8 +497,38 @@ function tot_compare(i1, v1, i2, v2,    l, r)
     if ( use_top_pct_cpu == 1) {
       fctr = 100.0;
     }
+    
+    # if we are doing max values and if there are multiple values that make up the max
+    # then we have to careful to make sure all the values come from the same interval.
+    # Othewise we can have max values that sum to more than # of cpus.
+    busy_mx = 0;
+    busy_infra              = ++busy_mx;
+    busy_infra_str[busy_mx] = "busy infra"
+    busy_non_infra          = ++busy_mx;
+    busy_infra_str[busy_mx] = "busy non-infra"
+    busy_muttley            = ++busy_mx;
+    busy_infra_str[busy_mx] = "busy muttley"
+    for(i=1; i <= proc_mx; i++) {
+      nm = proc_lkup[i];
+      if (nm == "muttley" || nm == "muttley-active") {
+        is_busy_muttley[i] = 1;
+      } else {
+        is_busy_muttley[i] = 0;
+      }
+      if (nm != "idle" && (nm == "__other_busy__" || nm == "java" || nm == "python2.7")) {
+        is_busy_non_infra[i] = 1;
+      } else {
+        is_busy_non_infra[i] = 0;
+        if (nm != "idle") {
+          is_busy_infra[i] = 1;
+        } else {
+          is_busy_infra[i] = 0;
+        }
+      }
+    }
     for(k=2; k <= mx; k++) {
-      printf("%s\t%d", dt[k], (k > 1 ? dt[k]-dt[1] : 0)) > ofile;
+      tm_off = dt[k]-dt[1];
+      printf("%s\t%d", dt[k], tm_off) > ofile;
       sum = 0.0;
       for(i=1; i < idle_idx; i++) {
          sum += sv[k,i];
@@ -429,11 +537,37 @@ function tot_compare(i1, v1, i2, v2,    l, r)
       if (num_cpus > 0) {
         i = idle_idx+1;
         busy = uptm[k] - idle[k] - sum;
+        if (busy < 0.0) { busy = 0.0; }
         sv[k,i] = busy;
       }
       for(i=1; i <= proc_mx; i++) {
         j = res_i[i];
-        printf("\t%.3f", fctr*sv[k,j]) > ofile;
+        v = fctr*sv[k,j];
+        cv[j] = v;
+        if (sv_max[j] < v) {
+           #printf("new[%d,%d]= %f infra max %f\n", k, j, tm_off, v) > "/dev/stderr";
+           sv_max[j] = v;
+        }
+        printf("\t%.3f", v) > ofile;
+      }
+      for (i=1; i <= busy_mx; i++) {
+        inf_sum[i] = 0.0;
+      }
+      for(i=1; i <= proc_mx; i++) {
+        if (is_busy_muttley[i] == 1) {
+          inf_sum[busy_muttley] += cv[i];
+        }
+        if (is_busy_non_infra[i] == 1) {
+          inf_sum[busy_non_infra] += cv[i];
+        }
+        if (is_busy_infra[i] == 1) {
+          inf_sum[busy_infra] += cv[i];
+        }
+      }
+      for (i=1; i <= busy_mx; i++) {
+        if (inf_max[i] < inf_sum[i]) {
+          inf_max[i] = inf_sum[i];
+        }
       }
       printf("\n") > ofile;
       trow++;
@@ -452,8 +586,176 @@ function tot_compare(i1, v1, i2, v2,    l, r)
            printf("infra_procs\tinfra procs %%cpu\t%.3f\t%s\n", v, proc_lkup[j]) >> sum_file;
          }
       }
+      for(i=1; i <= proc_mx; i++) {
+         j = res_i[i];
+         v = sv_max[j];
+         if ( use_top_pct_cpu == 0) {
+           printf("infra_procs\tinfra procs max cpus\t%.3f\t%s\n", v, proc_lkup[j]) >> sum_file;
+         } else {
+           # v = 100.0 * sv_max[j];
+           printf("infra_procs\tinfra procs max %%cpu\t%.3f\t%s\n", v, proc_lkup[j]) >> sum_file;
+         }
+      }
+      for (i=1; i <= busy_mx; i++) {
+         str = busy_infra_str[i];
+         v   = inf_max[i];
+         if ( use_top_pct_cpu == 0) {
+           printf("infra_procs\tinfra procs max cpus\t%.3f\t%s\n", v, str) >> sum_file;
+         } else {
+           printf("infra_procs\tinfra procs max %%cpu\t%.3f\t%s\n", v, str) >> sum_file;
+         }
+      }
       #close(sum_file);
       #printf("%f\n", 1.0/0.0); # force an error
+    }
+    if (muttley_mx > 2) {
+      for(i=1; i <= mutt_mx; i++) {
+        mutt_idx[i] = i;
+      }
+      asorti(mutt_idx, mutt_res_i, "mutt_tot_compare")
+      mutt_other = 100; # combine everything after N columns
+      mutt_floor = 1.0; # combine everthing with less than X RPS
+      # find which is smaller
+      tm_diff = muttley_dt[muttley_mx]-muttley_dt[1];
+      k = -1;
+      for(j=1; j <= mutt_mx; j++) {
+         i = mutt_res_i[j];
+         v = mutt_calls_tot[i]/tm_diff;
+         if (v < mutt_floor) {
+            k = i;
+            break;
+         }
+      }
+      printf("mutt_mx= %d, mutt_other= %d, cols w rps > %.3f = %d\n", mutt_mx, mutt_other, mutt_floor, k) > "/dev/stderr";
+      use_mutt_mx = mutt_mx;
+      if (use_mutt_mx > mutt_other) {
+          use_mutt_mx = mutt_other;
+      }
+      if (k != -1 && use_mutt_mx > k) {
+         use_mutt_mx = k;
+      }
+      mutt_other_str = "__muttley_other__";
+      use_mutt_mx = mutt_mx; # cant do the mutt_other stuff here or we wont be able to do the pXX (p99 etc) stuff when we combine hosts
+      trow++;
+      printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", "muttley calls RPS", "infra procs") > ofile;
+      trow++;
+      printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 2, -1, 2+use_mutt_mx, 1) > ofile;
+      #printf("net_mx= %d\n", net_mx);
+      cols = 3
+      printf("epoch\tts") > ofile
+      for(j=1; j <= mutt_mx; j++) {
+          i = mutt_res_i[j];
+          if (j == use_mutt_mx && mutt_mx > use_mutt_mx) {
+             printf("\t%s", mutt_other_str) > ofile;
+             break;
+          }
+        printf("\t%s", mutt_lkup[i]) > ofile;
+      }
+      printf("\n") > ofile;
+      trow++;
+      mutt_host_calls_max = -1
+      for(k=2; k <= muttley_mx; k++) {
+        printf("%s\t%d", muttley_dt[k], muttley_dt[k]-muttley_dt[1]) > ofile;
+        tm_diff = muttley_dt[k]-muttley_dt[k-1];
+        for(j=1; j <= mutt_mx; j++) {
+          i = mutt_res_i[j];
+          if (j == use_mutt_mx && mutt_mx > use_mutt_mx) {
+             v = mutt_calls[k,i];
+             for(jj=j+1; jj <= mutt_mx; jj++) {
+                ii = mutt_res_i[jj];
+                v += mutt_calls[k,ii];
+             }
+             if (tm_diff > 0.0) {
+               v /= tm_diff;
+             } else {
+               v = 0.0;
+             }
+             if (mutt_host_calls_max < v) {
+                 mutt_host_calls_max = v;
+             }
+             printf("\t%f", v) > ofile;
+             break;
+          }
+          if (tm_diff > 0.0) {
+            v = mutt_calls[k,i] / tm_diff;
+            #v = mutt_calls[k,i];
+          } else {
+            v = 0.0;
+          }
+          if (mutt_host_calls_max < v) {
+              mutt_host_calls_max = v;
+          }
+          printf("\t%f", v) > ofile;
+        }
+        printf("\n") > ofile;
+        trow++;
+      }
+      trow++;
+      printf("\n") > ofile;
+      if (sum_file != "") {
+         tm_diff = muttley_dt[muttley_mx]-muttley_dt[1];
+         if (1 == 20) {
+         for(j=1; j <= mutt_mx; j++) {
+           i = mutt_res_i[j];
+           if (j == use_mutt_mx && mutt_mx > use_mutt_mx) {
+             v = mutt_calls_tot[i]/tm_diff;
+             for(jj=j+1; jj <= mutt_mx; jj++) {
+                ii = mutt_res_i[jj];
+                v += mutt_calls_tot[ii]/tm_diff;
+             }
+             if (tm_diff > 0.0) {
+               v /= tm_diff;
+             } else {
+               v = 0.0;
+             }
+             printf("infra_procs\tmuttley calls avg\t%f\t%s\n", v, "RPS " mutt_other_str) >> sum_file;
+             break;
+          }
+           avg = mutt_calls_tot[i]/tm_diff;
+           printf("infra_procs\tmuttley calls avg\t%f\t%s\n", avg, "RPS " mutt_lkup[i]) >> sum_file;
+         }
+         }
+         printf("infra_procs\tmuttley host.calls max\t%f\t%s\n", mutt_host_calls_max, "RPS host.calls max") >> sum_file;
+      }
+#abc  write complete list to mutt_ofile
+      for(i=1; i <= mutt_mx2; i++) {
+        mutt_idx[i] = i;
+      }
+      tm_diff = muttley_dt[muttley_mx]-muttley_dt[1];
+      asorti(mutt_idx, mutt_res_i, "mutt_tot2_compare")
+      for(k=2; k <= muttley_mx; k++) {
+        tm_diff = muttley_dt[k]-muttley_dt[k-1];
+        if (tm_diff > 0.0) {
+          for(j=1; j <= mutt_mx2; j++) {
+            if (mutt_ok[j] == 1) {continue;}
+            if (mutt_calls2[k,j] >= tm_diff) { mutt_ok[j] = 1; }
+          }
+        }
+      }
+      printf("epoch\tts") > mutt_ofile
+      for(j=1; j <= mutt_mx2; j++) {
+         i = mutt_res_i[j];
+         if (mutt_ok[i] != 1) {continue;}
+         printf("\t%s", mutt_lkup2[i]) > mutt_ofile;
+      }
+      printf("\n") > mutt_ofile;
+      mutt_host_calls_max = -1
+      for(k=2; k <= muttley_mx; k++) {
+        printf("%s\t%d", muttley_dt[k], muttley_dt[k]-muttley_dt[1]) > mutt_ofile;
+        tm_diff = muttley_dt[k]-muttley_dt[k-1];
+        for(j=1; j <= mutt_mx2; j++) {
+          i = mutt_res_i[j];
+          if (mutt_ok[i] != 1) {continue;}
+          if (tm_diff > 0.0) {
+            v = mutt_calls2[k,i] / tm_diff;
+          } else {
+            v = 0.0;
+          }
+          printf("\t%f", v) > mutt_ofile;
+        }
+        printf("\n") > mutt_ofile;
+      }
+      printf("\n") > mutt_ofile;
     }
     if (docker_mx > 2) {
       trow++;
@@ -698,6 +1000,40 @@ function tot_compare(i1, v1, i2, v2,    l, r)
       }
       v = v * fctr;
       printf("%.3f\t", v) > ofile;
+    }
+    trow++;
+    printf("%%cpus\n") > ofile;
+    if ( use_top_pct_cpu == 0) {
+      str = "top infra procs max cpus (1=1cpu_busy)";
+      str2 = "cpu_secs";
+    } else {
+      str = "top infra procs max %cpus (100=1cpu_busy)";
+      str2 = "%cpu";
+    }
+    trow++;
+    printf("\n") > ofile;
+    trow++;
+    printf("title\t%s\tsheet\t%s\ttype\tcolumn\n", str, "infra procs") > ofile;
+    trow++;
+    printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 0, -1, proc_mx-1, proc_mx) > ofile;
+    for(i=1; i <= proc_mx; i++) {
+      j = res_i[i];
+      printf("%s\t", proc_lkup[j]) > ofile;
+    }
+    printf("%%cpus\n") > ofile;
+    trow++;
+    for(i=1; i <= proc_mx; i++) {
+      j = res_i[i];
+      v = sv_max[j];
+      printf("%.3f\t", v) > ofile;
+    #  if (sum_file != "") {
+    #     if ( use_top_pct_cpu == 0) {
+    #       printf("infra_procs\tinfra procs max cpus\t%.3f\t%s\n", v, proc_lkup[j]) >> sum_file;
+    #     } else {
+    #       # v = 100.0 * sv_max[j];
+    #       printf("infra_procs\tinfra procs max %%cpu\t%.3f\t%s\n", v, proc_lkup[j]) >> sum_file;
+    #     }
+    #  }
     }
     printf("%%cpus\n") > ofile;
     trow++;
