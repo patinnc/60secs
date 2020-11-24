@@ -754,8 +754,10 @@ for bmi in range(base_mx+1):
             for i in range(len(data)):
                 if not i in fn_bs_sum[fn_bs_i]:
                    if i in fn_bs_hdr_rows[fn_bs_i]:
+                      if len(fn_bs_hdr_lkup[fn_bs_i][i]) == 0:
+                          continue
                       for k in range(i, i+2):  # allow for a little shifting of rows
-                          if fn_bs_hdr_lkup[fn_bs_i][i][0] == data[k][0]: # look for match on 1st col of header row
+                          if k < len(data) and  fn_bs_hdr_lkup[fn_bs_i][i][0] == data[k][0]: # look for match on 1st col of header row
                              if verbose > 0:
                                 print("tsv_2_xlsx.py: at 2 sheet_nm= ", sheet_nm, ",i=",i,",k=",k,", outfile= ", output_filename, ", hdr_len= ", len(fn_bs_hdr_lkup[fn_bs_i][i]), ", write header row= ", fn_bs_hdr_lkup[fn_bs_i][i])
                              for j in range(fn_bs_hdr_max[fn_bs_i][i]+1):
