@@ -36,17 +36,45 @@
     }
     cmd="cat "infile ;
     infile_lines_mx=0;
+#Errors:
+#     1: failed to read HTTP response body: unexpected EOF
+#Total errors: 1
+#Error rate: 0.0009%
+    got_yab_errs = 0;
+    skip_err = 0;
+    infile_no_err_str = "";
+    error_rate = 0.0;
     while ((cmd | getline) > 0) {
       ++infile_lines_mx;
       infile_lines[infile_lines_mx] = $0;
+      if ($0 == "Errors:") {
+        got_yab_errs++;
+        skip_err = 1;
+      } else if ($1 == "Error" && $2 == "rate:") {
+        skip_err = 0;
+        error_rate = $3;
+        sub(/%/, "", error_rate);
+        continue;
+      }
+      if (skip_err == 0) {
+        infile_lines_no_errs[infile_lines_no_errs_mx] = $0;
+        infile_no_err_str = infile_no_err_str "" $0 "\n";
+      }
     }
     close(cmd);
+    ufile = infile;
+    if (got_yab_errs > 0 && index(infile, ".json") > 0) {
+      ufile = infile ".no_errs";
+      printf("%s", infile_no_err_str) > ufile;
+      close(ufile);
+    }
+    
     if (index(infile, ".json") > 0) {
     for (i=1; i <= flds_mx; i++) {
       str1 = flds_str[i,1];
       str2 = flds_str[i,2];
-      cmd="cat "infile" | jq '.|delpaths([path(..?) as $p | select(getpath($p) == null) | $p])|select(."str1")|."str1"."str2"'";
-      #printf("do jq cmd %s\n", cmd) > "/dev/stderr";
+      cmd="cat " ufile " | jq '.|delpaths([path(..?) as $p | select(getpath($p) == null) | $p])|select(."str1")|."str1"."str2"'";
+      printf("at aa do jq cmd %s\n", cmd) > "/dev/stderr";
       j = 0;
       structs_mx = 0;
       while ((cmd | getline) > 0) {
@@ -70,6 +98,7 @@
             #printf("mn= %s, v= %s, 0= %s\n", mn, v, $0);
          }
          if (str1 == "latencies") {
+            printf("latency[%d] cmd= %s, v= %s\n", i, cmd, v) > "/dev/stderr";
             idx= index(v, "µs");
             if (idx > 0) {
                gsub("µs", "", v);
@@ -233,6 +262,7 @@ str3="yab -P uns:...ompute-0:tchannel -t womfile   --concurrency 1  --per-peer-s
     for (yb=1; yb <= yb_cmds_mx; yb++) {
       lkfor = "ignoredPayload";
       str = yb_cmds[yb];
+      sub(/{req: /, "{\"req\": ", str);
       i = index(str, "{\"req\": {");
       if (i != 1) {
          printf("req str[%d] is probably not a yab str, skipping= %s\n", yb, str) > "/dev/stderr";
@@ -262,6 +292,7 @@ str3="yab -P uns:...ompute-0:tchannel -t womfile   --concurrency 1  --per-peer-s
         yb_lst_str[i,1]=arr[1];
         yb_lst_str[i,2]=str2;
         cmd="echo '"str"' | jq '."arr[1]"."str2"'";
+        #cmd="cat " ufile " | jq '."arr[1]"."str2"'";
         printf("do jq cmd %s\n", cmd) > "/dev/stderr";
         #printf("cmd= %s\n", cmd);
         while ((cmd | getline) > 0) {
@@ -281,6 +312,7 @@ str3="yab -P uns:...ompute-0:tchannel -t womfile   --concurrency 1  --per-peer-s
         }
         #system(cmd);
         close(cmd);
+        printf("did jq cmd %s\n", cmd) > "/dev/stderr";
       }
     }
     if (verbose > 0) {
@@ -395,6 +427,7 @@ str3="yab -P uns:...ompute-0:tchannel -t womfile   --concurrency 1  --per-peer-s
         printf("%s%syab %s%s%s%s%s\n", "yab", sep_in, sm_ln[i,1], sep_in, 100.0*sm_ln[i,3]/host_num_cpus, sep_in, "%"sm_ln[i,2]) >> sum_file;
       }
     }
+    printf("yab%s%%error_rate%s%s%s%s\n", sep_in, sep_in, error_rate, sep_in, "yab %error_rate") >> sum_file;
     close(sum_file)
     }
     exit;
