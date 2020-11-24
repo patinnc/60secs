@@ -21,6 +21,7 @@ BEG_TM_IN=
 METRIC_OUT="metric_out"
 METRIC_AVG="metric_out.average"
 SUM_TMAM_FILE="sum_TMAM.tsv"
+MUTTLEY_OUT_FILE="muttley_host_calls.tsv"
 SKIP_XLS=0
 MAX_VAL=
 AVERAGE=0
@@ -2317,8 +2318,8 @@ row += trows;
     if [ "$LSCPU_FL" != "" ]; then
      INCPUS=`awk '/^CPU.s.:/ { printf("%s\n", $2);exit;}' $LSCPU_FL`
     fi
-    echo "$SCR_DIR/rd_infra_cputime.sh -O "$OPTIONS" -f $i -n $INCPUS -S $SUM_FILE"
-          $SCR_DIR/rd_infra_cputime.sh -O "$OPTIONS" -f $i -n $INCPUS -S $SUM_FILE
+    echo "$SCR_DIR/rd_infra_cputime.sh -O "$OPTIONS" -f $i -n $INCPUS -S $SUM_FILE -m $MUTTLEY_OUT_FILE"
+          $SCR_DIR/rd_infra_cputime.sh -O "$OPTIONS" -f $i -n $INCPUS -S $SUM_FILE -m $MUTTLEY_OUT_FILE
           ck_last_rc $? $LINENO
     if [ -e $i.tsv ]; then
       SHEETS="$SHEETS $i.tsv"
