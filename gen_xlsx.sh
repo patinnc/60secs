@@ -5,6 +5,7 @@
 SCR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 echo "SCR_DIR= $SCR_DIR" > /dev/stderr
 
+
 declare -a REGEX
 DIR=
 PHASE_FILE=
@@ -54,7 +55,7 @@ fi
 # on macbook could do sysctl -a | grep machdep.cpu.thread_count
 BACKGROUND=$(($NUM_CPUS+2))  # setting this to 0 turns off launching sys_2_tsv.sh in the background
 echo "$0 ${@}"
-#echo "BACKGROUND= $NUM_CPUS"
+echo "BACKGROUND= $BACKGROUND  NUM_CPUS= $NUM_CPUS"
 JOB_ID=0
 
 while getopts "hvASa:b:B:c:D:d:e:F:g:I:j:m:N:o:P:r:X:x:" opt; do
@@ -290,7 +291,7 @@ get_dir_list() {
       STR="$STR $NM"
    done
    DIR=$STR
-   echo "$0.$LINENO get_dir_list: j= $j DIR= $DIR"
+   echo "$0.$LINENO +___________-- get_dir_list: j= $j DIR= $DIR" > /dev/stderr
    exit 1
 }
 
@@ -471,26 +472,26 @@ else
       if [ "$NUM_DIR_BEG" != "" ]; then
          if [ "$j" -lt "$NUM_DIR_BEG" ]; then
          #echo "$0.$LINENO  job_id= $JOB_ID skip dir $j due to -N $NUM_DIR_IN option" > /dev/stderr
-           j=$((j+1))
+         j=$((j+1))
          continue
          fi
       fi
       if [ "$NUM_DIR_END" != "" ]; then 
          if [ "$j" -gt "$NUM_DIR_END" ]; then
-         #echo "$0.$LINENO  job_id= $JOB_ID skip dir $j due to -N $NUM_DIR_IN option" > /dev/stderr
+           #echo "$0.$LINENO  job_id= $JOB_ID skip dir $j due to -N $NUM_DIR_IN option" > /dev/stderr
            j=$((j+1))
-         continue
+           continue
          fi
       fi
-           j=$((j+1))
-           STR="$STR $NM"
+      j=$((j+1))
+      STR="$STR $NM"
            if [ "$NUM_DIR" != "" -a $NUM_DIR -gt 0 -a $j -ge $NUM_DIR ]; then
               echo "$0.$LINENO  job_id= $JOB_ID limit number of dirs due to -N $NUM_DIR option"
               break
            fi
          done
          DIR=$STR
-         #echo "using2 DIR= $DIR, orig DIR= $DIR_ORIG"
+         #echo "$0.$LINENO: -__________- using2 DIR= $DIR, orig DIR= $DIR_ORIG" > /dev/stderr
        else
          echo "$0: didn't find 60secs.log nor metric_out nor sys_*_perf_stat.txt file under dir $DIR at line $LINENO Bye"
          exit
@@ -570,13 +571,11 @@ for i in $LST; do
  else
    pushd $i > /dev/null
  fi
- IFS="/" read -ra PARTS <<< "$(pwd)"
- XLS=
- for k in "${PARTS[@]}"; do
-    if [ "$k" != "60secs" ]; then
-       XLS=$k
-    fi
- done
+ pd=$(pwd)
+ str=`echo "${pd##*/}"`
+ if [ "$str" != "60secs" ]; then
+   XLS=$str
+ fi
  if [ $VERBOSE -gt 0 ]; then
    echo "$0.$LINENO XLS= $XLS" > /dev/stderr
  fi
@@ -685,6 +684,7 @@ for i in $LST; do
        #echo $job
        jbs=$((jbs+1))
      done
+     #echo "$0.$LINENO job_id= $JOB_ID jbs= $jbs LOAD= $LOAD BACKGROUND= $BACKGROUND" > /dev/stderr
      jbs=$(($jbs+$LOAD))
    if [ "$jbs" -gt "$BACKGROUND" ]; then
      #jbs=0
@@ -692,7 +692,7 @@ for i in $LST; do
      do
        TS_CUR=`date +%s`
        TS_DFF=$(($TS_CUR-$TS_BEG))
-       echo "$0.$LINENO: job_id= $JOB_ID wait for jobs (jbs= $jbs) pid= $job, dir_num= $DIR_NUM of $DIR_NUM_MX, elap_secs= $TS_DFF"
+       echo "$0.$LINENO: job_id= $JOB_ID wait for jobs (jbs= $jbs) pid= $job, dir_num= $DIR_NUM of $DIR_NUM_MX, elap_secs= $TS_DFF, load= $LOAD"
        jbs=$((jbs-1))
        wait $job
        RC=$?
@@ -741,6 +741,7 @@ wait_for_all() {
 
 wait_for_all $LINENO
 
+MUTT_ARR=()
 for i in $LST; do
  if [ $VERBOSE -gt 0 ]; then
    pushd $i
@@ -810,6 +811,10 @@ for i in $LST; do
    popd > /dev/null
  fi
  #FLS=`ls -1 $SM_FL $i/*txt.tsv | grep -v infra_cputime`
+ CKNM=$i/muttley_host_calls.tsv
+ if [ -e $CKNM ]; then
+   MUTT_ARR+=($CKNM)
+ fi
  FLS=`ls -1 $SM_FL $i/*txt.tsv`
  FLS_IC=`ls -1  $i/*txt.tsv | grep infra_cputime`
  echo -e "${FLS}" >> $ALST
@@ -877,15 +882,30 @@ if [ "$SVGS" != "" ]; then
   ck_last_rc $? $LINENO
 fi
   
+  if [ -e $SUM_ALL ]; then
+    rm $SUM_ALL
+  fi
+  #printf "title\tsum_all\tsheet\tsum_all\ttype\tcopy\n"  >> $SUM_ALL
+  #printf "hdrs\t2\t0\t-1\t%d\t-1\n"  500 >> $SUM_ALL
+  #printf "Resource\tTool\tMetric\taverage\n" >> $SUM_ALL;
 if [ "$FLS_IC" != "" ]; then
   OPT_METRIC=" -m sum "
   OPT_METRIC=" -m sum_per_server "
   OPT_METRIC=" -m avg "
-  echo "$SCR_DIR/redo_chart_table.sh -f $ALST -o infra_cputime_sum_${JOB_ID}.tsv   -g infra_cputime $OPT_METRIC -r 50 -t __all__"
-        $SCR_DIR/redo_chart_table.sh -f $ALST -o infra_cputime_sum_${JOB_ID}.tsv   -g infra_cputime $OPT_METRIC -r 50 -t __all__ 
+  OFILE=infra_cputime_sum_${JOB_ID}.tsv
+  if [ -e $OFILE ]; then
+    rm $OFILE
+  fi
+#abc
+  echo "$SCR_DIR/redo_chart_table.sh -S $SUM_ALL -f $ALST -o $OFILE   -g infra_cputime $OPT_METRIC -r 50 -t __all__"
+        $SCR_DIR/redo_chart_table.sh -S $SUM_ALL -f $ALST -o $OFILE   -g infra_cputime $OPT_METRIC -r 50 -t __all__ 
   ck_last_rc $? $LINENO
-  echo "$SCR_DIR/redo_chart_table.sh -f $ALST -o sys_perf_stat_sum_${JOB_ID}.tsv   -g perf_stat $OPT_METRIC -r 50 -t __all__"
-        $SCR_DIR/redo_chart_table.sh -f $ALST -o sys_perf_stat_sum_${JOB_ID}.tsv   -g perf_stat $OPT_METRIC -r 50 -t __all__ 
+  OFILE=sys_perf_stat_sum_${JOB_ID}.tsv
+  if [ -e $OFILE ]; then
+    rm $OFILE
+  fi
+  echo "$SCR_DIR/redo_chart_table.sh -S $SUM_ALL -f $ALST -o $OFILE   -g perf_stat $OPT_METRIC -r 50 -t __all__"
+        $SCR_DIR/redo_chart_table.sh -S $SUM_ALL -f $ALST -o $OFILE   -g perf_stat $OPT_METRIC -r 50 -t __all__ 
   ck_last_rc $? $LINENO
 fi
 
@@ -902,10 +922,7 @@ fi
 
   
 if [ "$DO_TSV_2_XLS" == "1" ]; then
-  if [ -e $SUM_ALL ]; then
-    rm $SUM_ALL
-  fi
-  echo "ALST= $ALST" > /dev/stderr
+  echo "$0.$LINENO: ALST= $ALST" > /dev/stderr
   got_pwd=`pwd`
   RESP=`grep sum.tsv $ALST | sed 's/sum.tsv/sum_all2.tsv/'`
   FLS=
@@ -924,17 +941,29 @@ if [ "$DO_TSV_2_XLS" == "1" ]; then
     MK_SUM_ALL=1
   fi
 
-  if [ $VERBOSE -gt 0 ]; then
+  #if [ $VERBOSE -gt 0 ]; then
   echo "$0: awk -v mk_sum_all="$MK_SUM_ALL" -v input_file=\"$ALST\" -v sum_all=\"$SUM_ALL\" -v sum_file=\"$SUM_FILE\" -v curdir=\"$got_pwd\" "
-  fi
-  awk -v job_id="$JOB_ID" -v verbose="$VERBOSE" -v mk_sum_all="$MK_SUM_ALL" -v input_file="$ALST" -v sum_all="$SUM_ALL" -v sum_file="$SUM_FILE" -v sum_all_avg_by_metric="$SUM_ALL_AVG_BY_METRIC" -v curdir="$got_pwd" '
+  #fi
+  awk -v script_nm="$0.$LINENO.awk" -v job_id="$JOB_ID" -v verbose="$VERBOSE" -v mk_sum_all="$MK_SUM_ALL" -v input_file="$ALST" -v sum_all="$SUM_ALL" -v sum_file="$SUM_FILE" -v sum_all_avg_by_metric="$SUM_ALL_AVG_BY_METRIC" -v curdir="$got_pwd" '
     BEGIN{sum_files=0;fls=0; fld_m=3;fld_v=4; got_avgby=0;}
+function do_pxx_compare(fls, str1, str2, v,    str, pxx_i)
+{
+    str = str1";"str2;
+    if (!(str in pxx_list)) {
+      pxx_list[str] = ++pxx_max;
+      pxx_lkup[pxx_max] = str;
+      pxx_hdr[pxx_max,"grp"] = str1;
+      pxx_hdr[pxx_max,"mtrc"] = str2
+    }
+    pxx_i = pxx_list[str];
+    pxx_arr[pxx_i,fls] += v+0.0;
+}
     { if (index($0, sum_file) > 0 || index($0, sum_all) > 0) {
         flnm = $0;
         fls++;
         fls_mx = fls;
         if (verbose > 0) {
-           printf("got sumfile= %s sum_all= %s\n", flnm, sum_all) > "/dev/stderr";
+           printf("got sumfile[%d]= %s sum_all= %s\n", fls, flnm, sum_all) > "/dev/stderr";
         }
         ln = -1;
         nflds=4;
@@ -966,9 +995,38 @@ if [ "$DO_TSV_2_XLS" == "1" ]; then
               continue;
            }
         #printf("got sum.tsv[%d][%d]= %s\n", fls, ln, line) > "/dev/stderr";
-           n = split(line, arr, /\t/);
-           mtrc = arr[fld_m];
+           n      = split(line, arr, /\t/);
            mtrcm1 = arr[fld_mm1];
+           mtrc   = arr[fld_m];
+           #printf("fl[%d].ln= %s\n", fls, line) > "/dev/stderr";
+           if (mtrcm1 == "hostname" && mtrc == "hostname") {
+              pxx_hst[fls] = arr[fld_v];
+           }
+           if (mtrcm1 == "infra procs max %cpu" && (mtrc == "busy muttley" || mtrc == "busy non-infra" || mtrc == "busy infra")) {
+              str1 = mtrcm1;
+              str2 = mtrc;
+              do_pxx_compare(fls, str1, str2, arr[fld_v]);
+           }
+           #if (mtrcm1 == "muttley calls avg") {
+           #   # the average muttley calls have so many small RPS. creates huge list especially if we match up columns
+           #   # so just drop the small values
+           #   continue;
+           #}
+           if (mtrcm1 == "muttley host.calls max" && (mtrc == "RPS host.calls max")) {
+              str1 = mtrcm1;
+              str2 = mtrc;
+              do_pxx_compare(fls, str1, str2, arr[fld_v]);
+           }
+           if (mtrcm1 == "muttley calls avg" && (mtrc == "RPS host.calls")) {
+              str1 = mtrcm1;
+              str2 = mtrc;
+              do_pxx_compare(fls, str1, str2, arr[fld_v]);
+           }
+           if (mtrcm1 == "muttley calls avg" && arr[fld_v] < 1.0) {
+              # the average muttley calls have so many small RPS. creates huge list especially if we match up columns
+              # so just drop the small values
+              continue;
+           }
            str = mtrcm1 " " mtrc;
            if (!(str in mtrc_list)) {
               mtrc_list[str] = ++mtrc_mx;
@@ -994,23 +1052,6 @@ if [ "$DO_TSV_2_XLS" == "1" ]; then
               avgby_i = avgby_list[avgby];
               avgby_arr[fls,1] = avgby_i;
               avgby_arr[fls,2]++;
-           }
-           if (mtrc == "goto_sheet") {
-              gs=arr[fld_v]; 
-              if (!(gs in gs_list)) {
-                gs_list[gs] = ++gs_list_mx;
-                gs_lkup[gs_list_mx] = gs;
-              } else {
-                for (i=0; i <= 100; i++) {
-                   tnm = gs "_" i;
-                   if (!(tnm in gs_list)) {
-                     gs_list[tnm] = ++gs_list_mx;
-                     gs_lkup[gs_list_mx] = tnm;
-                     arr[fld_v] = tnm;
-                     break;
-                   }
-                }
-              }
            }
            if (mtrc == "goto_sheet") {
               gs=arr[fld_v]; 
@@ -1088,37 +1129,48 @@ if [ "$DO_TSV_2_XLS" == "1" ]; then
   }
   return isnum;
  }
+function arr_in_compare(i1, v1, i2, v2,    l, r)
+{
+    m1 = arr_in[i1];
+    m2 = arr_in[i2];
+    if (m2 > m1)
+        return -1
+    else if (m1 == m2)
+        return 0
+    else
+        return 1
+}
 
     END {
       if (mk_sum_all == 1) {
       ofile = sum_all;
       #printf("ofile= %s\n", ofile) > "/dev/stderr";
-      printf("title\tsum_all\tsheet\tsum_all\ttype\tcopy\n")  > ofile;
-      printf("hdrs\t2\t0\t-1\t%d\t-1\n", fls+3) > ofile;
-      printf("Resource\tTool\tMetric") > ofile;
+      printf("title\tsum_all\tsheet\tsum_all\ttype\tcopy\n")  >> ofile;
+      printf("hdrs\t2\t0\t-1\t%d\t-1\n", fls+3) >> ofile;
+      printf("Resource\tTool\tMetric") >> ofile;
       if (got_avgby == 0 && fls > 1) {
-          printf("\taverage") > ofile;
+          printf("\taverage") >> ofile;
       }
       for (j=1; j <= fls; j++) {
          if (got_avgby == 1) {
           if (j == 1 || avgby_arr[j,1] != avgby_arr[j-1,1]) {
-            printf("\t%d", avgby_arr[j,1]) > ofile;
+            printf("\t%d", avgby_arr[j,1]) >> ofile;
           }
          } else {
-            printf("\t%d", j-1) > ofile;
+            printf("\t%d", j-1) >> ofile;
          }
       }
-      printf("\n") > ofile;
+      printf("\n") >> ofile;
       for (i=1; i <= mtrc_mx; i++) {
         mtrc   = mtrc_lkup[i,1];
         mtrcm1 = mtrc_lkup[i,2];
         if (mtrc == "") { continue; }
         if (mtrc == "data_sheet") {
-          printf("\t%s\t%s", mtrc_arr[1,i], mtrc) > ofile;
+          printf("\t%s\t%s", mtrc_arr[1,i], mtrc) >> ofile;
         } else {
           mcat = "itp";
           if (mtrc_cat[i] != "") { mcat = mtrc_cat[i]; }
-          printf("\t%s\t%s", mcat, mtrc) > ofile;
+          printf("\t%s\t%s", mcat, mtrc) >> ofile;
         }
         for (j=1; j <= fls; j++) {
           val = mtrc_arr[j,i];
@@ -1153,9 +1205,9 @@ if [ "$DO_TSV_2_XLS" == "1" ]; then
                   }
                 }
                 if (sum_n > 0) {
-                  printf("\t%s%f", equal, sum_v/sum_n) > ofile;
+                  printf("\t%s%f", equal, sum_v/sum_n) >> ofile;
                 } else {
-                  printf("\t%s%s", equal, 0) > ofile;
+                  printf("\t%s%s", equal, 0) >> ofile;
                 }
               }
             }
@@ -1168,13 +1220,75 @@ if [ "$DO_TSV_2_XLS" == "1" ]; then
               }
             } else {
               if (j == 1) {
-                 printf("\t%s%s", "", "") > ofile;
+                 printf("\t%s%s", "", "") >> ofile;
               }
             }
           }
-          printf("\t%s%s", equal, val) > ofile;
+          printf("\t%s%s", equal, val) >> ofile;
         }
-        printf("\n") > ofile;
+        printf("\n") >> ofile;
+      }
+      for (k=1; k <= pxx_max; k++) {
+        #pxx_arr[2,fls] += arr[fld_v];
+        #pxx_hdr[2,"grp"] = mtrcm1;
+        #pxx_hdr[2,"mtrc"] = mtrc;
+        delete res_i;
+        delete idx;
+        for(i=1; i <= fls_mx; i++) {
+          idx[i] = i;
+          arr_in[i] = pxx_arr[k,i];
+        }
+        asorti(idx, res_i, "arr_in_compare");
+        # https://www.dummies.com/education/math/statistics/how-to-calculate-percentiles-in-statistics/
+        px_mx = 0;
+        px[++px_mx] = 10;
+        px[++px_mx] = 20;
+        px[++px_mx] = 30;
+        px[++px_mx] = 40;
+        px[++px_mx] = 50;
+        px[++px_mx] = 60;
+        px[++px_mx] = 70;
+        px[++px_mx] = 80;
+        px[++px_mx] = 90;
+        px[++px_mx] = 95;
+        px[++px_mx] = 99;
+        px[++px_mx] = 100;
+        str = "hosts " pxx_hdr[k,"mtrc"];
+        printf("\t%s\t%s\t", pxx_hdr[k,"grp"], str) >> ofile;
+        for(i=1; i <= fls_mx; i++) {
+           printf("\t%s", pxx_hst[res_i[i]]) >> ofile;
+        }
+        printf("\n") >> ofile;
+        str = "values " pxx_hdr[k,"mtrc"];
+        printf("\t%s\t%s\t", pxx_hdr[k,"grp"], str) >> ofile;
+        for(i=1; i <= fls_mx; i++) {
+           printf("\t%f", arr_in[res_i[i]]) >> ofile;
+        }
+        printf("\n") >> ofile;
+        for (kk=1; kk <= px_mx; kk++) {
+          pi  = 0.01 * px[kk] * fls_mx; # index into array for this percentile
+          pii = int(pi);       # integer part
+          if (pii != pi) {
+            # so pi is not an integer
+            piu = pii+1;
+            if (piu > fls_mx) { piu = fls_mx; }
+            uval = arr_in[res_i[piu]]
+            hval = pxx_hst[res_i[piu]];
+          } else {
+            piu = pii;
+            if (piu >= fls_mx) {
+              uval = arr_in[res_i[fls_mx]];
+              hval = pxx_hst[res_i[fls_mx]];
+            } else {
+              piup1=piu + 1;
+              uval = 0.5*(arr_in[res_i[piu]] + arr_in[res_i[piup1]]);
+              hval = pxx_hst[res_i[piu]] " " pxx_hst[res_i[piup1]] " "
+            }
+          }
+          str = "p" px[kk] " " pxx_hdr[k,"mtrc"];
+          printf("\t%s\t%s\t%f\t%s\n", pxx_hdr[k,"grp"], str, uval, hval) >> ofile;
+          printf("\t%s\t%s\t%f\t%s\n", pxx_hdr[k,"grp"], str, uval, hval) > "/dev/stderr";
+        }
       }
       close(ofile);
       }
@@ -1231,6 +1345,28 @@ if [ "$DO_TSV_2_XLS" == "1" ]; then
       }
   ' $ALST
       ck_last_rc $? $LINENO
+
+#abc
+  if [ ${#MUTT_ARR[@]} -gt 0 ]; then
+  OFILE2=muttley_host_calls_combined_${JOB_ID}.tsv
+  echo $SCR_DIR/combine_muttley_host_calls.sh -S $SUM_ALL -o $OFILE2 -f $ALST  -t "avg muttley host calls by group" -c scatter_straight -s mutt_calls ${MUTT_ARR[@]} | cut -c 1-400
+       $SCR_DIR/combine_muttley_host_calls.sh -S $SUM_ALL -o $OFILE2 -f $ALST  -t "avg muttley host calls by group" -c scatter_straight -s mutt_calls ${MUTT_ARR[@]}
+  ck_last_rc $? $LINENO
+  awk -v add_file="$OFILE2" -v file_list="$ALST" '
+     BEGIN{did_add = 0; }
+     {
+       if (did_add == 0 && $0 != "" && substr($0, 1, 1) != "#" && substr($0,1,1) != "-") {
+          ln[++ln_mx] = add_file;
+          did_add = 1;
+       }
+       ln[++ln_mx] = $0;
+     }
+     END{
+       for (i=1; i <= ln_mx; i++) {
+         printf("%s\n", ln[i]) > file_list;
+       }
+     }' $ALST
+  fi
 
       if [ "$BEG_TM_IN" != "" ]; then
         BEG_TM=$BEG_TM_IN
@@ -1432,9 +1568,9 @@ if [ "$DO_TSV_2_XLS" == "1" ]; then
       exit 1
     fi
  fi
-  if [ $VERBOSE -gt 0 ]; then
-    echo "$0.$LINENO python $SCR_DIR/tsv_2_xlsx.py $OPT_a $OPT_A $OPT_TM $OPT_OPTIONS $OPT_M -f $ALST > $FSTDOUT"
-  fi
+  #if [ $VERBOSE -gt 0 ]; then
+    echo "$0.$LINENO python $SCR_DIR/tsv_2_xlsx.py $OPT_SM $OPT_a $OPT_A $OPT_TM $OPT_OPTIONS $OPT_M -f $ALST $SHEETS" > /dev/stderr
+  #fi
         python $SCR_DIR/tsv_2_xlsx.py $OPT_SM $OPT_a $OPT_A $OPT_TM $OPT_OPTIONS $OPT_M -f $ALST $SHEETS &> $FSTDOUT
         PY_RC=$?
         PY_PID=$!
