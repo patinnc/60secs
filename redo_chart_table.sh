@@ -7,7 +7,7 @@ ROWS_MAX="-1"
 VERBOSE=0
 OPTIONS=
 
-while getopts "hvc:f:g:m:n:o:O:r:s:t:" opt; do
+while getopts "hvc:f:g:m:n:o:O:r:S:s:t:" opt; do
   case ${opt} in
     c )
       CHRT_TYP=$OPTARG
@@ -33,6 +33,9 @@ while getopts "hvc:f:g:m:n:o:O:r:s:t:" opt; do
     r )
       ROWS_MAX=$OPTARG
       ;;
+    S )
+      SUM_FILE=$OPTARG
+      ;;
     s )
       SHEET=$OPTARG
       ;;
@@ -55,6 +58,7 @@ while getopts "hvc:f:g:m:n:o:O:r:s:t:" opt; do
       echo "   -r rows_max    you can get more rows or cols due to hashing the categories across multiple files"
       echo "                  use -r rows_max to increase the number of rows displayed. The default is to display rows == max number of rows in any input table"
       echo "   -s sheet_name  sheet name to look for in TSV 'title' line"
+      echo "   -S sum_file    sum_file for summary stats"
       echo "   -t title_of_chart  chart title to look for in TSV 'title' line"
       echo "   -v verbose mode"
       exit 1
@@ -138,7 +142,7 @@ HOST_NUM_LIST=
 if [ "$NLIMIT" != "" ]; then
   NUM_HOST=${#FLS[@]}
   HOST_NUM=$NLIMIT
-  HOST_NUM_LIST=(`awk -v scr_nm="$0" -v beg="0" -v end="$NUM_HOST" -v str="$HOST_NUM" '
+  HOST_NUM_LIST=(`awk -v sum_file="$SUM_FILE" -v script_name="$0" -v beg="0" -v end="$NUM_HOST" -v str="$HOST_NUM" '
      @load "time"
      BEGIN{
         # handle 1 or 0-2 or 0,3 or 0,1-3,7
