@@ -292,7 +292,7 @@ get_dir_list() {
    done
    DIR=$STR
    echo "$0.$LINENO +___________-- get_dir_list: j= $j DIR= $DIR" > /dev/stderr
-   exit 1
+   #exit 1
 }
 
 OPT_a=
@@ -358,32 +358,6 @@ else
        echo "$0.$LINENO found $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one."
        get_dir_list $CKF $DIR
        GOT_DIR=1
-#       #RESP=`find $DIR -name $CKF -print0 | sort -z | xargs -0 cat`
-#       if [ "$REGEX_LEN" != "0" ]; then
-#         RESP2=`find $DIR -name $CKF -print | sort`
-#         RESP=$RESP2
-#         for ii in ${REGEX[@]}; do
-#            RESP=`echo -e "$RESP" | grep "$ii"`
-#         done
-#         mydir=`echo -e "$RESP" | wc -l`
-#         echo "mydir count= $mydir"
-#       else
-#         RESP=`find $DIR -name $CKF -print | sort | xargs `
-#       fi
-#       echo "found $CKF file in dir $DIR"
-#       STR=
-#       j=0
-#       for ii in $RESP; do
-#         NM=$(dirname $ii)
-#           j=$((j+1))
-#           if [ "$NUM_DIR" != "" -a "$NUM_DIR" != "0" -a $NUM_DIR -gt 0 -a $j -ge $NUM_DIR ]; then
-#              echo "limit number of dirs with $CKF due to -N $NUM_DIR option"
-#              break
-#           fi
-#         STR="$STR $NM"
-#       done
-#       DIR=$STR
-#       #DIR=$(dirname $RESP)
        echo "$0.$LINENO using1 DIR= $DIR, orig DIR= $DIR_ORIG"
      fi
      if [ "$GOT_DIR" == "0" ]; then
@@ -419,15 +393,30 @@ else
          fi
          STR=
          j=0
+         GOT_TS_INIT=0
          for ii in $RESP; do
            NM=$(dirname $ii)
            NUM_LINES=`head -10 $ii | wc -l |awk '{$1=$1;printf("%d\n", $1);}'`
            if [ $NUM_LINES -lt 10 ]; then
              # the sys_*_perf_stat.txt file can get created with just one line in it if perf isn't present
              # so don't include dirs with empty data
-             continue
+             if [ -e $NM/run.log ]; then
+#20201203_201403 1607055243.064233658 start  -p /mnt/root/output/onprem_rome_combo_32cpus_v10 -I 0 -i 1 -d 7200
+#20201203_204129 1607056889.971113020 end elapsed_secs 1646.906879
+               TS_INIT=`awk '/start/{if ($3 == "start") {print $2;exit;}}' $NM/run.log`
+               if [ "$TS_INIT" != "" ]; then
+                 GOT_TS_INIT=1
+               fi
+               echo "$0.$LINENO: ck $NM/run.log got TS_INIT= $TS_INIT"
+             fi
+             if [ "$GOT_TS_INIT" != "1" ]; then
+              if [ $VERBOSE -gt 0 ]; then
+               echo "$0.$LINENO skip $CKF file in dir $DIR due to too few lines= $NUM_LINES"
+             fi
+               continue
+             fi
            fi
-           if [ $j -eq 0 ]; then
+           if [ $GOT_TS_INIT == 0 -a $j -eq 0 ]; then
              TS_INIT=`awk '
   function dt_to_epoch(offset) {
      if (date_str == "") {
@@ -493,7 +482,7 @@ else
          DIR=$STR
          #echo "$0.$LINENO: -__________- using2 DIR= $DIR, orig DIR= $DIR_ORIG" > /dev/stderr
        else
-         echo "$0: didn't find 60secs.log nor metric_out nor sys_*_perf_stat.txt file under dir $DIR at line $LINENO Bye"
+         echo "$0.$LINENO: didn't find 60secs.log nor metric_out nor sys_*_perf_stat.txt file under dir $DIR at line $LINENO Bye"
          exit
        fi
      fi
@@ -610,7 +599,7 @@ for i in $LST; do
  fi
  if [ "$BEG_TM_IN" != "" ]; then
     OPT_BEG_TM=" -b $BEG_TM_IN "
-    echo "$0: BEG_TM= $BEG_TM_IN"
+    echo "$0.$LINENO: BEG_TM= $BEG_TM_IN"
  fi
  OPT_END_TM=
  if [ "$END_TM_IN" != "" ]; then
@@ -817,6 +806,7 @@ for i in $LST; do
  fi
  FLS=`ls -1 $SM_FL $i/*txt.tsv`
  FLS_IC=`ls -1  $i/*txt.tsv | grep infra_cputime`
+ FLS_PS=`ls -1  $i/*txt.tsv | grep perf_stat`
  echo -e "${FLS}" >> $ALST
  MYA=($i/*log.tsv)
  if [ "${#MYA}" != "0" ]; then
@@ -888,7 +878,7 @@ fi
   #printf "title\tsum_all\tsheet\tsum_all\ttype\tcopy\n"  >> $SUM_ALL
   #printf "hdrs\t2\t0\t-1\t%d\t-1\n"  500 >> $SUM_ALL
   #printf "Resource\tTool\tMetric\taverage\n" >> $SUM_ALL;
-if [ "$FLS_IC" != "" ]; then
+if [ "$FLS_IC" != "" -o "$FLS_PS" != "" ]; then
   OPT_METRIC=" -m sum "
   OPT_METRIC=" -m sum_per_server "
   OPT_METRIC=" -m avg "
@@ -897,9 +887,12 @@ if [ "$FLS_IC" != "" ]; then
     rm $OFILE
   fi
 #abc
+  if [ "$FLS_IC" != "" -o "$FLS_PS" != "" ]; then
   echo "$SCR_DIR/redo_chart_table.sh -S $SUM_ALL -f $ALST -o $OFILE   -g infra_cputime $OPT_METRIC -r 50 -t __all__"
         $SCR_DIR/redo_chart_table.sh -S $SUM_ALL -f $ALST -o $OFILE   -g infra_cputime $OPT_METRIC -r 50 -t __all__ 
   ck_last_rc $? $LINENO
+  fi
+  if [ "$FLS_PS" != "" ]; then
   OFILE=sys_perf_stat_sum_${JOB_ID}.tsv
   if [ -e $OFILE ]; then
     rm $OFILE
@@ -907,6 +900,7 @@ if [ "$FLS_IC" != "" ]; then
   echo "$SCR_DIR/redo_chart_table.sh -S $SUM_ALL -f $ALST -o $OFILE   -g perf_stat $OPT_METRIC -r 50 -t __all__"
         $SCR_DIR/redo_chart_table.sh -S $SUM_ALL -f $ALST -o $OFILE   -g perf_stat $OPT_METRIC -r 50 -t __all__ 
   ck_last_rc $? $LINENO
+  fi
 fi
 
 DO_TSV_2_XLS=0
@@ -1542,9 +1536,13 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
   if [ "$BEG_TM_IN" != "" ]; then
      OPT_TM=" -b $BEG_TM_IN "
   fi
+  echo "$0.$LINENO ____got OPT_TM=\"$OPT_TM\"" > /dev/stderr
   if [ "$END_TM" != "" ]; then
+     echo "$0.$LINENO ____got END_TM=\"$END_TM\"" > /dev/stderr
+     END_TM=`echo "$END_TM"|head -1`
      OPT_TM="$OPT_TM -e $END_TM "
   fi
+  echo "$0.$LINENO ____got OPT_TM=\"$OPT_TM\"" > /dev/stderr
 
       
   #cat $ALST
