@@ -74,6 +74,7 @@ while getopts "hvc:f:g:m:n:o:O:r:S:s:t:" opt; do
   esac
 done
 shift $((OPTIND -1))
+echo "$0.$LINENO +++++ckckck"
 
 if [ "$FILE_LIST" == "" ]; then
   echo "$0: you must specify -f input_file_list (like -f tmp1.jnk)"
@@ -248,6 +249,7 @@ if [ $j -lt 10 ]; then
   echo "file_str= $FILE_STR"
 fi
 
+echo $0.$LINENO +++++awk -v options="$OPTIONS" -v out_file="$FL_OUT" -v verbose="$VERBOSE" -v rows_max="$ROWS_MAX" -v metric="$METRIC" -v chrt_typ="$CHRT_TYP" -v sheet="$SHEET" -v title="$TITLE" $FILE_STR
 awk -v options="$OPTIONS" -v out_file="$FL_OUT" -v verbose="$VERBOSE" -v rows_max="$ROWS_MAX" -v metric="$METRIC" -v chrt_typ="$CHRT_TYP" -v sheet="$SHEET" -v title="$TITLE" '
    @load "time"
    BEGIN {
