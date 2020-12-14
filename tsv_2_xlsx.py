@@ -21,6 +21,7 @@ import sys
 import glob
 import os
 import io
+import math
 
 # the 2 statements below workaround a "UnicodeEncodeError: 'ascii' codec can't encode character u'\xb5' in position 21: ordinal not in range(128)"
 # error when I read yab cmd json files
@@ -287,7 +288,7 @@ for bmi in range(base_mx+1):
    if verbose > 0:
       print("fo= ", fo)
    #options, remainder = getopt.getopt(sys.argv[1:], 'i:o:p:v', ['images=',
-   options, remainder = getopt.getopt(fl_options[fo][1:], 'Aa:b:c:d:e:i:m:o:O:P:p:s:v', [
+   options, remainder = getopt.getopt(fl_options[fo][1:], 'Aa:b:c:d:e:i:m:o:O:P:p:s:S:v', [
                                                             'average',
                                                             'avg_dir',
                                                             'begin=',
@@ -301,6 +302,7 @@ for bmi in range(base_mx+1):
                                                             'phase=',
                                                             'prefix=',
                                                             'size=',
+                                                            'sum_all=',
                                                             'verbose',
                                                             ])
 
@@ -820,8 +822,12 @@ for bmi in range(base_mx+1):
                             for ij in range(len(data[i])):
                               worksheet.write_blank(i, ph_add+ij, None, bold0)
                           continue
+                   #if worksheet is not None and not math.isnan(data[i]):
                    if worksheet is not None:
-                      worksheet.write_row(i, ph_add, data[i])
+                      try:
+                         worksheet.write_row(i, ph_add, data[i])
+                      except:
+                         print("---- error write row[%d], filenm= %s, row= " % (i, x), data[i], file=sys.stderr)
                    write_rows += 1
          #print("---- skipped2a= %d, write_rows= %d, write_rows3= %d, ts_beg= %f, ts_end= %f ts_first= %f ts_last= %f" % (skipped, write_rows, write_rows3, ts_beg, ts_end, ts_first, ts_last), file=sys.stderr)
       
@@ -879,6 +885,7 @@ for bmi in range(base_mx+1):
              print("sheet= %s ch= %d hro= %d hc= %d hce= %d, dr= %d, dre= %d" % (sheet_nm, c, hrow_beg, hcol_beg, hcol_end, drow_beg, drow_end))
           ch_style = 10
           chart1 = None
+          #got_how_many_series_for_chart = 0
           #if ch_type == "scatter_straight" and options_str_top.find("line_for_scatter") > -1:
           #   ch_type = "line"
           if ch_type == "scatter_straight":
@@ -924,19 +931,23 @@ for bmi in range(base_mx+1):
                 print("opt_phase skipped= %d" % (skipped), file=sys.stderr)
 
              if do_avg == False or do_avg_write == True:
-                if ch_type == "scatter_straight" and options_str_top.find("line_for_scatter") > -1:
-                   chart1 = workbook.add_chart({'type': "line"})
-                else:
-                   chart1 = workbook.add_chart({'type': 'scatter', 'subtype': 'straight'})
+                #drow_beg, drow_end,if got_how_many_series_for_chart > 0:
+                if drow_end  > (drow_beg+1):
+                   if ch_type == "scatter_straight" and options_str_top.find("line_for_scatter") > -1:
+                      chart1 = workbook.add_chart({'type': "line"})
+                   else:
+                      chart1 = workbook.add_chart({'type': 'scatter', 'subtype': 'straight'})
           else:
              if ch_type != "copy":
                 if do_avg == False or do_avg_write == True:
-                   if ch_type == "line_stacked":
-                      #print("chart_type2= %s, use_cats= %s" % (ch_type, use_cats), file=sys.stderr)
-                      chart1 = workbook.add_chart({'type': "area", 'subtype': 'stacked'})
-                      #chart1 = workbook.add_chart({'type': "line", 'subtype': 'stacked'})
-                   else:
-                      chart1 = workbook.add_chart({'type': ch_type})
+                   #if got_how_many_series_for_chart > 0:
+                   if drow_end  > (drow_beg+1):
+                      if ch_type == "line_stacked":
+                        #print("chart_type2= %s, use_cats= %s" % (ch_type, use_cats), file=sys.stderr)
+                        chart1 = workbook.add_chart({'type': "area", 'subtype': 'stacked'})
+                        #chart1 = workbook.add_chart({'type': "line", 'subtype': 'stacked'})
+                      else:
+                        chart1 = workbook.add_chart({'type': ch_type})
           if ch_type == "copy":
              #print("chart_type= copy", file=sys.stderr)
              continue
@@ -955,20 +966,21 @@ for bmi in range(base_mx+1):
                    if ch_type == "column":
                      print("ck col chart, sheet_nm= %s, ch_typ= %s, file= %s, drow_beg= %d drow_end= %d hcol_beg= %d, hcol_end= %d, ph_add= %d, h= %d" % (sheet_nm, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end, ph_add, h), file=sys.stderr)
                      use_drow_end = drow_end - 1
-                   if use_cats:
+                   if chart1 != None and (ch_type == "column" or drow_end  > (drow_beg+1)):
+                    if use_cats:
                      chart1.add_series({
                          'name':       [wrksh_nm, hrow_beg, h+ph_add],
                          'categories': [wrksh_nm, drow_beg, dcol_cat+ph_add, use_drow_end, dcol_cat+ph_add],
                          'values':     [wrksh_nm, drow_beg, h+ph_add, use_drow_end, h+ph_add],
                      })
-                   else:
+                    else:
                      chart1.add_series({
                          'name':       [wrksh_nm, hrow_beg, h+ph_add],
                          'values':     [wrksh_nm, drow_beg, h+ph_add, use_drow_end, h+ph_add],
                      })
           if got_how_many_series_for_chart == 0:
              print("What going on4, sheet_nm= %s, ch_typ= %s, file= %s, drow_beg= %d drow_end= %d hcol_beg= %d, hcol_end= %d" % (sheet_nm, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end), file=sys.stderr)
-          if do_avg == False or do_avg_write == True:
+          if chart1 != None and (do_avg == False or do_avg_write == True):
              chart1.set_title ({'name': title})
              chart1.set_style(ch_style)
              ch_opt = {'x_offset': 25, 'y_offset': 10}
@@ -1024,7 +1036,11 @@ for bmi in range(base_mx+1):
                         if ch_sh_row > 0:
                            ch_top_at_row = ch_sh_arr[ch_sh_row-1][0] + int(ch_size[2]*ch_size[1])
                         ch_sh_arr.append([ch_top_at_row, ch_left_at_col])
-                     ch_top_at_row = ch_sh_arr[ch_sh_row][0]
+                     if ch_sh_row >= len(ch_sh_arr) or not ch_sh_row in ch_sh_arr:
+                        print("err: ch_sh_row= %d len(ch_sh_arr)= %d, x= %s\n" % (ch_sh_row, len(ch_sh_arr), x), file=sys.stderr)
+                        #print("err: len(ch_sh_arr[ch_sh_row])= %d, x= %s\n" % (len(ch_sh_arr[ch_sh_row]), x), file=sys.stderr)
+                     else:
+                        ch_top_at_row = ch_sh_arr[ch_sh_row][0]
              if worksheet_charts != None:
                 worksheet_charts.write(ch_top_at_row -1, ch_left_at_col+1, title);
                 rc = worksheet_charts.insert_chart(ch_top_at_row, ch_left_at_col, chart1, ch_opt)
