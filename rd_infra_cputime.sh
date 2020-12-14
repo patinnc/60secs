@@ -83,6 +83,15 @@ awk -v script_nm="$0.$LINENO.awk" -v mutt_ofile="$MUTT_OUT_FL" -v cur_dir="$CUR_
      use_top_pct_cpu = 1;
    }
    printf("use_top_pct_cpu= %d, options= \"%s\"\n", use_top_pct_cpu, options) > "/dev/stderr";
+   plst[1] = "ksoftirqd/";
+   plst[2] = "cpuhp/";
+   plst[3] = "watchdog/";
+   plst[4] = "migration/";
+   plst[5] = "ksoftirqd/";
+   plst[6] = "cpuhp/";
+   plst[7] = "kworker/";
+   plst[8] = "ksoftirqd/";
+   plst_mx = 8;
   }
   /^__ps_ef_beg__ /{
     # UID         PID   PPID  C STIME TTY          TIME CMD
@@ -348,11 +357,26 @@ awk -v script_nm="$0.$LINENO.awk" -v mutt_ofile="$MUTT_OUT_FL" -v cur_dir="$CUR_
     }
     pid_i = pid_list[pid];
     first_tm_proc = 0;
-    if (!(proc in proc_list)) {
-       proc_list[proc] = ++proc_mx;
-       proc_lkup[proc_mx] = proc;
+    got_kw = -1;
+    for (i=1; i <= plst_mx; i++) {
+      if (index(proc, plst[i]) == 1) {
+       if (!(plst[i] in proc_list)) {
+         proc_list[plst[i]] = ++proc_mx;
+         proc_lkup[proc_mx] = plst[i];
+         proc_kw = proc_mx;
+       }
+       got_kw = proc_kw;
+       proc_i = proc_kw;
+       break;
+      }
     }
-    proc_i = proc_list[proc];
+    if (got_kw == -1) {
+      if (!(proc in proc_list)) {
+         proc_list[proc] = ++proc_mx;
+         proc_lkup[proc_mx] = proc;
+      }
+      proc_i = proc_list[proc];
+    }
     pid_proc = pid "," proc;
     if (!(pid_proc in pid_proc_list)) {
        pid_proc_list[pid_proc] = ++pid_prod_mx;
@@ -384,15 +408,19 @@ awk -v script_nm="$0.$LINENO.awk" -v mutt_ofile="$MUTT_OUT_FL" -v cur_dir="$CUR_
     if (dt_diff > 0.0) {
       v = (secs - secs_prev)/dt_diff;
       if (v < 0.0) { v = 0.0; }
-      sv[mx, proc_i] += v;
+      use_proc_i = proc_i;
+      if (got_kw != -1) {
+        use_proc_i = proc_kw;
+      }
+      sv[mx, use_proc_i] += v;
       if (col_rss != -1) {
-        sv_rss[mx, proc_i] += rss;
+        sv_rss[mx, use_proc_i] += rss;
       }
       if (col_vsz != -1) {
-        sv_vsz[mx, proc_i] += vsz;
+        sv_vsz[mx, use_proc_i] += vsz;
       }
-      tot[proc_i] += (secs - secs_prev);
-      tot_n[proc_i]++;
+      tot[use_proc_i] += (secs - secs_prev);
+      tot_n[use_proc_i]++;
     }
     pid_prev[pid_i,"secs"] = secs
     pid_prev[pid_i,"proc"] = proc;
@@ -489,6 +517,7 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
     printf("epoch\tts") > ofile
     for(i=1; i <= proc_mx; i++) {
       j = res_i[i];
+      if (tot[j] == 0) { continue; }
       printf("\t%s", proc_lkup[j]) > ofile;
     }
     printf("\n") > ofile;
@@ -542,6 +571,7 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
       }
       for(i=1; i <= proc_mx; i++) {
         j = res_i[i];
+        if (tot[j] == 0) { continue; }
         v = fctr*sv[k,j];
         cv[j] = v;
         if (sv_max[j] < v) {
@@ -579,6 +609,7 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
       printf("sum_file= %s\n", sum_file);
       for(i=1; i <= proc_mx; i++) {
          j = res_i[i];
+         if (tot[j] == 0) { continue; }
          if ( use_top_pct_cpu == 0) {
            printf("infra_procs\tinfra procs cpus\t%.3f\t%s\n", tot[j], proc_lkup[j]) >> sum_file;
          } else {
@@ -588,6 +619,7 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
       }
       for(i=1; i <= proc_mx; i++) {
          j = res_i[i];
+         if (tot[j] == 0) { continue; }
          v = sv_max[j];
          if ( use_top_pct_cpu == 0) {
            printf("infra_procs\tinfra procs max cpus\t%.3f\t%s\n", v, proc_lkup[j]) >> sum_file;
@@ -905,6 +937,7 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
       printf("epoch\tts") > ofile
       for(i=1; i <= proc_mx; i++) {
         j = res_i[i];
+        if (tot[j] == 0) { continue; }
         printf("\t%s", proc_lkup[j]) > ofile;
         rss_sum[j] = 0;
         rss_n[j] = 0;
@@ -915,6 +948,7 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
         printf("%s\t%d", dt[k], (k > 1 ? dt[k]-dt[1] : 0)) > ofile;
         for(i=1; i <= proc_mx; i++) {
           j = res_i[i];
+        if (tot[j] == 0) { continue; }
           printf("\t%.3f", sv_rss[k,j]/1024.0) > ofile;
           rss_sum[j] += sv_rss[k,j];
           rss_n[j]++;
@@ -927,6 +961,7 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
       if (sum_file != "") {
         for(i=1; i <= proc_mx; i++) {
           j = res_i[i];
+          if (tot[j] == 0) { continue; }
           avg = 0.0;
           if (rss_n[j] > 0) {
             avg = rss_sum[j]/rss_n[j];
@@ -944,6 +979,7 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
       printf("epoch\tts") > ofile
       for(i=1; i <= proc_mx; i++) {
         j = res_i[i];
+        if (tot[j] == 0) { continue; }
         printf("\t%s", proc_lkup[j]) > ofile;
         vsz_sum[j] = 0;
         vsz_n[j] = 0;
@@ -954,6 +990,7 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
         printf("%s\t%d", dt[k], (k > 1 ? dt[k]-dt[1] : 0)) > ofile;
         for(i=1; i <= proc_mx; i++) {
           j = res_i[i];
+          if (tot[j] == 0) { continue; }
           printf("\t%.3f", sv_vsz[k,j]/1024.0) > ofile;
           vsz_sum[j] += sv_vsz[k,j];
           vsz_n[j]++;
@@ -966,6 +1003,7 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
       if (sum_file != "") {
         for(i=1; i <= proc_mx; i++) {
           j = res_i[i];
+          if (tot[j] == 0) { continue; }
           avg = 0.0;
           if (rss_n[j] > 0) {
             avg = vsz_sum[j]/vsz_n[j];
@@ -987,12 +1025,14 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
     printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 0, -1, proc_mx-1, proc_mx) > ofile;
     for(i=1; i <= proc_mx; i++) {
       j = res_i[i];
+      if (tot[j] == 0) { continue; }
       printf("%s\t", proc_lkup[j]) > ofile;
     }
     printf("%%cpus\n") > ofile;
     trow++;
     for(i=1; i <= proc_mx; i++) {
       j = res_i[i];
+      if (tot[j] == 0) { continue; }
       v = tot[j];
       fctr = 1.0;
       if ( use_top_pct_cpu == 1) {
@@ -1018,12 +1058,14 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
     printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 0, -1, proc_mx-1, proc_mx) > ofile;
     for(i=1; i <= proc_mx; i++) {
       j = res_i[i];
+      if (tot[j] == 0) { continue; }
       printf("%s\t", proc_lkup[j]) > ofile;
     }
     printf("%%cpus\n") > ofile;
     trow++;
     for(i=1; i <= proc_mx; i++) {
       j = res_i[i];
+      if (tot[j] == 0) { continue; }
       v = sv_max[j];
       printf("%.3f\t", v) > ofile;
     #  if (sum_file != "") {
