@@ -50,7 +50,7 @@ while getopts "hvASa:b:c:D:d:e:g:i:j:m:o:P:p:s:t:x:" opt; do
       ;;
     b )
       BEG_TM_IN=$OPTARG
-      echo "$0: top BEG_TM_IN= $BEG_TM_IN"
+      echo "$0.$LINENO: top BEG_TM_IN= $BEG_TM_IN"
       ;;
     c )
       CLIP=$OPTARG
@@ -330,16 +330,17 @@ if [ "$BEG_TM_IN" != "" ]; then
 fi
 echo "awk time offset hours BEG_ADJ= $BEG_ADJ  BEG_TM= $BEG, BEG_TM_IN= $BEG_TM_IN"
 #exit
-RESP=`find .. -name "CPU2017.001.log" | wc -l | awk '{printf("%s\n", $1);exit;}'`
+RESP=`find .. -name "CPU2017.00*.log" | wc -l | awk '{printf("%s\n", $1);exit;}'`
 pwd
-echo "++++++++++find .. -name cpu2017.*.log resp = $RESP"
+echo "++++++++++find .. -name CPU2017.*.log resp = $RESP" > /dev/stderr
 CPU2017LOG=()
 if [ "$RESP" -ge "1" -a "$PHASE_FILE" == "" ]; then
-  RESP=`find .. -name CPU2017.001.log`
+  RESP=`find .. -name CPU2017.00*.log`
   echo "find .. -name cpu2017.*.log resp = $RESP"
-  CPU2017LOG=$RESP
-  #j=0
-  #for i in $RESP; do echo "echo j= $j CPU2017LOG $i ${CPU2017LOG[$j]}"; j=$((j+1)); done
+  CPU2017LOG=($RESP)
+  echo "+++CPU2017LOG= ${CPU2017LOG[@]} is list"
+  j=0
+  for i in $RESP; do echo "echo $0.$LINENO j= $j CPU2017LOG $i ${CPU2017LOG[$j]}"; j=$((j+1)); done
 fi
 EXTRA_FILES=
 if [ -e $DIR/$METRIC_OUT ]; then
@@ -1040,7 +1041,7 @@ trows++; printf("\t\n") > NFL;
 #12:01:02 AM    0   10.10    4.04    2.02    0.00    0.00    0.00    0.00    0.00    0.00   83.84
 #12:01:02 AM    1    1.03    6.19    2.06    0.00    0.00    0.00    0.00    0.00    0.00   90.72
 
-    awk -v ts_beg="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" '
+    awk -v script="$0.$LINENO.awk" -v options="$OPTIONS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" '
      BEGIN{
         beg=1;
         grp_mx=0;
@@ -1048,6 +1049,10 @@ trows++; printf("\t\n") > NFL;
         ts_beg += 0;
         ts_end += 0;
         epoch_init = 0;
+        got_skip_mpstat_percpu_charts = index(options, "mpstat_skip_percpu_charts");
+        if (got_skip_mpstat_percpu_charts > 0) {
+           printf("%s: going to skip_mpstat_percpu_charts due to string found in options\n", script) > "/dev/stderr";
+        }
       }
       function dt_to_epoch(hhmmss, ampm) {
          # the epoch seconds from the date time info in the file is local time,not UTC.
@@ -1149,6 +1154,9 @@ trows++; printf("single hot CPU can be evidence of a single-threaded application
 trows++; printf("\n") > NFL;
 
 	for (g=1; g <= grp_mx; g++) {
+          if (got_skip_mpstat_percpu_charts > 0 && grp_nm[g] != "all") {
+             continue;
+          }
           row++;
           printf("title\tmpstat cpu= %s\tsheet\tmpstat\ttype\tscatter_straight\n", grp_nm[g]) > NFL;
           row++;
@@ -2306,10 +2314,15 @@ row += trows;
     if [ "$END_TM" != "" ]; then
        OPT_TME=" -e $END_TM "
     fi
+    RESP=`head -10 $i |wc -l|awk '{print $1}'`
+    if [ $RESP -lt 9 ]; then
+       echo "File $i has less than 10 lines ($RESP lines) so skipped it" > /dev/stderr
+    else
     echo "do perf_stat data $i with BEG= $BEG, end= $END_TM" > /dev/stderr
     echo "$SCR_DIR/perf_stat_scatter.sh $OPT_D -b "$BEG"  $OPT_TME  -o "$OPTIONS"  -f $i -S $SUM_FILE > $i.tsv"
           $SCR_DIR/perf_stat_scatter.sh $OPT_D -b "$BEG"  $OPT_TME  -o "$OPTIONS"  -f $i -S $SUM_FILE > $i.tsv
           ck_last_rc $? $LINENO
+    fi
   fi
   if [[ $i == *"infra_cputime.txt" ]]; then
     #echo "$0: got $DIR/infra_cputime.txt at $LINENO" > /dev/stderr
@@ -2318,6 +2331,7 @@ row += trows;
     if [ "$LSCPU_FL" != "" ]; then
      INCPUS=`awk '/^CPU.s.:/ { printf("%s\n", $2);exit;}' $LSCPU_FL`
     fi
+    #echo "$0.$LINENO: _____________ INCPUS= $INCPUS, LSCPU_FL= $LSCPU_FL" > /dev/stderr
     echo "$SCR_DIR/rd_infra_cputime.sh -O "$OPTIONS" -f $i -n $INCPUS -S $SUM_FILE -m $MUTTLEY_OUT_FILE"
           $SCR_DIR/rd_infra_cputime.sh -O "$OPTIONS" -f $i -n $INCPUS -S $SUM_FILE -m $MUTTLEY_OUT_FILE
           ck_last_rc $? $LINENO
@@ -2349,7 +2363,10 @@ row += trows;
     SHEETS="$SHEETS $i"
   else
     if [[ $i == *"_perf_stat.txt"* ]]; then
+    RESP=`head -10 $i |wc -l|awk '{print $1}'`
+    if [ $RESP -gt 3 ]; then
       SHEETS="$SHEETS $i.tsv"
+    fi
     fi
   fi
 
@@ -2989,12 +3006,74 @@ if [ "$SUM_FILE" != "" ]; then
    ' 
    ck_last_rc $? $LINENO
 fi
-if [ "$CPU2017LOG" != "" -a "$PHASE_FILE" == "" ]; then
-  RESP=$CPU2017LOG
+if [ "${#CPU2017LOG[@]}" -gt 0 -a "$PHASE_FILE" == "" ]; then
+  RESP="${CPU2017LOG[@]}"
   echo "+++find .. -name cpu2017.*.log resp = $RESP"
-  PH=`awk '
-    BEGIN{mx=0;}
+  PH=`awk -v dir="$(pwd)" -v sum_file="$SUM_FILE" -v ofile="bmark.txt" '
+    BEGIN{
+        mx    = 0;
+        bm_mx = 0;
+    }
     #/Copy .* of .* (base refrate) run .* finished at .*.  Total elapsed time:/{
+# Run 520.omnetpp_r base refrate ratio=22.93, runtime=915.660271, copies=16, threads=1, 
+    /^ Run .* base refrate ratio=.*, runtime=.*, copies=.*,/{
+        bm = $2;
+        pos = index(dir, "cpus");
+        pos0 = index(dir, "n1-");
+        pos1 = index(dir, "n2-");
+        pos2 = index(dir, "n2d-");
+        if (pos > 0 || pos0 > 0 || pos1 > 0 || pos2 > 0) {
+           n = split(dir, arr, "_");
+           for (i=1; i <= n; i++) {
+             pos = index(arr[i], "cpus");
+             if (pos > 0) {
+                cpus = substr(arr[i], 1, pos-1)+0;
+             }
+             pos = index(arr[i], "n1-");
+             if (pos > 0) {
+                cpus = substr(arr[i], pos+3, length(arr[i]))+0;
+             } else {
+               pos = index(arr[i], "n2-");
+               if (pos > 0) {
+                  cpus = substr(arr[i], pos+3, length(arr[i]))+0;
+               } else {
+                 pos = index(arr[i], "n2d-");
+                 if (pos > 0) {
+                    cpus = substr(arr[i], pos+4, length(arr[i]))+0;
+                 }
+               }
+             }
+           }
+        }
+        if (!(bm in bm_list)) {
+          bm_list[bm] = ++bm_mx;
+          bm_lkup[bm_mx] = bm;
+          bm_vals[bm_mx] = 0;
+        }
+        bm_idx = bm_list[bm];
+        bm_val = ++bm_vals[bm_idx];
+        v = $5;
+        n = split(v, arr, "=");
+        gsub(",", "", arr[2]);
+        rat = arr[2];
+        v = $6;
+        n = split(v, arr, "=");
+        gsub(",", "", arr[2]);
+        run_tm = arr[2];
+        v = $7;
+        n = split(v, arr, "=");
+        gsub(",", "", arr[2]);
+        copies = arr[2];
+        bm_arr[bm_idx,bm_val,"ratio"] = rat;
+        bm_arr[bm_idx,bm_val,"run_time"] = run_tm;
+        bm_arr[bm_idx,bm_val,"copies"] = copies;
+        printf("SpecInt benchmark\t%s\nratio\t%s\nrun_tm\t%s\ncopies\t%s\n", bm, rat, run_tm, copies) > ofile;
+        printf("SpecInt\tSI benchmark\t%s\tSI %s ratio %s\n", rat, bm, bm_val) >> sum_file;
+        printf("SpecInt\tSI benchmark\t%s\tSI %s run_time %s\n", run_tm, bm, bm_val) >> sum_file;
+        printf("SpecInt\tSI benchmark\t%s\tSI %s copies %s\n", copies, bm, bm_val) >> sum_file;
+        #printf("got cpu2017 line= %s\n", $4);
+    }
+# Run 520.omnetpp_r base refrate ratio=22.93, runtime=915.660271, copies=16, threads=1, 
     /Copy .* of .* .base refrate. run .* finished at .* Total elapsed time:/{
         bm = $4;
         #printf("got cpu2017 line= %s\n", $4);
@@ -3022,6 +3101,49 @@ if [ "$CPU2017LOG" != "" -a "$PHASE_FILE" == "" ]; then
           tm += elap;
         }
         #printf("%s %s %s %.3f\n", bm, tm_beg, s, s-tm_beg);
+    }
+function tot_compare(i1, v1, i2, v2,    l, r)
+{
+    m1 = arr[i1];
+    m2 = arr[i2];
+    if (m1 < m2)
+        return -1
+    else if (m1 == m2)
+        return 0
+    else
+        return 1
+}
+    END{
+       close(ofile);
+       #The overall SPECrate metrics are calculated as a geometric mean from the individual benchmark SPECrate metrics using the median time from three runs or the slower of two runs, as explained above (rule 1.2.1).
+       for(i=1; i <= bm_mx; i++) {
+         delete arr;
+         delete idx;
+         for(j=1; j <= bm_vals[i]; j++) {
+            arr[j] = bm_arr[i,j,"ratio"];
+            idx[j] = j;
+         }
+         asorti(idx, res_i, "tot_compare")
+         if (bm_vals[i] <= 2 ) {
+            v = arr[res_i[1]];
+         } else if (bm_vals[i] == 3) {
+            v = arr[res_i[1]];
+         }
+         varr[i] = v;
+       }
+       x = varr[1];
+       printf("SI new score[1]= %.3f\n", x) > "/dev/stderr";
+       for(i=2; i <= bm_mx; i++) {
+          printf("SI new score[%d]= %.3f\n", i, varr[i]) > "/dev/stderr";
+          x *= varr[i];
+       }
+       y = 0.0
+       if (x > 0.0 && bm_mx > 0.0) {
+         y = x ^ (1.0/bm_mx);
+       }
+       printf("SI new score= %.3f, bm_mx= %f\n", y, bm_mx) > "/dev/stderr";
+       printf("SpecInt\tSI benchmark\t%s\tSI new score\n", y) >> sum_file;
+       printf("SpecInt\tSI benchmark\t%s\tSI cpus\n", cpus) >> sum_file;
     }
     ' $RESP`
    ck_last_rc $? $LINENO
