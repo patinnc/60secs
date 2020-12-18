@@ -1,9 +1,7 @@
 #!/bin/bash
 
-
-
-#lscpu | awk 'BEGIN{}
-cat /proc/cpuinfo | awk 'BEGIN{}
+cat /proc/cpuinfo | gawk '
+   BEGIN{vrb=0;}
    function ltrim(s) { sub(/^[ \t\r\n]+/, "", s); return s }
    function rtrim(s) { sub(/[ \t\r\n,]+$/, "", s); return s }
    function trim(s) { return rtrim(ltrim(s)); }
@@ -52,6 +50,10 @@ cat /proc/cpuinfo | awk 'BEGIN{}
        #Pinnacle Ridge 0x8     0xF     0x0     0x8     Family 23 Model 8
        #Zen    Raven Ridge     0x8     0xF     0x1     0x1     Family 23 Model 17
        #Naples, Whitehaven, Summit Ridge, Snowy Owl    0x8     0xF     0x0     0x1     Family 23 Model 1
+#Vendor ID:           AuthenticAMD
+#CPU family:          25
+#Model:               1
+#Model name:          AMD EPYC 7543 32-Core Processor
        
        dcd[1,1]="Zen2 Rome";           dcd[1,2]="Family 23 Model 32-47"; dcd[1,3]=23; dcd[1,4]=32;  dcd[1,5]=47;
        dcd[2,1]="Zen2 Matisse";        dcd[2,2]="Family 23 Model 113";   dcd[2,3]=23; dcd[2,4]=113; dcd[2,5]=113;
@@ -61,9 +63,10 @@ cat /proc/cpuinfo | awk 'BEGIN{}
        dcd[6,1]="Zen Raven Ridge";     dcd[6,2]="Family 23 Model 17";    dcd[6,3]=23; dcd[6,4]=17;  dcd[6,5]=17;
        dcd[7,1]="Zen Naples/Whitehaven/Summit Ridge/Snowy Owl";
        dcd[7,2]="Family 23 Model 1";    dcd[7,3]=23; dcd[7,4]=1;  dcd[7,5]=1;
+       dcd[8,1]="Zen3 Milan";          dcd[8,2]="Family 25 Model 1";    dcd[8,3]=25; dcd[8,4]=1;  dcd[8,5]=1;
        str = "Family " fam " Model " mod;
        res=" ";
-       for(k=1;k <=7;k++) {
+       for(k=1; k <= 8; k++) {
          if (dcd[k,3] == fam && dcd[k,4] <= mod && mod <= dcd[k,5] ) {
            res=dcd[k,1];break;
          }
@@ -72,15 +75,22 @@ cat /proc/cpuinfo | awk 'BEGIN{}
      }
    }
    {
+      if (vrb==1) {printf("%s\n", $0);}
       n=split($0, arr, ":");
       arr[1]=trim(arr[1]);
       arr[2]=trim(arr[2]);
-      #printf("1=_%s_, a1=_%s_\n", $1, arr[1]);
-      if (arr[1]=="CPU family" || arr[1]=="cpu family") {cpu_fam=arr[2];next;}
-      if (arr[1]=="Vendor ID"  || arr[1]=="vendor_id") {cpu_vnd=arr[2];next;}
-      if (arr[1]=="Model"      || arr[1]=="model") { cpu_mod=arr[2];next; }
+      if (vrb==1) {printf("1=_%s_, a1=_%s_ a2= %s\n", $1, arr[1], arr[2]);}
+      if (arr[1]=="CPU family" || arr[1]=="cpu family") {cpu_fam=arr[2];if(vrb==1){printf("cpu_fam= %s\n", cpu_fam)};next;}
+      if (arr[1]=="Vendor ID"  || arr[1]=="vendor_id") {cpu_vnd=arr[2];if(vrb==1){printf("cpu_vnd= %s\n", cpu_vnd)};next;}
+      if (arr[1]=="Model"      || arr[1]=="model") { cpu_mod=arr[2];if(vrb==1){printf("cpu_mod= %s\n", cpu_mod);}next; }
       if (arr[1]=="Model name" || arr[1]=="model name") {
+#vendor_id	: AuthenticAMD
+#cpu family	: 25
+#model		: 1
+#model name	: AMD EPYC 7543 32-Core Pro
          cpu_model_name = arr[2]; 
+         if(vrb==1){printf("cpu_model_name= %s\n", cpu_model_name);}
+         if(vrb==1){printf("decode_fam_mod(%s, %s, %s, %s)\n", cpu_vnd, cpu_fam, cpu_mod, cpu_model_name) > "/dev/stderr";}
          res=decode_fam_mod(cpu_vnd, cpu_fam, cpu_mod, cpu_model_name);
          printf("%s\n", res);
          exit;
