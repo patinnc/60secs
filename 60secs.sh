@@ -294,6 +294,8 @@ fi
 echo "count= $COUNT for interval= $INTRVL and wait= $WAIT"
 
 lscpu > lscpu.log
+ps -ef > ps_ef_beg.txt
+docker ps > docker_ps_beg.txt
 
 echo "going to do task $TB to $TE"
 
@@ -967,6 +969,8 @@ if [ "$NEED_TO_END_FLAMEGRAPH" == "1" ]; then
   echo "flamegraph profiling is still running. You'll need to do cmd below manually"
   echo ${SCR_DIR}/gen_flamegraph_for_java_in_container.sh -C $CONTAINER -a stop
 fi
+ps -ef > ps_ef_end.txt
+docker ps > docker_ps_end.txt
 tstmp=`date "+%Y%m%d_%H%M%S"`
 ts_end=`date "+%s.%N"`
 ts_elap=`awk -v ts_beg="$ts_beg" -v ts_end="$ts_end" 'BEGIN{printf("%f\n", (ts_end+0.0)-(ts_beg+0.0));exit;}'`
