@@ -16,6 +16,7 @@ MYBASHPID=$BASHPID
 echo "$BASHPID" > ~/60secs.pid
 
 SCR_DIR=`dirname "$(readlink -f "$0")"`
+IFS_SV=$IFS
 WAIT=60
 # renamed task 'top' to 'do_top' to avoid conflict with toplev
 TASKS=("uptime" "dmesg" "vmstat" "mpstat" "pidstat" "iostat" "free" "nicstat" "sar_dev" "sar_tcp" "do_top" "perf" "sched_switch" "interrupts" "flamegraph" "toplev" "power" "watch")
@@ -383,6 +384,7 @@ fi
 
 if [ "$EXCLUDE" != "" ]; then
   IFS=',' read -r -a ex_arr <<< "$EXCLUDE"
+  IFS=$IFS_SV
 fi
 
 NEED_TO_END_FLAMEGRAPH=0

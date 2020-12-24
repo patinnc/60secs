@@ -28,6 +28,7 @@ DESC_FILE=
 OSTYP=$OSTYPE
 NUM_CPUS=0
 FAIL=0
+IFS_SV=$IFS
 PY_PID=
 BK_PID=()
 BK_DIR=()
@@ -217,6 +218,7 @@ fi
 if [ "$NUM_DIR_IN" != "" ]; then
   NUM_DIR_ARR=()
   IFS=',' read -r -a NUM_DIR_ARR <<< "$NUM_DIR_IN"
+  IFS=$IFS_SV
   echo "NUM_DIR_ARR= ${NUM_DIR_ARR[@]}, BM0= ${NUM_DIR_ARR[0]}, BM1=${NUM_DIR_ARR[1]}" > /dev/stderr
   NUM_DIR_BEG=${NUM_DIR_ARR[0]}
   NUM_DIR_END=${NUM_DIR_ARR[1]}
