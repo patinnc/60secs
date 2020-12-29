@@ -354,6 +354,16 @@ if [ -e $DIR/infra_cputime.txt ]; then
   EXTRA_FILES="$EXTRA_FILES $DIR/infra_cputime.txt"
   #echo "$0: got $DIR/infra_cputime.txt at $LINENO" > /dev/stderr
 fi
+if [ -e $DIR/specjbb.log ]; then
+  EXTRA_FILES="$EXTRA_FILES $DIR/specjbb.log"
+  echo "$0: ____++++++_____got $DIR/specjbb.log at $LINENO" > /dev/stderr
+else
+if [ -e $DIR/*_specjbb/specjbb.log ]; then
+  RESP=`find . -name specjbb.log`
+  EXTRA_FILES="$EXTRA_FILES $RESP"
+  echo "$0: ____++++++_____got specjbb.log $RESP at $LINENO" > /dev/stderr
+fi
+fi
 if [ -e $DIR/yab_cmds.json ]; then
   EXTRA_FILES="$EXTRA_FILES $DIR/yab_cmds.json"
   echo "$0: got $DIR/yab_cmds.json at $LINENO" > /dev/stderr
@@ -2319,8 +2329,8 @@ row += trows;
        echo "File $i has less than 10 lines ($RESP lines) so skipped it" > /dev/stderr
     else
     echo "do perf_stat data $i with BEG= $BEG, end= $END_TM" > /dev/stderr
-    echo "$SCR_DIR/perf_stat_scatter.sh $OPT_D -b "$BEG"  $OPT_TME  -o "$OPTIONS"  -f $i -S $SUM_FILE > $i.tsv"
-          $SCR_DIR/perf_stat_scatter.sh $OPT_D -b "$BEG"  $OPT_TME  -o "$OPTIONS"  -f $i -S $SUM_FILE > $i.tsv
+    echo  $SCR_DIR/perf_stat_scatter.sh $OPT_D -b "$BEG"  $OPT_TME  -o "$OPTIONS" -O $i.tsv -f $i -S $SUM_FILE
+          $SCR_DIR/perf_stat_scatter.sh $OPT_D -b "$BEG"  $OPT_TME  -o "$OPTIONS" -O $i.tsv -f $i -S $SUM_FILE
           ck_last_rc $? $LINENO
     fi
   fi
@@ -2338,6 +2348,20 @@ row += trows;
     if [ -e $i.tsv ]; then
       SHEETS="$SHEETS $i.tsv"
     fi
+  fi
+  if [[ $i == *"specjbb.log" ]]; then
+    echo "$0: got specjbb.log $i at $LINENO" > /dev/stderr
+#jbb2015.result.metric.max-jOPS = 87723
+#jbb2015.result.metric.critical-jOPS = 28775
+    awk -v sum_file="$SUM_FILE" '
+      /jbb2015.result.metric.max-jOPS =/ {
+        printf("specjbb\tspecjbb\t%s\tspecjbb max-jOPS\n", $3) >> sum_file;
+      }
+      /jbb2015.result.metric.critical-jOPS =/ {
+        printf("specjbb\tspecjbb\t%s\tspecjbb crit-jOPS\n", $3) >> sum_file;
+      }
+    ' $i
+    ck_last_rc $? $LINENO
   fi
   if [[ $i == *"yab_cmds.txt" ]]; then
     echo "$0: got yab_cmds.txt $i at $LINENO" > /dev/stderr
