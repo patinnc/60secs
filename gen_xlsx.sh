@@ -940,7 +940,7 @@ if [ "$DO_TSV_2_XLS" == "1" ]; then
   #if [ $VERBOSE -gt 0 ]; then
   echo "$0: awk -v mk_sum_all="$MK_SUM_ALL" -v input_file=\"$ALST\" -v sum_all=\"$SUM_ALL\" -v sum_file=\"$SUM_FILE\" -v curdir=\"$got_pwd\" "
   #fi
-  awk -v script_nm="$0.$LINENO.awk" -v job_id="$JOB_ID" -v verbose="$VERBOSE" -v mk_sum_all="$MK_SUM_ALL" -v input_file="$ALST" -v sum_all="$SUM_ALL" -v sum_file="$SUM_FILE" -v sum_all_avg_by_metric="$SUM_ALL_AVG_BY_METRIC" -v curdir="$got_pwd" '
+  awk -v script="$0.$LINENO.awk" -v job_id="$JOB_ID" -v verbose="$VERBOSE" -v mk_sum_all="$MK_SUM_ALL" -v input_file="$ALST" -v sum_all="$SUM_ALL" -v sum_file="$SUM_FILE" -v sum_all_avg_by_metric="$SUM_ALL_AVG_BY_METRIC" -v curdir="$got_pwd" '
     BEGIN{sum_files=0;fls=0; fld_m=3;fld_v=4; got_avgby=0;}
 function do_pxx_compare(fls, str1, str2, v,    str, pxx_i)
 {
@@ -1140,11 +1140,12 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
     END {
       if (mk_sum_all == 1) {
       ofile = sum_all;
-      #printf("ofile= %s\n", ofile) > "/dev/stderr";
+      printf("_____script= %s ofile= %s, got_avgby= %d\n", script, ofile, got_avgby) > "/dev/stderr";
       printf("title\tsum_all\tsheet\tsum_all\ttype\tcopy\n")  >> ofile;
       printf("hdrs\t2\t0\t-1\t%d\t-1\n", fls+3) >> ofile;
       printf("Resource\tTool\tMetric") >> ofile;
-      if (got_avgby == 0 && fls > 1) {
+      #if (got_avgby == 0 && fls > 1) {
+      if (got_avgby == 0) {
           printf("\taverage") >> ofile;
       }
       for (j=1; j <= fls; j++) {
