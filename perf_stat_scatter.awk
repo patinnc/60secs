@@ -10,11 +10,17 @@ BEGIN{
    if (index(options, "add_all_to_summary") > 0) {
      got_add_all_to_summary = 1;
    }
-   printf("got_add_all_to_summary= %d\n", got_add_all_to_summary) > "/dev/stderr";
+   printf("%s got_add_all_to_summary= %d\n", script, got_add_all_to_summary) > "/dev/stderr";
    ts_initial = 0.0;
    ts_beg += 0.0;
    ts_end += 0.0;
    num_cpus += 0;
+   options_pct_cpu_like_top = 0;
+   options_pct_cpu_like_top_fctr = 1.0;
+   if (index(options, "%cpu_like_top") > 0) {
+      options_pct_cpu_like_top = 1;
+      options_pct_cpu_like_top_fctr = num_cpus;
+   }
    st_beg=0; 
    st_mx=0;
    ts_prev = 0.0;
@@ -77,6 +83,9 @@ function do_summary(colms, v, epch, intrvl, k_idx) {
 function dt_to_epoch(offset) {
  # started on Tue Dec 10 23:23:30 2019
  # Dec 10 23:23:30 2019
+      if (use_tm_beg_run_log != "") {
+        return use_tm_beg_run_log + offset;
+      }
    if (date_str == "") {
       return 0.0;
    }
@@ -136,6 +145,9 @@ function dt_to_epoch(offset) {
 #  }
 
 /^# started on / {
+# started on Sat 26 Dec 2020 12:59:46 AM PST 1608973186.709312151
+# started on Sat Dec 26 00:59:46 2020
+
   # started on Fri Jun 12 14:36:31 UTC 2020 1591972591.618156223
   # started on Fri Jun 12 14:36:31 2020
   pos = index($0, " on ")+8;
@@ -150,6 +162,12 @@ function dt_to_epoch(offset) {
         printf("perf_stat_scatter.sh: -------- ts_initial= %f\n", ts_initial) > "/dev/stderr";
      }
      date_str = $5 " " $6 " " $7 " " $9;
+  } else {
+    if (tm_beg_run_log != "") {
+      use_tm_beg_run_Log = tm_beg_run_log;
+      ts_initial = tm_beg_run_log+0.0;
+      printf("use tm_beg_run_log= %s\n", tm_beg_run_log) > "/dev/stderr";
+    }
   }
   #printf("data_str = \"%s\"\n", date_str);
   tst_epoch = dt_to_epoch(0.0);
@@ -321,7 +339,8 @@ function dt_to_epoch(offset) {
    got_lkfor[kmx,3]=1.0; # 100.0 * mperf / (num_cpus * tsc_freq);
    got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
    got_lkfor[kmx,5]=1; # instances
-   got_lkfor[kmx,6]=""; # 
+   #got_lkfor[kmx,6]=""; # 
+   got_lkfor[kmx,6]="div_by_interval"; # 
    kkmx = 0;
    got_rpn_eqn[kmx, ++kkmx, "val"]=100;
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
@@ -896,29 +915,29 @@ function dt_to_epoch(offset) {
    if (options != "" && index(options, "chart_sheet") == 0) {
      # make room for a row of charts
      for(i=0; i <= 40; i++) {
-       printf("\n");
+       printf("\n") > out_file;
        rows++;
      }
    }
-   printf("epoch\tts\trel_ts\tinstances:");
+   printf("epoch\tts\trel_ts\tinstances:") > out_file;
    for(i=0; i <= evt_idx; i++) {
-     printf("\t%s", evt_inst[i]);
+     printf("\t%s", evt_inst[i]) > out_file;
    }
    for (k=1; k <= kmx; k++) { 
      if (got_lkfor[k,1] == got_lkfor[k,2] || (got_lkfor[k,"typ_match"] == "require_any" && got_lkfor[k,1] > 0)) {
-        printf("\t%s", got_lkfor[k,5]);
+        printf("\t%s", got_lkfor[k,5]) > out_file;
      }
    }
-   printf("\n");
+   printf("\n") > out_file;
    rows++;
    rows++;
-   printf("title\t%s\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, pfx, sheet);
+   printf("title\t%s\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, pfx, sheet) > out_file;
    bcol = 4;
    if (options != "" && index(options, "chart_new") > 0 && extra_cols > 0) {
      bcol += evt_idx;
    }
    ts_col = 1;
-   printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", rows+1, bcol, -1, evt_idx+extra_cols+4, ts_col);
+   printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", rows+1, bcol, -1, evt_idx+extra_cols+4, ts_col) > out_file;
 #title	sar network IFACE dev eth0	sheet	sar network IFACE	type	line
 #hdrs	8	0	68	8
    bw_cols_mx = 0;
@@ -1000,13 +1019,13 @@ function dt_to_epoch(offset) {
      }
    }
    col_hdr_mx = cols;
-   printf("\t\t\t");
+   printf("\t\t\t") > out_file;
    for (k=4; k <= col_hdr_mx; k++) {
         frm = sprintf("=subtotal(101, INDIRECT(ADDRESS(row()+2, column(), 1)):INDIRECT(ADDRESS(row()-1+%d, column(),1)))", row);
-        printf("\t%s", frm);
+        printf("\t%s", frm) > out_file;
    }
-   printf("\n");
-   printf("%s\n", my_hdr);
+   printf("\n") > out_file;
+   printf("%s\n", my_hdr) > out_file;
    if (n_sum > 0) {
           for (k=0; k <= col_hdr_mx; k++) {
             hdr_lkup[k] = -1;
@@ -1053,7 +1072,7 @@ function dt_to_epoch(offset) {
      if (ts_end > 0.0 && use_epoch > ts_end) {
        continue;
      }
-     printf("%.4f\t%s\t%s\t%.4f", use_epoch, sv[i,1], sv[i,1], interval);
+     printf("%.4f\t%s\t%s\t%.4f", use_epoch, sv[i,1], sv[i,1], interval) > out_file;
      rw_data[rw_col++] = use_epoch;
      rw_data[rw_col++] = sv[i,1];
      rw_data[rw_col++] = sv[i,1];
@@ -1067,7 +1086,7 @@ function dt_to_epoch(offset) {
        denom[k]=0.0;
        for(j=0; j <= evt_idx; j++) {
          if (k == 1) {
-           printf("\t%s", sv[i,3+j]);
+           printf("\t%s", sv[i,3+j]) > out_file;
            rw_data[rw_col++] = sv[i,3+j];
            do_summary(cols, sv[i,3+j]+0.0, use_epoch+0.0, interval, k);
            cols++;
@@ -1203,7 +1222,7 @@ function dt_to_epoch(offset) {
                 val=0.0;
              }
          }
-         printf("\t%s", val);
+         printf("\t%s", val) > out_file;
          rw_data[rw_col++] = val;
          do_summary(cols, val+0.0, use_epoch+0.0, interval, k);
          cols++;
@@ -1215,7 +1234,7 @@ function dt_to_epoch(offset) {
         #printf("epb= %f, epe= %f, st_mx= %d\n", epb, epe, st_mx);
         for (ii=1; ii < st_mx; ii++) {
           if (epb <= st_sv[ii,2] && st_sv[ii,2] < epe) {
-              printf("\t%s", st_sv[ii,1]);
+              printf("\t%s", st_sv[ii,1]) > out_file;
               rw_data[rw_col++] = st_sv[ii,1];
               do_summary(cols, st_sv[ii,1]+0.0, use_epoch+0.0, interval, -1);
               cols++;
@@ -1223,12 +1242,12 @@ function dt_to_epoch(offset) {
           }
         }
      }
-     printf("\n");
+     printf("\n") > out_file;
    }
-   printf("\n");
+   printf("\n") > out_file;
    if (got_mini_ITP >= 3) {
-       printf("title\t%s TopLev Level 1 Percentages\tsheet\t%s\ttype\tline_stacked\n", chrt, sheet);
-       printf("hdrs\t%d\t%d\t%d\t%d\t1", rows+1, bcol, -1, evt_idx+extra_cols+4, ts_col);
+       printf("title\t%s TopLev Level 1 Percentages\tsheet\t%s\ttype\tline_stacked\n", chrt, sheet) > out_file;
+       printf("hdrs\t%d\t%d\t%d\t%d\t1", rows+1, bcol, -1, evt_idx+extra_cols+4, ts_col) > out_file;
        for (i=1; i <= got_mini_ITP; i++) {
        for (j=1; j <= got_mini_ITP; j++) {
            if ((i == 1 && ITP_lvl[j,2] == "fe") || (i == 2 && ITP_lvl[j,2] == "bs") ||
@@ -1237,44 +1256,44 @@ function dt_to_epoch(offset) {
                (got_mini_ITP  > 3 && (i == 3 && ITP_lvl[j,2] == "be")) ||
                (got_mini_ITP  > 3 && (i == 4 && ITP_lvl[j,2] == "ret")) ||
                (i == 4 && ITP_lvl[j,2] == "disp_0") || (i == 5 && ITP_lvl[j,2] == "disp_1")) {
-           printf("\t%d\t%d", ITP_lvl[j,1], ITP_lvl[j,1]);
+           printf("\t%d\t%d", ITP_lvl[j,1], ITP_lvl[j,1]) > out_file;
            }
        }
        }
-       printf("\n");
+       printf("\n") > out_file;
    }
    if (TMAM_cols_mx > 0) {
-     printf("\ntitle\t%s Top Lev: %%cpus Back/Front End Bound, Retiring\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, pfx, sheet);
-     printf("hdrs\t%d\t%d\t%d\t%d\t%d", rows+1, bcol, -1, evt_idx+extra_cols+4, ts_col);
+     printf("\ntitle\t%s Top Lev: %%cpus Back/Front End Bound, Retiring\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, pfx, sheet) > out_file;
+     printf("hdrs\t%d\t%d\t%d\t%d\t%d", rows+1, bcol, -1, evt_idx+extra_cols+4, ts_col) > out_file;
      for (i=1; i <= TMAM_cols_mx; i++) {
-       printf("\t%d\t%d", TMAM_cols[i], TMAM_cols[i]);
+       printf("\t%d\t%d", TMAM_cols[i], TMAM_cols[i]) > out_file;
      }
-     printf("\n");
+     printf("\n") > out_file;
    }
    printf("got bw_cols_mx= %d\n", bw_cols_mx) > "/dev/stderr";
    if (bw_cols_mx > 0) {
-     printf("\ntitle\t%s mem bw\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, pfx, sheet);
-     printf("hdrs\t%d\t%d\t%d\t%d\t%d", rows+1, bcol, -1, evt_idx+extra_cols+4, ts_col);
+     printf("\ntitle\t%s mem bw\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, pfx, sheet) > out_file;
+     printf("hdrs\t%d\t%d\t%d\t%d\t%d", rows+1, bcol, -1, evt_idx+extra_cols+4, ts_col) > out_file;
      for (i=1; i <= bw_cols_mx; i++) {
-       printf("\t%d\t%d", bw_cols[i], bw_cols[i]);
+       printf("\t%d\t%d", bw_cols[i], bw_cols[i]) > out_file;
      }
-     printf("\n");
+     printf("\n") > out_file;
    }
    if (ipc_cols_mx > 0) {
-     printf("\ntitle\t%s mem IPC, CPU freq, LLC misses\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, pfx, sheet);
-     printf("hdrs\t%d\t%d\t%d\t%d\t%d", rows+1, bcol, -1, evt_idx+extra_cols+4, ts_col);
+     printf("\ntitle\t%s mem IPC, CPU freq, LLC misses\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, pfx, sheet) > out_file;
+     printf("hdrs\t%d\t%d\t%d\t%d\t%d", rows+1, bcol, -1, evt_idx+extra_cols+4, ts_col) > out_file;
      for (i=1; i <= ipc_cols_mx; i++) {
-       printf("\t%d\t%d", ipc_cols[i], ipc_cols[i]);
+       printf("\t%d\t%d", ipc_cols[i], ipc_cols[i]) > out_file;
      }
-     printf("\n");
+     printf("\n") > out_file;
    }
    if (unhalted_cols_mx > 0) {
-     printf("\ntitle\t%s %%cpus not halted (running)\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, pfx, sheet);
-     printf("hdrs\t%d\t%d\t%d\t%d\t%d", rows+1, bcol, -1, evt_idx+extra_cols+4, ts_col);
+     printf("\ntitle\t%s %%cpus not halted (running)\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, pfx, sheet) > out_file;
+     printf("hdrs\t%d\t%d\t%d\t%d\t%d", rows+1, bcol, -1, evt_idx+extra_cols+4, ts_col) > out_file;
      for (i=1; i <= unhalted_cols_mx; i++) {
-       printf("\t%d\t%d", unhalted_cols[i], unhalted_cols[i]);
+       printf("\t%d\t%d", unhalted_cols[i], unhalted_cols[i]) > out_file;
      }
-     printf("\n");
+     printf("\n") > out_file;
    }
    write_specint_summary(sum_file);
    if (n_sum > 0) {
@@ -1392,4 +1411,5 @@ function dt_to_epoch(offset) {
       printf("%s\t%s\t%f\t%s\n", "average", "perf_stat", avg, evt_lkup[k]) >> sum_file;
     }
    }
+   close(out_file);
 }
