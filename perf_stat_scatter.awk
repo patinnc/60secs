@@ -290,6 +290,8 @@ function dt_to_epoch(offset) {
   #}
    ref_cycles_str = "ref-cycles";
    cpu_cycles_str = "cpu-cycles";
+   instructions_str = "instructions";
+   L3_misses_str = "L3_lat_out_misses";
    use_qpi_bw = -1;
    for (i=0; i <= evt_idx; i++) {
      if (evt_lkup[i] == "msr/aperf/" || evt_lkup[i] == "cycles" || evt_lkup[i] == "cpu-cycles") {
@@ -297,6 +299,12 @@ function dt_to_epoch(offset) {
      }
      if (evt_lkup[i] == "msr/mperf/" || evt_lkup[i] == "ref-cycles") {
        ref_cycles_str = evt_lkup[i];
+     }
+     if (evt_lkup[i] == "msr/irperf/" || evt_lkup[i] == "instructions") {
+       instructions_str = evt_lkup[i];
+     }
+     if (evt_lkup[i] == "L3_lat_out_misses" || evt_lkup[i] == "L3_misses") {
+       L3_misses_str = evt_lkup[i];
      }
      if (evt_lkup[i] == "qpi_data_bandwidth_tx") {
        # native broadwell event
@@ -356,6 +364,64 @@ function dt_to_epoch(offset) {
    lkfor[kmx,1]=tolower("msr/mperf/");
    nwfor[kmx,1,"hdr"]="%not_halted";
    nwfor[kmx,1,"alias"]="metric_CPU utilization %";
+
+   kmx++;
+   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+   got_lkfor[kmx,2]=2; # num of fields to look for
+   got_lkfor[kmx,3]=1000.0; # a factor
+   got_lkfor[kmx,4]="div"; # operation
+   got_lkfor[kmx,5]=1; # instances
+   lkfor[kmx,1]=L3_misses_str;
+   lkfor[kmx,2]=instructions_str;
+   nwfor[kmx,1,"hdr"]="LLC-misses PKI";
+
+   kmx++;
+   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+   got_lkfor[kmx,2]=2; # num of fields to look for
+   got_lkfor[kmx,3]=1.0;
+   got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
+   got_lkfor[kmx,5]=1; # instances
+   got_lkfor[kmx,6]=""; # 
+   #got_lkfor[kmx,6]="div_by_interval"; # 
+   kkmx = 0;
+   got_rpn_eqn[kmx, ++kkmx, "val"]=100.0;
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=L3_misses_str;
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="*"; # 100 * mperf
+   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="L3_accesses";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="/";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+   got_rpn_eqn[kmx,      1,"max"]=kkmx;
+   lkfor[kmx,1]=L3_misses_str;
+   lkfor[kmx,2]="L3_accesses";
+   nwfor[kmx,1,"hdr"]="%LLC misses";
+
+#  L3_lat_out_cycles
+#  L3_lat_out_misses
+
+   kmx++;
+   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+   got_lkfor[kmx,2]=2; # num of fields to look for
+   got_lkfor[kmx,3]=1.0;
+   got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
+   got_lkfor[kmx,5]=1; # instances
+   got_lkfor[kmx,6]=""; # 
+   #got_lkfor[kmx,6]="div_by_interval"; # 
+   kkmx = 0;
+   got_rpn_eqn[kmx, ++kkmx, "val"]="L3_lat_out_cycles";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=L3_misses_str;
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="/";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+   got_rpn_eqn[kmx,      1,"max"]=kkmx;
+   lkfor[kmx,1]="L3_lat_out_cycles";
+   lkfor[kmx,2]=L3_misses_str;
+   nwfor[kmx,1,"hdr"]="L3 miss latency (core_clks)";
+
    }
 
    kmx++;
@@ -372,7 +438,7 @@ function dt_to_epoch(offset) {
 
    kmx++;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=6; # num of fields to look for
+   got_lkfor[kmx,2]=8; # num of fields to look for
    got_lkfor[kmx,3]=64e-9; # a factor
    got_lkfor[kmx,4]="sum"; # operation
    got_lkfor[kmx,5]=1; # instances
@@ -385,10 +451,36 @@ function dt_to_epoch(offset) {
    lkfor[kmx,4]="unc3_read_write";
    lkfor[kmx,5]="unc4_read_write";
    lkfor[kmx,6]="unc5_read_write";
+   lkfor[kmx,7]="unc6_read_write";
+   lkfor[kmx,8]="unc7_read_write";
    nwfor[kmx,1,"hdr"]="unc_read_write (GB/s)";
    nwfor[kmx,1,"alias"]="metric_memory bandwidth total (MB/sec)";
    nwfor[kmx,1,"alias_factor"]=1000.0;
    nwfor[kmx,1,"alias_oper"]="*";
+
+   kmx++;
+   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+   got_lkfor[kmx,2]=1; # num of fields to look for
+   got_lkfor[kmx,3]=64e-9; # a factor
+   got_lkfor[kmx,4]="sum"; # operation
+   got_lkfor[kmx,5]=1; # instances
+   got_lkfor[kmx,6]="div_by_interval"; # 
+   got_lkfor[kmx,"typ_match"]="require_any"; # 
+   got_lkfor[kmx,"max"]=1000.0;
+   lkfor[kmx,1]="hwprefetch_local";
+   nwfor[kmx,1,"hdr"]="hw prefetch local bw (GB/s)";
+
+   kmx++;
+   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+   got_lkfor[kmx,2]=1; # num of fields to look for
+   got_lkfor[kmx,3]=64e-9; # a factor
+   got_lkfor[kmx,4]="sum"; # operation
+   got_lkfor[kmx,5]=1; # instances
+   got_lkfor[kmx,6]="div_by_interval"; # 
+   got_lkfor[kmx,"typ_match"]="require_any"; # 
+   got_lkfor[kmx,"max"]=1000.0;
+   lkfor[kmx,1]="hwprefetch_remote";
+   nwfor[kmx,1,"hdr"]="hw prefetch remote bw (GB/s)";
 
    kmx++;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
@@ -397,7 +489,7 @@ function dt_to_epoch(offset) {
    got_lkfor[kmx,4]="div"; # operation
    got_lkfor[kmx,5]=1; # instances
    lkfor[kmx,1]="LLC-load-misses";
-   lkfor[kmx,2]="instructions";
+   lkfor[kmx,2]=instructions_str;
    nwfor[kmx,1,"hdr"]="LLC-misses PKI";
 
    kmx++;
@@ -406,7 +498,7 @@ function dt_to_epoch(offset) {
    got_lkfor[kmx,3]=1.0; # a factor
    got_lkfor[kmx,4]="div"; # operation
    got_lkfor[kmx,5]=1; # instances
-   lkfor[kmx,1]="instructions";
+   lkfor[kmx,1]=instructions_str;
    lkfor[kmx,2]=cpu_cycles_str;
    nwfor[kmx,1,"hdr"]="IPC";
    nwfor[kmx,1,"alias"]="metric_IPC";
@@ -418,7 +510,7 @@ function dt_to_epoch(offset) {
    got_lkfor[kmx,4]="div"; # operation
    got_lkfor[kmx,5]=1; # instances
    lkfor[kmx,1]=cpu_cycles_str;
-   lkfor[kmx,2]="instructions";
+   lkfor[kmx,2]=instructions_str;
    nwfor[kmx,1,"hdr"]="CPI";
    nwfor[kmx,1,"alias"]="metric_CPI";
 
@@ -491,7 +583,7 @@ function dt_to_epoch(offset) {
    got_lkfor[kmx,4]="sum"; # operation
    got_lkfor[kmx,5]=1; # instances
    got_lkfor[kmx,6]="div_by_interval"; # 
-   lkfor[kmx,1]="instructions";
+   lkfor[kmx,1]=instructions_str;
    nwfor[kmx,1,"hdr"]="instructions/sec (1e9 instr/sec)";
 
 
@@ -505,12 +597,39 @@ function dt_to_epoch(offset) {
    lkfor[kmx,1]=cpu_cycles_str;
    nwfor[kmx,1,"hdr"]="cpu-cycles/sec (1e9 cycles/sec)";
 
+   if (amd_cpu == 1) {
+#            "name"       : "metric_TMAM_Retiring(%)",
+   kmx++;
+   kkmx=0;
+   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+   got_lkfor[kmx,2]=2; # num of fields to look for
+   got_lkfor[kmx,3]="1.0";
+   got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
+   got_lkfor[kmx,5]=1; # instances
+   got_lkfor[kmx,6]=""; # 
+   # 100*${ITP_UOP}/(4*(${ITP_ANY}/${thr_per_core}))
+   got_rpn_eqn[kmx, ++kkmx, "val"]=100;
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=tolower("ret_uops_cycles");
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="*";   # 100 * uop_ret
+   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=cpu_cycles_str;
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="/";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+   got_rpn_eqn[kmx,      1,"max"]=kkmx;
+   lkfor[kmx,1]="ret_uops_cycles";
+   lkfor[kmx,2]=cpu_cycles_str;  # get the instances from the first lkfor event
+   nwfor[kmx,1,"hdr"]="metric_TMAM_Retiring(%)";
+   }
+
    if (amd_cpu == 0) {
 #"name"       : "metric_TMAM_Info_CoreIPC",
 #                        "expression" : "[instructions] / ([CPU_CLK_UNHALTED.THREAD_ANY] / [const_thread_count])"
    kmx++;
    kkmx=0;
-   lkfor[kmx,1]="instructions";
+   lkfor[kmx,1]=instructions_str;
    lkfor[kmx,2]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
    got_lkfor[kmx,2]=2; # num of fields to look for
@@ -703,15 +822,6 @@ function dt_to_epoch(offset) {
    got_rpn_eqn[kmx, ++kkmx, "val"]=" ) ";
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
 
-#   got_rpn_eqn[kmx, ++kkmx, "val"]=100;
-#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
-#   got_rpn_eqn[kmx, ++kkmx, "val"]="metric_TMAM_Retiring(%)"
-#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-#   got_rpn_eqn[kmx, ++kkmx, "val"]="+";
-#   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-#   got_rpn_eqn[kmx, ++kkmx, "val"]="-";
-#   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
    got_rpn_eqn[kmx,      1,"max"]=kkmx;
    lkfor[kmx,1]=tolower("UOPS_RETIRED.RETIRE_SLOTS");
    lkfor[kmx,2]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
@@ -943,6 +1053,8 @@ function dt_to_epoch(offset) {
    bw_cols_mx = 0;
    ipc_cols_mx = 0;
    unhalted_cols_mx = 0;
+   hwpf_local_cols_mx = 0;
+   hwpf_remote_cols_mx = 0;
    col_hdr[0] = "epoch";
    col_hdr[1] = "ts";
    col_hdr[2] = "rel_ts";
@@ -955,6 +1067,7 @@ function dt_to_epoch(offset) {
      cols++;
    }
    got_mini_ITP=0;
+   got_LLC_pct_misses = -1;
    for (k=1; k <= kmx; k++) { 
      #printf("ck nwfor[%d,1]= %s, got_lkfor1= %d, got_lkfor2= %d\n", k, nwfor[k,1,"hdr"], got_lkfor[k,1], got_lkfor[k,2]) > "/dev/stderr";
      if (got_lkfor[k,1] == got_lkfor[k,2] || (got_lkfor[k,"typ_match"] == "require_any" && got_lkfor[k,1] > 0)) {
@@ -964,8 +1077,20 @@ function dt_to_epoch(offset) {
         if (index(nwfor[k,1,"hdr"], "GB/s") > 0) {
           bw_cols[++bw_cols_mx] = cols;
         }
-        if (index(nwfor[k,1,"hdr"], "not_halted") > 0) {
+        if (index(nwfor[k,1,"hdr"], "not_halted") > 0 || index(nwfor[k,1,"hdr"], "%LLC misses") > 0) {
           unhalted_cols[++unhalted_cols_mx] = cols;
+          if (index(nwfor[k,1,"hdr"], "%LLC misses") > 0) {
+            got_LLC_pct_misses = k;
+          }
+        }
+        if (nwfor[k,1,"hdr"] == "hw prefetch remote bw (GB/s)") {
+          hwpf_remote_cols[++hwpf_remote_cols_mx] = cols;
+        }
+        if (nwfor[k,1,"hdr"] == "hw prefetch local bw (GB/s)") {
+          hwpf_local_cols[++hwpf_local_cols_mx] = cols;
+        }
+        if (nwfor[k,1,"hdr"] == "L3 miss latency (core_clks)") {
+          L3_latency_cols[++L3_latency_cols_mx] = cols;
         }
         if (index(nwfor[k,1,"hdr"], "not_halted") > 0 || index(nwfor[k,1,"hdr"], "TMAM") > 0 || index(nwfor[k,1,"hdr"], "power_pkg (watts)") > 0) {
           TMAM_cols[++TMAM_cols_mx] = cols;
@@ -1288,10 +1413,33 @@ function dt_to_epoch(offset) {
      printf("\n") > out_file;
    }
    if (unhalted_cols_mx > 0) {
-     printf("\ntitle\t%s %%cpus not halted (running)\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, pfx, sheet) > out_file;
+     xtra_str = "";
+     if (got_LLC_pct_misses > -1) {
+       xtra_str = ", %LLC misses"
+     }
+     printf("\ntitle\t%s %%cpus not halted (running)%s\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, xtra_str, pfx, sheet) > out_file;
      printf("hdrs\t%d\t%d\t%d\t%d\t%d", rows+1, bcol, -1, evt_idx+extra_cols+4, ts_col) > out_file;
      for (i=1; i <= unhalted_cols_mx; i++) {
        printf("\t%d\t%d", unhalted_cols[i], unhalted_cols[i]) > out_file;
+     }
+     printf("\n") > out_file;
+   }
+   if (L3_latency_cols_mx > 0) {
+     printf("\ntitle\t%s L3 miss latency in core clocks\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, pfx, sheet) > out_file;
+     printf("hdrs\t%d\t%d\t%d\t%d\t%d", rows+1, bcol, -1, evt_idx+extra_cols+4, ts_col) > out_file;
+     for (i=1; i <= L3_latency_cols_mx; i++) {
+       printf("\t%d\t%d", L3_latency_cols[i], L3_latency_cols[i]) > out_file;
+     }
+     printf("\n") > out_file;
+   }
+   if (hwpf_local_cols_mx > 0 || hwpf_remote_cols_mx > 0) {
+     printf("\ntitle\t%s hw prefetch bw (GB/s)\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, pfx, sheet) > out_file;
+     printf("hdrs\t%d\t%d\t%d\t%d\t%d", rows+1, bcol, -1, evt_idx+extra_cols+4, ts_col) > out_file;
+     if (hwpf_local_cols_mx > 0) {
+       printf("\t%d\t%d", hwpf_local_cols[1], hwpf_local_cols[1]) > out_file;
+     }
+     if (hwpf_remote_cols_mx > 0) {
+       printf("\t%d\t%d", hwpf_remote_cols[1], hwpf_remote_cols[1]) > out_file;
      }
      printf("\n") > out_file;
    }
