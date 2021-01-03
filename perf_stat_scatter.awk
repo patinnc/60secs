@@ -288,10 +288,10 @@ function dt_to_epoch(offset) {
   #for (ii=1; ii <= st_mx; ii++) {
   #  printf("%s\t%f\t%f\n", st_sv[ii,1], st_sv[ii,2], st_sv[ii,3]);
   #}
-   ref_cycles_str = "ref-cycles";
-   cpu_cycles_str = "cpu-cycles";
-   instructions_str = "instructions";
-   L3_misses_str = "L3_lat_out_misses";
+   ref_cycles_str = "ref-cycles_unknown";
+   cpu_cycles_str = "cpu-cycles_unknown";
+   instructions_str = "instructions_unknown";
+   L3_misses_str = "L3_lat_out_misses_unknown";
    use_qpi_bw = -1;
    for (i=0; i <= evt_idx; i++) {
      if (evt_lkup[i] == "msr/aperf/" || evt_lkup[i] == "cycles" || evt_lkup[i] == "cpu-cycles") {
@@ -516,6 +516,25 @@ function dt_to_epoch(offset) {
 
 
 
+   if (amd_cpu == 1) {
+     if (use_qpi_bw == 2) {
+       kmx++;
+       got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+       got_lkfor[kmx,2]=4; # num of fields to look for
+       got_lkfor[kmx,3]=32e-9; # a factor
+       got_lkfor[kmx,4]="sum"; # operation
+       got_lkfor[kmx,5]=1; # instances
+       got_lkfor[kmx,6]="div_by_interval"; # 
+       lkfor[kmx,1]="qpi_data_bandwidth_tx0";
+       lkfor[kmx,2]="qpi_data_bandwidth_tx1";
+       lkfor[kmx,3]="qpi_data_bandwidth_tx2";
+       lkfor[kmx,4]="qpi_data_bandwidth_tx3";
+       nwfor[kmx,1,"hdr"]="QPI_BW (GB/sec)";
+       nwfor[kmx,1,"alias"]="metric_UPI Data transmit BW (MB/sec) (only data)";
+       nwfor[kmx,1,"alias_factor"]=1000.0;
+       nwfor[kmx,1,"alias_oper"]="*";
+     }
+   }
    if (amd_cpu == 0) {
      if (use_qpi_bw == 1) {
        kmx++;
