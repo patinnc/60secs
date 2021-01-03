@@ -330,13 +330,18 @@ if [ "$BEG_TM_IN" != "" ]; then
 fi
 echo "awk time offset hours BEG_ADJ= $BEG_ADJ  BEG_TM= $BEG, BEG_TM_IN= $BEG_TM_IN"
 #exit
-RESP=`find .. -name "CPU2017.00*.log" | wc -l | awk '{printf("%s\n", $1);exit;}'`
+CPU2017LOG_RT_PATH="."
+RESP=`find $CPU2017LOG_RT_PATH -name "CPU2017.00*.log" | wc -l | awk '{printf("%s\n", $1);exit;}'`
+if [ "$RESP" -eq "0" ]; then
+  CPU2017LOG_RT_PATH=".."
+  RESP=`find $CPU2017LOG_RT_PATH -name "CPU2017.00*.log" | wc -l | awk '{printf("%s\n", $1);exit;}'`
+fi
 pwd
 echo "++++++++++find .. -name CPU2017.*.log resp = $RESP" > /dev/stderr
 CPU2017LOG=()
 if [ "$RESP" -ge "1" -a "$PHASE_FILE" == "" ]; then
-  RESP=`find .. -name CPU2017.00*.log`
-  echo "find .. -name cpu2017.*.log resp = $RESP"
+  RESP=`find $CPU2017LOG_RT_PATH -name CPU2017.00*.log`
+  echo "find $CPU2017LOG_RT_PATH -name cpu2017.*.log resp = $RESP"
   CPU2017LOG=($RESP)
   echo "+++CPU2017LOG= ${CPU2017LOG[@]} is list"
   j=0
@@ -3032,7 +3037,7 @@ if [ "$SUM_FILE" != "" ]; then
 fi
 if [ "${#CPU2017LOG[@]}" -gt 0 -a "$PHASE_FILE" == "" ]; then
   RESP="${CPU2017LOG[@]}"
-  echo "+++find .. -name cpu2017.*.log resp = $RESP"
+  echo "+++find $CPU2017LOG_RT_PATH -name cpu2017.*.log resp = $RESP"
   PH=`awk -v dir="$(pwd)" -v sum_file="$SUM_FILE" -v ofile="bmark.txt" '
     BEGIN{
         mx    = 0;
@@ -3140,33 +3145,56 @@ function tot_compare(i1, v1, i2, v2,    l, r)
     END{
        close(ofile);
        #The overall SPECrate metrics are calculated as a geometric mean from the individual benchmark SPECrate metrics using the median time from three runs or the slower of two runs, as explained above (rule 1.2.1).
+       # Score_v2 just take the avg of the scores for each completed subtest and then new_score_v2 = .5*omne + .25*perl + .25*xalan
+       valid = 1; # must have at least 1 score from each subtest (expect to have 3 xalancs, 2 perls, 1 omne)
+       perl_i = 0;
+       omne_i = 0;
+       xalanc_i = 0;
        for(i=1; i <= bm_mx; i++) {
-         delete arr;
-         delete idx;
+          if (index(bm_lkup[i], "perl") > 0) { perl_i = i; }
+          if (index(bm_lkup[i], "omne") > 0) { omne_i = i; }
+          if (index(bm_lkup[i], "xalanc") > 0) { xalanc_i = i; }
+       }
+       for(i=1; i <= bm_mx; i++) {
+         #delete arr;
+         #delete idx;
+         sum = 0.0;
+         n   = 0;
          for(j=1; j <= bm_vals[i]; j++) {
-            arr[j] = bm_arr[i,j,"ratio"];
-            idx[j] = j;
+            sum += bm_arr[i,j,"ratio"];
+            n++;
+            #idx[j] = j;
          }
-         asorti(idx, res_i, "tot_compare")
-         if (bm_vals[i] <= 2 ) {
-            v = arr[res_i[1]];
-         } else if (bm_vals[i] == 3) {
-            v = arr[res_i[1]];
+         if (n == 0) {
+           valid = 0;
+         } else {
+           varr[i] = sum/n;
          }
-         varr[i] = v;
+         #asorti(idx, res_i, "tot_compare")
+         #if (bm_vals[i] <= 2 ) {
+         #   v = arr[res_i[1]];
+         #} else if (bm_vals[i] == 3) {
+         #   v = arr[res_i[1]];
+         #}
+         #varr[i] = v;
        }
-       x = varr[1];
-       printf("SI new score[1]= %.3f\n", x) > "/dev/stderr";
-       for(i=2; i <= bm_mx; i++) {
-          printf("SI new score[%d]= %.3f\n", i, varr[i]) > "/dev/stderr";
-          x *= varr[i];
+       #x = varr[1];
+       #printf("SI new score[1]= %.3f\n", x) > "/dev/stderr";
+       #for(i=2; i <= bm_mx; i++) {
+       #   printf("SI new score[%d]= %.3f\n", i, varr[i]) > "/dev/stderr";
+       #   x *= varr[i];
+       #}
+       if (valid == 0) {
+         str = "bad";
+         y = 0.0;
+       } else {
+         str = "ok";
+         y = 0.25 * varr[perl_i] + 0.25 * varr[xalanc_i] + 0.5 * varr[omne_i];
        }
-       y = 0.0
-       if (x > 0.0 && bm_mx > 0.0) {
-         y = x ^ (1.0/bm_mx);
-       }
-       printf("SI new score= %.3f, bm_mx= %f\n", y, bm_mx) > "/dev/stderr";
-       printf("SpecInt\tSI benchmark\t%s\tSI new score\n", y) >> sum_file;
+       str = sprintf("%s.%d.%d.%d", str, bm_vals[omne_i], bm_vals[perl_i], bm_vals[xalanc_i]);
+       printf("SpecInt\tSI benchmark\t%s\tSI new score_v2 valid? omnetpp.perlbench.xalanc\n", str) >> sum_file;
+       printf("SI new score_v2= %.3f, bm_mx= %f\n", y, bm_mx) > "/dev/stderr";
+       printf("SpecInt\tSI benchmark\t%s\tSI new score_v2\n", y) >> sum_file;
        printf("SpecInt\tSI benchmark\t%s\tSI cpus\n", cpus) >> sum_file;
     }
     ' $RESP`
