@@ -405,7 +405,7 @@ function dt_to_epoch(offset) {
    kmx++;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
    got_lkfor[kmx,2]=2; # num of fields to look for
-   got_lkfor[kmx,3]=1.0;
+   got_lkfor[kmx,3]=16.0; # lat_out_cycles is total cycles/16
    got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
    got_lkfor[kmx,5]=1; # instances
    got_lkfor[kmx,6]=""; # 
@@ -481,6 +481,30 @@ function dt_to_epoch(offset) {
    got_lkfor[kmx,"max"]=1000.0;
    lkfor[kmx,1]="hwprefetch_remote";
    nwfor[kmx,1,"hdr"]="hw prefetch remote bw (GB/s)";
+
+   kmx++;
+   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+   got_lkfor[kmx,2]=1; # num of fields to look for
+   got_lkfor[kmx,3]=64e-9; # a factor
+   got_lkfor[kmx,4]="sum"; # operation
+   got_lkfor[kmx,5]=1; # instances
+   got_lkfor[kmx,6]="div_by_interval"; # 
+   got_lkfor[kmx,"typ_match"]="require_any"; # 
+   got_lkfor[kmx,"max"]=1000.0;
+   lkfor[kmx,1]="mem_remote";
+   nwfor[kmx,1,"hdr"]="L1_miss_filled_from_remote bw (GB/s)";
+
+   kmx++;
+   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+   got_lkfor[kmx,2]=1; # num of fields to look for
+   got_lkfor[kmx,3]=64e-9; # a factor
+   got_lkfor[kmx,4]="sum"; # operation
+   got_lkfor[kmx,5]=1; # instances
+   got_lkfor[kmx,6]="div_by_interval"; # 
+   got_lkfor[kmx,"typ_match"]="require_any"; # 
+   got_lkfor[kmx,"max"]=1000.0;
+   lkfor[kmx,1]="mem_local";
+   nwfor[kmx,1,"hdr"]="L1_miss_filled_from_local bw (GB/s)";
 
    kmx++;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
