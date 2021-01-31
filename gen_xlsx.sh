@@ -602,6 +602,7 @@ for i in $LST; do
  if [ "$BEG_TM_IN" != "" ]; then
     OPT_BEG_TM=" -b $BEG_TM_IN "
     echo "$0.$LINENO: BEG_TM= $BEG_TM_IN"
+  echo "$0.$LINENO ____got BEG_TM_IN=\"$BEG_TM_IN\"" > /dev/stderr
  fi
  OPT_END_TM=
  if [ "$END_TM_IN" != "" ]; then
@@ -738,6 +739,16 @@ for i in $LST; do
    pushd $i
  else
    pushd $i > /dev/null
+ fi
+ if [ "$PHASE_FILE" == "" ]; then
+    RESP=phase_cpu2017.txt
+      echo "$0.$LINENO phase blank"
+    if [ -e $RESP ]; then
+      echo "$0.$LINENO phase $RESP"
+      #OPT_PH=" -P $i/$RESP "
+      echo -e "-P\t\"$i/$RESP\"" >> $ALST
+      echo "$0.$LINENO phase $OPT_PH"
+    fi
  fi
  SM_FL=
  #if [ ! -e $SUM_FILE ]; then
@@ -1365,6 +1376,7 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
      }' $ALST
   fi
 
+  echo "$0.$LINENO ____got BEG_TM_IN=\"$BEG_TM_IN\"" > /dev/stderr
       if [ "$BEG_TM_IN" != "" ]; then
         BEG_TM=$BEG_TM_IN
       fi
@@ -1407,6 +1419,7 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
        if [ $VERBOSE -gt 0 ]; then
         echo "$0.$LINENO run_log file= $RUN_LOG"
       fi
+  echo "$0.$LINENO ____got BEG_TM_IN=\"$BEG_TM_IN\"" > /dev/stderr
       if [ "$BEG_TM_IN" != "" ]; then
         BEG_TM=$BEG_TM_IN
       else
@@ -1536,6 +1549,7 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
     OPT_SM=" -S $SUM_ALL "
   fi
   OPT_TM=
+  echo "$0.$LINENO ____got BEG_TM_IN=\"$BEG_TM_IN\"" > /dev/stderr
   if [ "$BEG_TM_IN" != "" ]; then
      OPT_TM=" -b $BEG_TM_IN "
   fi
