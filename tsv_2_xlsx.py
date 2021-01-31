@@ -350,7 +350,7 @@ for bmi in range(base_mx+1):
            do_avg = True
        elif opt in ('-P', '--phase'):
            phase = arg
-           print("phase file= %s" % (phase), file=sys.stderr)
+           print("tsv_2_xls.ph: phase file= %s" % (phase), file=sys.stderr)
            #with open(phase, 'rU') as tsv:
            with io.open(phase, "rU", encoding="utf-8") as tsv:
               ln2 = [None, None, None]
@@ -705,8 +705,9 @@ for bmi in range(base_mx+1):
       
       ph_add = 0
       ph_done = 0
+      do_ph_add = 0
       if len(opt_phase) > 0:
-         ph_add = 1
+         do_ph_add = 1
 
       if do_avg == False or do_avg_write == True:
          #print("---- do_avg= %s, do_avg_write= %s, fn_bs_sum[%d] rows= %d" % (do_avg, do_avg_write, fn_bs_i, len(fn_bs_sum[fn_bs_i])), file=sys.stderr)
@@ -888,9 +889,9 @@ for bmi in range(base_mx+1):
           #got_how_many_series_for_chart = 0
           #if ch_type == "scatter_straight" and options_str_top.find("line_for_scatter") > -1:
           #   ch_type = "line"
-          if ch_type == "scatter_straight":
-             if ph_done == 0 and ph_add == 1 and dcol_cat > 0:
-                ph_done = 1
+          if ch_type == "scatter_straight" or ch_type == "line":
+             if ph_done == 0 and do_ph_add == 1 and dcol_cat > 0:
+                #ph_done = 1
                 skipped = 0
                 for ii in range(len(data)):
                     #  'categories': [wrksh_nm, drow_beg, dcol_cat+ph_add, drow_end, dcol_cat+ph_add],
@@ -902,17 +903,26 @@ for bmi in range(base_mx+1):
                     if ii > drow_end:
                        continue
                     tval = data[ii][jjj]
+                    worksheet.write_blank(ii, 0, None, bold0)
                     if (ts_beg != -1.0 and tval < ts_beg) or (ts_end != -1.0 and tval > ts_end):
                        skipped += 1
                        continue
                     in_phase = False
                     phase_arr = []
+                    #print("opt_phase ii= %d tval= %d lenopt_phase= %d" % (ii, tval, len(opt_phase)), file=sys.stderr)
                     for jj in range(len(opt_phase)):
                        if tval < opt_phase[jj][1]:
+                          #print("ex1 opt_phase ii= %d ph[%d]= %f tval= %f end= %f tv-beg= %f end-tv= %f" % (
+                          #  ii, jj, opt_phase[jj][1], tval, opt_phase[jj][2], tval-opt_phase[jj][1], opt_phase[jj][2]-tval), file=sys.stderr)
                           continue
-                       if opt_phase[jj][2] != -1 and tval >= opt_phase[jj][2]:
-                          break
+                       #print("ck  opt_phase ii= %d ph[%d]= %f tval= %f end= %f tv-beg= %f end-tv= %f" % (
+                       #     ii, jj, opt_phase[jj][1], tval, opt_phase[jj][2], tval-opt_phase[jj][1], opt_phase[jj][2]-tval), file=sys.stderr)
+                       #if opt_phase[jj][2] != -1 and tval < opt_phase[jj][2]:
+                       #   print("ex2 opt_phase ii= %d ph[%d]= %f tval= %f end= %f tv-beg= %f end-tv= %f" % (
+                       #     ii, jj, opt_phase[jj][1], tval, opt_phase[jj][2], tval-opt_phase[jj][1], opt_phase[jj][2]-tval), file=sys.stderr)
+                       #   break
                        if tval >= opt_phase[jj][1] and (tval <= opt_phase[jj][2] or opt_phase[jj][2] == -1):
+                          #print("got opt_phase ii= %d tval= %d lenopt_phase= %d" % (ii, tval, len(opt_phase)), file=sys.stderr)
                           if do_avg == False or do_avg_write == True:
                              in_phase = True
                              already_in_phase_arr = False
