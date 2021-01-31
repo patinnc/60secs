@@ -355,10 +355,12 @@ else
     EXTRA_FILES=$DIR/${METRIC_OUT}.csv
   fi
 fi
+    echo "$0.$LINENO got here" > /dev/stderr
 if [ -e $DIR/infra_cputime.txt ]; then
   EXTRA_FILES="$EXTRA_FILES $DIR/infra_cputime.txt"
   #echo "$0: got $DIR/infra_cputime.txt at $LINENO" > /dev/stderr
 fi
+    echo "$0.$LINENO got here" > /dev/stderr
 if [ -e $DIR/specjbb.log ]; then
   EXTRA_FILES="$EXTRA_FILES $DIR/specjbb.log"
   echo "$0: ____++++++_____got $DIR/specjbb.log at $LINENO" > /dev/stderr
@@ -369,6 +371,21 @@ if [ -e $DIR/*_specjbb/specjbb.log ]; then
   echo "$0: ____++++++_____got specjbb.log $RESP at $LINENO" > /dev/stderr
 fi
 fi
+for ifl in "CPU2017.001.intrate.txt" "CPU2017.001.log"; do
+  if [ -e $DIR/$ifl ]; then
+    EXTRA_FILES="$EXTRA_FILES $DIR/$ifl"
+    echo "$0: ____++++++_____got $DIR/$ifl at $LINENO" > /dev/stderr
+  else
+  #if [ -e $DIR/*_specjbb/$ifl ]; then
+    RESP=`find . -name $ifl`
+    if [ "$RESP" != "" ]; then
+    EXTRA_FILES="$EXTRA_FILES $RESP"
+    echo "$0: ____++++++_____got $ifl $RESP at $LINENO" > /dev/stderr
+    fi
+  #fi
+  fi
+done
+    echo "$0.$LINENO got here" > /dev/stderr
 if [ -e $DIR/yab_cmds.json ]; then
   EXTRA_FILES="$EXTRA_FILES $DIR/yab_cmds.json"
   echo "$0: got $DIR/yab_cmds.json at $LINENO" > /dev/stderr
@@ -2355,6 +2372,7 @@ row += trows;
     fi
   fi
   if [[ $i == *"specjbb.log" ]]; then
+    echo "$0.$LINENO got here" > /dev/stderr
     echo "$0: got specjbb.log $i at $LINENO" > /dev/stderr
 #jbb2015.result.metric.max-jOPS = 87723
 #jbb2015.result.metric.critical-jOPS = 28775
@@ -2367,7 +2385,95 @@ row += trows;
       }
     ' $i
     ck_last_rc $? $LINENO
+    echo "$0.$LINENO got here" > /dev/stderr
   fi
+    echo "$0.$LINENO got here" > /dev/stderr
+  if [[ $i == *"CPU2017.001.log" ]]; then
+    echo "$0.$LINENO got here" > /dev/stderr
+# Benchmark Times:
+#   Run Start:    2021-01-30 00:20:38 (1611994838)
+#   Rate Start:   2021-01-30 00:20:38 (1611994838.37371)
+#   Rate End:     2021-01-30 00:30:01 (1611995401.19515)
+#   Run Stop:     2021-01-30 00:30:01 (1611995401)
+#   Run Elapsed:  00:09:23 (563)
+#   Run Reported: 00:09:22 (562 821444034 562.821444)
+#  Success 500.perlbench_r base refrate ratio=181.03, runtime=562.821444, copies=64, threads=1, power=0.00W, temp=0.00 degC, humidity=0.00%
+    #awk -v sum_file="/dev/stderr" '
+    RESP=`awk -v sum_file="$SUM_FILE" '
+      /  Rate Start: / {
+        bm_nm = "";
+        copies = 0;
+        v = substr($5, 2, length($5)-2);
+        tm_beg = v;
+      }
+      /  Rate End: / {
+        v = substr($5, 2, length($5)-2);
+        tm_end = v;
+      }
+      /^ Success .* base refrate ratio=/ {
+        gsub(",", "", $0);
+        bm_nm = $2;
+        for (i=3; i <= NF; i++) {
+          n = split($i, arr, "=");
+          if (index($i, "ratio=") == 1)   { ratio = arr[2]; }
+          if (index($i, "runtime=") == 1) { run_tm = arr[2]; }
+          if (index($i, "copies=") == 1)  { copies = arr[2]; }
+        }
+        if (bm_nm != "" && (copies+0) > 1) {
+          if (!(bm_nm in bm_list)){
+            bm_list[bm_nm] = ++bm_mx;
+            bm_lkup[bm_mx] = bm_nm;
+            bm_arr[bm_mx,"mx"] = 0;
+          }
+          bm_i = bm_list[bm_nm];
+          bm_occ = ++bm_arr[bm_i,"mx"];
+          ++b_mx;
+          b_arr[b_mx,1] = bm_i;
+          b_arr[b_mx,2] = bm_occ;
+          b_arr[b_mx,"ratio"] = ratio;
+          b_arr[b_mx,"run_tm"] = run_tm;
+          b_arr[b_mx,"copies"] = copies;
+          b_arr[b_mx,"beg"] = tm_beg;
+          b_arr[b_mx,"end"] = tm_end;
+        }
+      }
+      END{
+      printf("specint b_mx= %d\n", b_mx) > "/dev/stderr";
+        for(i=1; i <= b_mx; i++) {
+          bm_i = b_arr[i,1];
+          bm_o = b_arr[i,2];
+          nm = bm_lkup[bm_i];
+          ratio  = b_arr[i,"ratio"];
+          run_tm = b_arr[i,"run_tm"];
+          copies = b_arr[i,"copies"];
+          tm_beg = b_arr[i,"beg"];
+          tm_end = b_arr[i,"end"];
+          printf("specint\tspecint\t%s\t\"SI %s %s %s\"\n", ratio, nm, "ratio", bm_o) >> sum_file;
+          printf("specint\tspecint\t%s\t\"SI %s %s %s\"\n", run_tm, nm, "run_tm", bm_o) >> sum_file;
+          printf("specint\tspecint\t%s\t\"SI %s %s %s\"\n", copies, nm, "copies", bm_o) >> sum_file;
+          printf("specint\tspecint\t%s\t\"SI %s %s %s\"\n", tm_beg, nm, "beg_ts", bm_o) >> sum_file;
+          printf("specint\tspecint\t%s\t\"SI %s %s %s\"\n", tm_end, nm, "end_ts", bm_o) >> sum_file;
+          printf("%s_%s %.3f %.3f %.3f\n", nm, bm_o, tm_beg, tm_end, tm_end-tm_beg);
+        }
+      }
+    ' $i`
+    ck_last_rc $? $LINENO
+    echo "$0.$LINENO got here" > /dev/stderr
+    if [ "$PHASE_FILE" == "" ]; then
+       echo  -e "$RESP" > phase_cpu2017.txt
+       PHASE_FILE=phase_cpu2017.txt
+    fi
+  fi
+  if [[ $i == *"CPU2017.001.intrate.txt" ]]; then
+    echo "$0: got CPU2017.001.intrate.txt $i at $LINENO" > /dev/stderr
+    awk -v sum_file="$SUM_FILE" '
+      / SPECrate2017_int_base/ {
+        printf("specint\tspecint\t%s\tspecint_rate\n", $2) >> sum_file;
+      }
+    ' $i
+    ck_last_rc $? $LINENO
+  fi
+    echo "$0.$LINENO got here" > /dev/stderr
   if [[ $i == *"yab_cmds.txt" ]]; then
     echo "$0: got yab_cmds.txt $i at $LINENO" > /dev/stderr
     echo "$SCR_DIR/rd_yab_json.sh -f $i -S $SUM_FILE"
