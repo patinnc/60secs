@@ -2346,13 +2346,23 @@ row += trows;
     if [ "$END_TM" != "" ]; then
        OPT_TME=" -e $END_TM "
     fi
+    OPT_C=
+    if [ "$CLIP" != "" ]; then
+       OPT_C=" -C $CLIP "
+    fi
+    OPT_P=
+    if [ "$PHASE_FILE" != "" ]; then
+       OPT_P=" -P $PHASE_FILE "
+    fi
     RESP=`head -10 $i |wc -l|awk '{print $1}'`
     if [ $RESP -lt 9 ]; then
        echo "File $i has less than 10 lines ($RESP lines) so skipped it" > /dev/stderr
     else
+    echo "$0.$LINENO bef perf_stat_scatter.sh phase= $PHASE_FILE clip= $CLIP $OPT_C $OPT_P"
+
     echo "do perf_stat data $i with BEG= $BEG, end= $END_TM" > /dev/stderr
-    echo  $SCR_DIR/perf_stat_scatter.sh $OPT_D -b "$BEG"  $OPT_TME  -o "$OPTIONS" -O $i.tsv -f $i -S $SUM_FILE
-          $SCR_DIR/perf_stat_scatter.sh $OPT_D -b "$BEG"  $OPT_TME  -o "$OPTIONS" -O $i.tsv -f $i -S $SUM_FILE
+    echo  $SCR_DIR/perf_stat_scatter.sh $OPT_P $OPT_C $OPT_D -b "$BEG"  $OPT_TME  -o "$OPTIONS" -O $i.tsv -f $i -S $SUM_FILE
+          $SCR_DIR/perf_stat_scatter.sh $OPT_P $OPT_C $OPT_D -b "$BEG"  $OPT_TME  -o "$OPTIONS" -O $i.tsv -f $i -S $SUM_FILE
           ck_last_rc $? $LINENO
     fi
   fi
