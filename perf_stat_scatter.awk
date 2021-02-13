@@ -11,6 +11,18 @@ BEGIN{
      got_add_all_to_summary = 1;
    }
    printf("%s got_add_all_to_summary= %d\n", script, got_add_all_to_summary) > "/dev/stderr";
+   ph_mx = 0;
+   if (phase_file != "" && phase_clip != "") {
+     while ((getline < phase_file) > 0) {
+       ph_mx++;
+       ph_arr[ph_mx,1] = $1;
+       ph_arr[ph_mx,2] = $2+0.0;
+       ph_arr[ph_mx,3] = $3+0.0;
+       ph_arr[ph_mx,4] = $4;
+     }
+     printf("phase_mx= %d, phase_clp=\"%s\"\n", ph_mx, phase_clip) > "/dev/stderr";
+     close(phase_file);
+   }
    ts_initial = 0.0;
    ts_beg += 0.0;
    ts_end += 0.0;
@@ -213,6 +225,26 @@ function dt_to_epoch(offset) {
 
   n=split($0,arr,";");
   ts=arr[1];
+  if (ts_initial > 0.0) {
+     epch = ts_initial + ts;
+  } else {
+     epch = dt_to_epoch(ts);
+  }
+  if (ph_mx > 0) {
+    #printf("ck phase_clp= \"%s\"  epch %f, ph_mx= %d, ph_0= %f, ph_end= %f\n", phase_clip, epch, ph_mx, ph_arr[1,2], ph_arr[ph_mx,3]) > "/dev/stderr";
+    for (i=1; i <= ph_mx; i++) {
+      if (epch >= ph_arr[i,2] && epch <= ph_arr[i,3]) {
+        #printf("befor phase_clip: got phase[%d]= %s cur_phase= %s beg= %f epch %f end= %f\n", i, phase_clip, ph_arr[i,1], ph_arr[i,2], epch, ph_arr[i,3]) > "/dev/stderr";
+        if (ph_arr[i,1] == phase_clip) {
+          #printf("got phase[%d]= %s  beg= %f epch %f end= %f\n", i, phase_clip, ph_arr[i,2], epch, ph_arr[i,3]) > "/dev/stderr";
+           break;
+         } else {
+           next;
+         }
+      }
+    }
+    if (i > ph_mx) { next; }
+  }
   skt=arr[2];
   skt_incr = 2;
   if (skt != "S0" && skt != "S1" && skt != "S2" && skt != "S3") {
@@ -265,11 +297,6 @@ function dt_to_epoch(offset) {
     evt_inst_ts[evt_idx]=ts;
   }
   j=evt_num[evt];
-  if (ts_initial > 0.0) {
-     epch = ts_initial + ts;
-  } else {
-     epch = dt_to_epoch(ts);
-  }
   if (evt_inst_ts[j] == ts) {
     if (evt_inst[j] == 0 || inst > 1){ # if summing per socket events, then summing to system, just put 1 for instance
        evt_inst[j] += inst;
