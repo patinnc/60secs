@@ -910,6 +910,7 @@ for bmi in range(base_mx+1):
                     in_phase = False
                     phase_arr = []
                     #print("opt_phase ii= %d tval= %d lenopt_phase= %d" % (ii, tval, len(opt_phase)), file=sys.stderr)
+                    cur_phase = ""
                     for jj in range(len(opt_phase)):
                        if tval < opt_phase[jj][1]:
                           #print("ex1 opt_phase ii= %d ph[%d]= %f tval= %f end= %f tv-beg= %f end-tv= %f" % (
@@ -922,7 +923,8 @@ for bmi in range(base_mx+1):
                        #     ii, jj, opt_phase[jj][1], tval, opt_phase[jj][2], tval-opt_phase[jj][1], opt_phase[jj][2]-tval), file=sys.stderr)
                        #   break
                        if tval >= opt_phase[jj][1] and (tval <= opt_phase[jj][2] or opt_phase[jj][2] == -1):
-                          #print("got opt_phase ii= %d tval= %d lenopt_phase= %d" % (ii, tval, len(opt_phase)), file=sys.stderr)
+                          cur_phase = opt_phase[jj][0]
+                          #print("got opt_phase ii= %d tval= %d clip= \"%s\" cur_phase[%d]= %s" % (ii, tval, clip, jj, cur_phase), file=sys.stderr)
                           if do_avg == False or do_avg_write == True:
                              in_phase = True
                              already_in_phase_arr = False
@@ -934,7 +936,8 @@ for bmi in range(base_mx+1):
                                 phase_arr.append(opt_phase[jj][0])
                     if in_phase and len(phase_arr) > 0:
                        worksheet.write(ii, 0, " ".join(phase_arr))
-                    if in_phase == False and clip != "":
+                    #if (in_phase == False and clip != ""):
+                    if (in_phase == False and clip != "") or (in_phase == True and clip != "" and clip != cur_phase):
                        #print("try to zero out row ", ii, " len= ", len(data[ii]))
                        for ij in range(len(data[ii])):
                            worksheet.write_blank(ii, ph_add+ij, None, bold0)
@@ -975,7 +978,7 @@ for bmi in range(base_mx+1):
                    use_drow_end = drow_end
                    if ch_type == "column":
                      print("ck col chart, sheet_nm= %s, ch_typ= %s, file= %s, drow_beg= %d drow_end= %d hcol_beg= %d, hcol_end= %d, ph_add= %d, h= %d" % (sheet_nm, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end, ph_add, h), file=sys.stderr)
-                     use_drow_end = drow_end - 1
+                     use_drow_end = drow_end
                    if chart1 != None and (ch_type == "column" or drow_end  > (drow_beg+1)):
                     if use_cats:
                      chart1.add_series({
