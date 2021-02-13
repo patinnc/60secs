@@ -763,7 +763,7 @@ for i in $LST; do
     echo -e "-A" >> $ALST
  fi
  if [ "$CLIP" != "" ]; then
-    echo -e "-c $CLIP" >> $ALST
+    echo -e "-c\t$CLIP" >> $ALST
  fi
  if [ "$DESC_FILE" != "" ]; then
    echo -e "-d\t\"$DESC_FILE\"" >> $ALST
