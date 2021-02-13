@@ -135,7 +135,15 @@ awk -v script_nm="$0.$LINENO.awk" -v mutt_ofile="$MUTT_OUT_FL" -v cur_dir="$CUR_
 # Field  7 -- # of sectors written. This is the total number of sectors written successfully.
     diskstats_dt[++diskstats_mx] = $2;
     diskstats_lns[diskstats_mx] = 0;
+    diskstats_tots = 0;
     j = 0;
+      j++;
+      diskstats_lns[diskstats_mx] = j;
+      diskstats_data[diskstats_mx,j,"device"] = "_total_";
+      #diskstats_data[diskstats_mx,j,"reads"] = 0;
+      #diskstats_data[diskstats_mx,j,"read_bytes"] = 0;
+      #diskstats_data[diskstats_mx,j,"writes"] = 0;
+      #diskstats_data[diskstats_mx,j,"write_bytes"] = 0;
     while ( getline  > 0) {
       if ($0 == "" || (length($1) > 2 && substr($1, 1, 2) == "__")) {
         break;
@@ -144,9 +152,23 @@ awk -v script_nm="$0.$LINENO.awk" -v mutt_ofile="$MUTT_OUT_FL" -v cur_dir="$CUR_
       dev = $3;
       dev_len = length(dev);
 #nvme0n1p1
+#  65     176 sdab 15392962 3237 6538521378 38521676 18133319 302715 8990653984 793844424 0 40104628 832302280
+#  65     177 sdab1 15392611 3237 6538511858 38521528 18133316 302715 8990653984 793844404 0 40104520 832300228
       use_it= 0;
-      if ((dev_len == 3 && substr(dev, 1, 2) == "sd") ||
-          (dev_len == 7 && substr(dev, 1, 4) == "nvme") ||
+      if (substr(dev, 1, 2) == "sd") {
+        if (length(dev) == 3) {
+          use_it = 1;
+        } else {
+          if (length(dev) == 4) {
+             sb = substr(dev, 4, 1);
+             isnum = (sb == (sb+0));
+             if (!isnum) {
+               use_it = 1;
+             }
+          }
+        }
+      }
+      if ((dev_len == 7 && substr(dev, 1, 4) == "nvme") ||
           dev == "dm-0") {
         use_it = 1;
       }
@@ -158,7 +180,9 @@ awk -v script_nm="$0.$LINENO.awk" -v mutt_ofile="$MUTT_OUT_FL" -v cur_dir="$CUR_
       #diskstats_data[diskstats_mx,j,"read_bytes"] = 512*($6+0);
       #diskstats_data[diskstats_mx,j,"writes"] = $8+0;
       #diskstats_data[diskstats_mx,j,"write_bytes"] = 512*($10+0);
-      diskstats_data[diskstats_mx,j,"total_bytes"] = 512*($10+$6);
+      tot_bytes = 512*($10+$6);
+      diskstats_data[diskstats_mx,j,"total_bytes"] = tot_bytes;
+      diskstats_data[diskstats_mx,1,"total_bytes"] += tot_bytes;
       }
     }
   }
