@@ -1,6 +1,12 @@
 #!/bin/bash
 
-cat /proc/cpuinfo | gawk '
+SCR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+AWK_BIN=awk
+if [ -e $SCR_DIR/bin/gawk ]; then
+  AWK_BIN=$SCR_DIR/bin/gawk
+fi
+
+cat /proc/cpuinfo | $AWK_BIN '
    BEGIN{vrb=0;}
    function ltrim(s) { sub(/^[ \t\r\n]+/, "", s); return s }
    function rtrim(s) { sub(/[ \t\r\n,]+$/, "", s); return s }
@@ -169,8 +175,8 @@ Penryn (Server)	Dunnington	0	0x6	0x1	0xD	Family 6 Model 29
 Harpertown, QC, Wolfdale, Yorkfield	0	0x6	0x1	0x7	Family 6 Model 23
 "
 STR="Family $1 Model $2"
-echo "$NMS" | awk -v lkfor="$STR" '{n=split($0,arr,"\t"); printf("%s\t%s\n", arr[1], arr[n]); }'
-nm=`echo "$NMS" | awk -v lkfor="$STR" '{if (index($0, lkfor) > 0) {n=split($0,arr,"\t"); printf("%s\n", arr[1]); }}'`
+echo "$NMS" | AWK_BIN -v lkfor="$STR" '{n=split($0,arr,"\t"); printf("%s\t%s\n", arr[1], arr[n]); }'
+nm=`echo "$NMS" | AWK_BIN -v lkfor="$STR" '{if (index($0, lkfor) > 0) {n=split($0,arr,"\t"); printf("%s\n", arr[1]); }}'`
 echo "$nm"
 
 #echo "$NMS"
