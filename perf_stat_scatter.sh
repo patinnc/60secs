@@ -16,10 +16,13 @@ SUM_FILE=
 END_TM=
 OUT_FILE=
 
-while getopts "hvb:c:D:e:f:O:o:p:s:S:l:" opt; do
+while getopts "hvb:C:c:D:e:f:O:o:P:p:s:S:l:" opt; do
   case ${opt} in
     b )
       BEG=$OPTARG
+      ;;
+    C )
+      CLIP_IN=$OPTARG
       ;;
     c )
       CHART_IN=$OPTARG
@@ -29,6 +32,9 @@ while getopts "hvb:c:D:e:f:O:o:p:s:S:l:" opt; do
       ;;
     e )
       END_TM=$OPTARG
+      ;;
+    P )
+      PHASE_FILE=$OPTARG
       ;;
     p )
       PFX_IN=$OPTARG
@@ -87,10 +93,12 @@ while getopts "hvb:c:D:e:f:O:o:p:s:S:l:" opt; do
       echo "Usage: $0 [-h] -f perf_stat_txt_file [ -f ...] [ -s sheetname ] [ -p prefix ] [ -c chart_name ] [ -l specInt_logfile ] [-v]"
       echo "   -f perf_stat_txt_file  perf stat data file"
       echo "      currently only 1 '-f filename' option is supported"
+      echo "   -C clip_phase restrict to this phase in phase_file"
       echo "   -c chart title. Used by tsv_2_xlsx.py"
       echo "   -e end_timestamp. drop data after this timestamp"
       echo "   -O out_file"
       echo "   -o options_str  Currently only option is \"dont_sum_sockets\" to not sum S0 & S1 to the system"
+      echo "   -P phase_file.  phase file: fmt phase_name beg_epoch_ts end_epoch_ts elapsed_secs"
       echo "   -p prefix_str.  prefix each sheet name with this string."
       echo "   -s sheet_name.  Used by tsv_2_xlsx.py. string has to comply with Excel sheet name rules"
       echo "   -S sum_file     Output summary stats to this file"
@@ -188,8 +196,8 @@ fi
 export AWKPATH=$SCR_DIR
 
 
-echo $0.$LINENO awk -v tm_beg_run_log="$TM_BEG_RUN_LOG"  -v out_file="$OUT_FILE" -v script="$0.$LINENO" -v amd_cpu="$AMD_CPU" -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s|memory},LLC-misses PKI{|memory},%not_halted{|CPU},avg_freq{avg_freq GHz|CPU},QPI_BW{QPI_BW GB/s|memory interconnect},power_pkg {power pkg (watts)|power}" -f $SCR_DIR/perf_stat_scatter.awk $FILES $CPU2017files > /dev/stderr
-awk  -v tm_beg_run_log="$TM_BEG_RUN_LOG" -v out_file="$OUT_FILE" -v script="$0.$LINENO"  -v amd_cpu="$AMD_CPU" -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s|memory},LLC-misses PKI{|memory},%not_halted{|CPU},avg_freq{avg_freq GHz|CPU},QPI_BW{QPI_BW GB/s|memory interconnect},power_pkg {power pkg (watts)|power}" -f $SCR_DIR/perf_stat_scatter.awk $FILES $CPU2017files
+echo $0.$LINENO awk -v phase_file="$PHASE_FILE" -v phase_clip="$CLIP_IN" -v tm_beg_run_log="$TM_BEG_RUN_LOG"  -v out_file="$OUT_FILE" -v script="$0.$LINENO" -v amd_cpu="$AMD_CPU" -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s|memory},LLC-misses PKI{|memory},%not_halted{|CPU},avg_freq{avg_freq GHz|CPU},QPI_BW{QPI_BW GB/s|memory interconnect},power_pkg {power pkg (watts)|power}" -f $SCR_DIR/perf_stat_scatter.awk $FILES $CPU2017files > /dev/stderr
+awk -v phase_file="$PHASE_FILE" -v phase_clip="$CLIP_IN"  -v tm_beg_run_log="$TM_BEG_RUN_LOG" -v out_file="$OUT_FILE" -v script="$0.$LINENO"  -v amd_cpu="$AMD_CPU" -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s|memory},LLC-misses PKI{|memory},%not_halted{|CPU},avg_freq{avg_freq GHz|CPU},QPI_BW{QPI_BW GB/s|memory interconnect},power_pkg {power pkg (watts)|power}" -f $SCR_DIR/perf_stat_scatter.awk $FILES $CPU2017files
           RC=$?
           if [ $RC -gt 0 ]; then
             RESP=`pwd`
