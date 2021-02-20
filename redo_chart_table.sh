@@ -249,8 +249,10 @@ if [ $j -lt 10 ]; then
   echo "file_str= $FILE_STR"
 fi
 
+if [ "$VERBOSE" != "" -a "$VERBOSE" != "0" ]; then
 echo $0.$LINENO +++++awk -v options="$OPTIONS" -v out_file="$FL_OUT" -v verbose="$VERBOSE" -v rows_max="$ROWS_MAX" -v metric="$METRIC" -v chrt_typ="$CHRT_TYP" -v sheet="$SHEET" -v title="$TITLE" $FILE_STR
-awk -v options="$OPTIONS" -v out_file="$FL_OUT" -v verbose="$VERBOSE" -v rows_max="$ROWS_MAX" -v metric="$METRIC" -v chrt_typ="$CHRT_TYP" -v sheet="$SHEET" -v title="$TITLE" '
+fi
+awk -v script_nm="$0.$LINENO.awk" -v options="$OPTIONS" -v out_file="$FL_OUT" -v verbose="$VERBOSE" -v rows_max="$ROWS_MAX" -v metric="$METRIC" -v chrt_typ="$CHRT_TYP" -v sheet="$SHEET" -v title="$TITLE" '
    @load "time"
    BEGIN {
      gtod_beg = gettimeofday() + 0.0;
@@ -258,6 +260,12 @@ awk -v options="$OPTIONS" -v out_file="$FL_OUT" -v verbose="$VERBOSE" -v rows_ma
      if (title == "__all__") {
         search = "";
      }
+     if (index(options, "get_max_val") > 0) {
+       options_get_max_val = 1;
+     } else {
+       options_get_max_val = 0;
+     }
+     #printf("%s: ____________ got options= %s and options_get_max_val= %d\n", script_nm, options, options_get_max_val) > "/dev/stderr";
      #printf("use search= \"%s\"\n", search);
      got_tbl = 0;
      rows_max += 0;
@@ -561,11 +569,28 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
                for (k=col_beg+1; k <= (col_end+1); k++) {
                   cat_i = col_lkup[k];
                   v = arr[k]+0.0;
-                  val[cat_i] += v;
+                  if (options_get_max_val == 1) {
+                    if (num[cat_i] == 0 || val[cat_i] < v) {
+                      val[cat_i] = v;
+                    }
+                  } else {
+                    val[cat_i] += v;
+                  }
                   # if (lkfor_got == 1 && j < 20) { printf("row[%d,%d]= %f, cati= %s\n", j, k, v, cat_i) > "/dev/stderr"; }
-                  num[cat_i]++;
-                  rval[cat_i,j] += v;
-                  rnum[cat_i,j]++;
+                  if (options_get_max_val == 1) {
+                     num[cat_i] = 1;
+                  } else {
+                     num[cat_i]++;
+                  }
+                  if (options_get_max_val == 1) {
+                    if (rnum[cat_i,j] == 0 || rval[cat_i,j] < v) {
+                      rval[cat_i,j] = v;
+                      rnum[cat_i,j] = 1;
+                    }
+                  } else {
+                    rval[cat_i,j] += v;
+                    rnum[cat_i,j]++;
+                  }
                   iters2++;
                }
                #gtod_end_files2 = gettimeofday()+0.0;
@@ -597,8 +622,15 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
              #printf("++--ch_typ= %s, got header row fl= %d c= %d, crow= %d, row_beg= %d\n", ch_typ, i, c, crow, row_beg) > "/dev/stderr";
               for (k=1; k <= (col_end+1); k++) {
                 cat_i = gcat_col2cat[i,c,k];
+                if (options_get_max_val == 1) {
+                  if (num[cat_i] == 0 || val[cat_i] < arr[k]) {
+                    val[cat_i] = arr[k];
+                    num[cat_i] = 1;
+                  }
+                } else {
                 val[cat_i] += arr[k];
                 num[cat_i]++;
+                }
               }
              }
            }
