@@ -10,6 +10,14 @@ BEGIN{
    if (index(options, "add_all_to_summary") > 0) {
      got_add_all_to_summary = 1;
    }
+   options_get_max_val = 0;
+   options_get_perf_stat_max_val = 0;
+   if (index(options, "get_max_val") > 0) {
+     options_get_max_val = 1;
+   }
+   if (index(options, "get_perf_stat_max_val") > 0) {
+     options_get_perf_stat_max_val = 1;
+   }
    printf("%s got_add_all_to_summary= %d\n", script, got_add_all_to_summary) > "/dev/stderr";
    ph_mx = 0;
    if (phase_file != "" && phase_clip != "") {
@@ -68,7 +76,7 @@ BEGIN{
 }
 
 
-function do_summary(colms, v, epch, intrvl, k_idx) {
+function do_summary(colms, v, epch, intrvl, k_idx,    v1) {
    if (n_sum > 0 && hdr_lkup[colms] != -1) {
       i_sum = hdr_lkup[colms];
       if (k_idx > 0) {
@@ -76,13 +84,24 @@ function do_summary(colms, v, epch, intrvl, k_idx) {
          nwfor[k_idx,1,"alias_i_sum"] = i_sum;
       }
       sum_occ[i_sum] += 1;
+      sum_k_idx[i_sum] = k_idx;
       #printf("colms= %d, v= %f, epch= %f, intrvl= %f, i_sum= %d typ= %d\n", colms, v, epch, intrvl, i_sum, sum_type[i_sum]) >> sum_file;
       if (sum_type[i_sum] == 1) {
          if (sum_tmin[i_sum] == 0)   { sum_tmin[i_sum] = epch; sum_tmax[i_sum] = sum_tmin[i_sum]; }
          if (sum_tmax[i_sum] < epch) { sum_tmax[i_sum] = epch; }
-         sum_tot[i_sum] += v * intrvl;
+         v1 = v * intrvl;
+         sum_tot[i_sum] += v1;
       } else {
-         sum_tot[i_sum] += v;
+         v1 = v;
+         sum_tot[i_sum] += v1;
+      }
+      if (options_get_perf_stat_max_val == 1) {
+        if (sum_ps_max[i_sum,"peak"] == "" || sum_ps_max[i_sum,"peak"] < v1) {
+          sum_ps_max[i_sum,"peak"] = v1;
+        }
+        sum_ps_max[i_sum,"n"]++;
+        sum_ps_max[i_sum,"sum"] += v1;
+        sum_ps_max[i_sum,"sum_sq"] += v1*v1;
       }
    } else {
       if (k_idx > 0) {
@@ -272,6 +291,15 @@ function dt_to_epoch(offset) {
   }
   if (options != "" && skt_incr != 0 && index(options, "dont_sum_sockets") > 0) {
      evt = evt " " skt;
+  }
+  if (val > 0 && substr(evt,1,3) == "unc") {
+   pos= index(evt, "_");
+   if (pos > 4 && substr(evt, pos, length(evt)) == "_read_write") {
+     if (!(evt in memch_list)) {
+       memch_list[evt] = ++memch_mx;
+       memch_lkup[memch_mx] = evt;
+     }
+   }
   }
   tmr=arr[5+skt_incr];
   pct=arr[6+skt_incr];
@@ -484,6 +512,7 @@ function dt_to_epoch(offset) {
    nwfor[kmx,1,"alias"]="metric_memory bandwidth total (MB/sec)";
    nwfor[kmx,1,"alias_factor"]=1000.0;
    nwfor[kmx,1,"alias_oper"]="*";
+   mem_bw_kmx = kmx;
 
    kmx++;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
@@ -606,7 +635,7 @@ function dt_to_epoch(offset) {
        kmx++;
        got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
        got_lkfor[kmx,2]=2; # num of fields to look for
-       got_lkfor[kmx,3]=8e-9; # a factor
+       got_lkfor[kmx,3]= (64.0/9.0) * 1.0e-9; # a factor
        got_lkfor[kmx,4]="sum"; # operation
        got_lkfor[kmx,5]=1; # instances
        got_lkfor[kmx,6]="div_by_interval"; # 
@@ -621,7 +650,7 @@ function dt_to_epoch(offset) {
      kmx++;
      got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
      got_lkfor[kmx,2]=3; # num of fields to look for
-     got_lkfor[kmx,3]=8.0e-9; # a factor
+     got_lkfor[kmx,3]= (64.0/9.0) * 1.0e-9; # a factor
      got_lkfor[kmx,4]="sum"; # operation
      got_lkfor[kmx,5]=1; # instances
      got_lkfor[kmx,6]="div_by_interval"; # 
@@ -1418,6 +1447,10 @@ function dt_to_epoch(offset) {
              }
          }
          printf("\t%s", val) > out_file;
+         ckv = val+0.0;
+         if (options_get_perf_stat_max_val == 1 && (get_ps_max[k] == "" || get_ps_max[k] < ckv)) {
+            get_ps_max[k] = ckv;
+         }
          rw_data[rw_col++] = val;
          do_summary(cols, val+0.0, use_epoch+0.0, interval, k);
          cols++;
@@ -1527,8 +1560,31 @@ function dt_to_epoch(offset) {
            ky = sum_prt[i_sum];
            vl = (divi > 0 ? sum_tot[i_sum]/divi : 0.0);
            sum_tot[i_sum,"total"] = vl;
-           printf("got perf_stat %s\t%f\tsum_tot= %s\n", ky, vl, sum_tot[i_sum]) > "/dev/stderr";
-           printf("%s\t%s\t%f\t%s\n", sum_res[i_sum], "perf_stat", vl, ky) >> sum_file;
+           v2 = vl;
+           peak_str = "";
+           if (options_get_perf_stat_max_val == 1 && sum_ps_max[i_sum,"peak"] != "") {
+              v2 = sum_ps_max[i_sum,"peak"];
+              sum_tot[i_sum,"total"] = v2;
+              my_n = sum_ps_max[i_sum,"n"];
+              my_avg = sum_ps_max[i_sum,"sum"]/my_n;
+              my_stdev=sqrt((sum_ps_max[i_sum,"sum_sq"]/my_n)-(my_avg*my_avg));
+ #avg1   = x/lines;
+ #stdev1 = sqrt((y/lines)-(avg1*avg1));
+              if (my_stdev == 0.0) {
+                my_peak_fctr = 0.0;
+              } else {
+                my_peak_fctr = (v2 - my_avg)/my_stdev;
+              }
+              printf("%s\t%s\t%f\t%s avg\n", sum_res[i_sum], "perf_stat", my_avg, ky) >> sum_file;
+              printf("%s\t%s\t%f\t%s stdev\n", sum_res[i_sum], "perf_stat", my_stdev, ky) >> sum_file;
+              printf("%s\t%s\t%f\t%s pk/stdev\n", sum_res[i_sum], "perf_stat", my_peak_fctr, ky) >> sum_file;
+              peak_str = " peak";
+           }
+           printf("got perf_stat %s\t%f\tsum_tot= %s\n", ky, v2, sum_tot[i_sum]) > "/dev/stderr";
+           printf("%s\t%s\t%f\t%s%s\n", sum_res[i_sum], "perf_stat", v2, ky, peak_str) >> sum_file;
+           if (sum_k_idx[i_sum] == mem_bw_kmx) {
+             mem_bw_val = v2;
+           }
         }
    }
    # print the computed columns which arent referenced in the sum_flds input list (and probably already printed out)
@@ -1540,7 +1596,14 @@ function dt_to_epoch(offset) {
      if (nwfor[k,2] == 0 && nwfor[k,4] > 0) {
         ky = nwfor[k,1,"hdr"];
         vl = nwfor[k,3] / nwfor[k,4];
+        if (options_get_perf_stat_max_val == 1 && get_ps_max[k] != "") {
+            vl = get_ps_max[k];
+        }
+
         printf("%s\t%s\t%f\t%s\n", "average", "perf_stat", vl, ky) >> sum_file;
+        if (k == mem_bw_kmx) {
+          mem_bw_val = vl;
+        }
         if (nwfor[k,1,"alias"] != "") {
            if (nwfor[k,1,"alias_i_sum"] != "") {
               i_sum = nwfor[k,1,"alias_i_sum"];
@@ -1628,6 +1691,18 @@ function dt_to_epoch(offset) {
       }
       printf("%s\t%s\t%f\t%s\n", "average", "perf_stat", avg, evt_lkup[k]) >> sum_file;
     }
+   }
+   if (memch_mx > 0) {
+      printf("%s\t%s\t%d\t%s\n", "itp_metric2", "perf_stat", memch_mx, "mem_channels") >> sum_file;
+      if (mem_speed_mhz != "" && num_sockets != "") {
+         v = 0.001 * mem_speed_mhz * 8 * memch_mx * num_sockets;
+         printf("%s\t%s\t%.3f\t%s\n", "itp_metric2", "perf_stat", v, "max_theoretical_mem_bw(GB/s)") >> sum_file;
+         if (mem_bw_val != "" && mem_bw_val > 0.0 && v > 0.0) {
+           printf("%s\t%s\t%.3f\t%s\n", "itp_metric2", "perf_stat", mem_bw_val, "used_mem_bw(GB/s)") >> sum_file;
+           printf("%s\t%s\t%.3f\t%s\n", "itp_metric2", "perf_stat", 100.0 * mem_bw_val / v, "%used_bw_of_max_theoretical_mem_bw") >> sum_file;
+           #printf("%s\t%s\t%.3f\t%s\n", "itp_metric2", "perf_stat", mem_bw_val, "%used_bw_of_max_possible_mem_bw") >> sum_file;
+         }
+      }
    }
    close(out_file);
 }
