@@ -40,6 +40,7 @@ worksheet_charts = None
 ch_sh_arr = []
 verbose = False
 options_all_charts_one_row = False
+options_get_max_val = False
 all_charts_one_row = []
 all_charts_one_row_hash = {}
 all_charts_one_row_max = -1
@@ -115,6 +116,9 @@ else:
    got_drop_summary = False
 if options_str.find("all_charts_one_row") >= 0:
    options_all_charts_one_row = True
+if options_str.find("get_max_val") >= 0:
+   options_get_max_val = True
+   print("opt= %s, get_max_val= %s" % (opt, options_get_max_val), file=sys.stderr)
 
 sheets_limit = []
 arr = options_str.split(",")
@@ -695,13 +699,18 @@ for bmi in range(base_mx+1):
                                data[ij][h] = 0.0
                          if not use_idx in fn_bs_sum[fn_bs_i][ij]:
                             #fn_bs_sum[fn_bs_i][ij] = {}
-                            fn_bs_sum[fn_bs_i][ij][use_idx] = 0.0;
-                            fn_bs_n[fn_bs_i][ij][use_idx] = 0;
-                         fn_bs_sum[fn_bs_i][ij][use_idx] += data[ij][h]
-                         fn_bs_n[fn_bs_i][ij][use_idx] += 1;
+                            fn_bs_sum[fn_bs_i][ij][use_idx] = 0.0
+                            fn_bs_n[fn_bs_i][ij][use_idx] = 0
+                         if options_get_max_val:
+                            if fn_bs_n[fn_bs_i][ij][use_idx] == 0 or fn_bs_sum[fn_bs_i][ij][use_idx] < data[ij][h]:
+                               fn_bs_sum[fn_bs_i][ij][use_idx] = data[ij][h]
+                               fn_bs_n[fn_bs_i][ij][use_idx] = 1
+                         else:
+                            fn_bs_sum[fn_bs_i][ij][use_idx] += data[ij][h]
+                            fn_bs_n[fn_bs_i][ij][use_idx] += 1
                       else:
                          fn_bs_sum[fn_bs_i][ij][use_idx] = data[ij][h]
-                         fn_bs_n[fn_bs_i][ij][use_idx] = -1;
+                         fn_bs_n[fn_bs_i][ij][use_idx] = -1
       
       ph_add = 0
       ph_done = 0
