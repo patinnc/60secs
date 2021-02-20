@@ -40,13 +40,16 @@ ck_last_rc() {
    fi
 }
 
-while getopts "hvASa:b:c:D:d:e:g:i:j:m:o:P:p:s:t:x:" opt; do
+while getopts "hvASa:B:b:c:D:d:e:g:i:j:m:o:P:p:s:t:x:" opt; do
   case ${opt} in
     A )
       AVERAGE=1
       ;;
     a )
       AVG_DIR=$OPTARG
+      ;;
+    B )
+      BASE_DIR=$OPTARG
       ;;
     b )
       BEG_TM_IN=$OPTARG
@@ -104,6 +107,7 @@ while getopts "hvASa:b:c:D:d:e:g:i:j:m:o:P:p:s:t:x:" opt; do
       echo "$0 split data files into columns"
       echo "Usage: $0 [-h] -d sys_data_dir [-v] [ -p prefix ]"
       echo "   -a avg_dir average files (-A ) will be put in this dir"
+      echo "   -B base_dir top level dir"
       echo "   -d dir containing sys_XX_* files created by 60secs.sh"
       echo "   -b beg_tm ending timestamp to clip time to"
       echo "   -c clip_to_Phase  enter string of phase for clipping (like x264_r*)"
@@ -206,6 +210,42 @@ HOSTNM=`awk -v curdir="$CURDIR" '
    ck_last_rc $? $LINENO
 printf "host\thostname\t%s\thostname\n"  "$HOSTNM" >> $SUM_FILE;
 
+if [ "$HOSTNM" != "" ]; then
+  CKFL=$BASE_DIR/grail_cpu_info.txt
+  echo "_____ck  grail file $CKFL" > /dev/stderr
+  if [ -e $CKFL ]; then
+    echo "_____got grail hst= $HOSTNM file $CKFL" > /dev/stderr
+    awk -v hst="$HOSTNM" 'BEGIN{FS=";";} $1 == hst {printf("%s\n", $0); exit;}'
+    #schemadock7333-dca8;B19A;48;Intel(R)_Xeon(R)_Silver_4214_CPU_@_2.20GHz;T22U-1U;2101
+    SKU_NCPU_CPU_BOX_DISK=(`awk -v hst="$HOSTNM" -v FS=";" '$1 == hst {printf("%s\n%s\n%s\n%s\n%s\n", $2, $3, $4,$5,$6); exit;}' $CKFL`)
+    #awk -v hst="schemadock7333-dca8" -v FS=";" ' $1 == hst {printf("%s\n", $0);exit;}' $CKFL
+    #awk -v hst="schemadock7333-dca8"  '{if (NR <5){printf("hst= %s, ln= %s\n",hst,$1);}}' $CKFL
+    #B19A 48 Intel(R)_Xeon(R)_Silver_4214_CPU_@_2.20GHz T22U-1U 2101
+    #echo "_____got grail sku= ${SKU_NCPU_CPU_BOX_DISK[@]}" > /dev/stderr
+    V=${SKU_NCPU_CPU_BOX_DISK[0]}
+    if [ "$V" == "" ]; then
+      V="unknown"
+    fi
+    printf "host\tSKU\t\"%s\"\tSKU\n"  "$V" >> $SUM_FILE;
+    V=${SKU_NCPU_CPU_BOX_DISK[4]}
+    if [ "$V" == "" ]; then
+      V=0
+    fi
+    printf "host\tdisk_GBs\t%s\tdisk_GBs\n"  "$V" >> $SUM_FILE;
+    V=${SKU_NCPU_CPU_BOX_DISK[3]}
+    if [ "$V" == "" ]; then
+      V="unknown"
+    fi
+    printf "host\thost_make\t\"%s\"\thost_make\n"  "$V" >> $SUM_FILE;
+    V=${SKU_NCPU_CPU_BOX_DISK[2]}
+    if [ "$V" == "" ]; then
+      V="unknown"
+    fi
+    printf "host\tcpu_string\t\"%s\"\tcpu_string\n"  "$V" >> $SUM_FILE;
+  fi
+fi
+
+
 LSCPU_FL=lscpu.txt
 if [ ! -e $LSCPU_FL ]; then
   if [ -e ../$LSCPU_FL ]; then
@@ -213,6 +253,30 @@ if [ ! -e $LSCPU_FL ]; then
   else
     LSCPU_FL=
   fi
+fi
+if [ "$LSCPU_FL" != "" ]; then
+     NCPUS=`awk '/^CPU.s.:/ { printf("%s\n", $2);exit;}' $LSCPU_FL`
+     printf "host\tcpus\t%s\tnum_cpus\n"  "$NCPUS" >> $SUM_FILE;
+     NSKTS=`awk '/^Socket.s.:/ { printf("%s\n", $2);exit;}' $LSCPU_FL`
+     printf "host\tsockets\t%s\tnum_sockets\n"  "$NSKTS" >> $SUM_FILE;
+     NUMAS=`awk '/^NUMA node.s.:/ { printf("%s\n", $3);exit;}' $LSCPU_FL`
+     printf "host\tnuma_nodes\t%s\tnuma_nodes\n"  "$NUMAS" >> $SUM_FILE;
+     DECD=`$SCR_DIR/decode_intel_fam_mod.sh $LSCPU_FL`
+     if [ "$DECD" != "" ]; then
+       printf "host\tcpu_type\t%s\tcpu_type\n"  "$DECD" >> $SUM_FILE;
+     fi
+fi
+DMIDECODE_FL=dmidecode.txt
+if [ ! -e $DMIDECODE_FL ]; then
+  if [ -e ../$DMIDECODE_FL ]; then
+    DMIDECODE_FL=../dmidecode.txt
+  else
+    DMIDECODE_FL=
+  fi
+fi
+if [ "$DMIDECODE_FL" != "" ]; then
+  MEM_SPEED=`awk '/Configured Clock Speed:/ {if ($4 == "Unknown") {next;}; printf("%s\n", $4);;exit;}' $DMIDECODE_FL`
+  printf "host\tmem_speed_mhz\t%s\tmem_speed_mhz\n"  "$MEM_SPEED" >> $SUM_FILE;
 fi
 if [ -e run.log ]; then
  MYA=(sys_*_perf_stat.txt)
@@ -535,6 +599,7 @@ trows++; printf("\n") > NFL;
     fi
 
     awk -v ts_beg="$BEG" -v ts_end="$UEND_TM" -v pfx="$PFX" -v sum_file="$SUM_FILE" -v sum_flds="avg_60secs{avg_power_60sec_mvg_avg|power|%stdev},max_60secs{max_power_60sec_mvg_avg|power},min_60secs{min_power_60sec_mvg_avg|power},SysFan_Power{|power},MB_HSC_Pwr_Out{|power},Total_Power{|power},Power_CPU{|power},Power_Memory{|power},PSU0_Input{|power},PSU0_Output{|power},PSU1_Input{|power},PSU1_Output{|power},HSC_Input_Power{|power},HSC_Output_Power{|power},PDB_HSC_POUT{|power},P0_Pkg_Power{|power},P1_Pkg_Power{|power},CPU0_VR0_Pout{|power},CPU0_VR1_Pout{|power},CPU1_VR0_Pout{|power},CPU1_VR1_Pout{|power},PCH_VR_POUT{|power},CPU0_DM_VR0_POUT{|power},CPU0_DM_VR1_POUT{|power},CPU1_DM_VR0_POUT{|power},CPU1_DM_VR1_POUT{|power},PSU0_POUT{|power},PSU1_POUT{|power},PSU0_PIN{|power},PSU1_PIN{|power},power{power_inst|power|stdev}" '
+    @include "get_excel_col_letter_from_number.awk"
       BEGIN{
         beg=1;
         mx=0;
@@ -690,30 +755,6 @@ trows++; printf("\n") > NFL;
 	FNM=ARGV[ARGIND];
         NFL=FNM ".tsv";
       }
-function columnToLetter(column)
-{
-  letter = "";
-  chr_str="ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  for (j=0; j < length(chr_str); j++) {
-   chr[j] = substr(chr_str, j+1, 1);
-  }
-  
-  c = column;
-  if (column == 0) { return "A";}
-  cpos = 0;
-  while ( column > 0) {
-     c_in= column;
-     res = column / 26;
-     rem = column % 26;
-     column = int(res);
-     cpos++;
-     if (cpos > 1 && rem > 0) { rem--; }
-     letter = chr[rem] "" letter;
-     #printf("col_in= %d, res= %d, rem= %d, col= %d, let= %s\n", c_in, res, rem, column, letter);
-  }
-  return letter;
-}
-
      END{
        add_col = 1;
        if (delloem >= 1) {
@@ -737,13 +778,13 @@ function columnToLetter(column)
        hdr_mx = area1_idx;
 trows++; printf("\t$ power") > NFL;
        for (i=2; i <= hdr_mx+area2_idx+area3_idx+1; i++) {
-         let = columnToLetter(i+add_col);
+         let = get_excel_col_letter_from_number(i+add_col);
          printf("\t=subtotal(1,%s%d:%s%d)", let, brw, let, brw+rw) > NFL;
        }
        printf("\n") > NFL;
 trows++; printf("\t$ power") > NFL;
        for (i=2; i <= hdr_mx+area2_idx+area3_idx+1; i++) {
-         let = columnToLetter(i+add_col);
+         let = get_excel_col_letter_from_number(i+add_col);
          printf("\t=subtotal(4,%s%d:%s%d)", let, brw, let, brw+rw) > NFL;
        }
        printf("\n") > NFL;
@@ -2354,6 +2395,10 @@ row += trows;
     if [ "$PHASE_FILE" != "" ]; then
        OPT_P=" -P $PHASE_FILE "
     fi
+    OPT_MEM=
+    if [ "$MEM_SPEED" != "" ]; then
+      OPT_MEM=" -M $MEM_SPEED "
+    fi
     RESP=`head -10 $i |wc -l|awk '{print $1}'`
     if [ $RESP -lt 9 ]; then
        echo "File $i has less than 10 lines ($RESP lines) so skipped it" > /dev/stderr
@@ -2361,8 +2406,8 @@ row += trows;
     echo "$0.$LINENO bef perf_stat_scatter.sh phase= $PHASE_FILE clip= $CLIP $OPT_C $OPT_P"
 
     echo "do perf_stat data $i with BEG= $BEG, end= $END_TM" > /dev/stderr
-    echo  $SCR_DIR/perf_stat_scatter.sh $OPT_P $OPT_C $OPT_D -b "$BEG"  $OPT_TME  -o "$OPTIONS" -O $i.tsv -f $i -S $SUM_FILE
-          $SCR_DIR/perf_stat_scatter.sh $OPT_P $OPT_C $OPT_D -b "$BEG"  $OPT_TME  -o "$OPTIONS" -O $i.tsv -f $i -S $SUM_FILE
+    echo  $SCR_DIR/perf_stat_scatter.sh $OPT_MEM $OPT_P $OPT_C $OPT_D -b "$BEG"  $OPT_TME  -o "$OPTIONS" -O $i.tsv -f $i -S $SUM_FILE
+          $SCR_DIR/perf_stat_scatter.sh $OPT_MEM $OPT_P $OPT_C $OPT_D -b "$BEG"  $OPT_TME  -o "$OPTIONS" -O $i.tsv -f $i -S $SUM_FILE
           ck_last_rc $? $LINENO
     fi
   fi
