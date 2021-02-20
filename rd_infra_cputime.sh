@@ -82,6 +82,10 @@ awk -v script_nm="$0.$LINENO.awk" -v mutt_ofile="$MUTT_OUT_FL" -v cur_dir="$CUR_
    if (index(options, "%cpu_like_top") > 0) {
      use_top_pct_cpu = 1;
    }
+   options_get_max_val = 0;
+   if (index(options, "get_max_val") > 0) {
+     options_get_max_val = 1;
+   }
    printf("use_top_pct_cpu= %d, options= \"%s\"\n", use_top_pct_cpu, options) > "/dev/stderr";
    plst[1] = "ksoftirqd/";
    plst[2] = "cpuhp/";
@@ -93,6 +97,76 @@ awk -v script_nm="$0.$LINENO.awk" -v mutt_ofile="$MUTT_OUT_FL" -v cur_dir="$CUR_
    plst[8] = "ksoftirqd/";
    plst_mx = 8;
   }
+function compute_diskstats(di,dim1, dj) {
+      dev_name = diskstats_data[di,dj,"device"];
+      rd_sec   = diskstats_data[di,dj,"rd_sec"];
+      wr_sec   = diskstats_data[di,dj,"wr_sec"];
+      rd_ios   = diskstats_data[di,dj,"rd_ios"];
+      wr_ios   = diskstats_data[di,dj,"wr_ios"];
+      rd_ticks = diskstats_data[di,dj,"rd_ticks"];
+      wr_ticks = diskstats_data[di,dj,"wr_ticks"];
+      rq_ticks = diskstats_data[di,dj,"rq_ticks"];
+      tot_ticks= diskstats_data[di,dj,"tot_ticks"];
+
+      ctm = diskstats_dt[di];
+      if (di > 1) {
+          tm_diff         = ctm      -diskstats_dt[dim1];
+          rd_ios_diff     = rd_ios   -diskstats_data[dim1,dj,"rd_ios"];
+          wr_ios_diff     = wr_ios   -diskstats_data[dim1,dj,"wr_ios"];
+          rd_sec_diff     = rd_sec   -diskstats_data[dim1,dj,"rd_sec"];
+          wr_sec_diff     = wr_sec   -diskstats_data[dim1,dj,"wr_sec"];
+          rd_ticks_diff   = rd_ticks -diskstats_data[dim1,dj,"rd_ticks"];
+          wr_ticks_diff   = wr_ticks -diskstats_data[dim1,dj,"wr_ticks"];
+          rq_ticks_diff   = rq_ticks -diskstats_data[dim1,dj,"rq_ticks"];
+          tot_ticks_diff  = tot_ticks-diskstats_data[dim1,dj,"tot_ticks"];
+          rw_ticks_diff   = rd_ticks_diff + wr_ticks_diff;
+          rw_ios_diff     = rd_ios_diff + wr_ios_diff;
+          rw_sec_diff     = rd_sec_diff + wr_sec_diff;
+          rd_kps          = rd_ios_diff/tm_diff/1024;
+          wr_kps          = wr_ios_diff/tm_diff/1024;
+          rd_MB           = rd_sec_diff / 2.0/1024.0; # 512/1024
+          wr_MB           = wr_sec_diff / 2.0/1024.0;
+          rd_KB_per_rd    = (rd_ios_diff > 0 ? 1024.0*rd_MB/rd_ios_diff : 0.0);
+          wr_KB_per_wr    = (wr_ios_diff > 0 ? 1024.0*wr_MB/wr_ios_diff : 0.0);
+          await    = (rw_ios_diff > 0.0 ? rw_ticks_diff/rw_ios_diff : 0.0);
+          await_rd = (rd_ios_diff > 0.0 ? rd_ticks_diff/rd_ios_diff : 0.0);
+          await_wr = (wr_ios_diff > 0.0 ? wr_ticks_diff/wr_ios_diff : 0.0);
+          avgrq_sz = (rw_ios_diff > 0.0 ? rw_sec_diff/rw_ios_diff : 0.0);
+          avgqu_sz =  0.001 * rq_ticks_diff/tm_diff;
+          dev_util = 0.1*tot_ticks_diff/tm_diff;
+
+          diskstats_vals[1]= dev_name;
+          diskstats_vals[2]= rd_kps;
+          diskstats_vals[3]= wr_kps;
+          diskstats_vals[4]= rd_MB/tm_diff;
+          diskstats_vals[5]= wr_MB/tm_diff;
+          diskstats_vals[6]= rd_KB_per_rd;
+          diskstats_vals[7]= wr_KB_per_wr;
+          diskstats_vals[8]= await;
+          diskstats_vals[9]= await_rd;
+          diskstats_vals[10]= await_wr;
+          diskstats_vals[11]= avgqu_sz;
+          diskstats_vals[12]= avgrq_sz;
+          diskstats_vals[13]= dev_util;
+          diskstats_vals_mx = 13;
+      }
+      if (diskstats_hdrs[1] == "" ) {
+          diskstats_hdrs[1]="dev";
+          diskstats_hdrs[2]="rd kIO/s";
+          diskstats_hdrs[3]="wr kIO/s";
+          diskstats_hdrs[4]="rd_MB/s";
+          diskstats_hdrs[5]="wr_MB/s";
+          diskstats_hdrs[6]="rd_KB/rd";
+          diskstats_hdrs[7]="wr_Kb/wr";
+          diskstats_hdrs[8]="await(io_ms/io)";
+          diskstats_hdrs[9]="await_rd";
+          diskstats_hdrs[10]="await_wr";
+          diskstats_hdrs[11]="avgqu-sz(avg_rq_ms/s)";
+          diskstats_hdrs[12]="avgrq_sz(sctrs/ios)";
+          diskstats_hdrs[13]="util%";
+          diskstats_hdrs_mx = 13;
+      }
+}
   /^__ps_ef_beg__ /{
     # UID         PID   PPID  C STIME TTY          TIME CMD
     getline;
@@ -116,6 +190,58 @@ awk -v script_nm="$0.$LINENO.awk" -v mutt_ofile="$MUTT_OUT_FL" -v cur_dir="$CUR_
       }
     }
   }
+#__net_dev__ 1613325090 1613361090
+#Inter-|   Receive                                                |  Transmit
+# face |bytes    packets errs drop fifo frame compressed multicast|bytes    packets errs drop fifo colls carrier compressed
+#    lo: 23718376346263 49951651466    0    0    0     0          0         0 23718376346263 49951651466    0    0    0     0       0          0
+#  eth1:       0       0    0    0    0     0          0         0        0       0    0    0    0     0       0          0
+#docker0:       0       0    0    0    0     0          0         0        0       0    0    0    0     0       0          0
+#  eth0: 1789224819997486 3969195799626   14    0    0    14          0  24714218 2735699337437607 4819718487079    0    0    0     0       0          0
+  /^__net_dev__ /{
+    i = 0;
+    netdev_dt[++netdev_mx] = $2;
+    netdev_lns[netdev_mx] = 0;
+    rd_bytes_col = 0;
+    wr_bytes_col = 0;
+    j = 0;
+    while ( getline  > 0) {
+      ++i;
+      if ($0 == "" || substr($0, 1, 2) == "__") {
+         break;
+      } else {
+        if (i == 1) { continue; }
+        if (i == 2) {
+            if ($1 != "face") { printf("%s expected \"face\" as 1st word of 2nd net_dev line, got= %s\n", script_nm, $1); exit 1;}
+              #printf(".0= %s\nFS= %s\n", $0, FS) > "/dev/stderr";
+            gsub(/\|/, " ");
+              #printf(".0= %s\nFS= %s, NF= %d\n", $0, FS, NF) > "/dev/stderr";
+            #n = split($0, arr);
+            for (k=1; k <= NF; k++) {
+              arr[k] = $k;
+              if(netdev_mx == 1) {printf("fld[%d]= %s\n", k, arr[k]) > "/dev/stderr";}
+              if (arr[k] == "bytes") {
+                if (rd_bytes_col == 0) {
+                  rd_bytes_col = k;
+                } else {
+                  wr_bytes_col = k;
+                  break;
+                }
+              }
+            }
+          if(netdev_mx == 1) {printf("=========---------_________ got rd_bytes_col= %d, wr_bytes_col= %d\n", rd_bytes_col, wr_bytes_col) > "/dev/stderr";}
+            continue;
+        }
+      j++;
+      netdev_data[netdev_mx,j,"device"] = $1;
+      netdev_data[netdev_mx,j,"bytes_rd"] += $(rd_bytes_col);
+      netdev_data[netdev_mx,j,"packets_rd"] += $(rd_bytes_col+1);
+      netdev_data[netdev_mx,j,"bytes_wr"] += $(wr_bytes_col);
+      netdev_data[netdev_mx,j,"packets_wr"] += $(wr_bytes_col+1);
+      netdev_lns[netdev_mx] = j;
+      }
+    }
+  }
+
   /^__diskstats__ /{
 #   8       0 sda 8619575 32211 794372805 4523480 181006599 266524862 29481431352 1752692472 0 228989488 1760207280
 #   8       1 sda1 458 0 7240 104 910 2668 122392 9396 0 2924 9500
@@ -140,10 +266,6 @@ awk -v script_nm="$0.$LINENO.awk" -v mutt_ofile="$MUTT_OUT_FL" -v cur_dir="$CUR_
       j++;
       diskstats_lns[diskstats_mx] = j;
       diskstats_data[diskstats_mx,j,"device"] = "_total_";
-      #diskstats_data[diskstats_mx,j,"reads"] = 0;
-      #diskstats_data[diskstats_mx,j,"read_bytes"] = 0;
-      #diskstats_data[diskstats_mx,j,"writes"] = 0;
-      #diskstats_data[diskstats_mx,j,"write_bytes"] = 0;
     while ( getline  > 0) {
       if ($0 == "" || (length($1) > 2 && substr($1, 1, 2) == "__")) {
         break;
@@ -151,9 +273,46 @@ awk -v script_nm="$0.$LINENO.awk" -v mutt_ofile="$MUTT_OUT_FL" -v cur_dir="$CUR_
       #if ($2  == 0 && $3 != "dm-0") {
       dev = $3;
       dev_len = length(dev);
-#nvme0n1p1
-#  65     176 sdab 15392962 3237 6538521378 38521676 18133319 302715 8990653984 793844424 0 40104628 832302280
-#  65     177 sdab1 15392611 3237 6538511858 38521528 18133316 302715 8990653984 793844404 0 40104520 832300228
+     
+
+#		if (NF >= 14) {
+#			sdev.rd_ios     = rd_ios;
+#			sdev.rd_merges  = rd_merges_or_rd_sec;
+#			sdev.rd_sectors = rd_sec_or_wr_ios;
+#			sdev.rd_ticks   = (unsigned int) rd_ticks_or_wr_sec;
+#			sdev.wr_ios     = wr_ios;
+#			sdev.wr_merges  = wr_merges;
+#			sdev.wr_sectors = wr_sec;
+#			sdev.wr_ticks   = wr_ticks;
+#			sdev.ios_pgr    = ios_pgr;
+#			sdev.tot_ticks  = tot_ticks;
+#			sdev.rq_ticks   = rq_ticks;
+#
+#			if (NF >= 18) {
+#				#/* Discard I/O */
+#				sdev.dc_ios     = dc_ios;
+#				sdev.dc_merges  = dc_merges;
+#				sdev.dc_sectors = dc_sec;
+#				sdev.dc_ticks   = dc_ticks;
+#			}
+#
+#			if (NF >= 20) {
+#				# Flush I/O 
+#				sdev.fl_ios     = fl_ios;
+#				sdev.fl_ticks   = fl_ticks;
+#			}
+#		}
+#		else if (NF == 7) {
+#			#/* Partition without extended statistics */
+#			#if (DISPLAY_EXTENDED(flags))
+#		#		continue;
+#
+#			sdev.rd_ios     = rd_ios;
+#			sdev.rd_sectors = rd_merges_or_rd_sec;
+#			sdev.wr_ios     = rd_sec_or_wr_ios;
+#			sdev.wr_sectors = rd_ticks_or_wr_sec;
+#		}
+
       use_it= 0;
       if (substr(dev, 1, 2) == "sd") {
         if (length(dev) == 3) {
@@ -168,21 +327,37 @@ awk -v script_nm="$0.$LINENO.awk" -v mutt_ofile="$MUTT_OUT_FL" -v cur_dir="$CUR_
           }
         }
       }
-      if ((dev_len == 7 && substr(dev, 1, 4) == "nvme") ||
-          dev == "dm-0") {
+      if (dev_len == 7 && substr(dev, 1, 4) == "nvme") {
         use_it = 1;
       }
       if (use_it == 1) {
-      j++;
+        j++;
+         # from https://github.com/sysstat/sysstat/blob/master/iostat.c
+	       major = $1; minor = $2; dev_name = $3;
+			   rd_ios = $4; rd_merges = $5; rd_sec = $6; rd_ticks = $7;
+			   wr_ios = $8; wr_merges = $9; wr_sec = $10; wr_ticks = $11; ios_pgr = $12; tot_ticks = $13; rq_ticks = $14;
+			   #dc_ios = $15; dc_merges = $16; dc_sec = $17; dc_ticks = $18;
+			   #fl_ios = $19; fl_ticks = $20;
+
       diskstats_lns[diskstats_mx] = j;
-      diskstats_data[diskstats_mx,j,"device"] = $3;
-      #diskstats_data[diskstats_mx,j,"reads"] = $4+0;
-      #diskstats_data[diskstats_mx,j,"read_bytes"] = 512*($6+0);
-      #diskstats_data[diskstats_mx,j,"writes"] = $8+0;
-      #diskstats_data[diskstats_mx,j,"write_bytes"] = 512*($10+0);
-      tot_bytes = 512*($10+$6);
-      diskstats_data[diskstats_mx,j,"total_bytes"] = tot_bytes;
-      diskstats_data[diskstats_mx,1,"total_bytes"] += tot_bytes;
+      diskstats_data[diskstats_mx,j,"device"] = dev_name;
+      diskstats_data[diskstats_mx,j,"rd_sec"] = rd_sec+0;
+      diskstats_data[diskstats_mx,j,"wr_sec"] = wr_sec+0;
+      diskstats_data[diskstats_mx,j,"rd_ios"] = rd_ios+0;
+      diskstats_data[diskstats_mx,j,"wr_ios"] = wr_ios+0;
+      diskstats_data[diskstats_mx,j,"rd_ticks"] = rd_ticks+0;
+      diskstats_data[diskstats_mx,j,"wr_ticks"] = wr_ticks+0;
+      diskstats_data[diskstats_mx,j,"rq_ticks"] = rq_ticks+0;
+      diskstats_data[diskstats_mx,j,"tot_ticks"] = tot_ticks+0;
+
+      diskstats_data[diskstats_mx,1,"rd_sec"] += rd_sec+0;
+      diskstats_data[diskstats_mx,1,"wr_sec"] += wr_sec+0;
+      diskstats_data[diskstats_mx,1,"rd_ios"] += rd_ios+0;
+      diskstats_data[diskstats_mx,1,"wr_ios"] += wr_ios+0;
+      diskstats_data[diskstats_mx,1,"rd_ticks"] += rd_ticks+0;
+      diskstats_data[diskstats_mx,1,"wr_ticks"] += wr_ticks+0;
+      diskstats_data[diskstats_mx,1,"rq_ticks"] += rq_ticks+0;
+      diskstats_data[diskstats_mx,1,"tot_ticks"] += tot_ticks+0;
       }
     }
   }
@@ -909,29 +1084,81 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
          }
       }
     }
-    if (diskstats_mx > 0) {
+    if (netdev_mx > 0) {
       trow++;
-      printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", "infra disk IO MB/sec", "infra procs") > ofile;
+      printf("\n") > ofile
       trow++;
-      devs = diskstats_lns[1];
-      printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 2, -1, 2+devs, 1) > ofile;
+      printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", "infra net device MB/s & packets Kp/s", "infra procs") > ofile;
+      trow++;
+      devs = netdev_lns[1];
+      printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 2, -1, 2+(4*devs), 1) > ofile;
       printf("epoch\tts") > ofile
+      j = 0;
       for(i=1; i <= devs; i++) {
-        printf("\t%s", diskstats_data[1,i,"device"]) > ofile;
-        vsum[i] = 0.0;
-        vnum[i] = 0;
+        dv = netdev_data[1,i,"device"];
+        printf("\tMB/s read %s", dv) > ofile;
+        vsum[++j] = 0.0;
+        vnum[j] = 0;
+        printf("\tpkts_read Kp/s %s", dv) > ofile;
+        vsum[++j] = 0.0;
+        vnum[j] = 0;
+        printf("\tMB/s write %s", dv) > ofile;
+        vsum[++j] = 0.0;
+        vnum[j] = 0;
+        printf("\tpkts_write Kp/s %s", dv) > ofile;
+        vsum[++j] = 0.0;
+        vnum[j] = 0;
       }
       printf("\n") > ofile;
       trow++;
-      for(k=2; k <= diskstats_mx; k++) {
-        printf("%s\t%d", diskstats_dt[k], diskstats_dt[k]-diskstats_dt[1]) > ofile;
-        tm_diff = diskstats_dt[k]-diskstats_dt[k-1];
+      j=0;
+      for(k=2; k <= netdev_mx; k++) {
+        printf("%s\t%d", netdev_dt[k], netdev_dt[k]-netdev_dt[1]) > ofile;
+        tm_diff = netdev_dt[k]-netdev_dt[k-1];
         for(i=1; i <= devs; i++) {
-          MB_diff = 1.0e-6 * (diskstats_data[k,i,"total_bytes"]-diskstats_data[k-1,i,"total_bytes"]);
-          val = MB_diff / tm_diff;
-          #printf("rd_infra_cputime.sh: k= %d dev[%d]= %s, perf= %f MB/s\n", k, i, diskstats_data[1,i,"device"], val) > "/dev/stderr";
-          vsum[i] += val;
-          vnum[i]++;
+          fld = "bytes_rd";
+          diff = (netdev_data[k,i,fld]-netdev_data[k-1,i,fld])/(1024.0*1024.0);
+          val = diff / tm_diff;
+          if (options_get_max_val == 1) {
+            if (netdev_max[i,fld] == "" || netdev_max[i,fld] < val) {
+              netdev_max[i,fld] = val;
+            }
+          }
+          vsum[++j] += val;
+          vnum[j]++;
+          printf("\t%.3f", val) > ofile;
+          fld = "packets_rd";
+          diff = (netdev_data[k,i,fld]-netdev_data[k-1,i,fld])/1024.0;
+          val = diff / tm_diff;
+          if (options_get_max_val == 1) {
+            if (netdev_max[i,fld] == "" || netdev_max[i,fld] < val) {
+              netdev_max[i,fld] = val;
+            }
+          }
+          vsum[++j] += val;
+          vnum[j]++;
+          printf("\t%.3f", val) > ofile;
+          fld = "bytes_wr";
+          diff = (netdev_data[k,i,fld]-netdev_data[k-1,i,fld])/(1024.0*1024.0);
+          val = diff / tm_diff;
+          if (options_get_max_val == 1) {
+            if (netdev_max[i,fld] == "" || netdev_max[i,fld] < val) {
+              netdev_max[i,fld] = val;
+            }
+          }
+          vsum[++j] += val;
+          vnum[j]++;
+          printf("\t%.3f", val) > ofile;
+          fld = "packets_wr";
+          diff = (netdev_data[k,i,fld]-netdev_data[k-1,i,fld])/1024.0;
+          val = diff / tm_diff;
+          if (options_get_max_val == 1) {
+            if (netdev_max[i,fld] == "" || netdev_max[i,fld] < val) {
+              netdev_max[i,fld] = val;
+            }
+          }
+          vsum[++j] += val;
+          vnum[j]++;
           printf("\t%.3f", val) > ofile;
         }
         printf("\n") > ofile;
@@ -939,6 +1166,116 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
       }
       trow++;
       printf("\n") > ofile;
+      if (sum_file != "") {
+         scl = 1024.0*1024.0;
+         for(i=1; i <= devs; i++) {
+          tm_diff = netdev_dt[netdev_mx]-netdev_dt[1];
+          fld = "bytes_rd";
+          diff = (netdev_data[netdev_mx,i,fld]-netdev_data[1,i,fld])/scl;
+          v = diff / tm_diff;
+          if (options_get_max_val == 1 && netdev_max[i,fld] != "") { v = netdev_max[i,fld]; }
+          printf("infra_procs\tnet stats\t%.3f\tMB/s read %s\n", v, netdev_data[1,i,"device"]) >> sum_file;
+          fld = "packets_rd";
+          diff = (netdev_data[netdev_mx,i,fld]-netdev_data[1,i,fld])/1024.0;
+          v = diff / tm_diff;
+          if (options_get_max_val == 1 && netdev_max[i,fld] != "") { v = netdev_max[i,fld]; }
+          printf("infra_procs\tnet stats\t%.3f\tpackets Kpkts/s read %s\n", v, netdev_data[1,i,"device"]) >> sum_file;
+          fld = "bytes_wr";
+          diff = (netdev_data[netdev_mx,i,fld]-netdev_data[1,i,fld])/scl;
+          v = diff / tm_diff;
+          if (options_get_max_val == 1 && netdev_max[i,fld] != "") { v = netdev_max[i,fld]; }
+          printf("infra_procs\tnet stats\t%.3f\tMB/s write %s\n", v, netdev_data[1,i,"device"]) >> sum_file;
+          fld = "packets_wr";
+          diff = (netdev_data[netdev_mx,i,fld]-netdev_data[1,i,fld])/1024.0;
+          v = diff / tm_diff;
+          if (options_get_max_val == 1 && netdev_max[i,fld] != "") { v = netdev_max[i,fld]; }
+          printf("infra_procs\tnet stats\t%.3f\tpackets/s Kpkts/s write %s\n", v, netdev_data[1,i,"device"]) >> sum_file;
+         }
+      }
+    }
+    if (diskstats_mx > 0) {
+      if (1 == 2) {
+      trow++;
+      compute_diskstats(1,0, 1);
+      printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", "infra disk total IO stats", "infra procs") > ofile;
+      trow++;
+      devs = diskstats_lns[1];
+      printf("diskstats devs= %s\n", devs) > "/dev/stderr";
+      cols = diskstats_hdrs_mx;
+      printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 2, -1, 2+cols, 1) > ofile;
+      printf("epoch\tts") > ofile
+      for(i=2; i <= cols; i++) {
+         printf("\t%s", diskstats_hdrs[i]) > ofile;
+         for (j=1; j <= devs; j++) {
+           max_arr[j,i] = 0.0;
+         }
+      }
+      printf("\n") > ofile;
+      trow++;
+      for(k=2; k <= diskstats_mx; k++) {
+        compute_diskstats(k,k-1, 1);
+        printf("%s\t%d", diskstats_dt[k], diskstats_dt[k]-diskstats_dt[1]) > ofile;
+        tm_diff = diskstats_dt[k]-diskstats_dt[k-1];
+        for(i=2; i <= cols; i++) {
+          val = diskstats_vals[i];
+          if (options_get_max_val == 1) {
+             max_arr[i] = 0.0;
+          }
+          printf("\t%.3f", val) > ofile;
+        }
+        printf("\n") > ofile;
+        trow++;
+      }
+      trow++;
+      printf("\n") > ofile;
+      }
+      compute_diskstats(1,0, 1);
+      devs = diskstats_lns[1];
+      for (i=1; i <= devs; i++) {
+        dev = diskstats_data[1,i,"device"];
+      trow++;
+      printf("title\t%s %s\tsheet\t%s\ttype\tscatter_straight\n", "infra disk IO stats device", dev, "infra procs") > ofile;
+      trow++;
+      cols = diskstats_hdrs_mx;
+      printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 2, -1, 2+(cols), 1) > ofile;
+      printf("epoch\tts") > ofile
+         for(j=2; j <= cols; j++) {
+           printf("\t%s %s", diskstats_hdrs[j],  diskstats_data[1,i,"device"]) > ofile;
+           max_arr[i,j] = 0.0;
+         }
+      printf("\n") > ofile;
+      trow++;
+      for(k=2; k <= diskstats_mx; k++) {
+        dev = diskstats_data[1,i,"device"];
+        compute_diskstats(k,k-1, i);
+        printf("%s\t%d", diskstats_dt[k], diskstats_dt[k]-diskstats_dt[1]) > ofile;
+        for(j=2; j <= cols; j++) {
+          val = diskstats_vals[j];
+          if (options_get_max_val == 1) {
+            if (diskstats_max[i,j] == "" || diskstats_max[i,j] < val) {
+              diskstats_max[i,j] = val;
+            }
+          }
+          printf("\t%.3f", val) > ofile;
+        }
+        printf("\n") > ofile;
+        trow++;
+      }
+      trow++;
+      printf("\n") > ofile;
+      }
+      for (i=1; i <= devs; i++) {
+        compute_diskstats(diskstats_mx,1, i);
+        dev = diskstats_data[1,i,"device"];
+        for (k=2; k <= cols; k++) {
+          v = diskstats_vals[k];
+          if (options_get_max_val == 1) {
+              v = diskstats_max[i,k];
+          }
+          printf("infra_procs\tIO stats\t%.4f\t%s %s\n", v, diskstats_hdrs[k], dev) >> sum_file;
+        }
+      }
+      if (1==2) {
       if (sum_file != "") {
          for(i=1; i <= devs; i++) {
           tm_diff = diskstats_dt[diskstats_mx]-diskstats_dt[1];
@@ -951,6 +1288,70 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
            printf("infra_procs\tIO stats\t%.3f\tIO MBs/sec %s\n", v, diskstats_data[1,i,"device"]) >> sum_file;
          }
       }
+
+      trow++;
+      printf("\n") > ofile;
+      trow++;
+      printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", "infra disk IOPS", "infra procs") > ofile;
+      trow++;
+      devs = diskstats_lns[1];
+      printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 2, -1, 2+(3*devs), 1) > ofile;
+      printf("epoch\tts") > ofile
+      j = 0;
+      for(i=1; i <= devs; i++) {
+        printf("\ttot_iops %s", diskstats_data[1,i,"device"]) > ofile;
+        vsum[++j] = 0.0;
+        vnum[j] = 0;
+        printf("\trd_iops %s", diskstats_data[1,i,"device"]) > ofile;
+        vsum[++j] = 0.0;
+        vnum[j] = 0;
+        printf("\twr_iops %s", diskstats_data[1,i,"device"]) > ofile;
+        vsum[++j] = 0.0;
+        vnum[j] = 0;
+      }
+      printf("\n") > ofile;
+      trow++;
+      j=0;
+      for(k=2; k <= diskstats_mx; k++) {
+        printf("%s\t%d", diskstats_dt[k], diskstats_dt[k]-diskstats_dt[1]) > ofile;
+        tm_diff = diskstats_dt[k]-diskstats_dt[k-1];
+        for(i=1; i <= devs; i++) {
+          IOS_diff = 1.0e-6 * (diskstats_data[k,i,"total_ios"]-diskstats_data[k-1,i,"total_ios"]);
+          val = IOS_diff / tm_diff;
+          vsum[++j] += val;
+          vnum[j]++;
+          printf("\t%.3f", val) > ofile;
+          IOS_diff = (diskstats_data[k,i,"total_ios_rd"]-diskstats_data[k-1,i,"total_ios_rd"]);
+          val = IOS_diff / tm_diff;
+          vsum[++j] += val;
+          vnum[j]++;
+          printf("\t%.3f", val) > ofile;
+          IOS_diff = (diskstats_data[k,i,"total_ios_wr"]-diskstats_data[k-1,i,"total_ios_wr"]);
+          val = IOS_diff / tm_diff;
+          vsum[++j] += val;
+          vnum[j]++;
+          printf("\t%.3f", val) > ofile;
+        }
+        printf("\n") > ofile;
+        trow++;
+      }
+      trow++;
+      printf("\n") > ofile;
+      if (sum_file != "") {
+         for(i=1; i <= devs; i++) {
+          tm_diff = diskstats_dt[diskstats_mx]-diskstats_dt[1];
+          IOS_diff = 1.0e-6 * (diskstats_data[diskstats_mx,i,"total_ios"]-diskstats_data[1,i,"total_ios"]);
+          v = IOS_diff / tm_diff;
+          printf("infra_procs\tIO stats\t%.3f\tIOPS %s\n", v, diskstats_data[1,i,"device"]) >> sum_file;
+          IOS_diff = 1.0e-6 * (diskstats_data[diskstats_mx,i,"total_ios_rd"]-diskstats_data[1,i,"total_ios_rd"]);
+          v = IOS_diff / tm_diff;
+          printf("infra_procs\tIO stats\t%.3f\tIOPS read %s\n", v, diskstats_data[1,i,"device"]) >> sum_file;
+          IOS_diff = 1.0e-6 * (diskstats_data[diskstats_mx,i,"total_ios_wr"]-diskstats_data[1,i,"total_ios_wr"]);
+          v = IOS_diff / tm_diff;
+          printf("infra_procs\tIO stats\t%.3f\tIOPS write %s\n", v, diskstats_data[1,i,"device"]) >> sum_file;
+         }
+      }
+    }
     }
     if (col_rss != -1) {
       trow++;
