@@ -1,13 +1,50 @@
 #!/bin/bash
 
+INF=/proc/cpuinfo
+if [ "$1" != "" ]; then
+  INF=$1
+fi
+
 SCR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 AWK_BIN=awk
 if [ -e $SCR_DIR/bin/gawk ]; then
+if [[ "$OSTYPE" == "linux-gnu"* ]]; then
   AWK_BIN=$SCR_DIR/bin/gawk
+elif [[ "$OSTYPE" == "darwin"* ]]; then
+   # Mac OSX
+   AWK_BIN=gawk
+fi
+fi
+if [[ "$OSTYPE" == "darwin"* ]]; then
+  if [ "$1" == "" ]; then
+   #machdep.cpu.vendor:
+   #machdep.cpu.brand_string
+   #machdep.cpu.family: 6
+   #machdep.cpu.model: 158
+   #sysctl machdep.cpu
+   #echo "$RESP"
+   VENDR=`sysctl machdep.cpu.vendor|awk '{$1="";printf("Vendor ID: %s\n", $0);exit;}'`
+   FAM=`sysctl machdep.cpu|grep family| awk '{$1=""; printf("CPU family: %s\n", $0);exit;}'`
+   MOD=`sysctl machdep.cpu|grep cpu.model| awk '{$1="";printf("Model: %s\n", $0);exit}'`
+   BRAND=`sysctl machdep.cpu|grep cpu.brand_str|awk '{$1="";printf("Model name: %s\n", $0);exit;}'`
+   RESP=`echo $VENDR; echo $FAM; echo $MOD; echo $BRAND`
+  else
+  if [ ! -e $INF ]; then
+    echo "didn't find input file $INF"
+    exit
+  fi
+   RESP=`cat $INF`
+  fi
+ else
+  if [ ! -e $INF ]; then
+    echo "didn't find input file $INF"
+    exit
+  fi
+   RESP=`cat $INF`
 fi
 
-cat /proc/cpuinfo | $AWK_BIN '
-   BEGIN{vrb=0;}
+echo "$RESP" | $AWK_BIN -v vrb=0 '
+   BEGIN{;}
    function ltrim(s) { sub(/^[ \t\r\n]+/, "", s); return s }
    function rtrim(s) { sub(/[ \t\r\n,]+$/, "", s); return s }
    function trim(s) { return rtrim(ltrim(s)); }
@@ -19,29 +56,31 @@ cat /proc/cpuinfo | $AWK_BIN '
         # 1st gen xeon scalable cpus: 81xx, 61xx, 51xx, 81xxT, 61xxT 81xxF, 61xxF, 51xx, 41xx, 31xx, 51xxT 41xxT, 51xx7, k
         
         # cpuid tables from https://en.wikichip.org/wiki/intel/cpuid
-        dcd[1,1]="Ice Lake";  dcd[1,2]="Family 6 Model 108";
-        dcd[2,1]="Ice Lake";  dcd[2,2]="Family 6 Model 106";
-        dcd[3,1]="Cooper Lake/Cascade Lake/Skylake";  dcd[3,2]="Family 6 Model 85";
-        dcd[4,1]="Broadwell";  dcd[4,2]="Family 6 Model 79";
-        dcd[5,1]="Broadwell";  dcd[5,2]="Family 6 Model 86";
-        dcd[6,1]="Haswell";  dcd[6,2]="Family 6 Model 63";
-        dcd[7,1]="Ivy Bridge";  dcd[7,2]="Family 6 Model 62";
-        dcd[8,1]="Sandy Bridge";  dcd[8,2]="Family 6 Model 45";
-        dcd[9,1]="Westmere";  dcd[9,2]="Family 6 Model 44";
-        dcd[10,1]="EX";  dcd[10,2]="Family 6 Model 47";
-        dcd[11,1]="Nehalem";  dcd[11,2]="Family 6 Model 46";
-        dcd[12,1]="Lynnfield";  dcd[12,2]="Family 6 Model 30";
-        dcd[13,1]="Bloomfield, EP, WS";  dcd[13,2]="Family 6 Model 26";
-        dcd[14,1]="Penryn";  dcd[14,2]="Family 6 Model 29";
-        dcd[15,1]="Harpertown, QC, Wolfdale, Yorkfield";  dcd[15,2]="Family 6 Model 23";
+        i=0;
+        dcd[++i,1]="Ice Lake";     dcd[i,2]="Family 6 Model 108";
+        dcd[++i,1]="Ice Lake";     dcd[i,2]="Family 6 Model 106";
+        dcd[++i,1]="Coffee Lake";  dcd[i,2]="Family 6 Model 158";
+        dcd[++i,1]="Cooper Lake/Cascade Lake/Skylake";  dcd[i,2]="Family 6 Model 85"; csx_i=i;
+        dcd[++i,1]="Broadwell";    dcd[i,2]="Family 6 Model 79";
+        dcd[++i,1]="Broadwell";    dcd[i,2]="Family 6 Model 86";
+        dcd[++i,1]="Haswell";      dcd[i,2]="Family 6 Model 63";
+        dcd[++i,1]="Ivy Bridge";   dcd[i,2]="Family 6 Model 62";
+        dcd[++i,1]="Sandy Bridge"; dcd[i,2]="Family 6 Model 45";
+        dcd[++i,1]="Westmere";     dcd[i,2]="Family 6 Model 44";
+        dcd[++i,1]="EX";           dcd[i,2]="Family 6 Model 47";
+        dcd[++i,1]="Nehalem";      dcd[i,2]="Family 6 Model 46";
+        dcd[++i,1]="Lynnfield";    dcd[i,2]="Family 6 Model 30";
+        dcd[++i,1]="Bloomfield, EP, WS";  dcd[i,2]="Family 6 Model 26";
+        dcd[++i,1]="Penryn";       dcd[i,2]="Family 6 Model 29";
+        dcd[++i,1]="Harpertown, QC, Wolfdale, Yorkfield";  dcd[i,2]="Family 6 Model 23";
         str = "Family " fam " Model " mod;
         res=" ";
-        for(k=1;k <=15;k++) {
+        for(k=1; k <= i; k++) {
            if (dcd[k,2] == str) {
               res=dcd[k,1];break;
            }
         }
-        if (k==3) { # so cooper/cascade/sky
+        if (k==csx_i) { # so cooper/cascade/sky
            if (match(cpu_model_name, / [86543]2[0-9][0-9]/) > 0) { res="Cascade Lake"}
            else if (match(cpu_model_name, / [86543]1[0-9][0-9]/) > 0) { res="Skylake"}
         }
