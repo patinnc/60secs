@@ -157,6 +157,8 @@ while getopts "hvASa:b:B:c:D:d:e:F:g:I:j:m:N:o:P:r:X:x:" opt; do
       echo "         'pidstat_dont_add_pid' don't add the pid to process name. Allows better matching if doing multple servers"
       echo "         'sum_file_no_formula' for non-combined summary sheets, don't use the excel formula to compute the average on the summary sheet"
       echo "           this can be useful if you are using compare_summary_table.sh to create a comparison of multiple summary sheets"
+      echo "         'get_max_val' when consolidating values for spreadsheet, don't get the avareage value, get the max value"
+      echo "         'get_perf_stat_max_val' when consolidating values for spreadsheet, don't get the avareage value, get the max value, this one is for perf_stat_scatter.awk"
       echo "   -P phase_file"
       echo "   -r regex   regex expression to select directories"
       echo "   -S    skip creating detail xlsx file, just do the summary all spreadsheet"
@@ -249,6 +251,8 @@ get_abs_filename() {
   # $1 : relative filename
   echo "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
 }
+
+export AWKPATH=$SCR_DIR
 
 get_dir_list() {
    local CKF=$1
@@ -653,18 +657,20 @@ for i in $LST; do
     fi
  fi
  if [ "$SKIP_SYS_2_TSV" == "0" ]; then
+   SYS_2_TSV_STDOUT_FILE=tmp.jnk
    if [ $VERBOSE -gt 0 ]; then
-     echo "$SCR_DIR/sys_2_tsv.sh $OPT_a $OPT_A $OPT_G -j $JOB_ID -p \"$RPS\" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i \"*.png\" -s $SUM_FILE -x $XLS.xlsx -o $OPT_OPT $OPT_PH -t $DIR &> tmp.jnk" &
+     echo "$SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p \"$RPS\" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i \"*.png\" -s $SUM_FILE -x $XLS.xlsx -o $OPT_OPT $OPT_PH -t $DIR &> $SYS_2_TSV_STDOUT_FILE" &
    fi
    if [ "$BACKGROUND" -le "0" ]; then
-          $SCR_DIR/sys_2_tsv.sh $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$RPS" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o $OPT_OPT $OPT_PH -t $DIR &> tmp.jnk 
+          $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$RPS" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o $OPT_OPT $OPT_PH -t $DIR &> $SYS_2_TSV_STDOUT_FILE
           RC=$?
           ck_last_rc $RC $LINENO
    else
-          $SCR_DIR/sys_2_tsv.sh $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$RPS" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o $OPT_OPT $OPT_PH -t $DIR &> tmp.jnk &
+          $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$RPS" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o $OPT_OPT $OPT_PH -t $DIR &> $SYS_2_TSV_STDOUT_FILE &
           LPID=$!
           RC=$?
           BK_DIR[$LPID]=$i
+          BK_OUT[$LPID]=$SYS_2_TSV_STDOUT_FILE
           if [ $VERBOSE -gt 0 ]; then
             echo "$0.$LINENO LPID= $LPID, RC= $RC"
           fi
@@ -690,7 +696,7 @@ for i in $LST; do
        RC=$?
        if [ "$RC" != "0" ]; then
           echo "$0: sys_2_tsv.sh got error! bye at $LINENO" > /dev/stderr
-          echo "$0: look at tmp.jnk file in last data dir for error messages" > /dev/stderr
+          echo "$0: look at ${BK_OUT[$LPID]} file in last data dir for error messages" > /dev/stderr
           echo "$0: dir= ${BK_DIR[$job]}"
           exit 1
        fi
@@ -723,9 +729,9 @@ wait_for_all() {
        #if [ "$RC" == "1" -o "$RC" == "2" ]; then
        if [ "$RC" != "0" ]; then
           echo "$0: sys_2_tsv.sh got error RC= \"$RC\"! at $LINENO. bye. called by line $1" > /dev/stderr
-          echo "$0: look at tmp.jnk file in last data dir for error messages" > /dev/stderr
+          echo "$0: look at ${BK_OUT[$job]} in last data dir for error messages" > /dev/stderr
           echo "$0: dir= ${BK_DIR[$job]}"
-          tail -20 ${BK_DIR[$job]}/tmp.jnk
+          tail -20 ${BK_DIR[$job]}/${BK_OUT[$job]}
           exit 1
        fi
      done
@@ -742,7 +748,9 @@ for i in $LST; do
  fi
  if [ "$PHASE_FILE" == "" ]; then
     RESP=phase_cpu2017.txt
+    if [ $VERBOSE -gt 0 ]; then
       echo "$0.$LINENO phase blank"
+    fi
     if [ -e $RESP ]; then
       echo "$0.$LINENO phase $RESP"
       #OPT_PH=" -P $i/$RESP "
@@ -901,8 +909,10 @@ if [ "$FLS_IC" != "" -o "$FLS_PS" != "" ]; then
   fi
 #abc
   if [ "$FLS_IC" != "" -o "$FLS_PS" != "" ]; then
-  echo "$SCR_DIR/redo_chart_table.sh -S $SUM_ALL -f $ALST -o $OFILE   -g infra_cputime $OPT_METRIC -r 50 -t __all__"
-        $SCR_DIR/redo_chart_table.sh -S $SUM_ALL -f $ALST -o $OFILE   -g infra_cputime $OPT_METRIC -r 50 -t __all__ 
+  if [ $VERBOSE -gt 0 ]; then
+  echo "$SCR_DIR/redo_chart_table.sh -O $OPTIONS -S $SUM_ALL -f $ALST -o $OFILE   -g infra_cputime $OPT_METRIC -r 50 -t __all__"
+  fi
+        $SCR_DIR/redo_chart_table.sh -O $OPTIONS -S $SUM_ALL -f $ALST -o $OFILE   -g infra_cputime $OPT_METRIC -r 50 -t __all__ 
   ck_last_rc $? $LINENO
   fi
   if [ "$FLS_PS" != "" ]; then
@@ -910,8 +920,10 @@ if [ "$FLS_IC" != "" -o "$FLS_PS" != "" ]; then
   if [ -e $OFILE ]; then
     rm $OFILE
   fi
-  echo "$SCR_DIR/redo_chart_table.sh -S $SUM_ALL -f $ALST -o $OFILE   -g perf_stat $OPT_METRIC -r 50 -t __all__"
-        $SCR_DIR/redo_chart_table.sh -S $SUM_ALL -f $ALST -o $OFILE   -g perf_stat $OPT_METRIC -r 50 -t __all__ 
+  if [ $VERBOSE -gt 0 ]; then
+  echo "$SCR_DIR/redo_chart_table.sh -O $OPTIONS -S $SUM_ALL -f $ALST -o $OFILE   -g perf_stat $OPT_METRIC -r 50 -t __all__"
+  fi
+        $SCR_DIR/redo_chart_table.sh -O $OPTIONS -S $SUM_ALL -f $ALST -o $OFILE   -g perf_stat $OPT_METRIC -r 50 -t __all__ 
   ck_last_rc $? $LINENO
   fi
 fi
@@ -948,11 +960,22 @@ if [ "$DO_TSV_2_XLS" == "1" ]; then
     MK_SUM_ALL=1
   fi
 
-  #if [ $VERBOSE -gt 0 ]; then
+  if [ $VERBOSE -gt 0 ]; then
   echo "$0: awk -v mk_sum_all="$MK_SUM_ALL" -v input_file=\"$ALST\" -v sum_all=\"$SUM_ALL\" -v sum_file=\"$SUM_FILE\" -v curdir=\"$got_pwd\" "
-  #fi
-  awk -v script="$0.$LINENO.awk" -v job_id="$JOB_ID" -v verbose="$VERBOSE" -v mk_sum_all="$MK_SUM_ALL" -v input_file="$ALST" -v sum_all="$SUM_ALL" -v sum_file="$SUM_FILE" -v sum_all_avg_by_metric="$SUM_ALL_AVG_BY_METRIC" -v curdir="$got_pwd" '
-    BEGIN{sum_files=0;fls=0; fld_m=3;fld_v=4; got_avgby=0;}
+  fi
+  awk -v options="$OPTIONS" -v script="$0.$LINENO.awk" -v job_id="$JOB_ID" -v verbose="$VERBOSE" -v mk_sum_all="$MK_SUM_ALL" -v input_file="$ALST" -v sum_all="$SUM_ALL" -v sum_file="$SUM_FILE" -v sum_all_avg_by_metric="$SUM_ALL_AVG_BY_METRIC" -v curdir="$got_pwd" '
+    @include "get_excel_col_letter_from_number.awk"
+    BEGIN{
+      sum_files=0;
+      fls=0;
+      fld_m=3;
+      fld_v=4;
+      got_avgby=0;
+      get_max_val = 0;
+      if (index(options, "get_max_val") > 0) {
+        get_max_val = 1;
+      }
+    }
 function do_pxx_compare(fls, str1, str2, v,    str, pxx_i)
 {
     str = str1";"str2;
@@ -1019,6 +1042,48 @@ function do_pxx_compare(fls, str1, str2, v,    str, pxx_i)
            #   # so just drop the small values
            #   continue;
            #}
+           if (mtrcm1 == "net stats" && (index(mtrc, "MB/s read ") == 1 || index(mtrc, "MB/s write ") == 1)) {
+              str1 = mtrcm1;
+              str2 = mtrc;
+              if (arr[fld_v] != "" && arr[fld_v] != 0) {
+              do_pxx_compare(fls, str1, str2, arr[fld_v]);
+              }
+           }
+           if (mtrcm1 == "IO stats" && index(mtrc, "util% ") == 1) {
+              str1 = mtrcm1;
+              str2 = mtrc;
+              if (arr[fld_v] != "" && arr[fld_v] != 0) {
+              do_pxx_compare(fls, str1, str2, arr[fld_v]);
+              }
+           }
+           if (mtrcm1 == "IO stats" && (index(mtrc, "rd_MB/s ") == 1 || index(mtrc, "wr_MB/s ") == 1)) {
+              str1 = mtrcm1;
+              str2 = mtrc;
+              if (arr[fld_v] != "" && arr[fld_v] != 0) {
+              do_pxx_compare(fls, str1, str2, arr[fld_v]);
+              }
+           }
+           if (mtrcm1 == "perf_stat" && index(mtrc, "QPI_BW GB/s") == 1) {
+              str1 = mtrcm1;
+              str2 = mtrc;
+              if (arr[fld_v] != "" && arr[fld_v] != 0) {
+              do_pxx_compare(fls, str1, str2, arr[fld_v]);
+              }
+           }
+           if (mtrcm1 == "perf_stat" && index(mtrc, "%used_bw_of_max_theoretical_mem_bw") == 1) {
+              str1 = mtrcm1;
+              str2 = mtrc;
+              if (arr[fld_v] != "" && arr[fld_v] != 0) {
+              do_pxx_compare(fls, str1, str2, arr[fld_v]);
+              }
+           }
+           if (mtrcm1 == "perf_stat" && index(mtrc, "Mem BW GB/s") == 1) {
+              str1 = mtrcm1;
+              str2 = mtrc;
+              if (arr[fld_v] != "" && arr[fld_v] != 0) {
+              do_pxx_compare(fls, str1, str2, arr[fld_v]);
+              }
+           }
            if (mtrcm1 == "muttley host.calls max" && (mtrc == "RPS host.calls max")) {
               str1 = mtrcm1;
               str2 = mtrc;
@@ -1032,6 +1097,11 @@ function do_pxx_compare(fls, str1, str2, v,    str, pxx_i)
            if (mtrcm1 == "muttley calls avg" && arr[fld_v] < 1.0) {
               # the average muttley calls have so many small RPS. creates huge list especially if we match up columns
               # so just drop the small values
+              continue;
+           }
+           if (mtrcm1 == "perf_stat" && arr[fld_v] == 0.0) {
+              # not all events are defined on each box
+              # so just drop the 0 values
               continue;
            }
            str = mtrcm1 " " mtrc;
@@ -1111,7 +1181,7 @@ function do_pxx_compare(fls, str1, str2, v,    str, pxx_i)
         close(flnm)
       }
     }
- function ck_num(a) {
+ function ck_num(a,    b, isnum, c) {
   b=a+0;
   isnum=0;
   if (a==0.0){
@@ -1152,13 +1222,23 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
       if (mk_sum_all == 1) {
       ofile = sum_all;
       printf("_____script= %s ofile= %s, got_avgby= %d\n", script, ofile, got_avgby) > "/dev/stderr";
+      rw = 1;
       printf("title\tsum_all\tsheet\tsum_all\ttype\tcopy\n")  >> ofile;
+      ++rw;
       printf("hdrs\t2\t0\t-1\t%d\t-1\n", fls+3) >> ofile;
+      ++rw;
       printf("Resource\tTool\tMetric") >> ofile;
+      cur_col = 2; # 1st col is 0 for me. After above printf we are in col 2
       #if (got_avgby == 0 && fls > 1) {
       if (got_avgby == 0) {
+        if (get_max_val == 1) {
+          printf("\tmax") >> ofile;
+        } else {
           printf("\taverage") >> ofile;
+        }
+        ++cur_col;
       }
+      fl_col_beg = cur_col + 1;
       for (j=1; j <= fls; j++) {
          if (got_avgby == 1) {
           if (j == 1 || avgby_arr[j,1] != avgby_arr[j-1,1]) {
@@ -1167,18 +1247,31 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
          } else {
             printf("\t%d", j-1) >> ofile;
          }
+         ++cur_col;
       }
+      fl_col_end = cur_col;
       printf("\n") >> ofile;
+      ltr_beg = get_excel_col_letter_from_number(fl_col_beg);
+      ltr_end = get_excel_col_letter_from_number(fl_col_end);
+      printf("______ col_beg= %d, col_end= %d, ltr_beg= %s ltr_end= %s\n", fl_col_beg, fl_col_end, ltr_beg, ltr_end) > "/dev/stderr";
+      first_metric = 1;
       for (i=1; i <= mtrc_mx; i++) {
         mtrc   = mtrc_lkup[i,1];
         mtrcm1 = mtrc_lkup[i,2];
         if (mtrc == "") { continue; }
+        ++rw;
+        rng_str = sprintf("%s%d:%s%d", ltr_beg, rw, ltr_end,rw);
         if (mtrc == "data_sheet") {
           printf("\t%s\t%s", mtrc_arr[1,i], mtrc) >> ofile;
         } else {
           mcat = "itp";
           if (mtrc_cat[i] != "") { mcat = mtrc_cat[i]; }
-          printf("\t%s\t%s", mcat, mtrc) >> ofile;
+          eqn_for_col_of_max_val = sprintf("=MATCH(MAX(%s),%s,0)-1", rng_str, rng_str);
+          if (first_metric == 1) {
+            eqn_for_col_of_max_val = "fileno_of_max";
+            first_metric = 0;
+          }
+          printf("\"%s\"\t%s\t%s", eqn_for_col_of_max_val, mcat, mtrc) >> ofile;
         }
         for (j=1; j <= fls; j++) {
           val = mtrc_arr[j,i];
@@ -1208,8 +1301,17 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
                   val2   = mtrc_arr[k,i];
                   isnum2 = ck_num(val2);
                   if (isnum2 > 0) {
-                  sum_v = sum_v + val2;
-                  sum_n = sum_n + 1;
+                    if (get_max_val == 1) {
+                      if (sum_n == 0) {
+                        sum_v = val2;
+                        sum_n = 1;
+                      } else if (sum_v < val2) {
+                          sum_v = val2;
+                      }
+                    } else {
+                      sum_v = sum_v + val2;
+                      sum_n = sum_n + 1;
+                    }
                   }
                 }
                 if (sum_n > 0) {
@@ -1232,7 +1334,14 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
               }
             }
           }
+          if (val == "") {
+          printf("\t") >> ofile;
+          } else {
           printf("\t%s%s", equal, val) >> ofile;
+          }
+           #if (index(mtrc, "Mem BW GB/s") > 0) {
+           #  printf("str= %s, fls= %d, %s, %s\n", mtrc, fls, val, isnum) > "/dev/stderr";
+           #}
         }
         printf("\n") >> ofile;
       }
@@ -1428,7 +1537,7 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
       if [ "$END_TM_IN" != "" ]; then
         END_TM=$END_TM_IN
       else
-        END_TM=`awk '/ end /{printf("%d\n", $2);}' $RUN_LOG`
+        END_TM=`awk '/ end /{printf("%d", $2);exit}' $RUN_LOG`
       fi
       echo "got RUN_LOG BEG_TM= $BEG_TM END_TM= $END_TM"
       RUN_INFRA=`find $USE_DIR -name infra_cputime.txt | head -1`
@@ -1441,6 +1550,7 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
                # END_TM can be empty if the data dir is not yet done and the last date tm hasnt been written yet
                END_TM=$END_TMI
            else
+             echo "$0.$LINENO END_TM= $END_TM and END_TMI= $END_TMI"
              if [ "$END_TM" -lt "$END_TMI" ]; then
                END_TM=$END_TMI
              fi
