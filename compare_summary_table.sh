@@ -184,13 +184,17 @@ function _ord_init(    low, high, i, t) {
     if (did_metric == 0) {
      for (i=1; i <= NF; i++) {
       if (tolower($i) == "metric") {
-         if (i > 1 && (tolower($(i-1)) == "average" || tolower($(i-1)) == "value") ) {
+         sm1 = "";
+         sp1 = "";
+         iif (i > 1) { sm1 = tolower($(i-1)); }
+         iif (i < NF) { sp1 = tolower($(i+1)); }
+         if (i > 1 && (sm1 == "average" || sm1 == "value" || index(sm1, "avg") > 0) ) {
            did_metric = 1;
            ky=i;
            vl = i-1;
            break;
          }
-         if (NF > 1 && (tolower($(i+1)) == "average" || tolower($(i+1)) == "value") ) {
+         if (NF > 1 && (sp1 == "average" || sp1 == "value" || index(sp1, "avg") > 0) ) {
            did_metric = 1;
            ky=i;
            vl = i+1;
