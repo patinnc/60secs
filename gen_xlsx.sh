@@ -1232,7 +1232,7 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
       #if (got_avgby == 0 && fls > 1) {
       if (got_avgby == 0) {
         if (get_max_val == 1) {
-          printf("\tmax") >> ofile;
+          printf("\tavg_or_max_of_peak") >> ofile;
         } else {
           printf("\taverage") >> ofile;
         }
@@ -1261,6 +1261,7 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
         if (mtrc == "") { continue; }
         ++rw;
         rng_str = sprintf("%s%d:%s%d", ltr_beg, rw, ltr_end,rw);
+        do_avg0_or_max1 = 0;
         if (mtrc == "data_sheet") {
           printf("\t%s\t%s", mtrc_arr[1,i], mtrc) >> ofile;
         } else {
@@ -1272,6 +1273,9 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
             first_metric = 0;
           }
           printf("\"%s\"\t%s\t%s", eqn_for_col_of_max_val, mcat, mtrc) >> ofile;
+          if (get_max_val == 1 && index(mtrc, "peak") > 0) {
+            do_avg0_or_max1 = 1;
+          }
         }
         for (j=1; j <= fls; j++) {
           val = mtrc_arr[j,i];
@@ -1301,7 +1305,8 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
                   val2   = mtrc_arr[k,i];
                   isnum2 = ck_num(val2);
                   if (isnum2 > 0) {
-                    if (get_max_val == 1) {
+                    #if (get_max_val == 1)
+                    if (do_avg0_or_max1 == 1) {
                       if (sum_n == 0) {
                         sum_v = val2;
                         sum_n = 1;
