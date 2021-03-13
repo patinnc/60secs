@@ -215,33 +215,55 @@ if [ "$HOSTNM" != "" ]; then
   echo "_____ck  grail file $CKFL" > /dev/stderr
   if [ -e $CKFL ]; then
     echo "_____got grail hst= $HOSTNM file $CKFL" > /dev/stderr
-    awk -v hst="$HOSTNM" 'BEGIN{FS=";";} $1 == hst {printf("%s\n", $0); exit;}'
-    #schemadock7333-dca8;B19A;48;Intel(R)_Xeon(R)_Silver_4214_CPU_@_2.20GHz;T22U-1U;2101
-    SKU_NCPU_CPU_BOX_DISK=(`awk -v hst="$HOSTNM" -v FS=";" '$1 == hst {printf("%s\n%s\n%s\n%s\n%s\n", $2, $3, $4,$5,$6); exit;}' $CKFL`)
-    #awk -v hst="schemadock7333-dca8" -v FS=";" ' $1 == hst {printf("%s\n", $0);exit;}' $CKFL
-    #awk -v hst="schemadock7333-dca8"  '{if (NR <5){printf("hst= %s, ln= %s\n",hst,$1);}}' $CKFL
-    #B19A 48 Intel(R)_Xeon(R)_Silver_4214_CPU_@_2.20GHz T22U-1U 2101
+    #awk -v hst="$HOSTNM" 'BEGIN{FS=";";} $1 == hst {printf("%s\n", $0); exit;}'
+    SKU_NCPU_CPU_BOX_DISK=(`awk -v hst="$HOSTNM" -v FS=";" '
+      $1 == hst {
+        n=split($0,a,";");
+        sku   =a[2];
+        cpus  =a[3]+0;
+        if (cpus == 0) { cpus = ""; }
+        brand =a[4];
+        model =a[5];
+        diskTB=a[6]+0;
+        if (diskTB == 0) {diskTB = ""; }
+        owner =a[7];
+        printf("\"%s\"\n%s\n\"%s\"\n\"%s\"\n%s\n\"%s\"\n", sku, cpus, brand, model,diskTB, owner); exit 0;}
+        ' $CKFL`)
+    ck_last_rc $? $LINENO
     #echo "_____got grail sku= ${SKU_NCPU_CPU_BOX_DISK[@]}" > /dev/stderr
     V=${SKU_NCPU_CPU_BOX_DISK[0]}
     if [ "$V" == "" ]; then
       V="unknown"
     fi
-    printf "host\tSKU\t\"%s\"\tSKU\n"  "$V" >> $SUM_FILE;
+    #printf "host\tSKU\t\"%s\"\tSKU\n"  "$V" >> $SUM_FILE;
+    printf "host\tSKU\t%s\tSKU\n"  $V >> $SUM_FILE;
+
     V=${SKU_NCPU_CPU_BOX_DISK[4]}
     if [ "$V" == "" ]; then
       V=0
     fi
     printf "host\tdisk_GBs\t%s\tdisk_GBs\n"  "$V" >> $SUM_FILE;
+
     V=${SKU_NCPU_CPU_BOX_DISK[3]}
     if [ "$V" == "" ]; then
       V="unknown"
     fi
-    printf "host\thost_make\t\"%s\"\thost_make\n"  "$V" >> $SUM_FILE;
+    #printf "host\thost_make\t\"%s\"\thost_make\n"  "$V" >> $SUM_FILE;
+    printf "host\thost_make\t%s\thost_make\n"  "$V" >> $SUM_FILE;
+
     V=${SKU_NCPU_CPU_BOX_DISK[2]}
     if [ "$V" == "" ]; then
       V="unknown"
     fi
-    printf "host\tcpu_string\t\"%s\"\tcpu_string\n"  "$V" >> $SUM_FILE;
+    #printf "host\tcpu_string\t\"%s\"\tcpu_string\n"  "$V" >> $SUM_FILE;
+    printf "host\tcpu_string\t%s\tcpu_string\n"  "$V" >> $SUM_FILE;
+
+    V=${SKU_NCPU_CPU_BOX_DISK[5]}
+    if [ "$V" == "" ]; then
+      V="unknown"
+    fi
+    #printf "host\towner\t\"%s\"\towner\n"  "$V" >> $SUM_FILE;
+    printf "host\towner\t%s\towner\n"  "$V" >> $SUM_FILE;
   fi
 fi
 
