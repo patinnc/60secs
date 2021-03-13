@@ -97,6 +97,78 @@ awk -v script_nm="$0.$LINENO.awk" -v mutt_ofile="$MUTT_OUT_FL" -v cur_dir="$CUR_
    plst[8] = "ksoftirqd/";
    plst_mx = 8;
   }
+function get_max(a, b) {
+  if (a > b) {
+    return a;
+  };
+  return b;
+}
+function ck_netdev_max_val(val, i, fld) {
+  if (netdev_max[i,fld,"peak"] == "" || netdev_max[i,fld,"peak"] < val) {
+     netdev_max[i,fld,"peak"] = val;
+  }
+  netdev_max[i,fld,"sum_sq"] += val*val;
+  netdev_max[i,fld,"sum"] += val;
+  netdev_max[i,fld,"n"]++;
+}
+function ck_diskstats_max_val(val, i, j) {
+  # v = diskstats_max[i,k];
+  if (diskstats_max[i,j,"peak"] == "" || diskstats_max[i,j,"peak"] < val) {
+    diskstats_max[i,j,"peak"] = val;
+  }
+  diskstats_max[i,j,"sum_sq"] += val*val;
+  diskstats_max[i,j,"sum"] += val;
+  diskstats_max[i,j,"n"]++;
+}
+function prt_diskstats(i, cols,   dev, fmt_str, k, v, my_n, my_avg, my_stdev, my_p997, my_peak, hdr) {
+    compute_diskstats(diskstats_mx,1, i);
+    dev = diskstats_data[1,i,"device"];
+    fmt_str = "infra_procs\tIO stats\t%.4f\t%s %s";
+    for (k=2; k <= cols; k++) {
+       v = diskstats_vals[k];
+       hdr = diskstats_hdrs[k];
+       printf(fmt_str "\n", v, hdr, dev) >> sum_file;
+       my_n     = diskstats_max[i,k,"n"];
+       #printf(fmt_str"\n", v, hdr, dev) >> sum_file;
+       if (my_n > 0) {
+         my_avg   = diskstats_max[i,k,"sum"]/my_n;
+         my_stdev = sqrt((diskstats_max[i,k,"sum_sq"]/my_n)-(my_avg*my_avg));
+         my_p997  = my_avg + 3.0*my_stdev;
+         my_peak  = diskstats_max[i,k,"peak"];
+       } else {
+         my_avg   = 0.0;
+         my_stdev = 0.0;
+         my_p997  = 0.0;
+         my_peak  = 0.0;
+       }
+       printf(fmt_str" avg+3stdev\n", my_p997, hdr, dev) >> sum_file;
+       printf(fmt_str" peak\n", my_peak, hdr, dev) >> sum_file;
+    }
+    #v = diskstats_max[i,k];
+    #printf("infra_procs\tIO stats\t%.4f\t%s %s peak\n", v, diskstats_hdrs[k], dev) >> sum_file;
+}
+function do_netdev_print(fmt_str, i, fld, iend, ibeg, scl,     dev, my_n, my_avg, my_stdev, my_997, my_peak, tm_diff, diff, v) {
+   tm_diff = netdev_dt[iend]-netdev_dt[ibeg];
+   dev     = netdev_data[1,i,"device"];
+   diff = (netdev_data[iend,i,fld]-netdev_data[ibeg,i,fld])/scl;
+   v = diff / tm_diff;
+   my_n     = netdev_max[i,fld,"n"];
+   printf(fmt_str"\n", v, dev) >> sum_file;
+   if (my_n > 0) {
+     my_avg   = netdev_max[i,fld,"sum"]/my_n;
+     my_stdev = sqrt((netdev_max[i,fld,"sum_sq"]/my_n)-(my_avg*my_avg));
+     my_p997  = my_avg + 3.0*my_stdev;
+     my_peak  = netdev_max[i,fld,"peak"];
+   } else {
+     my_avg   = 0.0;
+     my_stdev = 0.0;
+     my_p997  = 0.0;
+     my_peak  = 0.0;
+   }
+   printf(fmt_str" avg+3stdev\n", my_p997, dev) >> sum_file;
+   printf(fmt_str" peak\n", my_peak, dev) >> sum_file;
+}
+
 function compute_diskstats(di,dim1, dj) {
       dev_name = diskstats_data[di,dj,"device"];
       rd_sec   = diskstats_data[di,dj,"rd_sec"];
@@ -111,14 +183,14 @@ function compute_diskstats(di,dim1, dj) {
       ctm = diskstats_dt[di];
       if (di > 1) {
           tm_diff         = ctm      -diskstats_dt[dim1];
-          rd_ios_diff     = rd_ios   -diskstats_data[dim1,dj,"rd_ios"];
-          wr_ios_diff     = wr_ios   -diskstats_data[dim1,dj,"wr_ios"];
-          rd_sec_diff     = rd_sec   -diskstats_data[dim1,dj,"rd_sec"];
-          wr_sec_diff     = wr_sec   -diskstats_data[dim1,dj,"wr_sec"];
-          rd_ticks_diff   = rd_ticks -diskstats_data[dim1,dj,"rd_ticks"];
-          wr_ticks_diff   = wr_ticks -diskstats_data[dim1,dj,"wr_ticks"];
-          rq_ticks_diff   = rq_ticks -diskstats_data[dim1,dj,"rq_ticks"];
-          tot_ticks_diff  = tot_ticks-diskstats_data[dim1,dj,"tot_ticks"];
+          rd_ios_diff     = get_max(0, rd_ios   -diskstats_data[dim1,dj,"rd_ios"]);
+          wr_ios_diff     = get_max(0, wr_ios   -diskstats_data[dim1,dj,"wr_ios"]);
+          rd_sec_diff     = get_max(0, rd_sec   -diskstats_data[dim1,dj,"rd_sec"]);
+          wr_sec_diff     = get_max(0, wr_sec   -diskstats_data[dim1,dj,"wr_sec"]);
+          rd_ticks_diff   = get_max(0, rd_ticks -diskstats_data[dim1,dj,"rd_ticks"]);
+          wr_ticks_diff   = get_max(0, wr_ticks -diskstats_data[dim1,dj,"wr_ticks"]);
+          rq_ticks_diff   = get_max(0, rq_ticks -diskstats_data[dim1,dj,"rq_ticks"]);
+          tot_ticks_diff  = get_max(0, tot_ticks-diskstats_data[dim1,dj,"tot_ticks"]);
           rw_ticks_diff   = rd_ticks_diff + wr_ticks_diff;
           rw_ios_diff     = rd_ios_diff + wr_ios_diff;
           rw_sec_diff     = rd_sec_diff + wr_sec_diff;
@@ -1119,44 +1191,28 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
           fld = "bytes_rd";
           diff = (netdev_data[k,i,fld]-netdev_data[k-1,i,fld])/(1024.0*1024.0);
           val = diff / tm_diff;
-          if (options_get_max_val == 1) {
-            if (netdev_max[i,fld] == "" || netdev_max[i,fld] < val) {
-              netdev_max[i,fld] = val;
-            }
-          }
+          ck_netdev_max_val(val, i, fld);
           vsum[++j] += val;
           vnum[j]++;
           printf("\t%.3f", val) > ofile;
           fld = "packets_rd";
           diff = (netdev_data[k,i,fld]-netdev_data[k-1,i,fld])/1024.0;
           val = diff / tm_diff;
-          if (options_get_max_val == 1) {
-            if (netdev_max[i,fld] == "" || netdev_max[i,fld] < val) {
-              netdev_max[i,fld] = val;
-            }
-          }
+          ck_netdev_max_val(val, i, fld);
           vsum[++j] += val;
           vnum[j]++;
           printf("\t%.3f", val) > ofile;
           fld = "bytes_wr";
           diff = (netdev_data[k,i,fld]-netdev_data[k-1,i,fld])/(1024.0*1024.0);
           val = diff / tm_diff;
-          if (options_get_max_val == 1) {
-            if (netdev_max[i,fld] == "" || netdev_max[i,fld] < val) {
-              netdev_max[i,fld] = val;
-            }
-          }
+          ck_netdev_max_val(val, i, fld);
           vsum[++j] += val;
           vnum[j]++;
           printf("\t%.3f", val) > ofile;
           fld = "packets_wr";
           diff = (netdev_data[k,i,fld]-netdev_data[k-1,i,fld])/1024.0;
           val = diff / tm_diff;
-          if (options_get_max_val == 1) {
-            if (netdev_max[i,fld] == "" || netdev_max[i,fld] < val) {
-              netdev_max[i,fld] = val;
-            }
-          }
+          ck_netdev_max_val(val, i, fld);
           vsum[++j] += val;
           vnum[j]++;
           printf("\t%.3f", val) > ofile;
@@ -1167,29 +1223,19 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
       trow++;
       printf("\n") > ofile;
       if (sum_file != "") {
-         scl = 1024.0*1024.0;
+         scl  = 1024.0*1024.0;
+         scl2 = 1024.0;
          for(i=1; i <= devs; i++) {
-          tm_diff = netdev_dt[netdev_mx]-netdev_dt[1];
           fld = "bytes_rd";
-          diff = (netdev_data[netdev_mx,i,fld]-netdev_data[1,i,fld])/scl;
-          v = diff / tm_diff;
-          if (options_get_max_val == 1 && netdev_max[i,fld] != "") { v = netdev_max[i,fld]; }
-          printf("infra_procs\tnet stats\t%.3f\tMB/s read %s\n", v, netdev_data[1,i,"device"]) >> sum_file;
+          do_netdev_print("infra_procs\tnet stats\t%.3f\tMB/s read %s", i, fld, netdev_mx, 1, scl);
           fld = "packets_rd";
-          diff = (netdev_data[netdev_mx,i,fld]-netdev_data[1,i,fld])/1024.0;
-          v = diff / tm_diff;
-          if (options_get_max_val == 1 && netdev_max[i,fld] != "") { v = netdev_max[i,fld]; }
-          printf("infra_procs\tnet stats\t%.3f\tpackets Kpkts/s read %s\n", v, netdev_data[1,i,"device"]) >> sum_file;
+          do_netdev_print("infra_procs\tnet stats\t%.3f\tpackets Kpkts/s read %s", i, fld, netdev_mx, 1, scl2);
+          #printf("infra_procs\tnet stats\t%.3f\tpackets Kpkts/s read %s\n", v, netdev_data[1,i,"device"]) >> sum_file;
           fld = "bytes_wr";
-          diff = (netdev_data[netdev_mx,i,fld]-netdev_data[1,i,fld])/scl;
-          v = diff / tm_diff;
-          if (options_get_max_val == 1 && netdev_max[i,fld] != "") { v = netdev_max[i,fld]; }
-          printf("infra_procs\tnet stats\t%.3f\tMB/s write %s\n", v, netdev_data[1,i,"device"]) >> sum_file;
+          do_netdev_print("infra_procs\tnet stats\t%.3f\tMB/s write %s", i, fld, netdev_mx, 1, scl);
+          #printf("infra_procs\tnet stats\t%.3f\tMB/s write %s\n", v, netdev_data[1,i,"device"]) >> sum_file;
           fld = "packets_wr";
-          diff = (netdev_data[netdev_mx,i,fld]-netdev_data[1,i,fld])/1024.0;
-          v = diff / tm_diff;
-          if (options_get_max_val == 1 && netdev_max[i,fld] != "") { v = netdev_max[i,fld]; }
-          printf("infra_procs\tnet stats\t%.3f\tpackets/s Kpkts/s write %s\n", v, netdev_data[1,i,"device"]) >> sum_file;
+          do_netdev_print("infra_procs\tnet stats\t%.3f\tpackets/s Kpkts/s write %s", i, fld, netdev_mx, 1, scl2);
          }
       }
     }
@@ -1251,11 +1297,7 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
         printf("%s\t%d", diskstats_dt[k], diskstats_dt[k]-diskstats_dt[1]) > ofile;
         for(j=2; j <= cols; j++) {
           val = diskstats_vals[j];
-          if (options_get_max_val == 1) {
-            if (diskstats_max[i,j] == "" || diskstats_max[i,j] < val) {
-              diskstats_max[i,j] = val;
-            }
-          }
+          ck_diskstats_max_val(val, i, j);
           printf("\t%.3f", val) > ofile;
         }
         printf("\n") > ofile;
@@ -1265,14 +1307,18 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
       printf("\n") > ofile;
       }
       for (i=1; i <= devs; i++) {
+        prt_diskstats(i, cols);
+        if (1==2) {
         compute_diskstats(diskstats_mx,1, i);
         dev = diskstats_data[1,i,"device"];
         for (k=2; k <= cols; k++) {
           v = diskstats_vals[k];
+          printf("infra_procs\tIO stats\t%.4f\t%s %s\n", v, diskstats_hdrs[k], dev) >> sum_file;
           if (options_get_max_val == 1) {
               v = diskstats_max[i,k];
+              printf("infra_procs\tIO stats\t%.4f\t%s %s peak\n", v, diskstats_hdrs[k], dev) >> sum_file;
           }
-          printf("infra_procs\tIO stats\t%.4f\t%s %s\n", v, diskstats_hdrs[k], dev) >> sum_file;
+        }
         }
       }
       if (1==2) {
