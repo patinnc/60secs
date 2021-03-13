@@ -95,6 +95,9 @@ function do_summary(colms, v, epch, intrvl, k_idx,    v1) {
          v1 = v;
          sum_tot[i_sum] += v1;
       }
+        sum_tot[i_sum,"sum"] += v1;
+        sum_tot[i_sum,"sum_sq"] += v1*v1;
+        sum_tot[i_sum,"n"]++;
       if (options_get_perf_stat_max_val == 1) {
         if (sum_ps_max[i_sum,"peak"] == "" || sum_ps_max[i_sum,"peak"] < v1) {
           sum_ps_max[i_sum,"peak"] = v1;
@@ -1568,16 +1571,14 @@ function dt_to_epoch(offset) {
               my_n = sum_ps_max[i_sum,"n"];
               my_avg = sum_ps_max[i_sum,"sum"]/my_n;
               my_stdev=sqrt((sum_ps_max[i_sum,"sum_sq"]/my_n)-(my_avg*my_avg));
- #avg1   = x/lines;
- #stdev1 = sqrt((y/lines)-(avg1*avg1));
               if (my_stdev == 0.0) {
                 my_peak_fctr = 0.0;
               } else {
-                my_peak_fctr = (v2 - my_avg)/my_stdev;
+                my_peak_fctr = my_avg + 3*my_stdev;
               }
               printf("%s\t%s\t%f\t%s avg\n", sum_res[i_sum], "perf_stat", my_avg, ky) >> sum_file;
               printf("%s\t%s\t%f\t%s stdev\n", sum_res[i_sum], "perf_stat", my_stdev, ky) >> sum_file;
-              printf("%s\t%s\t%f\t%s pk/stdev\n", sum_res[i_sum], "perf_stat", my_peak_fctr, ky) >> sum_file;
+              printf("%s\t%s\t%f\t%s avg+3stdev\n", sum_res[i_sum], "perf_stat", my_peak_fctr, ky) >> sum_file;
               peak_str = " peak";
            }
            printf("got perf_stat %s\t%f\tsum_tot= %s\n", ky, v2, sum_tot[i_sum]) > "/dev/stderr";
