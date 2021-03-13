@@ -260,11 +260,13 @@ awk -v script_nm="$0.$LINENO.awk" -v options="$OPTIONS" -v out_file="$FL_OUT" -v
      if (title == "__all__") {
         search = "";
      }
-     if (index(options, "get_max_val") > 0) {
-       options_get_max_val = 1;
-     } else {
-       options_get_max_val = 0;
-     }
+     options_get_max_val = 0;
+#    turn this off get_max_val here for now. moving to having separate "peak" variable
+#     if (index(options, "get_max_val") > 0) {
+#       options_get_max_val = 1;
+#     } else {
+#       options_get_max_val = 0;
+#     }
      #printf("%s: ____________ got options= %s and options_get_max_val= %d\n", script_nm, options, options_get_max_val) > "/dev/stderr";
      #printf("use search= \"%s\"\n", search);
      got_tbl = 0;
