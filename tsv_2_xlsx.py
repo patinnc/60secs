@@ -116,9 +116,11 @@ else:
    got_drop_summary = False
 if options_str.find("all_charts_one_row") >= 0:
    options_all_charts_one_row = True
-if options_str.find("get_max_val") >= 0:
-   options_get_max_val = True
-   print("opt= %s, get_max_val= %s" % (opt, options_get_max_val), file=sys.stderr)
+# don't do get_max_val here. data suppliers have to create new 'peak' variables and old avg variables
+#if options_str.find("get_max_val") >= 0:
+#   options_get_max_val = True
+#   options_get_max_val = True
+#   print("opt= %s, get_max_val= %s" % (opt, options_get_max_val), file=sys.stderr)
 
 sheets_limit = []
 arr = options_str.split(",")
@@ -955,7 +957,7 @@ for bmi in range(base_mx+1):
              if do_avg == False or do_avg_write == True:
                 #drow_beg, drow_end,if got_how_many_series_for_chart > 0:
                 if drow_end  > (drow_beg+1):
-                   if ch_type == "scatter_straight" and options_str_top.find("line_for_scatter") > -1:
+                   if ch_type == "line" or (ch_type == "scatter_straight" and options_str_top.find("line_for_scatter") > -1):
                       chart1 = workbook.add_chart({'type': "line"})
                    else:
                       chart1 = workbook.add_chart({'type': 'scatter', 'subtype': 'straight'})
