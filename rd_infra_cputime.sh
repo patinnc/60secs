@@ -103,31 +103,44 @@ function get_max(a, b) {
   };
   return b;
 }
-function ck_netdev_max_val(val, i, fld) {
+function ck_netdev_max_val(val, i, fld,    my_n) {
   if (netdev_max[i,fld,"peak"] == "" || netdev_max[i,fld,"peak"] < val) {
      netdev_max[i,fld,"peak"] = val;
+  }
+  if (val != "") {
+    my_n = ++netdev_max[i,fld,"val_n"];
+    netdev_max[i,fld,"val_arr",my_n] = val;
   }
   netdev_max[i,fld,"sum_sq"] += val*val;
   netdev_max[i,fld,"sum"] += val;
   netdev_max[i,fld,"n"]++;
 }
-function ck_diskstats_max_val(val, i, j) {
+function ck_diskstats_max_val(val, i, j,    my_n) {
   # v = diskstats_max[i,k];
   if (diskstats_max[i,j,"peak"] == "" || diskstats_max[i,j,"peak"] < val) {
     diskstats_max[i,j,"peak"] = val;
+  }
+  if (val != "") {
+    diskstats_max[i,j,"val_n"]++;
+    my_n = diskstats_max[i,j,"val_n"];
+    diskstats_max[i,j,"val_arr",my_n] = val;
   }
   diskstats_max[i,j,"sum_sq"] += val*val;
   diskstats_max[i,j,"sum"] += val;
   diskstats_max[i,j,"n"]++;
 }
-function prt_diskstats(i, cols,   dev, fmt_str, k, v, my_n, my_avg, my_stdev, my_p997, my_peak, hdr) {
+function prt_diskstats(i, cols,    dev, fmt_str, k, v, my_n, my_avg, my_stdev, my_p997, my_peak, hdr, grp, mtrc, mtrcm1,
+res_i, idx, j, px, px_mx, str) {
     compute_diskstats(diskstats_mx,1, i);
     dev = diskstats_data[1,i,"device"];
-    fmt_str = "infra_procs\tIO stats\t%.4f\t%s %s";
+    mtrcm1 = "IO stats";
+    grp = "infra_procs";
+    fmt_str = grp"\t%s\t%.4f\t%s %s";
     for (k=2; k <= cols; k++) {
        v = diskstats_vals[k];
        hdr = diskstats_hdrs[k];
-       printf(fmt_str "\n", v, hdr, dev) >> sum_file;
+       mtrc = hdr " " dev;
+       printf(fmt_str "\n", mtrcm1, v, hdr, dev) >> sum_file;
        my_n     = diskstats_max[i,k,"n"];
        #printf(fmt_str"\n", v, hdr, dev) >> sum_file;
        if (my_n > 0) {
@@ -141,15 +154,100 @@ function prt_diskstats(i, cols,   dev, fmt_str, k, v, my_n, my_avg, my_stdev, my
          my_p997  = 0.0;
          my_peak  = 0.0;
        }
-       printf(fmt_str" avg+3stdev\n", my_p997, hdr, dev) >> sum_file;
-       printf(fmt_str" peak\n", my_peak, hdr, dev) >> sum_file;
+       printf(fmt_str" avg+3stdev\n", mtrcm1, my_p997, hdr, dev) >> sum_file;
+       printf(fmt_str" peak\n", mtrcm1, my_peak, hdr, dev) >> sum_file;
+        delete arr_in;
+        delete res_i;
+        delete idx;
+        n = diskstats_max[i,k,"val_n"];
+        my_n     = n;
+        for(j=1; j <= n; j++) {
+          idx[j] = j;
+          arr_in[j] = diskstats_max[i,k,"val_arr",j];
+        }
+        asorti(idx, res_i, "arr_in_compare");
+        printf("%s\t%s\t%f\t%s val_arr", grp, mtrcm1, my_n, mtrc) >> sum_file;
+        for(j=1; j <= n; j++) {
+          printf("\t%f", arr_in[res_i[j]]) >> sum_file;
+        }
+        printf("\n") >> sum_file;
+        # https://www.dummies.com/education/math/statistics/how-to-calculate-percentiles-in-statistics/
+        px_mx = 0;
+        px[++px_mx] = 10;
+        px[++px_mx] = 20;
+        px[++px_mx] = 30;
+        px[++px_mx] = 40;
+        px[++px_mx] = 50;
+        px[++px_mx] = 60;
+        px[++px_mx] = 70;
+        px[++px_mx] = 80;
+        px[++px_mx] = 90;
+        px[++px_mx] = 95;
+        px[++px_mx] = 99;
+        px[++px_mx] = 99.5;
+        px[++px_mx] = 100;
+        if (index(fmt_str, " val_arr") > 0) {
+          my_sum = 0.0;
+          n = 0;
+          for(j=1; j <= n; j++) {
+            my_sum += arr_in[res_i[j]];
+            n++;
+          }
+          if (n > 0) {
+            my_sum /= n;
+          } else {
+            my_sum = 0.0;
+          }
+          str = mtrc " avg";
+          printf("%s\t%s\t%s\t%f\n", grp, mtrcm1, str, my_sum) >> ofile;
+        }
+        if (1==2) {
+        printf("++++++++____________++++++++++++ io %s %s my_y= %d\n", mtrcm1, mtrc, my_n) > "/dev/stderr";
+        for (kk=1; kk <= px_mx; kk++) {
+          pi  = 0.01 * px[kk] * my_n; # index into array for this percentile
+          pii = int(pi);       # integer part
+          if (pii != pi) {
+            # so pi is not an integer
+            piu = pii+1;
+            if (piu > my_n) { piu = my_n; }
+            uval = arr_in[res_i[piu]]
+          } else {
+            piu = pii;
+            if (piu >= my_n) {
+              uval = arr_in[res_i[my_n]];
+            } else {
+              piup1=piu + 1;
+              uval = 0.5*(arr_in[res_i[piu]] + arr_in[res_i[piup1]]);
+            }
+          }
+          str = mtrc " p" px[kk] " ";
+          printf("%s\t%s\t%f\t%s\n", grp, mtrcm1, uval, str) >> sum_file;
+          printf("%s\t%s\t%f\t%s\n", grp, mtrcm1, uval, str) > "/dev/stderr";
+        }
+        }
     }
     #v = diskstats_max[i,k];
     #printf("infra_procs\tIO stats\t%.4f\t%s %s peak\n", v, diskstats_hdrs[k], dev) >> sum_file;
 }
-function do_netdev_print(fmt_str, i, fld, iend, ibeg, scl,     dev, my_n, my_avg, my_stdev, my_997, my_peak, tm_diff, diff, v) {
-   tm_diff = netdev_dt[iend]-netdev_dt[ibeg];
+function arr_in_compare(i1, v1, i2, v2,    l, r, m1, m2)
+{
+    m1 = arr_in[i1];
+    m2 = arr_in[i2];
+    if (m2 > m1)
+        return -1
+    else if (m1 == m2)
+        return 0
+    else
+        return 1
+}
+function do_netdev_print(fmt_str, i, fld, iend, ibeg, scl,     n, fmt_arr, dev, my_n, my_avg, my_stdev, my_997, my_peak,
+tm_diff, diff, v, grp, mtrc, mtrcm1, res_i, idx, j, px, px_mx, my_sum, str) {
    dev     = netdev_data[1,i,"device"];
+   n = split(fmt_str, fmt_arr, "\t");
+   grp = fmt_arr[1];
+   mtrc = fmt_arr[4];
+   mtrcm1 = fmt_arr[2];
+   tm_diff = netdev_dt[iend]-netdev_dt[ibeg];
    diff = (netdev_data[iend,i,fld]-netdev_data[ibeg,i,fld])/scl;
    v = diff / tm_diff;
    my_n     = netdev_max[i,fld,"n"];
@@ -167,6 +265,79 @@ function do_netdev_print(fmt_str, i, fld, iend, ibeg, scl,     dev, my_n, my_avg
    }
    printf(fmt_str" avg+3stdev\n", my_p997, dev) >> sum_file;
    printf(fmt_str" peak\n", my_peak, dev) >> sum_file;
+        delete arr_in;
+        delete res_i;
+        delete idx;
+        n=0;
+        for(j=2; j <= iend; j++) {
+          n++;
+          idx[n] = n;
+          tm_diff = netdev_dt[j]-netdev_dt[j-1];
+          diff = (netdev_data[j,i,fld]-netdev_data[j-1,i,fld])/scl;
+          v = diff / tm_diff;
+          arr_in[n] = v;
+        }
+        my_n     = n;
+        asorti(idx, res_i, "arr_in_compare");
+        printf("%s\t%s\t%f\t%s %s val_arr", grp, mtrcm1, my_n, mtrc, dev) >> sum_file;
+        for(j=1; j <= n; j++) {
+          printf("\t%f", arr_in[res_i[j]]) >> sum_file;
+        }
+        printf("\n") >> sum_file;
+        # https://www.dummies.com/education/math/statistics/how-to-calculate-percentiles-in-statistics/
+        px_mx = 0;
+        px[++px_mx] = 10;
+        px[++px_mx] = 20;
+        px[++px_mx] = 30;
+        px[++px_mx] = 40;
+        px[++px_mx] = 50;
+        px[++px_mx] = 60;
+        px[++px_mx] = 70;
+        px[++px_mx] = 80;
+        px[++px_mx] = 90;
+        px[++px_mx] = 95;
+        px[++px_mx] = 99;
+        px[++px_mx] = 99.5;
+        px[++px_mx] = 100;
+        if (index(fmt_str, " val_arr") > 0) {
+          my_sum = 0.0;
+          n = 0;
+          for(j=1; j <= n; j++) {
+            my_sum += arr_in[res_i[j]];
+            n++;
+          }
+          if (n > 0) {
+            my_sum /= n;
+          } else {
+            my_sum = 0.0;
+          }
+          str = "avg " mtrc;
+          printf("infra_procs\t%s\t%s\t%s %s\n", mtrcm1, my_sum, str, dev) >> sum_file;
+        }
+        if (1==2) {
+        printf("++++++++____________++++++++++++ io %s %s my_y= %d\n", mtrcm1, mtrc, my_n) > "/dev/stderr";
+        for (kk=1; kk <= px_mx; kk++) {
+          pi  = 0.01 * px[kk] * my_n; # index into array for this percentile
+          pii = int(pi);       # integer part
+          if (pii != pi) {
+            # so pi is not an integer
+            piu = pii+1;
+            if (piu > my_n) { piu = my_n; }
+            uval = arr_in[res_i[piu]]
+          } else {
+            piu = pii;
+            if (piu >= my_n) {
+              uval = arr_in[res_i[my_n]];
+            } else {
+              piup1=piu + 1;
+              uval = 0.5*(arr_in[res_i[piu]] + arr_in[res_i[piup1]]);
+            }
+          }
+          str = mtrc " p" px[kk] " ";
+          printf("infra_procs\t%s\t%f\t%s %s\n", mtrcm1, uval, str, dev) >> sum_file;
+          printf("infra_procs\t%s\t%f\t%s %s\n", mtrcm1, uval, str, dev) > "/dev/stderr";
+        }
+        }
 }
 
 function compute_diskstats(di,dim1, dj) {
