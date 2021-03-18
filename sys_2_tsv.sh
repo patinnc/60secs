@@ -194,29 +194,48 @@ RPS=`echo $TDIR | sed 's/rps_v/rpsv/' | sed 's/rps.*_.*/rps/' | sed 's/.*_//'`
 RPS="${RPS}"
 FCTR=`echo $RPS | sed 's/rps//'`
 printf "DIR= $DIR, RPS= %s\n", $RPS > "/dev/stderr"
-CURDIR=`pwd`
-HOSTNM=`awk -v curdir="$CURDIR" '
+
+get_hostname_from_path() {
+  if [ "$1" != "" ]; then
+    USEDIR=$1
+  else
+   USEDIR=`pwd`
+  fi
+  HOSTNM=`awk -v script="$0" -v lineno="$LINENO" -v usedir="$USEDIR" '
   BEGIN{
-    n = split(curdir, arr, "/");
+    n = split(usedir, arr, "/");
     for (i=n; i > 2; i--) {
        if (arr[i] == arr[i-2] && index(arr[i-1], "-") > 0) {
           printf("%s\n", arr[i-1]);
           exit;
        }
     }
-    printf("missed_hostnm\n");
-    exit;
+    printf("%s.%s: missed_hostnm in %s\n", script, lineno, usedir) > "/dev/stderr";
+    exit 1;
   }'`
    ck_last_rc $? $LINENO
-printf "host\thostname\t%s\thostname\n"  "$HOSTNM" >> $SUM_FILE;
+}
 
-if [ "$HOSTNM" != "" ]; then
+get_hostname_from_path
+
+printf "host\thostname\t%s\thostname\n"  "$HOSTNM" >> $SUM_FILE
+
+get_grail_info_for_hostname() {
+  if [ "$1" != "" ]; then
+    UHOSTNM=$1
+  else
+    UHOSTNM=$HOSTNM
+  fi
+  if [ "$2" != "" ]; then
+    USUM_FILE=$2
+  fi
+if [ "$UHOSTNM" != "" ]; then
   CKFL=$BASE_DIR/grail_cpu_info.txt
   echo "_____ck  grail file $CKFL" > /dev/stderr
   if [ -e $CKFL ]; then
-    echo "_____got grail hst= $HOSTNM file $CKFL" > /dev/stderr
-    #awk -v hst="$HOSTNM" 'BEGIN{FS=";";} $1 == hst {printf("%s\n", $0); exit;}'
-    SKU_NCPU_CPU_BOX_DISK=(`awk -v hst="$HOSTNM" -v FS=";" '
+    echo "_____got grail hst= $UHOSTNM file $CKFL" > /dev/stderr
+    #awk -v hst="$UHOSTNM" 'BEGIN{FS=";";} $1 == hst {printf("%s\n", $0); exit;}'
+    SKU_NCPU_CPU_BOX_DISK=(`awk -v hst="$UHOSTNM" -v FS=";" '
       $1 == hst {
         n=split($0,a,";");
         sku   =a[2];
@@ -231,42 +250,46 @@ if [ "$HOSTNM" != "" ]; then
         ' $CKFL`)
     ck_last_rc $? $LINENO
     #echo "_____got grail sku= ${SKU_NCPU_CPU_BOX_DISK[@]}" > /dev/stderr
-    V=${SKU_NCPU_CPU_BOX_DISK[0]}
-    if [ "$V" == "" ]; then
-      V="unknown"
+    if [ "$USUM_FILE" != "" ]; then
+      V=${SKU_NCPU_CPU_BOX_DISK[0]}
+      if [ "$V" == "" ]; then
+        V="unknown"
+      fi
+      #printf "host\tSKU\t\"%s\"\tSKU\n"  "$V" >> $USUM_FILE;
+      printf "host\tSKU\t%s\tSKU\n"  $V >> $USUM_FILE;
+  
+      V=${SKU_NCPU_CPU_BOX_DISK[4]}
+      if [ "$V" == "" ]; then
+        V=0
+      fi
+      printf "host\tdisk_GBs\t%s\tdisk_GBs\n"  "$V" >> $USUM_FILE;
+  
+      V=${SKU_NCPU_CPU_BOX_DISK[3]}
+      if [ "$V" == "" ]; then
+        V="unknown"
+      fi
+      #printf "host\thost_make\t\"%s\"\thost_make\n"  "$V" >> $USUM_FILE;
+      printf "host\thost_make\t%s\thost_make\n"  "$V" >> $USUM_FILE;
+  
+      V=${SKU_NCPU_CPU_BOX_DISK[2]}
+      if [ "$V" == "" ]; then
+        V="unknown"
+      fi
+      #printf "host\tcpu_string\t\"%s\"\tcpu_string\n"  "$V" >> $USUM_FILE;
+      printf "host\tcpu_string\t%s\tcpu_string\n"  "$V" >> $USUM_FILE;
+  
+      V=${SKU_NCPU_CPU_BOX_DISK[5]}
+      if [ "$V" == "" ]; then
+        V="unknown"
+      fi
+      #printf "host\towner\t\"%s\"\towner\n"  "$V" >> $USUM_FILE;
+      printf "host\towner\t%s\towner\n"  "$V" >> $USUM_FILE;
     fi
-    #printf "host\tSKU\t\"%s\"\tSKU\n"  "$V" >> $SUM_FILE;
-    printf "host\tSKU\t%s\tSKU\n"  $V >> $SUM_FILE;
-
-    V=${SKU_NCPU_CPU_BOX_DISK[4]}
-    if [ "$V" == "" ]; then
-      V=0
-    fi
-    printf "host\tdisk_GBs\t%s\tdisk_GBs\n"  "$V" >> $SUM_FILE;
-
-    V=${SKU_NCPU_CPU_BOX_DISK[3]}
-    if [ "$V" == "" ]; then
-      V="unknown"
-    fi
-    #printf "host\thost_make\t\"%s\"\thost_make\n"  "$V" >> $SUM_FILE;
-    printf "host\thost_make\t%s\thost_make\n"  "$V" >> $SUM_FILE;
-
-    V=${SKU_NCPU_CPU_BOX_DISK[2]}
-    if [ "$V" == "" ]; then
-      V="unknown"
-    fi
-    #printf "host\tcpu_string\t\"%s\"\tcpu_string\n"  "$V" >> $SUM_FILE;
-    printf "host\tcpu_string\t%s\tcpu_string\n"  "$V" >> $SUM_FILE;
-
-    V=${SKU_NCPU_CPU_BOX_DISK[5]}
-    if [ "$V" == "" ]; then
-      V="unknown"
-    fi
-    #printf "host\towner\t\"%s\"\towner\n"  "$V" >> $SUM_FILE;
-    printf "host\towner\t%s\towner\n"  "$V" >> $SUM_FILE;
   fi
 fi
+}
 
+get_grail_info_for_hostname $HOSTNM $SUM_FILE
 
 LSCPU_FL=lscpu.txt
 if [ ! -e $LSCPU_FL ]; then
@@ -351,9 +374,9 @@ if [ -e run.log ]; then
    DATE_ARR[1]="$RESP"
    get_date_arr "end_str"
    DATE_ARR[2]="$RESP"
-   echo "got run.log DATE_ARR0= ${DATE_ARR[0]}"
-   echo "got run.log DATE_ARR1= ${DATE_ARR[1]}"
-   echo "got run.log DATE_ARR2= ${DATE_ARR[2]}"
+   echo "got run.log DATE_ARR0= ${DATE_ARR[0]}" > /dev/stderr
+   echo "got run.log DATE_ARR1= ${DATE_ARR[1]}" > /dev/stderr
+   echo "got run.log DATE_ARR2= ${DATE_ARR[2]}" > /dev/stderr
    printf "time\titp_run\t\"%s\"\tday_beg\n"  "${DATE_ARR[0]}" >> $SUM_FILE;
    printf "time\titp_run\t\"%s\"\tdate_beg\n" "${DATE_ARR[1]}" >> $SUM_FILE;
    printf "time\titp_run\t\"%s\"\tdate_end\n" "${DATE_ARR[2]}" >> $SUM_FILE;
