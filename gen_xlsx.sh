@@ -7,6 +7,7 @@ echo "SCR_DIR= $SCR_DIR" > /dev/stderr
 
 
 declare -a REGEX
+declare -a SKU
 DIR=
 PHASE_FILE=
 OPT_OPT_DEF=chart_new,dont_sum_sockets
@@ -59,7 +60,7 @@ echo "$0 ${@}"
 echo "BACKGROUND= $BACKGROUND  NUM_CPUS= $NUM_CPUS"
 JOB_ID=0
 
-while getopts "hvASa:b:B:c:D:d:e:F:g:I:j:m:N:o:P:r:X:x:" opt; do
+while getopts "hvASa:b:B:c:D:d:e:F:g:I:j:m:N:o:P:r:s:X:x:" opt; do
   case ${opt} in
     A )
       AVERAGE=1
@@ -116,6 +117,9 @@ while getopts "hvASa:b:B:c:D:d:e:F:g:I:j:m:N:o:P:r:X:x:" opt; do
     P )
       PHASE_FILE=$OPTARG
       ;;
+    s )
+      SKU+=($OPTARG)
+      ;;
     r )
       REGEX+=($OPTARG)
       ;;
@@ -162,6 +166,7 @@ while getopts "hvASa:b:B:c:D:d:e:F:g:I:j:m:N:o:P:r:X:x:" opt; do
       echo "   -P phase_file"
       echo "   -r regex   regex expression to select directories"
       echo "   -S    skip creating detail xlsx file, just do the summary all spreadsheet"
+      echo "   -s  sku_list  select dirs with sku. have to be able to figure host from path and must have crane list of host info"
       echo "   -x xlsx_filename  This is passed to tsv_2_xlsx.py as the name of the xlsx. (you need to add the .xlsx)"
       echo "      The default is chart_line.xlsx"
       echo "   -X xlsx_filename  like above but assume path relative to current dir"
@@ -233,6 +238,7 @@ if [ "$NUM_DIR_IN" != "" ]; then
 fi
 
 REGEX_LEN=${#REGEX[@]}
+SKU_LEN=${#SKU[@]}
 
 SKIP_SYS_2_TSV=0
 if [ "$OPTIONS" != "" ]; then
@@ -253,6 +259,105 @@ get_abs_filename() {
 }
 
 export AWKPATH=$SCR_DIR
+
+get_hostname_from_path() {
+  if [ "$1" != "" ]; then
+    USEDIR=$1
+  else
+   USEDIR=`pwd`
+  fi
+  HOSTNM=`awk -v script="$0" -v lineno="$LINENO" -v usedir="$USEDIR" '
+  BEGIN{
+    n = split(usedir, arr, "/");
+    for (i=n; i > 2; i--) {
+       if (arr[i] == arr[i-2] && index(arr[i-1], "-") > 0) {
+          printf("%s\n", arr[i-1]);
+          exit;
+       }
+    }
+    printf("%s.%s: missed_hostnm in %s\n", script, lineno, usedir) > "/dev/stderr";
+    exit 1;
+  }'`
+   ck_last_rc $? $LINENO
+}
+
+get_grail_info_for_hostname() {
+  if [ "$1" != "" ]; then
+    UHOSTNM=$1
+  else
+    UHOSTNM=$HOSTNM
+  fi
+  if [ "$2" != "" ]; then
+    USUM_FILE=$2
+  fi
+if [ "$UHOSTNM" != "" ]; then
+  CKFL=grail_cpu_info.txt
+  if [ ! -e $CKFL ]; then
+    CKFL=$BASE_DIR/grail_cpu_info.txt
+  fi
+  if [ $VERBOSE -gt 0 ]; then
+    echo "_____ck  grail file $CKFL" > /dev/stderr
+  fi
+  if [ -e $CKFL ]; then
+    if [ $VERBOSE -gt 0 ]; then
+      echo "_____got grail hst= $UHOSTNM file $CKFL" > /dev/stderr
+    fi
+    #awk -v hst="$UHOSTNM" 'BEGIN{FS=";";} $1 == hst {printf("%s\n", $0); exit;}'
+    SKU_NCPU_CPU_BOX_DISK=(`awk -v hst="$UHOSTNM" -v FS=";" '
+      $1 == hst {
+        n=split($0,a,";");
+        sku   =a[2];
+        cpus  =a[3]+0;
+        if (cpus == 0) { cpus = ""; }
+        brand =a[4];
+        model =a[5];
+        diskTB=a[6]+0;
+        if (diskTB == 0) {diskTB = ""; }
+        owner =a[7];
+        printf("\"%s\"\n%s\n\"%s\"\n\"%s\"\n%s\n\"%s\"\n", sku, cpus, brand, model,diskTB, owner); exit 0;}
+        ' $CKFL`)
+    ck_last_rc $? $LINENO
+    #echo "_____got grail sku= ${SKU_NCPU_CPU_BOX_DISK[@]}" > /dev/stderr
+    if [ "$USUM_FILE" != "" ]; then
+      V=${SKU_NCPU_CPU_BOX_DISK[0]}
+      if [ "$V" == "" ]; then
+        V="unknown"
+      fi
+      #printf "host\tSKU\t\"%s\"\tSKU\n"  "$V" >> $USUM_FILE;
+      printf "host\tSKU\t%s\tSKU\n"  $V >> $USUM_FILE;
+  
+      V=${SKU_NCPU_CPU_BOX_DISK[4]}
+      if [ "$V" == "" ]; then
+        V=0
+      fi
+      printf "host\tdisk_GBs\t%s\tdisk_GBs\n"  "$V" >> $USUM_FILE;
+  
+      V=${SKU_NCPU_CPU_BOX_DISK[3]}
+      if [ "$V" == "" ]; then
+        V="unknown"
+      fi
+      #printf "host\thost_make\t\"%s\"\thost_make\n"  "$V" >> $USUM_FILE;
+      printf "host\thost_make\t%s\thost_make\n"  "$V" >> $USUM_FILE;
+  
+      V=${SKU_NCPU_CPU_BOX_DISK[2]}
+      if [ "$V" == "" ]; then
+        V="unknown"
+      fi
+      #printf "host\tcpu_string\t\"%s\"\tcpu_string\n"  "$V" >> $USUM_FILE;
+      printf "host\tcpu_string\t%s\tcpu_string\n"  "$V" >> $USUM_FILE;
+  
+      V=${SKU_NCPU_CPU_BOX_DISK[5]}
+      if [ "$V" == "" ]; then
+        V="unknown"
+      fi
+      #printf "host\towner\t\"%s\"\towner\n"  "$V" >> $USUM_FILE;
+      printf "host\towner\t%s\towner\n"  "$V" >> $USUM_FILE;
+    fi
+  fi
+fi
+}
+
+
 
 get_dir_list() {
    local CKF=$1
@@ -506,9 +611,47 @@ fi
 
 LST=$DIR
 if [ $VERBOSE -gt 0 ]; then
-  echo "$0.$LINENO DIR at 35: $DIR"
+  echo "$0.$LINENO DIR: $DIR"
 fi
 #exit
+
+if [ "$SKU_LEN" != "0" ]; then
+  echo "$0.$LINENO SKU= ${SKU[@]}"
+   if [ "$SKU_LEN" != "0" ]; then
+      itot=0
+      ii=0
+      RESP=
+      for idir in $DIR; do
+        itot=$((itot+1))
+        if [ $VERBOSE -gt 1 ]; then
+          echo "__________sku try dir= $idir"
+        fi
+        get_hostname_from_path $idir
+        if [ "$HOSTNM" != "" ]; then
+          get_grail_info_for_hostname $HOSTNM
+          if [ "${#SKU_NCPU_CPU_BOX_DISK[@]}" != 0 ]; then
+             V=${SKU_NCPU_CPU_BOX_DISK[0]}
+             if [ $VERBOSE -gt 0 ]; then
+               echo "__________HOSTNM= $HOSTNM , sku= $V"
+             fi
+             for ij in ${SKU[@]}; do
+               if [ "$V" == "\"$ij\"" ]; then
+                 if [ $VERBOSE -gt 0 ]; then
+                   echo "__match __HOSTNM= $HOSTNM , sku= $V"
+                 fi
+                 RESP="$RESP $idir"
+                 ii=$((ii+1))
+                 break
+               fi
+             done
+          fi
+        fi
+      done
+      DIR=$RESP
+      LST=$DIR
+      echo "+__________$0.$LINENO input dirs= $itot. got matches= $ii for skus= ${SKU[@]}" > /dev/stderr
+   fi
+fi
 
 CDIR=`pwd`
 ALST=$CDIR/tsv_2_xlsx_${JOB_ID}.inp
@@ -582,6 +725,9 @@ for i in $LST; do
  if [ "$SUM_FILE" != "" ]; then
    if [ -e $SUM_FILE ]; then
      rm $SUM_FILE
+   fi
+   if [ -e "$SUM_FILE.dist" ]; then
+     rm "$SUM_FILE.dist"
    fi
  fi
  FCTR=`echo $RPS | sed 's/rps//'`
@@ -976,7 +1122,7 @@ if [ "$DO_TSV_2_XLS" == "1" ]; then
         get_max_val = 1;
       }
     }
-function do_pxx_compare(fls, str1, str2, v,    str, pxx_i)
+function do_pxx_compare(fls, str1, str2, v,    str, pxx_i, my_n)
 {
     str = str1";"str2;
     if (!(str in pxx_list)) {
@@ -984,13 +1130,36 @@ function do_pxx_compare(fls, str1, str2, v,    str, pxx_i)
       pxx_lkup[pxx_max] = str;
       pxx_hdr[pxx_max,"grp"] = str1;
       pxx_hdr[pxx_max,"mtrc"] = str2
+      pxx_n[pxx_max] = 0;
     }
     pxx_i = pxx_list[str];
-    pxx_arr[pxx_i,fls] += v+0.0;
+    pxx_n[pxx_i]++;
+    my_n = pxx_n[pxx_i];
+    if (v != "") {
+       pxx_arr[pxx_i,my_n] += v+0.0;
+    } else {
+      # if we are doing  val_arr lines then dont add empty values to array
+      if (index(str, " val_arr") == 0) {
+       pxx_arr[pxx_i,my_n] = v;
+      }
+    }
+    return pxx_n[pxx_i];
+}
+function pre_do_pxx_compare(mtrcm1, mtrc, fld_v, arr, fls, fld_beg, n, allow_zero0_nonzero1,    ii) {
+  if (allow_zero0_nonzero1 == 0 || (arr[fld_v] != "" && arr[fld_v] != 0)) {
+    if (index(mtrc, " val_arr") > 0) {
+      for(ii=fld_beg; ii <= n; ii++) {
+        do_pxx_compare(fls, mtrcm1, mtrc, arr[ii]);
+      }
+    } else {
+      do_pxx_compare(fls, mtrcm1, mtrc, arr[fld_v]);
+    }
+  }
 }
     { if (index($0, sum_file) > 0 || index($0, sum_all) > 0) {
         flnm = $0;
         fls++;
+        flnm_arr[fls] = flnm;
         fls_mx = fls;
         if (verbose > 0) {
            printf("got sumfile[%d]= %s sum_all= %s\n", fls, flnm, sum_all) > "/dev/stderr";
@@ -1002,9 +1171,11 @@ function do_pxx_compare(fls, str1, str2, v,    str, pxx_i)
            if (ln <= 2) {
               if (ln == 2) {
                 nh = split(line, hdrs, /\t/);
+                fld_beg = 0;
                 if (hdrs[3] == "Value" && hdrs[4] == "Metric") {
                    fld_m=4; 
                    fld_v=3; 
+                   fld_beg = 5;
                    fld_mm1=2; 
                    if (verbose > 0) {
                      printf("sum_all2 metric fld= %d nf= %d\n", 3, nh) > "/dev/stderr";
@@ -1014,6 +1185,7 @@ function do_pxx_compare(fls, str1, str2, v,    str, pxx_i)
                    fld_m=3; 
                    fld_v=4; 
                    fld_mm1=2; 
+                   fld_beg = 5;
                    if (verbose > 0) {
                      printf("sum_all3 metric fld= %d nf= %d\n", 3, nh) > "/dev/stderr";
                    }
@@ -1024,7 +1196,7 @@ function do_pxx_compare(fls, str1, str2, v,    str, pxx_i)
               }
               continue;
            }
-        #printf("got sum.tsv[%d][%d]= %s\n", fls, ln, line) > "/dev/stderr";
+           #printf("got sum.tsv[%d][%d]= %s\n", fls, ln, line) > "/dev/stderr";
            n      = split(line, arr, /\t/);
            mtrcm1 = arr[fld_mm1];
            mtrc   = arr[fld_m];
@@ -1033,9 +1205,7 @@ function do_pxx_compare(fls, str1, str2, v,    str, pxx_i)
               pxx_hst[fls] = arr[fld_v];
            }
            if (mtrcm1 == "infra procs max %cpu" && (mtrc == "busy muttley" || mtrc == "busy non-infra" || mtrc == "busy infra")) {
-              str1 = mtrcm1;
-              str2 = mtrc;
-              do_pxx_compare(fls, str1, str2, arr[fld_v]);
+              pre_do_pxx_compare(mtrcm1, mtrc, fld_v, arr, fls, fld_beg, n, 0);
            }
            #if (mtrcm1 == "muttley calls avg") {
            #   # the average muttley calls have so many small RPS. creates huge list especially if we match up columns
@@ -1043,56 +1213,31 @@ function do_pxx_compare(fls, str1, str2, v,    str, pxx_i)
            #   continue;
            #}
            if (mtrcm1 == "net stats" && (index(mtrc, "MB/s read ") == 1 || index(mtrc, "MB/s write ") == 1)) {
-              str1 = mtrcm1;
-              str2 = mtrc;
-              if (arr[fld_v] != "" && arr[fld_v] != 0) {
-              do_pxx_compare(fls, str1, str2, arr[fld_v]);
-              }
+              pre_do_pxx_compare(mtrcm1, mtrc, fld_v, arr, fls, fld_beg, n, 1);
            }
            if (mtrcm1 == "IO stats" && index(mtrc, "util% ") == 1) {
-              str1 = mtrcm1;
-              str2 = mtrc;
-              if (arr[fld_v] != "" && arr[fld_v] != 0) {
-              do_pxx_compare(fls, str1, str2, arr[fld_v]);
-              }
+              pre_do_pxx_compare(mtrcm1, mtrc, fld_v, arr, fls, fld_beg, n, 1);
            }
            if (mtrcm1 == "IO stats" && (index(mtrc, "rd_MB/s ") == 1 || index(mtrc, "wr_MB/s ") == 1)) {
-              str1 = mtrcm1;
-              str2 = mtrc;
-              if (arr[fld_v] != "" && arr[fld_v] != 0) {
-              do_pxx_compare(fls, str1, str2, arr[fld_v]);
-              }
+              pre_do_pxx_compare(mtrcm1, mtrc, fld_v, arr, fls, fld_beg, n, 1);
            }
-           if (mtrcm1 == "perf_stat" && index(mtrc, "QPI_BW GB/s") == 1) {
-              str1 = mtrcm1;
-              str2 = mtrc;
-              if (arr[fld_v] != "" && arr[fld_v] != 0) {
-              do_pxx_compare(fls, str1, str2, arr[fld_v]);
-              }
+           if (mtrcm1 == "perf_stat" && index(mtrc, " val_arr") > 0) {
+              pre_do_pxx_compare(mtrcm1, mtrc, fld_v, arr, fls, fld_beg, n, 1);
            }
+#          if (mtrcm1 == "perf_stat" && index(mtrc, "%not_halted") == 1) {
+#             pre_do_pxx_compare(mtrcm1, mtrc, fld_v, arr, fls, fld_beg, n, 1);
+#          }
+#          if (mtrcm1 == "perf_stat" && index(mtrc, "Mem BW GB/s") == 1) {
+#             pre_do_pxx_compare(mtrcm1, mtrc, fld_v, arr, fls, fld_beg, n, 1);
+#          }
            if (mtrcm1 == "perf_stat" && index(mtrc, "%used_bw_of_max_theoretical_mem_bw") == 1) {
-              str1 = mtrcm1;
-              str2 = mtrc;
-              if (arr[fld_v] != "" && arr[fld_v] != 0) {
-              do_pxx_compare(fls, str1, str2, arr[fld_v]);
-              }
-           }
-           if (mtrcm1 == "perf_stat" && index(mtrc, "Mem BW GB/s") == 1) {
-              str1 = mtrcm1;
-              str2 = mtrc;
-              if (arr[fld_v] != "" && arr[fld_v] != 0) {
-              do_pxx_compare(fls, str1, str2, arr[fld_v]);
-              }
+              pre_do_pxx_compare(mtrcm1, mtrc, fld_v, arr, fls, fld_beg, n, 1);
            }
            if (mtrcm1 == "muttley host.calls max" && (mtrc == "RPS host.calls max")) {
-              str1 = mtrcm1;
-              str2 = mtrc;
-              do_pxx_compare(fls, str1, str2, arr[fld_v]);
+              pre_do_pxx_compare(mtrcm1, mtrc, fld_v, arr, fls, fld_beg, n, 0);
            }
            if (mtrcm1 == "muttley calls avg" && (mtrc == "RPS host.calls")) {
-              str1 = mtrcm1;
-              str2 = mtrc;
-              do_pxx_compare(fls, str1, str2, arr[fld_v]);
+              pre_do_pxx_compare(mtrcm1, mtrc, fld_v, arr, fls, fld_beg, n, 0);
            }
            if (mtrcm1 == "muttley calls avg" && arr[fld_v] < 1.0) {
               # the average muttley calls have so many small RPS. creates huge list especially if we match up columns
@@ -1222,11 +1367,10 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
       if (mk_sum_all == 1) {
       ofile = sum_all;
       printf("_____script= %s ofile= %s, got_avgby= %d\n", script, ofile, got_avgby) > "/dev/stderr";
-      rw = 1;
+      rw = 2;
       printf("title\tsum_all\tsheet\tsum_all\ttype\tcopy\n")  >> ofile;
       ++rw;
       printf("hdrs\t2\t0\t-1\t%d\t-1\n", fls+3) >> ofile;
-      ++rw;
       printf("Resource\tTool\tMetric") >> ofile;
       cur_col = 2; # 1st col is 0 for me. After above printf we are in col 2
       #if (got_avgby == 0 && fls > 1) {
@@ -1250,6 +1394,7 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
          ++cur_col;
       }
       fl_col_end = cur_col;
+      ++rw;
       printf("\n") >> ofile;
       ltr_beg = get_excel_col_letter_from_number(fl_col_beg);
       ltr_end = get_excel_col_letter_from_number(fl_col_end);
@@ -1259,8 +1404,24 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
         mtrc   = mtrc_lkup[i,1];
         mtrcm1 = mtrc_lkup[i,2];
         if (mtrc == "") { continue; }
-        ++rw;
-        rng_str = sprintf("%s%d:%s%d", ltr_beg, rw, ltr_end,rw);
+        my_str = mtrcm1";"mtrc;
+        pxx_i = pxx_list[my_str];
+        my_n = pxx_n[pxx_i];
+        if (my_n > fls) {
+          ltr_e = get_excel_col_letter_from_number(my_n+4);
+        } else {
+          ltr_e = ltr_end;
+          my_n = fls;
+        }
+        got_val_arr = 0;
+        if(index(mtrc, " val_arr") > 0) {
+          printf("+++++++++++++++++++++++++ got_avgby= %s\"%s\"\t%s\t%s \t my_n= %d\n", got_avgby, eqn_for_col_of_max_val, mcat, mtrc, my_n) > "/dev/stderr";
+          got_val_arr = 1;
+        }
+        if (got_val_arr == 1) {
+          continue;
+        }
+        rng_str = sprintf("%s%d:%s%d", ltr_beg, rw, ltr_e, rw);
         do_avg0_or_max1 = 0;
         if (mtrc == "data_sheet") {
           printf("\t%s\t%s", mtrc_arr[1,i], mtrc) >> ofile;
@@ -1277,7 +1438,7 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
             do_avg0_or_max1 = 1;
           }
         }
-        for (j=1; j <= fls; j++) {
+        for (j=1; j <= my_n; j++) {
           val = mtrc_arr[j,i];
           isnum=ck_num(val);
           equal = "";
@@ -1301,8 +1462,12 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
               if (j == 1) {
                 sum_n = 0;
                 sum_v = 0;
-                for (k=1; k <= fls; k++) {
-                  val2   = mtrc_arr[k,i];
+                for (k=1; k <= my_n; k++) {
+                  if (got_val_arr == 1) {
+                    val2   = pxx_arr[pxx_i,k];
+                  } else {
+                    val2   = mtrc_arr[k,i];
+                  }
                   isnum2 = ck_num(val2);
                   if (isnum2 > 0) {
                     #if (get_max_val == 1)
@@ -1317,12 +1482,17 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
                       sum_v = sum_v + val2;
                       sum_n = sum_n + 1;
                     }
+                    if (got_val_arr == 1) {
+                      printf("\t%s%f", equal, val2) >> ofile;
+                    }
                   }
                 }
+                if (got_val_arr == 0) {
                 if (sum_n > 0) {
                   printf("\t%s%f", equal, sum_v/sum_n) >> ofile;
                 } else {
                   printf("\t%s%s", equal, 0) >> ofile;
+                }
                 }
               }
             }
@@ -1334,29 +1504,30 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
                 continue;
               }
             } else {
-              if (j == 1) {
+              if (j == 1 && got_val_arr == 0) {
                  printf("\t%s%s", "", "") >> ofile;
               }
             }
           }
-          if (val == "") {
-          printf("\t") >> ofile;
-          } else {
-          printf("\t%s%s", equal, val) >> ofile;
+          if (got_val_arr == 0) {
+            if (val == "") {
+              printf("\t") >> ofile;
+            } else {
+              printf("\t%s%s", equal, val) >> ofile;
+            }
           }
            #if (index(mtrc, "Mem BW GB/s") > 0) {
            #  printf("str= %s, fls= %d, %s, %s\n", mtrc, fls, val, isnum) > "/dev/stderr";
            #}
         }
+        ++rw;
         printf("\n") >> ofile;
       }
       for (k=1; k <= pxx_max; k++) {
-        #pxx_arr[2,fls] += arr[fld_v];
-        #pxx_hdr[2,"grp"] = mtrcm1;
-        #pxx_hdr[2,"mtrc"] = mtrc;
         delete res_i;
         delete idx;
-        for(i=1; i <= fls_mx; i++) {
+        my_n = pxx_n[k];
+        for(i=1; i <= my_n; i++) {
           idx[i] = i;
           arr_in[i] = pxx_arr[k,i];
         }
@@ -1374,40 +1545,65 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
         px[++px_mx] = 90;
         px[++px_mx] = 95;
         px[++px_mx] = 99;
+        px[++px_mx] = 99.5;
         px[++px_mx] = 100;
         str = "hosts " pxx_hdr[k,"mtrc"];
-        printf("\t%s\t%s\t", pxx_hdr[k,"grp"], str) >> ofile;
-        for(i=1; i <= fls_mx; i++) {
-           printf("\t%s", pxx_hst[res_i[i]]) >> ofile;
+        if (index(str, " val_arr") == 0) {
+          printf("\t%s\t%s\t", pxx_hdr[k,"grp"], str) >> ofile;
+          for(i=1; i <= fls_mx; i++) {
+            printf("\t%s", pxx_hst[res_i[i]]) >> ofile;
+          }
+          ++rw;
+          printf("\n") >> ofile;
+          str = "values " pxx_hdr[k,"mtrc"];
+          my_n = pxx_n[k];
+          my_str = sprintf("\t%s\t%s\t", pxx_hdr[k,"grp"], str);
+          printf("+++++++++++++ my_n= %d ++++++++++++++ my_str= %s ofile= %s\n", my_n, my_str, ofile) > "/dev/stderr";
+          printf("%s", my_str) >> ofile;
+          for(i=1; i <= my_n; i++) {
+            printf("\t%f", arr_in[res_i[i]]) >> ofile;
+          }
+          ++rw;
+          printf("\n") >> ofile;
         }
-        printf("\n") >> ofile;
-        str = "values " pxx_hdr[k,"mtrc"];
-        printf("\t%s\t%s\t", pxx_hdr[k,"grp"], str) >> ofile;
-        for(i=1; i <= fls_mx; i++) {
-           printf("\t%f", arr_in[res_i[i]]) >> ofile;
+        if (index(str, " val_arr") > 0) {
+          my_sum = 0.0;
+          n = 0;
+          for(i=1; i <= my_n; i++) {
+            my_sum += arr_in[res_i[i]];
+            n++;
+          }
+          if (n > 0) {
+            my_sum /= n;
+          } else {
+            my_sum = 0.0;
+          }
+          str = pxx_hdr[k,"mtrc"] " avg";
+          ++rw;
+          printf("\t%s\t%s\t%f\n", pxx_hdr[k,"grp"], str, my_sum) >> ofile;
         }
-        printf("\n") >> ofile;
         for (kk=1; kk <= px_mx; kk++) {
-          pi  = 0.01 * px[kk] * fls_mx; # index into array for this percentile
+          pi  = 0.01 * px[kk] * my_n; # index into array for this percentile
           pii = int(pi);       # integer part
           if (pii != pi) {
             # so pi is not an integer
             piu = pii+1;
-            if (piu > fls_mx) { piu = fls_mx; }
+            if (piu > my_n) { piu = my_n; }
             uval = arr_in[res_i[piu]]
             hval = pxx_hst[res_i[piu]];
           } else {
             piu = pii;
-            if (piu >= fls_mx) {
-              uval = arr_in[res_i[fls_mx]];
-              hval = pxx_hst[res_i[fls_mx]];
+            if (piu >= my_n) {
+              uval = arr_in[res_i[my_n]];
+              hval = pxx_hst[res_i[my_n]];
             } else {
               piup1=piu + 1;
               uval = 0.5*(arr_in[res_i[piu]] + arr_in[res_i[piup1]]);
-              hval = pxx_hst[res_i[piu]] " " pxx_hst[res_i[piup1]] " "
+              hval = pxx_hst[res_i[piu]] " " pxx_hst[res_i[piup1]] " ";
             }
           }
-          str = "p" px[kk] " " pxx_hdr[k,"mtrc"];
+          str = pxx_hdr[k,"mtrc"] " p" px[kk];
+          ++rw;
           printf("\t%s\t%s\t%f\t%s\n", pxx_hdr[k,"grp"], str, uval, hval) >> ofile;
           printf("\t%s\t%s\t%f\t%s\n", pxx_hdr[k,"grp"], str, uval, hval) > "/dev/stderr";
         }
