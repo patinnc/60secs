@@ -18,6 +18,10 @@ BEGIN{
    if (index(options, "get_perf_stat_max_val") > 0) {
      options_get_perf_stat_max_val = 1;
    }
+   options_get_pxx_stats = 0;
+   if (index(options, "get_pxx_stats") > 0) {
+    options_get_pxx_stats = 1;
+   }
    printf("%s got_add_all_to_summary= %d\n", script, got_add_all_to_summary) > "/dev/stderr";
    ph_mx = 0;
    if (phase_file != "" && phase_clip != "") {
@@ -76,7 +80,7 @@ BEGIN{
 }
 
 
-function do_summary(colms, v, epch, intrvl, k_idx,    v1) {
+function do_summary(colms, v, epch, intrvl, k_idx,    v1, myn, isum) {
    if (n_sum > 0 && hdr_lkup[colms] != -1) {
       i_sum = hdr_lkup[colms];
       if (k_idx > 0) {
@@ -105,6 +109,10 @@ function do_summary(colms, v, epch, intrvl, k_idx,    v1) {
         sum_ps_max[i_sum,"n"]++;
         sum_ps_max[i_sum,"sum"] += v1;
         sum_ps_max[i_sum,"sum_sq"] += v1*v1;
+      }
+      if (options_get_pxx_stats == 1) {
+        myn = ++pxx_stats[i_sum,"n"];
+        pxx_stats[i_sum,"vals",myn] = v1;
       }
    } else {
       if (k_idx > 0) {
@@ -1579,6 +1587,28 @@ function dt_to_epoch(offset) {
               printf("%s\t%s\t%f\t%s avg\n", sum_res[i_sum], "perf_stat", my_avg, ky) >> sum_file;
               printf("%s\t%s\t%f\t%s stdev\n", sum_res[i_sum], "perf_stat", my_stdev, ky) >> sum_file;
               printf("%s\t%s\t%f\t%s avg+3stdev\n", sum_res[i_sum], "perf_stat", my_peak_fctr, ky) >> sum_file;
+              peak_str = " peak";
+           }
+           if (options_get_pxx_stats == 1 && pxx_stats[i_sum,"n"] != "") {
+             dist_file = sum_file;
+              my_n = pxx_stats[i_sum,"n"];
+              my_sum = 0.0;
+              my_pk = 0;
+              for (ii=1; ii <= my_n; ii++) {
+                v = pxx_stats[i_sum,"vals",ii];
+                my_sum += v;
+                if (ii == 1 || my_pk < v) { my_pk = v;}
+              }
+              v2 = my_pk;
+              printf("%s\t%s\t%f\t%s val_arr", sum_res[i_sum], "perf_stat", my_n, ky) >> dist_file;
+              for (ii=1; ii <= my_n; ii++) {
+                printf("\t%f", pxx_stats[i_sum,"vals",ii]) >> dist_file;
+              }
+              printf("\n") >> dist_file;
+              #printf("%s\t%s\t%f\t%s avg+3stdev\n", sum_res[i_sum], "perf_stat", my_peak_fctr, ky) >> sum_file;
+              if (my_n > 0) {
+                printf("%s\t%s\t%f\t%s%s\n", sum_res[i_sum], "perf_stat", my_sum/my_n, ky, " avg") >> sum_file;
+              }
               peak_str = " peak";
            }
            printf("got perf_stat %s\t%f\tsum_tot= %s\n", ky, v2, sum_tot[i_sum]) > "/dev/stderr";
