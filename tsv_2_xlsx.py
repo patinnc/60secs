@@ -434,7 +434,9 @@ for bmi in range(base_mx+1):
       print("file list remainder= ", remainder, file=sys.stderr)
 
    drow_end = -1
+   filenum = -1
    for x in remainder:
+      filenum = filenum + 1
       if verbose:
          print("do x fo= %d file= %s" % (fo, x), file=sys.stderr)
 #      do_it = True
@@ -490,9 +492,15 @@ for bmi in range(base_mx+1):
       if not fo in fn_bs_data[bmi]:
          #with open(x, 'rU', encoding="utf-8") as tsv:
          #with open(x, "rU") as tsv:
+         linenum = -1
          with io.open(x, "rU", encoding="utf-8") as tsv:
-            for line in csv.reader(tsv, dialect="excel-tab"):
-              data.append(line)
+            try:
+               for line in csv.reader(tsv, dialect="excel-tab"):
+                   linenum = linenum +1
+                   data.append(line)
+            except:
+               print("---- error read tsv filename[%d]= %s, linenum= %d" % (filenum, x, linenum), file=sys.stderr)
+               sys.exit(1)
          tsv.close
          fn_bs_data[bmi][fo] = data
       else:
