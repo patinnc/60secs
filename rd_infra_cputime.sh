@@ -154,7 +154,7 @@ res_i, idx, j, px, px_mx, str) {
          my_p997  = 0.0;
          my_peak  = 0.0;
        }
-       printf(fmt_str" avg+3stdev\n", mtrcm1, my_p997, hdr, dev) >> sum_file;
+       printf(fmt_str" avg\n", mtrcm1, my_avg, hdr, dev) >> sum_file;
        printf(fmt_str" peak\n", mtrcm1, my_peak, hdr, dev) >> sum_file;
         delete arr_in;
         delete res_i;
