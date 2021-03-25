@@ -186,8 +186,8 @@ function _ord_init(    low, high, i, t) {
       if (tolower($i) == "metric") {
          sm1 = "";
          sp1 = "";
-         iif (i > 1) { sm1 = tolower($(i-1)); }
-         iif (i < NF) { sp1 = tolower($(i+1)); }
+         if (i > 1) { sm1 = tolower($(i-1)); }
+         if (i < NF) { sp1 = tolower($(i+1)); }
          if (i > 1 && (sm1 == "average" || sm1 == "value" || index(sm1, "avg") > 0) ) {
            did_metric = 1;
            ky=i;
@@ -273,6 +273,9 @@ function _ord_init(    low, high, i, t) {
       if (!(gstr in gstr_list)) {
          gstr_list[gstr]     = ++gstr_mx;
          gstr_lkup[gstr_mx]  = gstr;
+         if (index(arr[1], "MATCH(MAX") > 0) {
+           arr[1] = "";
+         }
          gstr_lkup1[gstr_mx] = arr[1];
          gstr_lkup2[gstr_mx] = arr[2];
       }
@@ -479,8 +482,63 @@ function tot_compare(i1, v1, i2, v2,    l, r)
      if (layout == 0) {
         gstr_mx = 1;
      }
+SI_mx = 0;
+SI_arr[++SI_mx]="SI 500.perlbench_r ratio 1";
+SI_arr[++SI_mx]="SI 500.perlbench_r run_time 1";
+SI_arr[++SI_mx]="SI 500.perlbench_r copies 1";
+SI_arr[++SI_mx]="SI 500.perlbench_r ratio 2";
+SI_arr[++SI_mx]="SI 500.perlbench_r run_time 2";
+SI_arr[++SI_mx]="SI 500.perlbench_r copies 2";
+SI_arr[++SI_mx]="SI 500.perlbench_r ratio 3";
+SI_arr[++SI_mx]="SI 500.perlbench_r run_time 3";
+SI_arr[++SI_mx]="SI 500.perlbench_r copies 3";
+SI_arr[++SI_mx]="SI 520.omnetpp_r ratio 1";
+SI_arr[++SI_mx]="SI 520.omnetpp_r run_time 1";
+SI_arr[++SI_mx]="SI 520.omnetpp_r copies 1";
+SI_arr[++SI_mx]="SI 520.omnetpp_r ratio 2";
+SI_arr[++SI_mx]="SI 520.omnetpp_r run_time 2";
+SI_arr[++SI_mx]="SI 520.omnetpp_r copies 2";
+SI_arr[++SI_mx]="SI 523.xalancbmk_r ratio 1";
+SI_arr[++SI_mx]="SI 523.xalancbmk_r run_time 1";
+SI_arr[++SI_mx]="SI 523.xalancbmk_r copies 1";
+SI_arr[++SI_mx]="SI 523.xalancbmk_r ratio 2";
+SI_arr[++SI_mx]="SI 523.xalancbmk_r run_time 2";
+SI_arr[++SI_mx]="SI 523.xalancbmk_r copies 2";
+SI_arr[++SI_mx]="SI 523.xalancbmk_r ratio 3";
+SI_arr[++SI_mx]="SI 523.xalancbmk_r run_time 3";
+SI_arr[++SI_mx]="SI 523.xalancbmk_r copies 3";
+SI_arr[++SI_mx]="SI 523.xalancbmk_r ratio 4";
+SI_arr[++SI_mx]="SI 523.xalancbmk_r run_time 4";
+SI_arr[++SI_mx]="SI 523.xalancbmk_r copies 4";
+SI_arr[++SI_mx]="SI new score_v2 valid? omnetpp.perlbench.xalanc";
+SI_arr[++SI_mx]="SI new score_v2";
+SI_arr[++SI_mx]="SI cpus";
+     
+     SI_did = 0;
+     SI_cur = 0;
      for (g=1; g <= gstr_mx; g++) {
-      for (i=1; i <= lbl_mx; i++) {
+      #for (i=1; i <= lbl_mx; i++) 
+      ii = 0;
+      if (gstr_lkup2[g] == "SI benchmark") {
+        if (++SI_did > 1) {continue; }
+      }
+      while (ii <= lbl_mx) {
+        doing_SI = 0;
+        if (gstr_lkup2[g] == "SI benchmark") {
+          SI_cur++;
+          if (SI_cur > SI_mx) {
+            break;
+          }
+          #printf("try SI_B[%d]= %s\n", SI_cur, SI_arr[SI_cur]);
+          i = lbl_list[SI_arr[SI_cur]];
+          if (i == "") {
+            #printf("skp SI_B[%d]= %s\n", SI_cur, SI_arr[SI_cur]);
+            continue;
+          }
+          doing_SI = 1;
+        } else {
+          i = ++ii;
+        }
         kk = i;
         lbl=lbl_lkup[i];
         got_2 = 0;
@@ -489,7 +547,10 @@ function tot_compare(i1, v1, i2, v2,    l, r)
          got_gstr = 0;
          for (fl=1; fl <= mx_fl; fl++) {
           j = lbl_arr[i,fl];
-          if (sv[j,fl,3] == g) {
+          ck_gstr_g = gstr_lkup2[g];
+          ck_gstr_fl = gstr_lkup2[sv[j,fl,3]]
+          #if (sv[j,fl,3] == g) 
+          if (ck_gstr_g == ck_gstr_fl) {
              got_gstr = 1;
              break;
           }
@@ -500,6 +561,11 @@ function tot_compare(i1, v1, i2, v2,    l, r)
         if (got_gstr == 1) {
          if (layout == 1) {
             lstr = lbl;
+            ck_str =  gstr_lkup2[g]"\t"lstr;
+            if (ck_did_already[ck_str] != "") {
+              continue;
+            }
+            ck_did_already[ck_str] = 1;
             if (gstr_lkup1[g] == "pidstat") {
                ++plst;
                kk = result[plst];
@@ -526,6 +592,7 @@ function tot_compare(i1, v1, i2, v2,    l, r)
               cend=cbeg+mx_fl;
               frm_max="=SUBTOTAL(104, INDIRECT(ADDRESS(ROW(), COLUMN()+"cbeg", 1)):INDIRECT(ADDRESS(ROW(), COLUMN()+"cend",1)))"
             }
+            #printf("grp= %s lkup= %s, lstr= %s\n", gstr_lkup1[g], gstr_lkup2[g], lstr) > "/dev/stderr";
             printf("%s%s%s%s%s%s\"%s\"%s\"%s\"%s\"%s\"%s", gstr_lkup1[g], sep, gstr_lkup2[g], sep, lstr, sep, frm_avg, sep, frm_min, sep, frm_max, sep) > out_file;
             lc = 6;
          for (fl=1; fl <= ratio_cols; fl++) {
