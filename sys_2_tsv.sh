@@ -216,7 +216,12 @@ get_hostname_from_path() {
    ck_last_rc $? $LINENO
 }
 
-get_hostname_from_path
+CK_HST_NM=`find . -name hostname.txt`
+if [ "$CK_HST_NM" == "" ]; then
+  get_hostname_from_path
+else
+  HOSTNM=$CK_HST_NM
+fi
 
 printf "host\thostname\t%s\thostname\n"  "$HOSTNM" >> $SUM_FILE
 
