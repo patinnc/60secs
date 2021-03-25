@@ -167,7 +167,10 @@ for i in $LSCPU_FL; do
 #CPU MHz:               1496.962
 #CPU max MHz:           2000.0000
 #Socket(s):             2
-    TSC_FREQ_AMD=`cat $i |awk '/^Vendor ID:/{if ($3 == "AuthenticAMD"){amd=1;}}/BogoMIPS:/{bogo=$2;}/CPU max MHz:/{ freq= $4; if (amd==1){printf("%s\n", freq);exit;}}END{if(amd==1){printf("%.3f\n",0.5*bogo/1000.0);}}'`
+    TSC_FREQ_AMD=`cat $i |awk '/^Vendor ID:/{if ($3 == "AuthenticAMD"){amd=1;}}
+      /BogoMIPS:/{bogo=$2;}
+      END{if(amd==1){printf("%.3f\n",0.5*bogo);}}'`
+
     TSC_FREQ=`cat $i |awk '/^Model name/{for (i=1;i<=NF;i++){pos=index($i, "GHz");if (pos > 0){print substr($i,1,pos-1);}}}'`
     NUM_CPUS=`cat $i |awk '/^CPU.s.:/{printf("%s\n",$2);}'`
     SOCKETS=`cat $i |awk '/^Socket.s.:/{printf("%s\n",$2);}'`
