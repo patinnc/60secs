@@ -50,7 +50,7 @@ fi
 #TSC_FREQ=`lscpu |grep "Model name:" | awk '{for (i=1;i<=NF;i++){pos=index($i,"GHz");if (pos > 0){frq=substr($i,1,pos-1);printf("%s\n",frq);exit;}}}'`
 #echo "TSC_FREQ= $TSC_FREQ"
 #SLOTS=8
-#CPU_ARCH=`$SCR_DIR/decode_intel_fam_mod.sh`
+#CPU_ARCH=`$SCR_DIR/decode_cpu_fam_mod.sh`
 
 echo "use_unit= $USE_UNIT" > /dev/stderr
 printf "%s\n%s\n\n\n", $USE_UNIT, $USE_INIT > /dev/stderr
