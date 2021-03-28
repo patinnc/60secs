@@ -311,7 +311,7 @@ if [ "$LSCPU_FL" != "" ]; then
      printf "host\tsockets\t%s\tnum_sockets\n"  "$NSKTS" >> $SUM_FILE;
      NUMAS=`awk '/^NUMA node.s.:/ { printf("%s\n", $3);exit;}' $LSCPU_FL`
      printf "host\tnuma_nodes\t%s\tnuma_nodes\n"  "$NUMAS" >> $SUM_FILE;
-     DECD=`$SCR_DIR/decode_intel_fam_mod.sh $LSCPU_FL`
+     DECD=`$SCR_DIR/decode_cpu_fam_mod.sh $LSCPU_FL`
      if [ "$DECD" != "" ]; then
        printf "host\tcpu_type\t%s\tcpu_type\n"  "$DECD" >> $SUM_FILE;
      fi
