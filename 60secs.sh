@@ -305,7 +305,7 @@ if [ -e $LOG ]; then
   rm $LOG
 fi
 
-CPU_DECODE=`${SCR_DIR}/decode_intel_fam_mod.sh`
+CPU_DECODE=`${SCR_DIR}/decode_cpu_fam_mod.sh`
 
 NANO=".%N"
 tdte=`date "+${NANO}"`
