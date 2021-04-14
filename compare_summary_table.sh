@@ -142,6 +142,7 @@ fi
 
 awk -v xls_str="$XLS_STR" -v sku_str="$SKU_STR" -v ratio_cols="$RATIO_COLS" -v out_file="$OUT_FILE" -v layout="$LAYOUT" -v sep="$SEPARATOR" '
  BEGIN{
+      need_SI_ncu_combined = 0;
       did_metric = 0;
       ky = 2;
       vl = 1; 
@@ -256,6 +257,58 @@ function _ord_init(    low, high, i, t) {
     if (n <= 1) {
       next;
     }
+    if (arr[ky] == "num_cpus") {
+      num_cpus[mx_fl] = ck_for_eq_sign(arr[vl]) + 0.0;
+    }
+    if (arr[ky] == "SI NCU score_v3") {
+      SI_ncu_score_v3[mx_fl] = ck_for_eq_sign(arr[vl]) + 0.0;
+    }
+    if (arr[ky] == "SI cpus") {
+      cv = ck_for_eq_sign(arr[vl]) + 0.0;
+      SI_cpus[mx_fl] = cv;
+      if (num_cpus[mx_fl] != "") {
+        v25 = num_cpus[mx_fl]/4;
+        v50 = num_cpus[mx_fl]/2;
+        v75 = v25*3;
+        v100= num_cpus[mx_fl];
+        if (cv == v25) {
+          need_SI_ncu_combined_pct[mx_fl] = 25;
+        }
+        if (cv == v50) {
+          need_SI_ncu_combined_pct[mx_fl] = 50;
+        }
+        if (cv == v75) {
+          need_SI_ncu_combined_pct[mx_fl] = 75;
+        }
+        if (cv == v100) {
+          need_SI_ncu_combined_pct[mx_fl] = 100;
+        }
+        need_SI_ncu_combined_arr[mx_fl] = 0;
+        printf("_____tst need_SI_ncu_combined, v25= %s v50= %f v75= %f v100= %f, cv= %f\n", v25, v50, v75, v100, cv) > "/dev/stderr";
+        if (cv == (v25 - 4) || cv == (v25 + 4) ||
+            cv == (v75 - 4) || cv == (v75 + 4)) {
+            need_SI_ncu_combined_arr[mx_fl] = 1;
+            need_SI_ncu_combined = 1;
+            need_SI_ncu_combined_pct[mx_fl] = "";
+            printf("_____got need_SI_ncu_combined = %d\n", need_SI_ncu_combined) > "/dev/stderr";
+            if ((cv == (v25 + 4) && SI_cpus[mx_fl-1] == (v25-4)) ||
+                (cv == (v75 + 4) && SI_cpus[mx_fl-1] == (v75-4))) {
+              printf("_____use need_SI_ncu_combined = %d\n", mx_fl) > "/dev/stderr";
+              need_SI_ncu_combined_arr[mx_fl] = 2;
+              if (cv == (v25 + 4)) {
+                need_SI_ncu_combined_pct[mx_fl] = 25;
+              }
+              if (cv == (v75 + 4)) {
+                need_SI_ncu_combined_pct[mx_fl] = 75;
+              }
+            }
+            
+        }
+      }
+      if (mx_fl == 20) {
+        printf("++++++++++++ SI_cpus[%d]= %d, num_cpus[%d]= %d, pct= %s\n", mx_fl, SI_cpus[mx_fl], mx_fl, num_cpus[mx_fl], need_SI_ncu_combined_pct[mx_fl]) > "/dev/stderr";
+      }
+    }
     lnm = ++ln[mx_fl];
     #if (got_xlsx == 1) {
     #   printf("got xlsx at2, fl= %d\n", mx_fl);
@@ -304,6 +357,14 @@ function tot_compare(i1, v1, i2, v2,    l, r)
         return 0
     else
         return 1
+}
+function ck_for_eq_sign(str)
+{
+    if (index(str, "=") == 1) {
+      return substr(str, 2, length(str));
+    } else {
+      return str;
+    }
 }
    END {
      _ord_init(1, 127, i, t); 
@@ -484,35 +545,43 @@ function tot_compare(i1, v1, i2, v2,    l, r)
      }
 SI_mx = 0;
 SI_arr[++SI_mx]="SI 500.perlbench_r ratio 1";
-SI_arr[++SI_mx]="SI 500.perlbench_r run_time 1";
-SI_arr[++SI_mx]="SI 500.perlbench_r copies 1";
 SI_arr[++SI_mx]="SI 500.perlbench_r ratio 2";
-SI_arr[++SI_mx]="SI 500.perlbench_r run_time 2";
-SI_arr[++SI_mx]="SI 500.perlbench_r copies 2";
 SI_arr[++SI_mx]="SI 500.perlbench_r ratio 3";
-SI_arr[++SI_mx]="SI 500.perlbench_r run_time 3";
+SI_arr[++SI_mx]="SI 500.perlbench_r copies 1";
+SI_arr[++SI_mx]="SI 500.perlbench_r copies 2";
 SI_arr[++SI_mx]="SI 500.perlbench_r copies 3";
+SI_arr[++SI_mx]="SI 500.perlbench_r run_time 1";
+SI_arr[++SI_mx]="SI 500.perlbench_r run_time 3";
+SI_arr[++SI_mx]="SI 500.perlbench_r run_time 2";
 SI_arr[++SI_mx]="SI 520.omnetpp_r ratio 1";
-SI_arr[++SI_mx]="SI 520.omnetpp_r run_time 1";
-SI_arr[++SI_mx]="SI 520.omnetpp_r copies 1";
 SI_arr[++SI_mx]="SI 520.omnetpp_r ratio 2";
-SI_arr[++SI_mx]="SI 520.omnetpp_r run_time 2";
+SI_arr[++SI_mx]="SI 520.omnetpp_r ratio 3";
+SI_arr[++SI_mx]="SI 520.omnetpp_r copies 1";
 SI_arr[++SI_mx]="SI 520.omnetpp_r copies 2";
+SI_arr[++SI_mx]="SI 520.omnetpp_r copies 3";
+SI_arr[++SI_mx]="SI 520.omnetpp_r run_time 1";
+SI_arr[++SI_mx]="SI 520.omnetpp_r run_time 2";
+SI_arr[++SI_mx]="SI 520.omnetpp_r run_time 3";
 SI_arr[++SI_mx]="SI 523.xalancbmk_r ratio 1";
-SI_arr[++SI_mx]="SI 523.xalancbmk_r run_time 1";
-SI_arr[++SI_mx]="SI 523.xalancbmk_r copies 1";
 SI_arr[++SI_mx]="SI 523.xalancbmk_r ratio 2";
-SI_arr[++SI_mx]="SI 523.xalancbmk_r run_time 2";
-SI_arr[++SI_mx]="SI 523.xalancbmk_r copies 2";
 SI_arr[++SI_mx]="SI 523.xalancbmk_r ratio 3";
-SI_arr[++SI_mx]="SI 523.xalancbmk_r run_time 3";
-SI_arr[++SI_mx]="SI 523.xalancbmk_r copies 3";
 SI_arr[++SI_mx]="SI 523.xalancbmk_r ratio 4";
-SI_arr[++SI_mx]="SI 523.xalancbmk_r run_time 4";
+SI_arr[++SI_mx]="SI 523.xalancbmk_r copies 1";
+SI_arr[++SI_mx]="SI 523.xalancbmk_r copies 2";
+SI_arr[++SI_mx]="SI 523.xalancbmk_r copies 3";
 SI_arr[++SI_mx]="SI 523.xalancbmk_r copies 4";
+SI_arr[++SI_mx]="SI 523.xalancbmk_r run_time 1";
+SI_arr[++SI_mx]="SI 523.xalancbmk_r run_time 2";
+SI_arr[++SI_mx]="SI 523.xalancbmk_r run_time 3";
+SI_arr[++SI_mx]="SI 523.xalancbmk_r run_time 4";
 SI_arr[++SI_mx]="SI new score_v2 valid? omnetpp.perlbench.xalanc";
 SI_arr[++SI_mx]="SI new score_v2";
+SI_arr[++SI_mx]="SI NCU score_v3";
 SI_arr[++SI_mx]="SI cpus";
+SI_arr[++SI_mx]="SI NCU score_average"; SI_sc_avg= SI_mx;
+SI_arr[++SI_mx]="SI NCU score_pct_sys"; SI_sc_pct= SI_mx;
+SI_arr[++SI_mx]="SI NCU score_avg_of_4pcts"; SI_sc_avg_of_avg= SI_mx;
+SI_arr[++SI_mx]="SI NCU score_sum_at_pct"; SI_sc_sum_at_pct= SI_mx;
      
      SI_did = 0;
      SI_cur = 0;
@@ -526,12 +595,36 @@ SI_arr[++SI_mx]="SI cpus";
         doing_SI = 0;
         if (gstr_lkup2[g] == "SI benchmark") {
           SI_cur++;
+          doing_SI_sc_avg=0;
+          doing_SI_sc_pct=0;
+          doing_SI_sc_avg_of_avg=0;
+          doing_SI_sc_sum_at_pct=0;
+          if ((SI_cur == SI_sc_avg || SI_cur == SI_sc_pct || SI_cur == SI_sc_avg_of_avg || SI_cur == SI_sc_sum_at_pct) && need_SI_ncu_combined == 0) {
+            SI_cur++; # skip the line
+            printf("__________skip %s\n", SI_arr[SI_cur]) > "/dev/stderr";
+          }
+          if (SI_cur == SI_sc_avg && need_SI_ncu_combined == 1) {
+             printf("__________got  %s, layout= %d\n", SI_arr[SI_cur], layout) > "/dev/stderr";
+             doing_SI_sc_avg=1;
+          }
+          if (SI_cur == SI_sc_pct && need_SI_ncu_combined == 1) {
+             printf("__________got  %s, layout= %d\n", SI_arr[SI_cur], layout) > "/dev/stderr";
+             doing_SI_sc_pct=1;
+          }
+          if (SI_cur == SI_sc_avg_of_avg && need_SI_ncu_combined == 1) {
+             printf("__________got  %s, layout= %d\n", SI_arr[SI_cur], layout) > "/dev/stderr";
+             doing_SI_sc_avg_of_avg=1;
+          }
+          if (SI_cur == SI_sc_sum_at_pct && need_SI_ncu_combined == 1) {
+             printf("__________got  %s, layout= %d\n", SI_arr[SI_cur], layout) > "/dev/stderr";
+             doing_SI_sc_sum_at_pct=1;
+          }
           if (SI_cur > SI_mx) {
             break;
           }
           #printf("try SI_B[%d]= %s\n", SI_cur, SI_arr[SI_cur]);
           i = lbl_list[SI_arr[SI_cur]];
-          if (i == "") {
+          if (i == "" && doing_SI_sc_avg == 0 && doing_SI_sc_pct == 0 && doing_SI_sc_avg_of_avg == 0 && doing_SI_sc_sum_at_pct == 0) {
             #printf("skp SI_B[%d]= %s\n", SI_cur, SI_arr[SI_cur]);
             continue;
           }
@@ -554,6 +647,18 @@ SI_arr[++SI_mx]="SI cpus";
              got_gstr = 1;
              break;
           }
+         }
+         if (doing_SI_sc_avg == 1 || doing_SI_sc_pct == 1) {
+          lbl = SI_arr[SI_cur];
+          got_gstr = 1;
+         }
+         if (doing_SI_sc_avg == 1 || doing_SI_sc_avg_of_avg == 1) {
+          lbl = SI_arr[SI_cur];
+          got_gstr = 1;
+         }
+         if (doing_SI_sc_avg == 1 || doing_SI_sc_sum_at_pct == 1) {
+          lbl = SI_arr[SI_cur];
+          got_gstr = 1;
          }
         } else {
           got_gstr = 1;
@@ -616,7 +721,75 @@ SI_arr[++SI_mx]="SI cpus";
           } else {
              j = lbl_arr[i,fl];
              lbl=lbl_lkup[i];
+             if (doing_SI_sc_avg == 1 || doing_SI_sc_pct == 1) {
+                lbl = SI_arr[SI_cur];
+             }
+             if (doing_SI_sc_avg == 1 || doing_SI_sc_avg_of_avg == 1) {
+                lbl = SI_arr[SI_cur];
+             }
+             if (lbl == "SI NCU score_v3") {
+               printf("______ lbl= %s, cpus= %s, si_cpus= %s, si_ncu_score= %s\n", lbl, num_cpus[fl], SI_cpus[fl], SI_ncu_score_v3[fl]) > "/dev/stderr";
+             }
              val[fl] = sv[j,fl,2];
+             if (doing_SI_sc_avg == 1) {
+               val[fl] = "";
+               if (need_SI_ncu_combined_arr[fl] == 2) {
+                  val[fl] = 0.5 * (SI_ncu_score_v3[fl] + SI_ncu_score_v3[fl-1]);
+               } else if (need_SI_ncu_combined_arr[fl] == 0) {
+                  val[fl] = SI_ncu_score_v3[fl];
+               }
+               SI_ncu_score_v3_sv[fl] = val[fl];
+               j = 1;
+             } 
+             if (doing_SI_sc_pct == 1) {
+               val[fl] = "";
+               val[fl] = need_SI_ncu_combined_pct[fl];
+               j = 1;
+             } 
+             if (doing_SI_sc_avg_of_avg == 1) {
+               val[fl] = "";
+               if (need_SI_ncu_combined_pct[fl] == 100) {
+                 aoa_n = 0;
+                 aoa_sum = 0.0;
+                 delete aoa_got_arr;
+                 for (aoa_i= fl; aoa_i >= 0; aoa_i--) {
+                   v = need_SI_ncu_combined_pct[aoa_i];
+                   #printf("ck  pct0= %s\n", v) > "/dev/stderr";
+                   if (v == "") { continue; }
+                   v = sprintf("%d", v + 0.1) + 0;
+                   #printf("got pct1= %s\n", v) > "/dev/stderr";
+                   if (v == 100 || v == 75 || v == 50 || v == 25) {
+                     if (aoa_got_arr[v] == "") {
+                       aoa_got_arr[v] = v;
+                       aoa_sum += SI_ncu_score_v3_sv[aoa_i];
+                       aoa_n++;
+                       #printf("got pct2= %s, n= %d\n", v, aoa_n) > "/dev/stderr";
+                     } else {
+                       #printf("brk pct3= %s\n", v) > "/dev/stderr";
+                       break;
+                     }
+                   }
+                 }
+                 if (aoa_n == 4) {
+                   val[fl] = aoa_sum/aoa_n;
+                 }
+               }
+               j = 1;
+             } 
+             if (doing_SI_sc_sum_at_pct == 1) {
+               val[fl] = "";
+               j = 1;
+               v = need_SI_ncu_combined_pct[fl];
+               if (v != "") {
+                 v1 = num_cpus[fl];
+                 v2 = SI_ncu_score_v3_sv[fl];
+                 val[fl] = 0.01 * v * v1 * v2;
+               }
+             } 
+             if (lbl == "SI NCU score_average") {
+               printf("______ lbl= %s, doing_SI_sc_avg= %d, need_SI_ncu_combined_arr[fl]= %d  cpus= %s, si_cpus= %s, si_ncu_score= %s, comb_val= %f cmb_valm1= %f\n",
+                  lbl, doing_SI_sc_avg, need_SI_ncu_combined_arr[fl] , num_cpus[fl], SI_cpus[fl], SI_ncu_score_v3[fl], SI_ncu_score_v3[fl-1], val[fl]) > "/dev/stderr";
+             }
              str = (j == "" ? "" : val[fl])
           }
           if ((val[fl] + 0.0) != 0.0) {
