@@ -477,6 +477,16 @@ else
        if [ $VERBOSE -gt 0 ]; then
          echo "$0.$LINENO got29 $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one." > /dev/stderr
        fi
+     if [ "$RESP" == "0" ]; then
+       CKF="run_itp.log"
+       RESP=`find $DIR -name $CKF | wc -l | awk '{$1=$1;print}'`
+       #echo "found $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one."
+     fi
+     if [ "$RESP" == "0" ]; then
+       CKF="infra_cputime.txt"
+       RESP=`find $DIR -name $CKF | wc -l | awk '{$1=$1;print}'`
+       #echo "found $RESP $CKF file(s) under dir $DIR. Using the dir of first one if more than one."
+     fi
        if [ "$RESP" == "0" ]; then
          CKF="sys_*_perf_stat.txt*"
          RESP=`find $DIR -name "$CKF" | wc -l | awk '{$1=$1;print}'`
@@ -518,7 +528,7 @@ else
                if [ "$TS_INIT" != "" ]; then
                  GOT_TS_INIT=1
                fi
-               echo "$0.$LINENO: ck $NM/run.log got TS_INIT= $TS_INIT"
+               #echo "$0.$LINENO: ck $NM/run.log got TS_INIT= $TS_INIT"
              fi
              if [ "$GOT_TS_INIT" != "1" ]; then
               if [ $VERBOSE -gt 0 ]; then
@@ -613,6 +623,7 @@ LST=$DIR
 if [ $VERBOSE -gt 0 ]; then
   echo "$0.$LINENO DIR: $DIR"
 fi
+#  echo "$0.$LINENO DIR: $DIR"
 #exit
 
 if [ "$SKU_LEN" != "0" ]; then
@@ -674,6 +685,7 @@ if [ $VERBOSE -gt 0 ]; then
   echo "$0.$LINENO LST= $LST" > /dev/stderr
 fi
 
+#echo "$0.$LINENO: DIR_LST= $LST" > /dev/stderr
 DIR_1ST_DIR=
 if [ "$INPUT_FILE_LIST" == "" ]; then
   NUM_DIRS=0
@@ -1055,9 +1067,9 @@ if [ "$FLS_IC" != "" -o "$FLS_PS" != "" ]; then
   fi
 #abc
   if [ "$FLS_IC" != "" -o "$FLS_PS" != "" ]; then
-  if [ $VERBOSE -gt 0 ]; then
+  #if [ $VERBOSE -gt 0 ]; then
   echo "$SCR_DIR/redo_chart_table.sh -O $OPTIONS -S $SUM_ALL -f $ALST -o $OFILE   -g infra_cputime $OPT_METRIC -r 50 -t __all__"
-  fi
+  #fi
         $SCR_DIR/redo_chart_table.sh -O $OPTIONS -S $SUM_ALL -f $ALST -o $OFILE   -g infra_cputime $OPT_METRIC -r 50 -t __all__ 
   ck_last_rc $? $LINENO
   fi
@@ -1224,6 +1236,9 @@ function pre_do_pxx_compare(mtrcm1, mtrc, fld_v, arr, fls, fld_beg, n, allow_zer
            if (mtrcm1 == "perf_stat" && index(mtrc, " val_arr") > 0) {
               pre_do_pxx_compare(mtrcm1, mtrc, fld_v, arr, fls, fld_beg, n, 1);
            }
+           if (mtrcm1 == "cgrps_val_arr" && index(mtrc, " val_arr") > 0) {
+              pre_do_pxx_compare(mtrcm1, mtrc, fld_v, arr, fls, fld_beg, n, 1);
+           }
 #          if (mtrcm1 == "perf_stat" && index(mtrc, "%not_halted") == 1) {
 #             pre_do_pxx_compare(mtrcm1, mtrc, fld_v, arr, fls, fld_beg, n, 1);
 #          }
@@ -1363,12 +1378,24 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
         return 1
 }
 
+function arr_in_compare_rev(i1, v1, i2, v2,    l, r)
+{
+    m1 = arr_in[i1];
+    m2 = arr_in[i2];
+    if (m2 < m1)
+        return -1
+    else if (m1 == m2)
+        return 0
+    else
+        return 1
+}
+
     END {
       if (mk_sum_all == 1) {
       ofile = sum_all;
       printf("_____script= %s ofile= %s, got_avgby= %d\n", script, ofile, got_avgby) > "/dev/stderr";
       rw = 2;
-      printf("title\tsum_all\tsheet\tsum_all\ttype\tcopy\n")  >> ofile;
+      printf("title\tsum_all\tsheet\tsum_all\ttype\tcopy\t\t=1\tfor Col.A, if 1=col_of_max,2=max,3=sum,4=countNotBlank\n")  >> ofile;
       ++rw;
       printf("hdrs\t2\t0\t-1\t%d\t-1\n", fls+3) >> ofile;
       printf("Resource\tTool\tMetric") >> ofile;
@@ -1400,9 +1427,79 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
       ltr_end = get_excel_col_letter_from_number(fl_col_end);
       printf("______ col_beg= %d, col_end= %d, ltr_beg= %s ltr_end= %s\n", fl_col_beg, fl_col_end, ltr_beg, ltr_end) > "/dev/stderr";
       first_metric = 1;
+      amtrc__mx = 0;
       for (i=1; i <= mtrc_mx; i++) {
+        mtrc   = mtrc_lkup[i,2];
+        if (!(mtrc in amtrc_list)) {
+          amtrc_list[mtrc] = ++amtrc_mx;
+          amtrc_lkup[amtrc_mx] = mtrc;
+        }
+      }
+      lst_grp=0;
+      lst[++lst_grp,1]= "cgrps cpu ";
+      lst[++lst_grp,1]= "cgrps %cpu ";
+      lst[++lst_grp,1]= "cntr_nomap_to_muttley_pct_of_tot_cntr_cpusecs";
+      lst[++lst_grp,1]= "elapsed time secs";
+      lst[++lst_grp,1]= "total_busy_cpusecs";
+      lst[++lst_grp,1]= "total_%cpu_utilization";
+      lst[++lst_grp,1]= "tot_map_cntr_cpusecs";
+      lst[++lst_grp,1]= "tot_notmap_cntr_cpusecs";
+      lst[++lst_grp,1]= "tot_cntr_cpusecs";
+      lst[++lst_grp,1]= "cntr_cpu_ms_per_call";
+      lst[++lst_grp,1]= "cntr_pct_of_tot_cntr_secs";
+      lst[++lst_grp,1]= "cntr_secs";
+      lst[++lst_grp,1]= "cntr_calls";
+      lst[++lst_grp,1]= "infra procs %cpu";
+      lst[++lst_grp,1]= "cgrp_per_hst";
+      lst[++lst_grp,1]= "RPS_per_hst";
+      lst[++lst_grp,1]= "cpu_util_per_hst";
+      
+      str_prv = "";
+      for (k=1; k <= lst_grp; k++) {
+      delete idx;
+      delete res_i;
+      delete arr_in;
+       for (i=1; i <= mtrc_mx; i++) {
         mtrc   = mtrc_lkup[i,1];
         mtrcm1 = mtrc_lkup[i,2];
+        if (index(mtrcm1, lst[k,1]) == 0) { continue; }
+        nn = ++lst[k,"mx"];
+        mtrc_sum[nn] = 0.0;
+        sumn= 0;
+        my_n = fls;
+        for (j=1; j <= my_n; j++) {
+          if (mtrc_arr[j,i] != "") {
+          sumn += mtrc_arr[j,i];
+          }
+        }
+        lst_2_i[k,nn] = i;
+        idx[nn] = nn;
+        arr_in[nn] = sumn;
+       }
+       asorti(idx, res_i, "arr_in_compare_rev");
+       printf("cg_ lst[%d,"mx"] = %d\n", k, lst[k,"mx"]);
+       for(i=1; i <= lst[k,"mx"]; i++) {
+         lst_srt[k,i] = res_i[i];
+         #printf("k= %d srt[%d]= %d, arr= %f\n", k, i, res_i[i], arr_in[i]);
+       }
+      }
+
+      for (mm=1; mm <= amtrc_mx; mm++) {
+      for (ij=1; ij <= mtrc_mx; ij++) {
+        mtrcm1 = mtrc_lkup[ij,2];
+        if (mtrcm1 != amtrc_lkup[mm]) { continue; }
+        kk = 0;
+        if (mtrcm1 == lst[1,1]) { kk = 1; }
+        else if (mtrcm1 == lst[2,1]) { kk = 2; }
+        if (kk != 0) {
+          iij = ++lst_ij[kk];
+          iijj = lst_srt[kk,iij];
+          i = lst_2_i[kk,iijj];
+          #printf("cg kk= %d, ij= %d iij= %d, i= %d\n", kk, ij, iij, i);
+        } else {
+          i = ij;
+        }
+        mtrc   = mtrc_lkup[i,1];
         if (mtrc == "") { continue; }
         my_str = mtrcm1";"mtrc;
         pxx_i = pxx_list[my_str];
@@ -1415,7 +1512,7 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
         }
         got_val_arr = 0;
         if(index(mtrc, " val_arr") > 0) {
-          printf("+++++++++++++++++++++++++ got_avgby= %s\"%s\"\t%s\t%s \t my_n= %d\n", got_avgby, eqn_for_col_of_max_val, mcat, mtrc, my_n) > "/dev/stderr";
+          #printf("+++++++++++++++++++++++++ got_avgby= %s\"%s\"\t%s\t%s \t my_n= %d\n", got_avgby, eqn_for_col_of_max_val, mcat, mtrc, my_n) > "/dev/stderr";
           got_val_arr = 1;
         }
         if (got_val_arr == 1) {
@@ -1428,7 +1525,13 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
         } else {
           mcat = "itp";
           if (mtrc_cat[i] != "") { mcat = mtrc_cat[i]; }
-          eqn_for_col_of_max_val = sprintf("=MATCH(MAX(%s),%s,0)-1", rng_str, rng_str);
+          smatch = sprintf("MATCH(MAX(%s),%s,0)-1", rng_str, rng_str);
+          smax   = sprintf("MAX(%s)", rng_str);
+          ssum   = sprintf("SUM(%s)", rng_str);
+          counta = sprintf("COUNTA(%s)", rng_str);
+          if_stmt = "=IF($H$1=1,"smatch",IF($H$1=2,"smax",IF($H$1=3,"ssum","counta")))";
+          #eqn_for_col_of_max_val = sprintf("=MATCH(MAX(%s),%s,0)-1", rng_str, rng_str);
+          eqn_for_col_of_max_val = if_stmt;
           if (first_metric == 1) {
             eqn_for_col_of_max_val = "fileno_of_max";
             first_metric = 0;
@@ -1468,6 +1571,8 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
                   } else {
                     val2   = mtrc_arr[k,i];
                   }
+                  got_blank = 0;
+                  if (val2 == "") { got_blank = 1;}
                   isnum2 = ck_num(val2);
                   if (isnum2 > 0) {
                     #if (get_max_val == 1)
@@ -1479,8 +1584,10 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
                           sum_v = val2;
                       }
                     } else {
-                      sum_v = sum_v + val2;
-                      sum_n = sum_n + 1;
+                      if (got_blank == 0) {
+                        sum_v += val2;
+                        sum_n++;
+                      }
                     }
                     if (got_val_arr == 1) {
                       printf("\t%s%f", equal, val2) >> ofile;
@@ -1523,6 +1630,7 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
         ++rw;
         printf("\n") >> ofile;
       }
+      }
       for (k=1; k <= pxx_max; k++) {
         delete res_i;
         delete idx;
@@ -1558,7 +1666,7 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
           str = "values " pxx_hdr[k,"mtrc"];
           my_n = pxx_n[k];
           my_str = sprintf("\t%s\t%s\t", pxx_hdr[k,"grp"], str);
-          printf("+++++++++++++ my_n= %d ++++++++++++++ my_str= %s ofile= %s\n", my_n, my_str, ofile) > "/dev/stderr";
+          #printf("+++++++++++++ my_n= %d ++++++++++++++ my_str= %s ofile= %s\n", my_n, my_str, ofile) > "/dev/stderr";
           printf("%s", my_str) >> ofile;
           for(i=1; i <= my_n; i++) {
             printf("\t%f", arr_in[res_i[i]]) >> ofile;
@@ -1578,6 +1686,13 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
           } else {
             my_sum = 0.0;
           }
+          str = pxx_hdr[k,"mtrc"] " all_vals";
+          ++rw;
+          mystr = sprintf("\t%s\t%s\t%f", pxx_hdr[k,"grp"], str, my_n);
+          for(i=1; i <= my_n; i++) {
+            mystr = mystr "" sprintf("\t%f", arr_in[res_i[i]]);
+          }
+          printf("%s\n", mystr) >> ofile;
           str = pxx_hdr[k,"mtrc"] " avg";
           ++rw;
           printf("\t%s\t%s\t%f\n", pxx_hdr[k,"grp"], str, my_sum) >> ofile;
@@ -1605,7 +1720,7 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
           str = pxx_hdr[k,"mtrc"] " p" px[kk];
           ++rw;
           printf("\t%s\t%s\t%f\t%s\n", pxx_hdr[k,"grp"], str, uval, hval) >> ofile;
-          printf("\t%s\t%s\t%f\t%s\n", pxx_hdr[k,"grp"], str, uval, hval) > "/dev/stderr";
+          #printf("\t%s\t%s\t%f\t%s\n", pxx_hdr[k,"grp"], str, uval, hval) > "/dev/stderr";
         }
       }
       close(ofile);
@@ -1697,6 +1812,7 @@ function arr_in_compare(i1, v1, i2, v2,    l, r)
        echo "$0.$LINENO =========== pwd = $got_pwd ========="
     fi
     USE_DIR=
+    echo "$0.$LINENO find $DIR_1ST_DIR -name 60secs.log" > /dev/stderr
     RESP=`find $DIR_1ST_DIR -name 60secs.log | head -1 | wc -l | awk '{$1=$1;print}'`
     BTM=
     ETM=
