@@ -150,6 +150,8 @@ shift $((OPTIND -1))
 
 #echo "$0: top BEG_TM_IN= $BEG_TM_IN" > /dev/stderr
 
+for ((ck_for_null=0; ck_for_null <= 1; ck_for_null++)); do
+
 if [ "$DIR" == "" ]; then
   echo "you must enter a dir '-d dir_path' containing sys_*_*.txt files created by 60secs.sh"
   exit 1
@@ -220,7 +222,7 @@ CK_HST_NM=`find . -name hostname.txt`
 if [ "$CK_HST_NM" == "" ]; then
   get_hostname_from_path
 else
-  HOSTNM=$CK_HST_NM
+  HOSTNM=`cat $CK_HST_NM|head -1`
 fi
 
 printf "host\thostname\t%s\thostname\n"  "$HOSTNM" >> $SUM_FILE
@@ -3401,11 +3403,14 @@ function tot_compare(i1, v1, i2, v2,    l, r)
        } else {
          str = "ok";
          y = 0.25 * varr[perl_i] + 0.25 * varr[xalanc_i] + 0.5 * varr[omne_i];
+         z = varr[perl_i] + varr[xalanc_i] + varr[omne_i];
+         z3 = (cpus > 0.0 ? z /= cpus : 0.0);
        }
        str = sprintf("%s.%d.%d.%d", str, bm_vals[omne_i], bm_vals[perl_i], bm_vals[xalanc_i]);
        printf("SpecInt\tSI benchmark\t%s\tSI new score_v2 valid? omnetpp.perlbench.xalanc\n", str) >> sum_file;
        printf("SI new score_v2= %.3f, bm_mx= %f\n", y, bm_mx) > "/dev/stderr";
        printf("SpecInt\tSI benchmark\t%s\tSI new score_v2\n", y) >> sum_file;
+       printf("SpecInt\tSI benchmark\t%s\tSI NCU score_v3\n", z3) >> sum_file;
        printf("SpecInt\tSI benchmark\t%s\tSI cpus\n", cpus) >> sum_file;
     }
     ' $RESP`
@@ -3529,5 +3534,30 @@ if [ "$SHEETS" != "" -a "$SKIP_XLS" == "0" ]; then
      echo "$UDIR/$XLSX_FILE" > /dev/stderr
    fi
 fi
+  if [ -e $SUM_FILE ]; then
+    if [ "$ck_for_null" == "0" ]; then
+      ckck=`pwd`
+      grep -E  '\x00' $SUM_FILE
+      RC=$?
+      if [ "$RC" == "1" ]; then
+        echo "ck_for_null_0: no  null char in sum_file $SUM_FILE  dir= $ckck"
+        break
+      fi
+      if [ "$RC" == "0" ]; then
+        echo "ck_for_null_0: got null char in sum_file $SUM_FILE  dir= $ckck"
+      fi
+    fi
+    if [ "$ck_for_null" == "1" ]; then
+      grep -E  '\x00' $SUM_FILE
+      RC=$?
+      if [ "$RC" == "1" ]; then
+        echo "ck_for_null_1: got null char in sum_file $SUM_FILE  dir= $ckck"
+      fi
+      if [ "$RC" == "0" ]; then
+        echo "ck_for_null_1: no  null char in sum_file $SUM_FILE  dir= $ckck"
+      fi
+    fi
+  fi
+done
 exit 0
 
