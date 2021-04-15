@@ -590,8 +590,10 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
                       rnum[cat_i,j] = 1;
                     }
                   } else {
+                    if (arr[k] != "") {
                     rval[cat_i,j] += v;
                     rnum[cat_i,j]++;
+                    }
                   }
                   iters2++;
                }
@@ -630,8 +632,10 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
                     num[cat_i] = 1;
                   }
                 } else {
-                val[cat_i] += arr[k];
-                num[cat_i]++;
+                  if (arr[k] != "") {
+                    val[cat_i] += arr[k];
+                    num[cat_i]++;
+                  }
                 }
               }
              }
@@ -724,21 +728,33 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
          }
        }
        if (ch_typ == "scatter_straight" || ch_typ == "line" || ch_typ == "line_stacked") {
+         delete srt_indx;
+         delete indx;
+         delete ck_v;
          for(i=1; i <= gcat_mx[c]; i++) {
            indx[i]=i;
            avg[i] = 0;
            if (metric == "avg" && num[i] > 0) {
                avg[i] = val[i]/num[i];
            }
+           nm = gcat_lkup[c,i];
+           #printf("redo_a[%d], cat= %s avg[%d]= %f\n", i, nm, i, avg[i]);
            if (metric == "sum" && num[i] > 0) {
               avg[i] = val[i];
            }
            if (metric == "sum_per_server" && num[i] > 0) {
               avg[i] = val[i]/mx_fls;
            }
+           ck_v[i,1] = 0;
+           ck_v[i,2] = 0;
+           ck_v[i,3] = 0;
            for (j=1; j <= rws; j++) {
              if (metric == "avg" && rnum[i,j] > 0) {
                  ravg[i,j] = rval[i,j]/rnum[i,j];
+             }
+             if (metric == "avg" && rnum[i,j] != "" && rnum[i,j] > 0) {
+                 ck_v[i,1] += rval[i,j];
+                 ck_v[i,2] += rnum[i,j];
              }
              if (metric == "sum" && rnum[i,j] > 0) {
                 ravg[i,j] = rval[i,j];
@@ -747,6 +763,10 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
                 ravg[i,j] = rval[i,j]/mx_fls;
              }
            }
+           if (ck_v[i,2] > 0) {
+             ck_v[i,3] = ck_v[i,1]/ck_v[i,2];
+           }
+           #printf("redo_a[%d], cat= %s avg[%d]= %f, nw_avg= %.3f a= %.3f, b= %.3f\n", i, nm, i, avg[i], ck_v[i,3], ck_v[i,1], ck_v[i,2]);
          }
          if (index(options, "nosort") > 0) {
            for(i=1; i <= gcat_mx[c]; i++) {
@@ -792,6 +812,7 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
               break;
            }
          }
+         #printf("redo title= %s", ctbl[c,cr]);
          ctbl[c,++cr] = sprintf("ln hdrs\t%d\t%d\t%d\t%d\t%d\n", row_beg, col_beg, row_beg+rws-blnk_rows, col_end, col_cat);
          if (verbose > 0) {
            printf("ch[%d], rw[%d] = %s\n", c, cr, ctbl[c,cr]);
@@ -800,6 +821,7 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
          if (data_row_diff > 0) {
            do_1st_data_row = cr + data_row_diff;
          }
+         #printf("redo hdr= %s", ctbl[c,cr]);
           
          for (j=3; j < rws-blnk_rows; j++) {
            n = split(tbl[fl,c,"tbl",j], arr, "\t");
@@ -822,12 +844,18 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
                 sep = "\t";
               }
               ctbl[c,cr] = ctbl[c,cr] "" sprintf("\n");
+           #if (index(ctbl[c,cr], "epoch") > 0) {
+           #  printf("redo1 epcoch rw= %s\n", ctbl[c,cr]);
+           #}
               continue;
            }
            for(m=1; m <= (col_beg); m++) {
               ctbl[c,cr] = ctbl[c,cr] "" sprintf("%s%s", sep, arr[m]);
               sep = "\t";
            }
+           #if (index(ctbl[c,cr], "epoch") > 0) {
+           #  printf("redo2 epcoch rw= %s\n", ctbl[c,cr]);
+           #}
            for(m=1; m <= gcat_mx[c]; m++) {
              ii = gsrt_indx[c,m];
              if (do_1st_data_row > -1 && do_1st_data_row == cr) {
@@ -835,6 +863,9 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
                 ctbl_col_hdrs_list[c,gcat_lkup[c,ii]] = m;
                 #printf("ctbl_col_hdrs_list[%s,%s] = %s\n", c, gcat_lkup[c,ii], m) > "/dev/stderr";
                 ctbl_col_hdrs_lkup[c,m] = gcat_lkup[c,ii];
+           #if (index(ctbl[c,cr], "epoch") > 0) {
+           #  printf("redo2.1 m= %d, ii= %d epcoch rw= %s\n", m, ii, ctbl[c,cr]);
+           #}
               } else {
                 vl = ravg[ii,j];
                 ivl = int(vl);
@@ -843,9 +874,15 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
                 } else {
                   ctbl[c,cr] = ctbl[c,cr] "" sprintf("%s%f", sep, vl);
                 }
+           #if (index(ctbl[c,cr], "epoch") > 0) {
+           #  printf("redo2.2 m= %d, ii= %d epcoch rw= %s\n", m, ii, ctbl[c,cr]);
+           #}
               }
               sep = "\t";
            }
+           #if (index(ctbl[c,cr], "epoch") > 0) {
+           #  printf("redo3 epcoch rw= %s\n", ctbl[c,cr]);
+           #}
            ctbl[c,cr] = ctbl[c,cr] "" sprintf("\n");
          }
          ctbl[c,"max"] = cr -2;
