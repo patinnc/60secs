@@ -716,7 +716,11 @@ for bmi in range(base_mx+1):
                                fn_bs_sum[fn_bs_i][ij][use_idx] = data[ij][h]
                                fn_bs_n[fn_bs_i][ij][use_idx] = 1
                          else:
-                            fn_bs_sum[fn_bs_i][ij][use_idx] += data[ij][h]
+                            try:
+                               fn_bs_sum[fn_bs_i][ij][use_idx] += data[ij][h]
+                            except:
+                               print("---- error concat data[%d][%d] filenm= %s, field= " % (ij, h, x), data[ij][h], ", line= ", data[ij], file=sys.stderr)
+                               sys.exit(1)
                             fn_bs_n[fn_bs_i][ij][use_idx] += 1
                       else:
                          fn_bs_sum[fn_bs_i][ij][use_idx] = data[ij][h]
