@@ -26,6 +26,7 @@
 #   MSR_TURBO_RATIO_LIMIT       0x1ad  Table 2-45
 #   MSR_TURBO_RATIO_LIMIT_CORES 0x1ae  Table 2-45
 
+SCR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 GOV_IN=
 FREQ_IN=
 DID_GOV=0
@@ -143,50 +144,14 @@ if [ "$RC" != "0" ]; then
   apt-get install msr-tools
 fi
 
+export AWKPATH=$SCR_DIR
+
 # cascade lake 2nd gen stuff from https://www.intel.com/content/www/us/en/products/docs/processors/xeon/2nd-gen-xeon-scalable-spec-update.html
 # 2nd gen xeon scalable cpus: cascade lake sku is 82xx, 62xx, 52xx, 42xx 32xx W-32xx  from https://www.intel.com/content/www/us/en/products/docs/processors/xeon/2nd-gen-xeon-scalable-spec-update.html
 # skylake 1st gen stuff from https://www.intel.com/content/www/us/en/processors/xeon/scalable/xeon-scalable-spec-update.html
 # 1st gen xeon scalable cpus: 81xx, 61xx, 51xx, 81xxT, 61xxT 81xxF, 61xxF, 51xx, 41xx, 31xx, 51xxT 41xxT, 51xx7, 
 CPU_NAME=`cat /proc/cpuinfo | awk '
-  function decode_fam_mod(vndor, fam, mod, mod_nm) {
-    if (vndor == "GenuineIntel") {
-      # cpuid tables from https://en.wikichip.org/wiki/intel/cpuid
-      dcd[1,1]="Ice Lake";              dcd[1,2] ="Family 6 Model 108";
-      dcd[2,1]="Ice Lake";              dcd[2,2] ="Family 6 Model 106";
-      dcd[3,1]="Cascade Lake/Skylake";  dcd[3,2] ="Family 6 Model 85"; # 06_55h  Intel always does the hex fam_model
-      dcd[4,1]="Broadwell";             dcd[4,2] ="Family 6 Model 79"; # 06_4fh
-      dcd[5,1]="Broadwell";             dcd[5,2] ="Family 6 Model 86"; # 06_56h
-      dcd[6,1]="Haswell";               dcd[6,2] ="Family 6 Model 63"; # 06_3fh
-      dcd[7,1]="Ivy Bridge";            dcd[7,2] ="Family 6 Model 62";
-      dcd[8,1]="Sandy Bridge";          dcd[8,2] ="Family 6 Model 45"; # 06_2dh
-      dcd[9,1]="Westmere";              dcd[9,2] ="Family 6 Model 44";
-      dcd[10,1]="EX";                   dcd[10,2]="Family 6 Model 47";
-      dcd[11,1]="Nehalem";              dcd[11,2]="Family 6 Model 46";
-      dcd[12,1]="Lynnfield";            dcd[12,2]="Family 6 Model 30";
-      dcd[13,1]="Bloomfield, EP, WS";   dcd[13,2]="Family 6 Model 26";
-      dcd[14,1]="Penryn";               dcd[14,2]="Family 6 Model 29";
-      dcd[15,1]="Harpertown, QC, Wolfdale, Yorkfield";  dcd[15,2]="Family 6 Model 23";
-      str = "Family " fam " Model " mod;
-      #printf("str= %s\n", str);
-      res=" ";
-      for(k=1;k <=15;k++) { if (dcd[k,2] == str) {res=dcd[k,1];break;}}
-      if (k == 3) {
-        # so Cooper Lake/Cascade Lake/SkyLake)
-        # Gold 5218R
-        echo "mod_nm= $mod_nm"
-        if (match(mod_nm, / [86543]2[0-9][0-9]R /) > 0) {
-           echo "got refresh"
-           if (match(mod_nm, / Gold /) > 0) {
-             res="Cascade Lake Gold Refresh";
-           } else {
-             res="Cascade Lake Refresh";
-           }
-        } else if (match(mod_nm, / [86543]2[0-9][0-9]/) > 0) { res="Cascade Lake";}
-        else if (match(mod_nm, / [86543]1[0-9][0-9]/) > 0) { res="Skylake";}
-      }
-      return res;
-    }
-  }
+   @include "decode_cpu_fam_mod.awk"
   /^vendor_id/ {
     vndr=$(NF);
   }
