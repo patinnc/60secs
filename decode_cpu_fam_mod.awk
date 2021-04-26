@@ -58,7 +58,7 @@
        dcd[++i,1]="Zen+ Pinnacle Ridge"; dcd[i,2]="Family 23 Model 8";     dcd[i,3]=23; dcd[i,4]=8;   dcd[i,5]=8;
        dcd[++i,1]="Zen Raven Ridge";     dcd[i,2]="Family 23 Model 17";    dcd[i,3]=23; dcd[i,4]=17;  dcd[i,5]=17;
        dcd[++i,1]="Zen Naples/Whitehaven/Summit Ridge/Snowy Owl";
-       dcd[++i,2]="Family 23 Model 1";    dcd[i,3]=23; dcd[i,4]=1;  dcd[i,5]=1;
+         dcd[i,2]="Family 23 Model 1";    dcd[i,3]=23; dcd[i,4]=1;  dcd[i,5]=1;
        dcd[++i,1]="Zen3 Milan";          dcd[i,2]="Family 25 Model 1";    dcd[i,3]=25; dcd[i,4]=1;  dcd[i,5]=1;
        str = "Family " fam " Model " mod;
        res=" ";
