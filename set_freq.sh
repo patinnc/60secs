@@ -219,7 +219,15 @@ fi
 MSR_SEMA=
 echo "CPU_NAME= $CPU_NAME"
 
+GOT_CSX_ICX=0
 if [[ $CPU_NAME == *"Cascade"* ]]; then
+ GOT_CSX_ICX=1
+fi
+if [[ $CPU_NAME == *"Ice Lake"* ]]; then
+ # i don't know that it is correct to assume ICX is the same as CSX but I haven't seen th emanual yet.
+ GOT_CSX_ICX=1
+fi
+if [ "$GOT_CSX_ICX" == "1" ]; then
   MSR_LIST="0x1ad"
 else 
   if [[ $CPU_NAME == *"Skylake"* ]]; then
