@@ -332,6 +332,9 @@ if [ "$DMIDECODE_FL" != "" ]; then
 fi
 if [ -e run.log ]; then
  MYA=(sys_*_perf_stat.txt)
+ if [ "${#MYA}" == "0" ]; then
+   MYA=(../sys_*_perf_stat.txt)
+ fi
  if [ "${#MYA}" != "0" ]; then
    # 20200719_155911 1595174351.170475304 start  
    DATE_ARR=()
@@ -487,13 +490,16 @@ if [ -e $DIR/*_specjbb/specjbb.log ]; then
   echo "$0: ____++++++_____got specjbb.log $RESP at $LINENO" > /dev/stderr
 fi
 fi
-for ifl in "CPU2017.001.intrate.txt" "CPU2017.001.log"; do
+for ifl in "phase_cpu2017.txt" "CPU2017.001.intrate.txt" "CPU2017.001.intrate.refrate.txt"  "CPU2017.001.log"; do
   if [ -e $DIR/$ifl ]; then
     EXTRA_FILES="$EXTRA_FILES $DIR/$ifl"
     echo "$0: ____++++++_____got $DIR/$ifl at $LINENO" > /dev/stderr
   else
   #if [ -e $DIR/*_specjbb/$ifl ]; then
     RESP=`find . -name $ifl`
+    if [ "$RESP" == "" ]; then
+      RESP=`find .. -name $ifl`
+    fi
     if [ "$RESP" != "" ]; then
     EXTRA_FILES="$EXTRA_FILES $RESP"
     echo "$0: ____++++++_____got $ifl $RESP at $LINENO" > /dev/stderr
@@ -515,6 +521,10 @@ FILES=`ls -1 $DIR/sys_*_*.txt $EXTRA_FILES`
 echo "FILES = $FILES"
 if [ "$FILES" == "" ]; then
    FILES=`ls -1 $DIR/*txt.tsv`
+fi
+FILES2=`ls -1 $DIR/../sys_*_*.txt`
+if [ "$FILES2" != "" ]; then
+    FILES="$FILES $FILES2"
 fi
 for i in $FILES; do
  if [ -e job_${JOB_ID}.stop ]; then
@@ -778,11 +788,17 @@ trows++; printf("\n") > NFL;
           typ=3;
         }
         if ( typ > 0) {
+          units[typ] = va[2];
           if (typ==1) {
           if ((!(area in area1_lkup))) {
              area1_idx++
              area1_lkup[area] = area1_idx;
              area1_list[area1_idx] = area;
+             a_mx++;
+             a_lkup[a_mx,"area"] = area;
+             a_lkup[a_mx,"idx"] = area1_idx;
+             a_lkup[a_mx,"typ"] = typ;
+             aa_lkup[typ,area1_idx] = area;
           }
           i = area1_lkup[area];
           }
@@ -791,6 +807,11 @@ trows++; printf("\n") > NFL;
              area2_idx++
              area2_lkup[area] = area2_idx;
              area2_list[area2_idx] = area;
+             a_mx++;
+             a_lkup[a_mx,"area"] = area;
+             a_lkup[a_mx,"idx"] = area2_idx;
+             a_lkup[a_mx,"typ"] = typ;
+             aa_lkup[typ,area2_idx] = area;
           }
           i = area2_lkup[area];
           }
@@ -799,6 +820,11 @@ trows++; printf("\n") > NFL;
              area3_idx++
              area3_lkup[area] = area3_idx;
              area3_list[area3_idx] = area;
+             a_mx++;
+             a_lkup[a_mx,"area"] = area;
+             a_lkup[a_mx,"idx"] = area3_idx;
+             a_lkup[a_mx,"typ"] = typ;
+             aa_lkup[typ,area3_idx] = area;
           }
           i = area3_lkup[area];
           }
@@ -809,6 +835,7 @@ trows++; printf("\n") > NFL;
       }
      END{
        add_col = 1;
+       rw_mx = rw;
        if (delloem >= 1) {
          rw--;
          add_col = 0;
@@ -935,6 +962,31 @@ trows++; printf("\t$ power") > NFL;
              else if (index(sum_opt[i_sum], "stdev") > 0) {
                 printf("%s\t%s\t%f\t%s stdev\n",  sum_res[i_sum], tool, stdev, sum_prt[i_sum]) >> sum_file;
              }
+          }
+
+          for (k=1; k <= 3; k++) {
+            if (k == 1) { a_idx = area1_idx; }
+            if (k == 2) { a_idx = area2_idx; }
+            if (k == 3) { a_idx = area3_idx; }
+          for (j=1; j <= a_idx; j++) {
+             sum_n[j] = 0;
+             sum[j] = 0.0;
+          }
+          for (i=1; i <= rw_mx; i++) {
+            for (j=1; j <= a_idx; j++) {
+              if (rows[i,k,j] != "") {
+                sum_n[j]++;
+                sum[j] += rows[i,k,j];
+              }
+            }
+          }
+          for (j=1; j <= a_idx; j++) {
+            avg = 0.0;
+            if (sum_n[j] > 0.0) {
+              avg = sum[j]/sum_n[j];
+            }
+            printf("%s bb\t%s %s\t%f\t%s\n", "pppat pwr", tool, units[k], avg, aa_lkup[k,j]) >> sum_file;
+          }
           }
      }
    ' $i
@@ -2566,14 +2618,82 @@ row += trows;
     ' $i`
     ck_last_rc $? $LINENO
     echo "$0.$LINENO got here" > /dev/stderr
+    echo  -e "$RESP" > phase_cpu2017.txt
     if [ "$PHASE_FILE" == "" ]; then
-       echo  -e "$RESP" > phase_cpu2017.txt
+       #echo  -e "$RESP" > phase_cpu2017.txt
        PHASE_FILE=phase_cpu2017.txt
     fi
   fi
-  if [[ $i == *"CPU2017.001.intrate.txt" ]]; then
-    echo "$0: got CPU2017.001.intrate.txt $i at $LINENO" > /dev/stderr
+  if [[ $i =~ phase_cpu2017.txt ]]; then
+    echo "$0.$LINENO: got CPU2017.001.intrate.txt $i at $LINENO" > /dev/stderr
+    OFILE="$i.tsv"
+    awk -v ofile="$OFILE" -v ts_beg="$BEG"  -v sum_file="$SUM_FILE" '
+ #subtest beg_epoch end_epoch
+      BEGIN{
+        subtst=0;
+      }
+      {
+        if (NF >= 3) {
+          printf("specint\tspecint\t%s\t%s beg secs\n", $2-ts_beg, $1) >> sum_file;
+          printf("specint\tspecint\t%s\t%s end secs\n", $3-ts_beg, $1) >> sum_file;
+          subtst++;
+          sv[subtst,"nm"] = $1;
+          sv[subtst,"beg"] = $2;
+          sv[subtst,"end"] = $3;
+        }
+      }
+      END{
+       if (subtst==0) {
+         exit;
+       }
+       printf("title\tcpu2017 subtests\tsheet\tcpu2017_phase\ttype\tscatter_straight\n") > ofile;
+       row++;
+       printf("hdrs\t%d\t%d\t-1\t%d\t1\n", row+1, 2, 2+subtst) > ofile;
+       row++;
+       printf("epoch\tts") > ofile;
+       for (i=1; i <= subtst; i++) {
+         printf("\t%s", sv[i,"nm"]) > ofile;
+       }
+       printf("\n") > ofile;
+       for (j=1; j <= subtst; j++) {
+         for (k=1; k <= 4; k++) {
+           if (k<=2) {
+             tm  = sv[j,"beg"];
+           } else {
+             tm  = sv[j,"end"];
+           }
+           tm0 = tm;
+           # for now, unless Im using scatter plots (and when I save files for google sheets then scatter plots become line charts)
+           # then just enit a begin and end point. line charts dont assume linear time on xaxis.
+           if (k == 1 || k == 4) { continue; }
+           if (k == 1) { tm = tm - 0.01;}
+           if (k == 4) { tm = tm + 0.01;}
+           printf("%s\t%.3f", tm0, tm-ts_beg) > ofile;
+           for (i=1; i <= subtst; i++) {
+             if (k == 1 || k == 4 || i != j) {
+               printf("\t%s", 0) > ofile;
+             } else {
+               printf("\t%s", 1+0.1*i) > ofile;
+             }
+           }
+           printf("\n") > ofile;
+         }
+       }
+      }
+    ' $i
+    ck_last_rc $? $LINENO
+  fi
+  if [[ $i =~ CPU2017.001.intrate.*txt ]]; then
+    echo "$0.$LINENO: got CPU2017.001.intrate.txt $i at $LINENO" > /dev/stderr
     awk -v sum_file="$SUM_FILE" '
+ #Est. SPECrate2017_int_base             159
+ #Est. SPECrate2017_int_peak                                         Not Run
+      / Est. SPECrate2017_int_base/ {
+        if ($3 != "Not") {
+        printf("specint\tspecint\t%s\tspecint_rate\n", $3) >> sum_file;
+        }
+        next;
+      }
       / SPECrate2017_int_base/ {
         printf("specint\tspecint\t%s\tspecint_rate\n", $2) >> sum_file;
       }
