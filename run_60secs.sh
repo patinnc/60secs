@@ -14,7 +14,7 @@ EXCL=
 EVT_IN=
 DO_CONTAINER=
 
-while getopts "hPa:c:C:d:E:i:p:t:W:x:" opt; do
+while getopts "hPwa:c:C:d:E:i:p:t:W:x:" opt; do
   case ${opt} in
     a )
       ADD_IN=$OPTARG
@@ -46,6 +46,9 @@ while getopts "hPa:c:C:d:E:i:p:t:W:x:" opt; do
     x )
       EXCL=$OPTARG
       ;;
+    w )
+      WAIT_IN=1
+      ;;
     W )
       WATCH_IN="$OPTARG"
       echo "in $0 getopts: WATCH_IN= $WATCH_IN"
@@ -66,6 +69,7 @@ while getopts "hPa:c:C:d:E:i:p:t:W:x:" opt; do
       echo "   -t tasks_to_run  comma separated list of tasks to run. Overrides the default list."
       echo "   -x tasks_not_to_run comma separated list of tasks (from default task list) to not run"
       echo "   -E event event for flamegraphs (lock or itimer). default is itimer."
+      echo "   -w flag indicating you want to wait for duration seconds."
       echo "   -W watch_cmd"
       exit
       ;;
@@ -99,7 +103,10 @@ pushd $result
 hostname > hostname.txt
 
 if [ "$DO_CONTAINER" != "" ]; then
+  GOT_DCKR=`which docker`
+  if [ "$GOT_DCKR" != "" ]; then
   CNTNR=`docker ps | grep $DO_CONTAINER | awk '{print $1;exit}'`
+  fi
 fi
 
 TASK=all
@@ -126,12 +133,17 @@ if [ "$EVT_IN" != "" ]; then
   OPT_EV=" -E $EVT_IN "
 fi
 
+OPT_w=
+if [ "$WAIT_IN" != "" ]; then
+  OPT_w=" -w "
+fi
+
 if [ "$CNTNR" != "" ]; then
-echo $SCR_DIR/60secs.sh -t $TASK $OPT_EX -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf -C $CNTNR $OPT_EV -W "$WATCH_IN" $ADD
-     $SCR_DIR/60secs.sh -t $TASK $OPT_EX -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf -C $CNTNR $OPT_EV -W "$WATCH_IN" $ADD
+echo $SCR_DIR/60secs.sh -t $TASK $OPT_EX -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf -C $CNTNR $OPT_EV $OPT_w -W "$WATCH_IN" $ADD
+     $SCR_DIR/60secs.sh -t $TASK $OPT_EX -b -w -c -d $DURA -i $INTRVL -p $SCR_DIR/perf -C $CNTNR $OPT_EV $OPT_w -W "$WATCH_IN" $ADD
 else
-echo $SCR_DIR/60secs.sh -t $TASK $OPT_EX -b -w -d $DURA -i $INTRVL -p $SCR_DIR/perf $OPT_EV -W "$WATCH_IN" $ADD
-     $SCR_DIR/60secs.sh -t $TASK $OPT_EX -b -w -d $DURA -i $INTRVL -p $SCR_DIR/perf $OPT_EV -W "$WATCH_IN" $ADD
+echo $SCR_DIR/60secs.sh -t $TASK $OPT_EX -b -w -d $DURA -i $INTRVL -p $SCR_DIR/perf $OPT_EV $OPT_w -W "$WATCH_IN" $ADD
+     $SCR_DIR/60secs.sh -t $TASK $OPT_EX -b -w -d $DURA -i $INTRVL -p $SCR_DIR/perf $OPT_EV $OPT_w -W "$WATCH_IN" $ADD
 fi
 
 popd
