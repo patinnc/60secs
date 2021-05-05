@@ -135,7 +135,7 @@ while getopts "hvASa:b:B:c:D:d:e:F:g:I:j:m:N:o:P:r:s:X:x:" opt; do
       echo "   -a avg_dir requires -A. Average tsv files will be put in this dir"
       echo "   -A   flag indicating you want to average the same file from multiple dirs into 1 sheet."
       echo "          The default is to create 1 sheet per file per directory"
-      echo "   -b begin_timestamp  exclude data until this timestamp (UTC timestamp)"
+      echo "   -b begin_timestamp  exclude data until this timestamp (UTC epoch timestamp)"
       echo "   -B background_processs_allowed  max background processes allowed. if 0 then no background processes. default is $BACKGROUND"
       echo "   -d dir containing sys_XX_* files created by 60secs.sh"
       echo "   -D debug_opt_strings    used for debugging"
@@ -170,7 +170,7 @@ while getopts "hvASa:b:B:c:D:d:e:F:g:I:j:m:N:o:P:r:s:X:x:" opt; do
       echo "   -x xlsx_filename  This is passed to tsv_2_xlsx.py as the name of the xlsx. (you need to add the .xlsx)"
       echo "      The default is chart_line.xlsx"
       echo "   -X xlsx_filename  like above but assume path relative to current dir"
-      echo "   -e ending_timestamp  cut off data files at this timestamp"
+      echo "   -e ending_timestamp  cut off data files at this timestamp (UTC epoch)"
       echo "      useful for runs that mess up before the expected end time"
       echo "   -v verbose mode"
       exit
@@ -410,7 +410,7 @@ OPT_a=
 if [ "$AVG_DIR" != "" ]; then
   if [ "$AVERAGE" == "0" ]; then
      echo "$0: cmdline options has -a $AVG_DIR but you didn't specify -A option. Bye" > /dev/stderr
-     exit
+     exit 1
   fi
   if [ -d $AVG_DIR ]; then
     mkdir -p "$AVG_DIR"
@@ -986,6 +986,16 @@ for i in $LST; do
  FLS=`ls -1 $SM_FL $i/*txt.tsv`
  FLS_IC=`ls -1  $i/*txt.tsv | grep infra_cputime`
  FLS_PS=`ls -1  $i/*txt.tsv | grep perf_stat`
+ echo "$0.$LINENO ++++++++FLS_PS= $FLS_PS" > /dev/stderr
+ if [ "$FLS_PS" == "" ]; then
+   FLS_PS=`ls -1  $i/../*txt.tsv | grep perf_stat`
+   echo "$0.$LINENO ++++++++FLS_PS= $FLS_PS"  > /dev/stderr
+   if [ "$FLS_PS" != "" ]; then
+     echo "$0.$LINENO ++++++++FLS= $FLS" > /dev/stderr
+     FLS=`ls -1 $SM_FL $i/*txt.tsv $i/../*txt.tsv`
+     echo "$0.$LINENO ++++++++FLS= $FLS" > /dev/stderr
+   fi
+ fi
  echo -e "${FLS}" >> $ALST
  MYA=($i/*log.tsv)
  if [ "${#MYA}" != "0" ]; then
@@ -1081,6 +1091,7 @@ if [ "$FLS_IC" != "" -o "$FLS_PS" != "" ]; then
   if [ $VERBOSE -gt 0 ]; then
   echo "$SCR_DIR/redo_chart_table.sh -O $OPTIONS -S $SUM_ALL -f $ALST -o $OFILE   -g perf_stat $OPT_METRIC -r 50 -t __all__"
   fi
+  echo "$SCR_DIR/redo_chart_table.sh -O $OPTIONS -S $SUM_ALL -f $ALST -o $OFILE   -g perf_stat $OPT_METRIC -r 50 -t __all__" > /dev/stderr
         $SCR_DIR/redo_chart_table.sh -O $OPTIONS -S $SUM_ALL -f $ALST -o $OFILE   -g perf_stat $OPT_METRIC -r 50 -t __all__ 
   ck_last_rc $? $LINENO
   fi
