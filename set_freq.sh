@@ -315,6 +315,14 @@ if [ "$ACTION" == "reset" ]; then
     #  Model:                 85
     #  Model name:            Intel(R) Xeon(R) Silver 4214 CPU @ 2.20GHz
     wrmsr --all 0x1ad 0x1b1b1b1b1b1d1e20
+  elif [[ $CPU_NAME == *"Ice Lake"* ]]; then
+    # default from ice lake config=base
+    # which is 
+    # CPU family:                      6
+    # Model:                           106
+    # Model name:                      Intel(R) Xeon(R) Gold 5318Y CPU @ 2.10GHz
+    # Stepping:                        6
+    wrmsr --all 0x1ad 0x1a1a1a1a1b1e2022
   elif [[ $CPU_NAME == *"Broadwell"* ]]; then
     CKVAL=`rdmsr -0 -p 0 0x1af | awk '{v=substr($0, 1, 2);str="";for(i=1;i<=8;i++){str=str""v;}printf("0x%s", str);}'`
     #if [ "$CKVAL" == "0x1a1a1a1a1a1a1a1a" ]; then
@@ -348,6 +356,8 @@ if [ "$ACTION" == "allcore" ]; then
     #  CPU family:            6
     #  Model:                 85
     #  Model name:            Intel(R) Xeon(R) Silver 4214 CPU @ 2.20GHz
+    wrmsr --all 0x1ad $CKVAL
+  elif [[ $CPU_NAME == *"Ice Lake"* ]]; then
     wrmsr --all 0x1ad $CKVAL
   elif [[ $CPU_NAME == *"Broadwell"* ]]; then
     CKVAL=`rdmsr -0 -p 0 0x1af | awk '{v=substr($0, 1, 2);str="";for(i=1;i<=8;i++){str=str""v;}printf("0x%s", str);}'`
