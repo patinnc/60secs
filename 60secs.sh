@@ -194,6 +194,8 @@ if [ "$TSK_IN" == "-1" ]; then
   TSK=$TSK_IN
 fi
 if [ "$CONTAINER" != "" ]; then
+  GOT_DCKR=`which docker`
+  if [ "$GOT_DCKR" != "" ]; then
   RESP=`docker ps | awk -v cntr="$CONTAINER" 'BEGIN{rc=0;}{if ($1 == cntr) {rc=1;}} END{printf("%d\n", rc);}'`
   echo "got docker cntr= $RESP"
   if [ "$RESP" == "1" ]; then
@@ -201,6 +203,7 @@ if [ "$CONTAINER" != "" ]; then
   else
     echo "missed match on docker cntr= $CONTAINER"
     exit
+  fi
   fi
 fi
 
@@ -292,13 +295,16 @@ COUNT=$(($WAIT/$INTRVL))
 if [ $COUNT -lt 1 ]; then
   COUNT=1
 fi
-echo "count= $COUNT for interval= $INTRVL and wait= $WAIT"
+echo "$0.$LINENO: count= $COUNT for interval= $INTRVL and wait= $WAIT"
 
 lscpu > lscpu.log
 ps -ef > ps_ef_beg.txt
-docker ps > docker_ps_beg.txt
+GOT_DCKR=`which docker`
+if [ "$GOT_DCKR" != "" ]; then
+  docker ps > docker_ps_beg.txt
+fi
 
-echo "going to do task $TB to $TE"
+echo "$0.$LINENO: going to do task $TB to $TE"
 
 LOG=60secs.log
 if [ -e $LOG ]; then
@@ -708,7 +714,7 @@ for TSKj in `seq $TB $TE`; do
     if [ -e $FL ]; then
       rm $FL
     fi
-    echo "ipmitool sdr"
+    echo "$0.$LINENO ipmitool sdr"
     j=0
     BDT=`date +%s`
     EDT=$((BDT+$WAIT))
@@ -865,7 +871,11 @@ if [ "$BKGRND" == "1" ]; then
     echo "$PID_LST_NC" >> ~/60secs.pid
   fi
 fi
-if [ "$WAIT_AT_END" == "1" -a "$PID_LST_NC" != "" ]; then
+DO_W=0
+if [ "$PID_LST_NC" != "" -o "$FL_PWR" != "" ]; then
+ DO_W=1
+fi
+if [ "$WAIT_AT_END" == "1" -a "$DO_W" == "1" ]; then
   echo "waiting for $WAIT seconds"
   #sleep $WAIT
   j=0
@@ -972,7 +982,9 @@ if [ "$NEED_TO_END_FLAMEGRAPH" == "1" ]; then
   echo ${SCR_DIR}/gen_flamegraph_for_java_in_container.sh -C $CONTAINER -a stop
 fi
 ps -ef > ps_ef_end.txt
-docker ps > docker_ps_end.txt
+if [ "$GOT_DCKR" != "" ]; then
+  docker ps > docker_ps_end.txt
+fi
 tstmp=`date "+%Y%m%d_%H%M%S"`
 ts_end=`date "+%s.%N"`
 ts_elap=`awk -v ts_beg="$ts_beg" -v ts_end="$ts_end" 'BEGIN{printf("%f\n", (ts_end+0.0)-(ts_beg+0.0));exit;}'`
