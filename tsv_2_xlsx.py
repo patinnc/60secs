@@ -39,12 +39,14 @@ options_str_top = ""
 worksheet_charts = None
 ch_sh_arr = []
 verbose = False
+tsv_dialect = "excel-tab"
 options_all_charts_one_row = False
 options_get_max_val = False
 all_charts_one_row = []
 all_charts_one_row_hash = {}
 all_charts_one_row_max = -1
 desc = None
+set_col_arr = []
 got_sum_all = 0
 sum_all_file = ""
 sum_all_base = ""
@@ -116,6 +118,10 @@ else:
    got_drop_summary = False
 if options_str.find("all_charts_one_row") >= 0:
    options_all_charts_one_row = True
+if options_str.find("tsv_dialect{excel-csv}") >= 0:
+   tsv_dialect = "excel"
+   print("tsv_dialect= excel")
+
 # don't do get_max_val here. data suppliers have to create new 'peak' variables and old avg variables
 #if options_str.find("get_max_val") >= 0:
 #   options_get_max_val = True
@@ -127,11 +133,11 @@ arr = options_str.split(",")
 if verbose > 0:
    print("options_str= ", options_str, ", options arr= ", arr)
 if len(options_str) > 0:
-  lkfor = "sheet_limit{"
   arr = options_str.split(",")
   if verbose > 0:
      print("options arr= ", arr)
   for opt in arr:
+    lkfor = "sheet_limit{"
     i = opt.find(lkfor)
     if verbose > 0:
        print("opt= ", opt, ", i=", i)
@@ -141,6 +147,32 @@ if len(options_str) > 0:
        sheets_limit.append([arr2[0], arr2[1],arr[2]])
        if verbose > 0:
           print("opt= %s, lkfor= %s, str2= %s" % (opt, lkfor, str2), file=sys.stderr)
+    lkfor="xlsx_set_col_width{"
+    if opt.find(lkfor) >= 0:
+       pos = opt.find(lkfor) + len(lkfor)
+       mstr = opt[pos:]
+       print("+++++++set_col= ", mstr);
+       #worksheet.set_column
+       pos = mstr.find("}")
+       mstr = mstr[:pos]
+       print("+++++++set_col= ", mstr);
+       set_col_sheet = ""
+       pos = mstr.find("!")
+       if pos > 0:
+         set_col_sheet = mstr[:pos]
+         mstr = mstr[pos+1:]
+       print("set_col sheet= ", set_col_sheet, ", mstr= ", mstr)
+       pos = mstr.find(";")
+       set_col_cols = ""
+       if pos > 0:
+         set_col_cols = mstr[:pos]
+         mstr = mstr[pos+1:]
+       set_col_width = 0
+       if len(mstr) > 0:
+         set_col_width = int(mstr)
+       if set_col_width > 0 and set_col_cols != "":
+         set_col_arr.append({"sheet":set_col_sheet, "cols":set_col_cols, "width":set_col_width})
+       print("set_col_arr len= ", len(set_col_arr), set_col_arr)
 
 if verbose > 0:
    print("sheets_limit= ", sheets_limit)
@@ -227,6 +259,20 @@ def is_number(s):
       return True
     except ValueError:
       return False
+
+def ck_set_col_width(wrksht, nm):
+    if len(set_col_arr) == 0:
+      return
+    for i in range(len(set_col_arr)):
+      len_in  = len(nm)
+      nm_arr  = set_col_arr[i]["sheet"]
+      len_arr = len(nm_arr)
+      print("+++ck set_column nm= %s width(%s!%s, %d), sub_nm= %s" % (nm, set_col_arr[i]["sheet"], set_col_arr[i]["cols"], set_col_arr[i]["width"], nm[:len_arr]))
+      if nm_arr == nm or len_arr == 0 or (len_arr < len_in and nm[:len_arr] == nm_arr):
+        rc = wrksht.set_column(set_col_arr[i]["cols"], set_col_arr[i]["width"])
+        print("+++did set_column width(%s!%s, %d), rc= %d" % (nm, set_col_arr[i]["cols"], set_col_arr[i]["width"], rc))
+    return
+
    
 for fo2 in range(len(fl_options)):
    fo = fo2
@@ -314,7 +360,7 @@ for bmi in range(base_mx+1):
 
    image_files=[]
    prefix = ""
-   ch_size = [1.0, 1.0, 15.0]
+   ch_size = [1.0, 1.0, 15.0, 15.0]
 
    # if orient_vert == true then put charts down same column.
    # if False, put charts across same row (so scroll right to see charts). This is useful if you start data at row 40 then charts won't obscure data.
@@ -395,8 +441,11 @@ for bmi in range(base_mx+1):
            if len(ch_tsize) >= 2:
               ch_size[0] = float(ch_tsize[0])
               ch_size[1] = float(ch_tsize[1])
-           if len(ch_tsize) == 3:
+           if len(ch_tsize) >= 3:
               ch_size[2] = float(ch_tsize[2])
+              ch_size[3] = float(ch_tsize[2])
+           if len(ch_tsize) == 4:
+              ch_size[3] = float(ch_tsize[3])
        elif opt in ('-v', '--verbose'):
            verbose = True
 
@@ -417,6 +466,7 @@ for bmi in range(base_mx+1):
           if len(prefix) > 0:
              wrksh_nm = sheet_nm + "_" + prefix
           worksheet = workbook.add_worksheet(wrksh_nm)
+          ck_set_col_width(worksheet, wrksh_nm)
           worksheet_sum_all = worksheet
           worksheet_sum_all_nm = wrksh_nm
           wksheet_nms[wrksh_nm] = 1
@@ -424,6 +474,7 @@ for bmi in range(base_mx+1):
        if options_str.find("chart_sheet") >= 0:
           wrksh_nm = "charts"
           worksheet_charts = workbook.add_worksheet(wrksh_nm)
+          ck_set_col_width(worksheet_charts, wrksh_nm)
           worksheet_charts_nm = wrksh_nm
           ch_sh_row = -1
    
@@ -495,7 +546,8 @@ for bmi in range(base_mx+1):
          linenum = -1
          with io.open(x, "rU", encoding="utf-8") as tsv:
             try:
-               for line in csv.reader(tsv, dialect="excel-tab"):
+               #for line in csv.reader(tsv, dialect="excel-tab"):
+               for line in csv.reader(tsv, dialect=tsv_dialect):
                    linenum = linenum +1
                    data.append(line)
             except:
@@ -571,8 +623,9 @@ for bmi in range(base_mx+1):
                   wrksh_nm = tnm
                   break
              if verbose:
-                print("use worksheet name %s" % (wrksh_nm), file=sys.stderr)
+                print("use worksheet name %s" % (wrksh_nm), file=sys.stdout)
             worksheet = workbook.add_worksheet(wrksh_nm)
+            ck_set_col_width(worksheet, wrksh_nm)
          wksheet_nms[wrksh_nm] = 1
          bold = workbook.add_format({'bold': 1})
    
@@ -811,7 +864,7 @@ for bmi in range(base_mx+1):
                       spamwriter.writerow(ndata[i])
          else:
             doing_sum_all = False
-            if len(wrksh_nm) >= 7 and wrksh_nm[0:7] == "sum_all":
+            if wrksh_nm != None and len(wrksh_nm) >= 7 and wrksh_nm[0:7] == "sum_all":
                doing_sum_all = True
             skipped = 0
             ts_first = -1.0
@@ -881,7 +934,7 @@ for bmi in range(base_mx+1):
           if drow_end == -1:
              drow_end, dcol_cat = find_drow_end(data, ch_arr, c, drow_beg, drow_end)
              print("ck data for chart! sheet_nm= %s, title= %s ch_typ= %s, file= %s, drow_beg= %d, drow_end= %d, hcol_beg= %d, hcol_end= %d ts_beg= %f ts_end= %f len(data)= %d" % (sheet_nm, title, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end, ts_beg, ts_end, len(data)), file=sys.stderr)
-          if drow_end == -1 or drow_beg >= drow_end:
+          if drow_end == -1 or ((ch_type == "column" or ch_type == "column_stacked") and drow_beg > drow_end) or ((ch_type != "column" and ch_type != "column_stacked") and drow_beg >= drow_end):
              if printed_no_data_for_chart_msg == False:
                 print("no data for chart! sheet_nm= %s, title= %s ch_typ= %s, file= %s, drow_beg= %d, drow_end= %d, hcol_beg= %d, hcol_end= %d ts_beg= %f ts_end= %f" % (sheet_nm, title, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end, ts_beg, ts_end), file=sys.stderr)
                 printed_no_data_for_chart_msg = True
@@ -977,13 +1030,17 @@ for bmi in range(base_mx+1):
              if ch_type != "copy":
                 if do_avg == False or do_avg_write == True:
                    #if got_how_many_series_for_chart > 0:
-                   if drow_end  > (drow_beg+1):
+                   if drow_end  >= (drow_beg):
                       if ch_type == "line_stacked":
                         #print("chart_type2= %s, use_cats= %s" % (ch_type, use_cats), file=sys.stderr)
                         chart1 = workbook.add_chart({'type': "area", 'subtype': 'stacked'})
                         #chart1 = workbook.add_chart({'type': "line", 'subtype': 'stacked'})
                       else:
-                        chart1 = workbook.add_chart({'type': ch_type})
+                        if ch_type == "column_stacked":
+                          chart1 = workbook.add_chart({'type': 'column', 'subtype': 'stacked'})
+                          #chart1.set_style(12)
+                        else:
+                          chart1 = workbook.add_chart({'type': ch_type})
           if ch_type == "copy":
              #print("chart_type= copy", file=sys.stderr)
              continue
@@ -999,18 +1056,22 @@ for bmi in range(base_mx+1):
                   got_how_many_series_for_chart += 1
                   if do_avg == False or do_avg_write == True:
                    use_drow_end = drow_end
-                   if ch_type == "column":
-                     print("ck col chart, sheet_nm= %s, ch_typ= %s, file= %s, drow_beg= %d drow_end= %d hcol_beg= %d, hcol_end= %d, ph_add= %d, h= %d" % (sheet_nm, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end, ph_add, h), file=sys.stderr)
+                   if ch_type == "column" or ch_type == "column_stacked":
+                     print("ck col chart, sheet_nm= %s, ch_typ= %s, file= %s, drow_beg= %d drow_end= %d hcol_beg= %d, hcol_end= %d, ph_add= %d, h= %d" % (sheet_nm, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end, ph_add, h), chart1, file=sys.stderr)
                      use_drow_end = drow_end
-                   if chart1 != None and (ch_type == "column" or drow_end  > (drow_beg+1)):
+                   if chart1 != None and ((ch_type == "column" or ch_type == "column_stacked") or drow_end  > (drow_beg+1)):
+                    rc = 0;
+                    #print("got bef add_series");
                     if use_cats:
-                     chart1.add_series({
+                     #print("got add_series1\n");
+                     rc = chart1.add_series({
                          'name':       [wrksh_nm, hrow_beg, h+ph_add],
                          'categories': [wrksh_nm, drow_beg, dcol_cat+ph_add, use_drow_end, dcol_cat+ph_add],
                          'values':     [wrksh_nm, drow_beg, h+ph_add, use_drow_end, h+ph_add],
                      })
                     else:
-                     chart1.add_series({
+                     #print("got add_series2\n");
+                     rc = chart1.add_series({
                          'name':       [wrksh_nm, hrow_beg, h+ph_add],
                          'values':     [wrksh_nm, drow_beg, h+ph_add, use_drow_end, h+ph_add],
                      })
@@ -1019,6 +1080,9 @@ for bmi in range(base_mx+1):
           if chart1 != None and (do_avg == False or do_avg_write == True):
              chart1.set_title ({'name': title})
              chart1.set_style(ch_style)
+             use_xbase = 25
+             if ch_size[0] == 1:
+               use_xbase = 10
              ch_opt = {'x_offset': 25, 'y_offset': 10}
              if len(ch_size) >= 2:
                 ch_opt = {'x_offset': 25, 'y_offset': 10, 'x_scale': ch_size[0], 'y_scale': ch_size[1]}
@@ -1029,7 +1093,7 @@ for bmi in range(base_mx+1):
                    ch_ln_prev = len(ch_array)-1
                    if ch_array[ch_ln_prev][0] == sheet_nm:
                       ch_top_at_row = ch_array[ch_ln_prev][1] + int(ch_size[2]*ch_size[1])
-                      ch_left_at_col = ch_array[ch_ln_prev][2] + 0
+                      ch_left_at_col = ch_array[ch_ln_prev][3] + 0
                 #print("+_++__insert chart for sheet= %s, chart= %s, at_row= %d at_col= %d" % (sheet_nm, title, ch_top_at_row, ch_left_at_col), file=sys.stderr)
              else:
                 ch_top_at_row = 1
@@ -1057,7 +1121,7 @@ for bmi in range(base_mx+1):
                          dsc_i    = all_charts_one_row_hash[dsc]["index"]
                          ch_in_rw = all_charts_one_row_hash[dsc]["charts"]
                          all_charts_one_row[dsc_i][0] = 3+ dsc_i * (3+int(ch_size[1]*ch_size[2]))
-                         all_charts_one_row[dsc_i][1] = ch_in_rw * int(ch_size[2])
+                         all_charts_one_row[dsc_i][1] = ch_in_rw * int(ch_size[3])
                          if ch_in_rw == 0:
                             worksheet_charts.write(all_charts_one_row[dsc_i][0]-2, 0, txt);
                          ch_top_at_row  = all_charts_one_row[dsc_i][0]
