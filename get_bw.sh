@@ -74,12 +74,6 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
     lkup[++j] = "uops_retired.retire_slots";
     lkup[++j] = "cpu_clk_unhalted.thread_any"
     lkup[++j] = "idq_uops_not_delivered.core"
-    lkup[++j] = "topdown-retiring";
-    lkup[++j] = "topdown-bad-spec";
-    lkup[++j] = "topdown-fe-bound";
-    lkup[++j] = "topdown-be-bound";
-    lkup[++j] = "cpu/slots/";
-    lkup[++j] = "int_misc.uop_dropping";
     lkup_mx = j;
 
     for (j=1; j <= lkup_mx; j++) {
@@ -105,12 +99,6 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
         if (j == 15) { ret_slots    = k; }
         if (j == 16) { thr_any      = k; }
         if (j == 17) { not_deliv    = k; }
-        if (j == 18) { tdicx_ret    = k; }
-        if (j == 19) { tdicx_bs     = k; }
-        if (j == 20) { tdicx_fe     = k; }
-        if (j == 21) { tdicx_be     = k; }
-        if (j == 22) { tdicx_slots  = k; }
-        if (j == 23) { uop_drop     = k; }
         evt_list[v] = k;
         evt_lkup[i] = v;
       }
@@ -212,8 +200,11 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
         h[++cats] = "Lat(ns)";
       }
    }
-   if (evt[L3m,1] != "" && evt[cyc,1] != "") {
-      h[++cats] = "MssO/cyc";
+   #if (evt[L3m,1] != "" && evt[L3cyc,1] != "") {
+   #   h[++cats] = "MssO/cyc";
+   #}
+   if (evt[L3m,1] != "") {
+      h[++cats] = "L3MssBW";
    }
    if (evt[instr,1] != "" && evt[cyc,1] != "") {
       h[++cats] = "IPC";
@@ -222,25 +213,9 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
       h[++cats] = "%retiring";
       td_ret = cats;
    }
-   if (evt[tdicx_ret,1] != "") {
-      h[++cats] = "%td_ret";
-   }
-   if (evt[tdicx_fe,1] != "") {
-      h[++cats] = "%td_fe";
-   }
-   if (evt[tdicx_bs,1] != "") {
-      h[++cats] = "%td_bs";
-   }
-   if (evt[tdicx_be,1] != "") {
-      h[++cats] = "%td_be";
-   }
-   if (evt[tdicx_ret,1] == "" && evt[not_deliv,1] != "") {
+   if (evt[not_deliv,1] != "") {
       h[++cats] = "%frt_end";
       td_frnt = cats;
-   }
-   if (evt[tdicx_ret,1] != "" && evt[not_deliv,1] != "" && evt[uop_drop,1] != "") {
-      h[++cats] = "%td_fe";
-      #td_frnt = cats;
    }
    if (td_ret != "" && td_frnt != "") {
       h[++cats] = "%be_spec";
@@ -285,7 +260,6 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
    if (index(vendor, "AMD") > 0) {
       lat_fctr = 16.0;
    }
-   Pipeline_Width_icx = 5
    for (i=1; i <= tm_mx; i++) {
     tm_dff = tm_lkup[i] - tm_lkup[i-1];
     tm_elap = tm_lkup[i];
@@ -315,6 +289,20 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
 	  }
           L3lat_cycles = v;
         }
+      }
+      #if (h[j] == "MssO/cyc") 
+      if (h[j] == "L3MssBW") {
+        #if (index(vendor, "AMD") > 0) {
+        #  #v = lat_fctr * evt[L3cyc,i]/evt[L3m,i];
+        #  v = 0.0;
+        #} else {
+        #  v = 0.0;
+	#  if (evt[L3cyc,1] > 0 && evt[L3m,i] > 0) {
+          #v = evt[L3cyc,i]/evt[L3m,i];
+          v = 64e-9*evt[L3m,i]/tm_dff;
+          #v = 1.0/v;
+	#  }
+        #}
       }
       if (h[j] == "LatUncCycls") {
           #v = evt[unc_cha_occ,i]/evt[unc_cha_miss,i]/(sockets*evt[unc_cha_occ,i,"inst"]);
@@ -349,28 +337,6 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
       if (h[j] == "%frt_end") { v = 100.0*evt[not_deliv,i]/(4*evt[cyc,i]/2); td_frt_end_val = v; }
       if (h[j] == "%be_spec") { v = 100 - td_ret_val - td_frt_end_val; if (v < 0) { v = 0.0; }}
       if (h[j] == "%ret_cyc") { v = 100.0*evt[ret_cycles,i]/evt[cyc,i]; }
-      if (h[j] == "%td_ret") {
-        td_ret_v = 100.0*evt[tdicx_ret,i]/evt[tdicx_slots,i];
-        td_fe_v = 100.0*(evt[not_deliv,i]-evt[uop_drop,i])/evt[tdicx_slots,i];
-        td_bs_v = 100.0*evt[tdicx_bs,i]/evt[tdicx_slots,i];
-        td_be_v = 100.0*evt[tdicx_be,i]/evt[tdicx_slots,i];
-        td_sum = td_ret_v + td_bs_v + td_fe_v + td_be_v;
-        td_ret_v = 100.0*td_ret_v / td_sum;
-        td_fe_v = 100.0*td_fe_v / td_sum;
-        td_be_v = 100.0*td_be_v / td_sum;
-        v = td_ret_v;
-      }
-      if (h[j] == "%td_bs") { v = td_bs_v; }
-      if (h[j] == "%td_fe") { v = td_fe_v; }
-      if (h[j] == "%td_be") { v = td_be_v; }
-# stuff from Andy Kleen github pmu-tools
-# self.val = (EV("PERF_METRICS.RETIRING", 1) / EV("TOPDOWN.SLOTS", 1)) / PERF_METRICS_SUM(self, EV, 1) if topdown_use_fixed else EV("UOPS_RETIRED.SLOTS", 1) / SLOTS(self, EV, 1)
-# self.val = (EV("PERF_METRICS.FRONTEND_BOUND", 1) / EV("TOPDOWN.SLOTS", 1)) / PERF_METRICS_SUM(self, EV, 1) - EV("INT_MISC.UOP_DROPPING", 1) / SLOTS(self, EV, 1) if topdown_use_fixed else(EV("IDQ_UOPS_NOT_DELIVERED.CORE", 1) - EV("INT_MISC.UOP_DROPPING", 1)) / SLOTS(self, EV, 1)
-
-# self.val = (EV("PERF_METRICS.BACKEND_BOUND", 1) / EV("TOPDOWN.SLOTS", 1)) / PERF_METRICS_SUM(self, EV, 1) + (Pipeline_Width * EV("INT_MISC.RECOVERY_CYCLES:c1:e1", 1)) / SLOTS(self, EV, 1) if topdown_use_fixed else(EV("TOPDOWN.BACKEND_BOUND_SLOTS", 1) + Pipeline_Width * EV("INT_MISC.RECOVERY_CYCLES:c1:e1", 1)) / SLOTS(self, EV, 1)
-# sum=    return ((EV("PERF_METRICS.FRONTEND_BOUND", level) / EV("TOPDOWN.SLOTS", level)) + (EV("PERF_METRICS.BAD_SPECULATION", level) / EV("TOPDOWN.SLOTS", level)) + (EV("PERF_METRICS.RETIRING", level) / EV("TOPDOWN.SLOTS", level)) + (EV("PERF_METRICS.BACKEND_BOUND", level) / EV("TOPDOWN.SLOTS", level))) if topdown_use_fixed else 0
-
-      #EV("TOPDOWN.BACKEND_BOUND_SLOTS", 1) + Pipeline_Width * EV("INT_MISC.RECOVERY_CYCLES:c1:e1", 1)) / SLOTS(self, EV, 1)
       if (h[j] == "bw_rmt") {
         if (evt[qpi0,1] != "" && evt[qpi1,1] != "") {
           v = (64.0/9.0) * 1.0e-9 * (evt[qpi0,i]+evt[qpi1,i])/tm_dff;
