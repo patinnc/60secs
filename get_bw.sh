@@ -98,6 +98,9 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
         if (j == 4) { unc_cha_occ  = k; }
         if (j == 5) { unc_cha_clk  = k; }
         if (j == 6) { pwr  = k; }
+        if (j == 7) { offc_pwr  = k; }
+        if (j == 8) { offc_dmnd_data_rd    = k; }
+        if (j == 9) { offc_out_dmnd_data_rd= k; }
         if (j == 10) { unc_cha_ref  = k; }
         if (j == 11) { unc_upi_bytes= k; }
         if (j == 12) { instr        = k; }
@@ -106,8 +109,8 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
         if (j == 15) { ret_slots    = k; }
         if (j == 16) { thr_any      = k; }
         if (j == 17) { not_deliv    = k; }
-        if (j == 18) { offc_dmnd_data_rd    = k; }
-        if (j == 19) { offc_out_dmnd_data_rd= k; }
+        #if (j == 18) { offc_dmnd_data_rd    = k; }
+        #if (j == 19) { offc_out_dmnd_data_rd= k; }
         if (j == 20) { qpi_tx = k;}
         if (j == 21) { tor_ins = k;}
         if (j == 22) { tor_occ = k;}
@@ -117,11 +120,11 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
       }
     }
     evt_last = i;
-    #if (offc_dmnd_data_rd != "") { L3m = offc_dmnd_data_rd; }
-    #if (offc_out_dmnd_data_rd != "") { L3cyc = offc_out_dmnd_data_rd; }
+    if (offc_dmnd_data_rd != "") { L3m = offc_dmnd_data_rd; }
+    if (offc_out_dmnd_data_rd != "") { L3cyc = offc_out_dmnd_data_rd; }
     if (qpi_tx != "" ) { unc_upi_bytes = qpi_tx; }
-    if (tor_ins != "") { L3m = tor_ins; }
-    if (tor_occ != "") { L3cyc = tor_occ; }
+    #if (tor_ins != "") { L3m = tor_ins; }
+    #if (tor_occ != "") { L3cyc = tor_occ; }
   }
   {
     j = 0;
@@ -253,6 +256,7 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
       if (evt[unc_cha_clk,1] != "") {
         h[++cats] = "LatUnc(ns)";
       }
+      h[++cats] = "LatUncBW";
    }
    if (evt[unc_cha_miss,1] != "" && evt[unc_cha_ref,1] != "") {
       h[++cats] = "%L3_miss";
@@ -343,8 +347,19 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
           }
           if (v > 0 && evt[unc_cha_miss,i] > 0) {
           v = evt[unc_cha_occ,i]/evt[unc_cha_miss,i]/v;
+          #if (sockets > 0) { v /= sockets; }
           }
           L3lat_cycles = v;
+      }
+      if (h[j] == "LatUncBW") {
+	  if (evt[unc_cha_clk,i,"inst"] > 0) {
+          v = (1.0e-9*evt[unc_cha_clk,i]/tm_dff)/evt[unc_cha_clk,i,"inst"];
+          }
+          if (v > 0 && evt[unc_cha_miss,i] > 0) {
+          v = 64.0e-9*evt[unc_cha_miss,i]/tm_dff;
+          #if (sockets > 0) { v /= sockets; }
+          }
+          #L3lat_cycles = v;
       }
       if (h[j] == "Lat(ns)") {
         v = lat_fctr * evt[L3cyc,i]/evt[L3m,i];
