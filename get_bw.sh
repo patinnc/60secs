@@ -59,14 +59,14 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
     j =0;
     lkup[++j] = "qpi_data_bandwidth_tx0";
     lkup[++j] = "qpi_data_bandwidth_tx1";
-    lkup[++j] = "UNC_CHA_TOR_INSERTS.IA_MISS.0x40433";
-    lkup[++j] = "UNC_CHA_TOR_OCCUPANCY.IA_MISS.0x40433";
-    lkup[++j] = "UNC_CHA_CLOCKTICKS";
+    lkup[++j] = "unc_cha_tor_inserts.ia_miss.0x40433";
+    lkup[++j] = "unc_cha_tor_occupancy.ia_miss.0x40433";
+    lkup[++j] = "unc_cha_clockticks";
     lkup[++j] = "power/energy-pkg/";
     lkup[++j] = "ref-cycles";
     lkup[++j] = "offcore_requests.l3_miss_demand_data_rd";
     lkup[++j] = "offcore_requests_outstanding.l3_miss_demand_data_rd";
-    lkup[++j] = "UNC_CHA_TOR_INSERTS.IA.0x40433";
+    lkup[++j] = "unc_cha_tor_inserts.ia.0x40433";
     lkup[++j] = "upi_data_bandwidth_tx"
     lkup[++j] = "msr/irperf"
     lkup[++j] = "ret_uops_cycles";
@@ -74,6 +74,13 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
     lkup[++j] = "uops_retired.retire_slots";
     lkup[++j] = "cpu_clk_unhalted.thread_any"
     lkup[++j] = "idq_uops_not_delivered.core"
+    lkup[++j] = "offcore_requests.demand_data_rd"
+    lkup[++j] = "offcore_requests_outstanding.demand_data_rd"
+    lkup[++j] = "qpi_data_bandwidth_tx"
+    lkup[++j] = "unc_c_tor_inserts.miss_opcode.0x182"
+    lkup[++j] = "unc_c_tor_occupancy.miss_opcode.0x182"
+    lkup[++j] = "unc_c_clockticks"
+
     lkup_mx = j;
 
     for (j=1; j <= lkup_mx; j++) {
@@ -99,11 +106,22 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
         if (j == 15) { ret_slots    = k; }
         if (j == 16) { thr_any      = k; }
         if (j == 17) { not_deliv    = k; }
+        if (j == 18) { offc_dmnd_data_rd    = k; }
+        if (j == 19) { offc_out_dmnd_data_rd= k; }
+        if (j == 20) { qpi_tx = k;}
+        if (j == 21) { tor_ins = k;}
+        if (j == 22) { tor_occ = k;}
+        if (j == 23) { tor_clk = k;}
         evt_list[v] = k;
         evt_lkup[i] = v;
       }
     }
     evt_last = i;
+    #if (offc_dmnd_data_rd != "") { L3m = offc_dmnd_data_rd; }
+    #if (offc_out_dmnd_data_rd != "") { L3cyc = offc_out_dmnd_data_rd; }
+    if (qpi_tx != "" ) { unc_upi_bytes = qpi_tx; }
+    if (tor_ins != "") { L3m = tor_ins; }
+    if (tor_occ != "") { L3cyc = tor_occ; }
   }
   {
     j = 0;
@@ -115,7 +133,7 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
     else if (index($0, "ret_uops_cycles") > 0) { j=ret_cycles; }
     if (j == 0) {
       n=split($1, arr, ";");
-      e = arr[4];
+      e = tolower(arr[4]);
       if (e in evt_list) {
         #printf("got e= %s\n", e);
         j = evt_list[e];
@@ -126,6 +144,9 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
       tm_i = ck_tm(arr[1]);
       evt[j,tm_i] += arr[2];
       evt[j,tm_i,"inst"]++;
+      evt[j,tm_i,"ns"] += arr[5];
+      evt[j,tm_i,"multi"] = arr[6];
+      #1.002152878;5415357486;;UNC_C_CLOCKTICKS;2005707182;100.00;168.823;M/sec
       next;
     }
   }
@@ -286,6 +307,7 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
           #v = evt[L3cyc,i]/evt[L3m,i]/(sockets*evt[L3m,i,"inst"]);
 	  if (evt[L3m,i] > 0) {
           v = evt[L3cyc,i]/evt[L3m,i];
+          if (tor_occ == L3cyc) { v *= 0.5; }
 	  }
           L3lat_cycles = v;
         }
@@ -324,6 +346,7 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
       }
       if (h[j] == "Lat(ns)") {
         v = lat_fctr * evt[L3cyc,i]/evt[L3m,i];
+        if (tor_occ == L3cyc) { v *= 0.5; }
         if (index(vendor, "AMD") > 0) {
           v = v/frqGHz; 
         } else {
