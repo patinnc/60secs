@@ -307,7 +307,7 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
           #v = evt[L3cyc,i]/evt[L3m,i]/(sockets*evt[L3m,i,"inst"]);
 	  if (evt[L3m,i] > 0) {
           v = evt[L3cyc,i]/evt[L3m,i];
-          if (tor_occ == L3cyc) { v *= 0.5; }
+          if (tor_occ == L3cyc && sockets > 0) { v /= sockets; }
 	  }
           L3lat_cycles = v;
         }
@@ -330,6 +330,8 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
           #v = evt[unc_cha_occ,i]/evt[unc_cha_miss,i]/(sockets*evt[unc_cha_occ,i,"inst"]);
 	  if (evt[unc_cha_miss,i] > 0) {
           v = evt[unc_cha_occ,i]/evt[unc_cha_miss,i];
+          if (sockets > 0) { v /= sockets; }
+          #if (did_sockets_msg != 1) { did_sockets_msg = 1; printf("got sockets= %d\n", sockets) > "/dev/stderr";}
 	  }
           #v = evt[L3cyc,i]/evt[L3m,i];
           L3lat_cycles = v;
