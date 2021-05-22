@@ -40,6 +40,7 @@ worksheet_charts = None
 ch_sh_arr = []
 verbose = False
 tsv_dialect = "excel-tab"
+chart_show_blanks_as = "gap" # or "zero" or "span"
 options_all_charts_one_row = False
 options_get_max_val = False
 all_charts_one_row = []
@@ -121,6 +122,18 @@ if options_str.find("all_charts_one_row") >= 0:
 if options_str.find("tsv_dialect{excel-csv}") >= 0:
    tsv_dialect = "excel"
    print("tsv_dialect= excel")
+
+chart_show_blanks_as = "gap" # or "zero" or "span"
+chart_show_blanks_set = False
+if options_str.find("chart_show_blanks_as{gap}") >= 0:
+   chart_show_blanks_as = "gap" # or "zero" or "span"
+   chart_show_blanks_set = True
+elif options_str.find("chart_show_blanks_as{zero}") >= 0:
+   chart_show_blanks_as = "zero" # or "zero" or "span"
+   chart_show_blanks_set = True
+elif options_str.find("chart_show_blanks_as{span}") >= 0:
+   chart_show_blanks_as = "span" # or "zero" or "span"
+   chart_show_blanks_set = True
 
 # don't do get_max_val here. data suppliers have to create new 'peak' variables and old avg variables
 #if options_str.find("get_max_val") >= 0:
@@ -770,11 +783,25 @@ for bmi in range(base_mx+1):
                                fn_bs_n[fn_bs_i][ij][use_idx] = 1
                          else:
                             try:
-                               fn_bs_sum[fn_bs_i][ij][use_idx] += data[ij][h]
-                            except:
-                               print("---- error concat data[%d][%d] filenm= %s, field= " % (ij, h, x), data[ij][h], ", line= ", data[ij], file=sys.stderr)
+                               if fn_bs_sum[fn_bs_i][ij][use_idx] == '':
+                                  fn_bs_sum[fn_bs_i][ij][use_idx] = 0.0
+                                  fn_bs_n[fn_bs_i][ij][use_idx] = 0
+                               if data[ij][h] != '':
+                                  data[ij][h] = float(data[ij][h])
+                                  fn_bs_sum[fn_bs_i][ij][use_idx] += data[ij][h]
+                                  fn_bs_n[fn_bs_i][ij][use_idx] += 1
+                               elif not use_idx in fn_bs_sum[fn_bs_i][ij]:
+                                  fn_bs_sum[fn_bs_i][ij][use_idx] = 0.0
+                                  fn_bs_n[fn_bs_i][ij][use_idx] = 0
+                               #else if fn_bs_sum[fn_bs_i][ij][use_idx] != "" and data[ij][h] == "":
+                               #   don't do anything for this case
+                               #   fn_bs_sum[fn_bs_i][ij][use_idx] += data[ij][h]
+                               #   fn_bs_n[fn_bs_i][ij][use_idx] += 1
+                            except Exception as e:
+                               print(e, file=sys.stderr)
+                               print("---- error on += of fn_bs_sum  data[%d][%d] filenm= %s, field= " % (ij, h, x), data[ij][h], "type of new val= ", type(data[ij][h]), "is spc= ",data[ij][j]=='', ", base_val= ", fn_bs_sum[fn_bs_i][ij][use_idx], ", line= ", data[ij], file=sys.stderr)
+                               print("---- type of old val: ", type(fn_bs_sum[fn_bs_i][ij][use_idx]), " val of old val: ", fn_bs_sum[fn_bs_i][ij][use_idx], "is spc= ",fn_bs_sum[fn_bs_i][ij][use_idx]=='',file=sys.stderr)
                                sys.exit(1)
-                            fn_bs_n[fn_bs_i][ij][use_idx] += 1
                       else:
                          fn_bs_sum[fn_bs_i][ij][use_idx] = data[ij][h]
                          fn_bs_n[fn_bs_i][ij][use_idx] = -1
@@ -881,7 +908,13 @@ for bmi in range(base_mx+1):
                         worksheet.write_url(i, j,  "internal:"+data[i][j]+"!A1")
                 write_rows3 += 1
               else:
-                   if 1==1 and dcol_cat != -1 and len(data[i]) > jjj and i >= drow_beg and i <= (drow_end):
+                   if 1==1 and dcol_cat != -1 and len(data[i]) > jjj and jjj != -1 and i >= drow_beg and i <= (drow_end):
+                       try:
+                         if data[i][jjj] is None or data[i][jjj] == '':
+                           continue
+                       except Exception as e:
+                           print(e, ", i= ", i, ", jjj= ",jjj,  file=sys.stderr)
+                           sys.exit(1)
                        if data[i][jjj] is None or data[i][jjj] == '':
                           continue
                        tval = data[i][jjj]
@@ -1080,6 +1113,10 @@ for bmi in range(base_mx+1):
           if chart1 != None and (do_avg == False or do_avg_write == True):
              chart1.set_title ({'name': title})
              chart1.set_style(ch_style)
+             if chart_show_blanks_set == True:
+                print("chart1.show_blanks_as(%s)" % (chart_show_blanks_as), file=sys.stderr)
+                chart1.show_blanks_as(chart_show_blanks_as)
+             
              use_xbase = 25
              if ch_size[0] == 1:
                use_xbase = 10
