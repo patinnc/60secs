@@ -358,8 +358,18 @@ function dt_to_epoch(offset) {
    cpu_cycles_str = "cpu-cycles_unknown";
    instructions_str = "instructions_unknown";
    L3_misses_str = "L3_lat_out_misses_unknown";
+   L3_misses_out_str = "L3_cha_lat_out_misses_unknown";
+   L3_cha_misses_str = "L3_cha_lat_out_misses_unknown";
+   L3_cha_misses_out_str = "L3_lat_out_misses_unknown";
+   L3_access_str = "L3_lat_out_misses_unknown";
+   L3_cha_clockticks = "unc_cha_clockticks";
+   L3_cha_clockticks_str = L3_cha_clockticks "_unknown";
+   got_unc_cha_miss = 0;
+   got_unc_cha_miss_out = 0;
+   got_unc_cha_clockticks = 0;
    use_qpi_bw = -1;
    for (i=0; i <= evt_idx; i++) {
+     levt = tolower(evt_lkup[i]);
      if (evt_lkup[i] == "msr/aperf/" || evt_lkup[i] == "cycles" || evt_lkup[i] == "cpu-cycles") {
        cpu_cycles_str = evt_lkup[i];
      }
@@ -369,8 +379,26 @@ function dt_to_epoch(offset) {
      if (evt_lkup[i] == "msr/irperf/" || evt_lkup[i] == "instructions") {
        instructions_str = evt_lkup[i];
      }
-     if (evt_lkup[i] == "L3_lat_out_misses" || evt_lkup[i] == "L3_misses") {
+     if (evt_lkup[i] == "L3_misses") {
        L3_misses_str = evt_lkup[i];
+     }
+     if (evt_lkup[i] == "L3_lat_out_misses") {
+       L3_misses_out_str = evt_lkup[i];
+     }
+     if (levt == "unc_cha_tor_inserts.ia_miss.0x40433") {
+       L3_cha_misses_str = evt_lkup[i];
+       got_unc_cha_miss= 1;
+     }
+     if (levt == "unc_cha_tor_occupancy.ia_miss.0x40433") {
+       L3_cha_misses_out_str = evt_lkup[i];
+       got_unc_cha_miss_out= 1;
+     }
+     if (levt == L3_cha_clockticks) {
+       L3_cha_clockticks_str = evt_lkup[i];
+       got_unc_cha_clockticks = 1;
+     }
+     if (levt == "unc_cha_tor_inserts.ia.0x40433") {
+       L3_cha_access_str = evt_lkup[i];
      }
      if (evt_lkup[i] == "qpi_data_bandwidth_tx") {
        # native broadwell event
@@ -402,6 +430,22 @@ function dt_to_epoch(offset) {
    lkfor[kmx,2]="instances";  # get the instances from the first lkfor event
    nwfor[kmx,1,"hdr"]="%not_halted";
    nwfor[kmx,1,"alias"]="metric_CPU utilization %";
+
+   inv_num_sockets = 0;
+   if (num_sockets != "" && num_sockets > 0) {
+     inv_num_sockets = 1.0/num_sockets;
+   }
+
+   kmx++;
+   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+   got_lkfor[kmx,2]=1; # num of fields to look for
+   got_lkfor[kmx,3]=inv_num_sockets * 1.0e-9; # a factor
+   got_lkfor[kmx,4]="sum"; # operation x/y
+   got_lkfor[kmx,5]=1; # instances
+   got_lkfor[kmx,6]="div_by_interval"; # 
+   got_lkfor[kmx,"tag"]="uncore_freq";
+   lkfor[kmx,1]=L3_cha_clockticks_str;
+   nwfor[kmx,1,"hdr"]="uncore_freq (GHz)";
    }
 
 #    rpn operations
@@ -431,15 +475,113 @@ function dt_to_epoch(offset) {
    nwfor[kmx,1,"hdr"]="%not_halted";
    nwfor[kmx,1,"alias"]="metric_CPU utilization %";
 
+
+#  L3_lat_out_cycles
+#  L3_lat_out_misses
+
+   }
    kmx++;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
    got_lkfor[kmx,2]=2; # num of fields to look for
    got_lkfor[kmx,3]=1000.0; # a factor
    got_lkfor[kmx,4]="div"; # operation
    got_lkfor[kmx,5]=1; # instances
-   lkfor[kmx,1]=L3_misses_str;
+   lkfor[kmx,1]=L3_cha_misses_str;
    lkfor[kmx,2]=instructions_str;
    nwfor[kmx,1,"hdr"]="LLC-misses PKI";
+
+   kmx++;
+   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+   got_lkfor[kmx,2]=1; # num of fields to look for
+   got_lkfor[kmx,3]=64.0e-9; # a factor
+   got_lkfor[kmx,4]="sum"; # operation
+   got_lkfor[kmx,5]=1; # instances
+   got_lkfor[kmx,6]="div_by_interval"; # 
+   lkfor[kmx,1]=L3_cha_misses_str;
+   nwfor[kmx,1,"hdr"]="LLC-miss bw (GB/s)";
+
+   kmx++;
+   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+   got_lkfor[kmx,2]=2; # num of fields to look for
+   got_lkfor[kmx,3]=1.0e-9; # a factor
+   got_lkfor[kmx,4]="div"; # operation x/y/z
+   got_lkfor[kmx,5]=1; # instances
+   got_lkfor[kmx,6]="div_by_non_halted_interval"; # 
+   lkfor[kmx,1]=cpu_cycles_str;
+   lkfor[kmx,2]="instances";  # get the instances from the first lkfor event
+   nwfor[kmx,1,"hdr"]="avg_freq (GHz)";
+   nwfor[kmx,1,"alias"]="metric_CPU operating frequency (in GHz)";
+
+   kmx++;
+   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+   got_lkfor[kmx,2]=2; # num of fields to look for
+   if (amd_cpu == 1) {
+     got_lkfor[kmx,3]=16.0; # lat_out_cycles is total cycles/16
+   } else {
+     got_lkfor[kmx,3]=1.0; 
+   }
+   got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
+   got_lkfor[kmx,5]=1; # instances
+   got_lkfor[kmx,6]=""; # 
+   #got_lkfor[kmx,6]="div_by_interval"; # 
+   kkmx = 0;
+   got_rpn_eqn[kmx, ++kkmx, "val"]=L3_cha_misses_out_str;
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=L3_cha_misses_str;
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="/";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+   got_rpn_eqn[kmx,      1,"max"]=kkmx;
+   lkfor[kmx,1]=L3_cha_misses_out_str;
+   lkfor[kmx,2]=L3_cha_misses_str;
+   nwfor[kmx,1,"hdr"]="L3 miss latency (core_clks)";
+
+   kmx++;
+   kkmx = 0;
+   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+   got_lkfor[kmx,2]=3; # num of fields to look for
+   #got_lkfor[kmx,3]=1.0e-9 * num_sockets;
+   got_lkfor[kmx,3]=1.0;
+   got_lkfor[kmx,4]="bc_eqn"; # operation x/y/z
+   got_lkfor[kmx,5]=1; # instances
+   got_lkfor[kmx,6]="";
+   #got_lkfor[kmx,6]="div_by_interval"; # 
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" ( "
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=L3_cha_misses_out_str;
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" / "
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=L3_cha_misses_str;
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" ) / ( ( ";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=L3_cha_clockticks_str;
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" / "
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=1000000000;
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" ) "
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" / ( "
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="interval";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_interval";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" * "
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=num_sockets;
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" ) )";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+   got_rpn_eqn[kmx,      1,"max"]=kkmx;
+   lkfor[kmx,1]=L3_cha_misses_out_str;
+   lkfor[kmx,2]=L3_cha_misses_str;
+   lkfor[kmx,3]=L3_cha_clockticks_str;
+   nwfor[kmx,1,"hdr"]="L3 miss latency (ns)";
+   printf("%s _____ L3_cha_misses_out_str= %s L3_cha_misses_str= %s L3_cha_clockticks_str= %s inv_num_sockets= %f\n",
+     script, L3_cha_misses_out_str, L3_cha_misses_str, L3_cha_clockticks_str, inv_num_sockets) > "/dev/stderr";
+
 
    kmx++;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
@@ -456,51 +598,15 @@ function dt_to_epoch(offset) {
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
    got_rpn_eqn[kmx, ++kkmx, "val"]="*"; # 100 * mperf
    got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="L3_accesses";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=L3_access_str;
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
    got_rpn_eqn[kmx, ++kkmx, "val"]="/";
    got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
    got_rpn_eqn[kmx,      1,"max"]=kkmx;
    lkfor[kmx,1]=L3_misses_str;
-   lkfor[kmx,2]="L3_accesses";
+   lkfor[kmx,2]=L3_access_str;
    nwfor[kmx,1,"hdr"]="%LLC misses";
 
-#  L3_lat_out_cycles
-#  L3_lat_out_misses
-
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=2; # num of fields to look for
-   got_lkfor[kmx,3]=16.0; # lat_out_cycles is total cycles/16
-   got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
-   got_lkfor[kmx,5]=1; # instances
-   got_lkfor[kmx,6]=""; # 
-   #got_lkfor[kmx,6]="div_by_interval"; # 
-   kkmx = 0;
-   got_rpn_eqn[kmx, ++kkmx, "val"]="L3_lat_out_cycles";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=L3_misses_str;
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="/";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   got_rpn_eqn[kmx,      1,"max"]=kkmx;
-   lkfor[kmx,1]="L3_lat_out_cycles";
-   lkfor[kmx,2]=L3_misses_str;
-   nwfor[kmx,1,"hdr"]="L3 miss latency (core_clks)";
-
-   }
-
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=2; # num of fields to look for
-   got_lkfor[kmx,3]=1.0e-9; # a factor
-   got_lkfor[kmx,4]="div"; # operation x/y/z
-   got_lkfor[kmx,5]=1; # instances
-   got_lkfor[kmx,6]="div_by_non_halted_interval"; # 
-   lkfor[kmx,1]=cpu_cycles_str;
-   lkfor[kmx,2]="instances";  # get the instances from the first lkfor event
-   nwfor[kmx,1,"hdr"]="avg_freq (GHz)";
-   nwfor[kmx,1,"alias"]="metric_CPU operating frequency (in GHz)";
 
    kmx++;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
@@ -572,16 +678,6 @@ function dt_to_epoch(offset) {
    got_lkfor[kmx,"max"]=1000.0;
    lkfor[kmx,1]="mem_local";
    nwfor[kmx,1,"hdr"]="L1_miss_filled_from_local bw (GB/s)";
-
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=2; # num of fields to look for
-   got_lkfor[kmx,3]=1000.0; # a factor
-   got_lkfor[kmx,4]="div"; # operation
-   got_lkfor[kmx,5]=1; # instances
-   lkfor[kmx,1]="LLC-load-misses";
-   lkfor[kmx,2]=instructions_str;
-   nwfor[kmx,1,"hdr"]="LLC-misses PKI";
 
    kmx++;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
@@ -1360,6 +1456,9 @@ function dt_to_epoch(offset) {
         if (nwfor[k,1,"hdr"] == "L3 miss latency (core_clks)") {
           L3_latency_cols[++L3_latency_cols_mx] = cols;
         }
+        if (nwfor[k,1,"hdr"] == "L3 miss latency (ns)") {
+          L3_latency_cols[++L3_latency_cols_mx] = cols;
+        }
         if (index(nwfor[k,1,"hdr"], "not_halted") > 0 || index(nwfor[k,1,"hdr"], "TMAM") > 0 || index(nwfor[k,1,"hdr"], "power_pkg (watts)") > 0) {
           TMAM_cols[++TMAM_cols_mx] = cols;
         }
@@ -1708,7 +1807,7 @@ function dt_to_epoch(offset) {
      printf("\n") > out_file;
    }
    if (L3_latency_cols_mx > 0) {
-     printf("\ntitle\t%s L3 miss latency in core clocks\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, pfx, sheet) > out_file;
+     printf("\ntitle\t%s L3 miss latency\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, pfx, sheet) > out_file;
      printf("hdrs\t%d\t%d\t%d\t%d\t%d", rows+1, bcol, -1, evt_idx+extra_cols+4, ts_col) > out_file;
      for (i=1; i <= L3_latency_cols_mx; i++) {
        printf("\t%d\t%d", L3_latency_cols[i], L3_latency_cols[i]) > out_file;
