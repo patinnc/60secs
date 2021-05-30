@@ -80,6 +80,9 @@ ts_end = -1.0
 avg_dir = None;
 
 #print("remainder files: ", remainder)
+#gcolor_lst = ["#b0556a", "#7adf39", "#8d40d6", "#ead12d", "#0160eb", "#aaed78", "#f945b7", "#04e6a0", "#cf193b", "#4df8ca", "#b21f72", "#41981b", "#b773eb", "#276718", "#f39afb", "#0ea26a", "#015fc6", "#ec7118", "#108cf5", "#feab4f", "#1eacf8", "#a13502", "#49f6fd", "#9e5d33", "#30d8ec", "#ab952f", "#8156a5", "#f5db82", "#1e67a9", "#f6b17c", "#47caf9", "#695909", "#7daaef", "#a4ce84", "#ef89bb", "#1c6c43", "#ecb5f2", "#7ddab8", "#0f88b4", "#07a1b2"];
+gcolor_lst= ["#1f77b4", "#aec7e8", "#ff7f0e", "#ffbb78", "#2ca02c", "#98df8a", "#d62728", "#ff9896", "#9467bd", "#c5b0d5",
+  "#8c564b", "#c49c94", "#e377c2", "#f7b6d2", "#7f7f7f", "#c7c7c7", "#bcbd22", "#dbdb8d", "#17becf", "#9edae5" ];
 
 for opt, arg in options:
     if opt in ('-A', '--average'):
@@ -573,6 +576,7 @@ for bmi in range(base_mx+1):
       
       chrts = 0
       ch_arr = []
+      ch_opts  = []
       ch_cols_used = {}
       sheet_nm = "sheet1"
       ch_type  = "line"
@@ -582,16 +586,34 @@ for bmi in range(base_mx+1):
                  #print("got title for x= %s\n" % (x))
                  chrts = chrts + 1
                  ch = []
+                 co = {}
                  ch.append(["title", i, j])
                  if len(data[i]) >= 4:
                     sheet_nm = data[i][3]
                  if len(data[i]) >= 6:
                     ch_type = data[i][5]
                     ch[0].append(ch_type)
+                 if len(data[i]) >= 8 and data[i][6] == "options":
+                    for k in range(7, len(data[i]), 2):
+                      opk = data[i][k]
+                      opv = data[i][k+1]
+                      if opk == "style":
+                         opv = int(opv)
+                      co[opk] = opv
+                      print("ch ch_typ= %s, title= %s, ch_opt[%s:" % (ch_type, data[i][1], opk), opv, file=sys.stderr)
+                      if opk == "chart_show_blanks_as":
+                        if opv != "gap" and opv != "zero" and opv != "span":
+                          print("error: invalid chart_show_blanks_as setting %s", opv, ", valid values=", ["gap" "zero", "span"], file=sys.stderr)
+                          sys.exit(1)
+                      if verbose > 0 and opk == "set_x_axis_name":
+                          print("ch ch_typ= %s, title= %s, ch_opt[%s:" % (ch_type, data[i][1], opk), opv, file=sys.stderr)
+                      if verbose > 0 and opk == "set_y_axis_name":
+                          print("ch ch_typ= %s, title= %s, ch_opt[%s:" % (ch_type, data[i][1], opk), opv, file=sys.stderr)
               if j == 0 and data[i][j] == "hdrs":
                  #print("got hdrs for x= %s\n" % (x))
                  ch.append(["hdrs", i])
                  ch_arr.append(ch)
+                 ch_opts.append(co)
               #print(data[i][j])
           #print("")
       
@@ -647,8 +669,6 @@ for bmi in range(base_mx+1):
           mcol_num_cols = len(data[drw])
           dcol_cat = -1
           skipped = 0
-          if mcol_num_cols > 5 and int(data[drw][5]) > -1:
-             dcol_cat = int(data[drw][5])
           if mcol_num_cols > 5 and int(data[drw][5]) > -1:
              dcol_cat = int(data[drw][5])
           if drow_end == -1:
@@ -712,7 +732,7 @@ for bmi in range(base_mx+1):
              ch_cols_used[i] = 1
           if mcol_num_cols > 6:
              for h in range(6, mcol_num_cols, 2):
-                 #print("sheet_nm= %s got series[%d] colb= %d cole= %d" % (sheet_nm, len(mcol_list), int(data[drw][h]), int(data[drw][h+1])))
+                 #print("tsv_2_xlsx.py: mcol_num_cols= %d sheet_nm= %s got h= %d colb= %d cole= %d title= %s" % (mcol_num_cols, sheet_nm, h, int(data[drw][h]), int(data[drw][h+1]), title))
                  tcol0 = int(data[drw][h])
                  tcol1 = int(data[drw][h+1])
                  if tcol0 > -1 and tcol1 > -1:
@@ -764,7 +784,7 @@ for bmi in range(base_mx+1):
                          print("dude, idx= ", ij, ", h= ", h, ", len(data[idx])= ", len(data[ij]), " drow: ", data[ij])
                       is_num = is_number(data[ij][h])
                       if not h in fn_bs_hdr_map[fn_bs_i][hrow_beg]:
-                         print("dude, h: ", h, " not in fn_bs_hdr_map[",fn_bs_i,"][",hrow_beg,"], data[",ij,"][",h,"]=",data[ij][h]," error. bye", file=sys.stderr)
+                         print("dude, h: ", h, " not in fn_bs_hdr_map[",fn_bs_i,"][",hrow_beg,"], data[",ij,"][",h,"]=",data[ij][h]," fn_bs_hdr_map= ",fn_bs_hdr_map[fn_bs_i][hrow_beg]," error. skip", file=sys.stderr)
                          continue
                          #sys.exit(1)
                       use_idx = fn_bs_hdr_map[fn_bs_i][hrow_beg][h]
@@ -981,16 +1001,19 @@ for bmi in range(base_mx+1):
              dcol_cat = int(data[drw][5])
              use_cats = True
           if mcol_num_cols > 6:
+             #print("tsv_2_xlsx.py: sheet_nm= %s title= %s ck columns[%d]" % (sheet_nm, title, len(mcol_list)))
              for h in range(6, mcol_num_cols, 2):
-                 #print("sheet_nm= %s got series[%d] colb= %d cole= %d" % (sheet_nm, len(mcol_list), int(data[drw][h]), int(data[drw][h+1])))
+                 #print("tsv_2_xlsx.py: sheet_nm= %s title= %s add columns[%d] colb= %d cole= %d" % (sheet_nm, title, len(mcol_list), int(data[drw][h]), int(data[drw][h+1])))
                  tcol0 = int(data[drw][h])
                  tcol1 = int(data[drw][h+1])
                  if tcol0 > -1 and tcol1 > -1:
                     mcol_list.append([tcol0, tcol1+1])
+                    #print("tsv_2_xlsx.py: added sheet_nm= %s title= %s got series[%d] colb= %d cole= %d" % (sheet_nm, title, len(mcol_list)-1, tcol0, tcol1+1))
           else:
              if hcol_beg < 0 or hcol_end < 0:
                 print("What going on, sheet_nm= %s, ch_typ= %s, file= %s, hcol_beg= %d, hcol_end= %d" % (sheet_nm, ch_type, x, hcol_beg, hcol_end), file=sys.stderr)
              mcol_list.append([hcol_beg, hcol_end])
+             #print("add_mcol_list[%d] sheet_nm= %s, ch_typ= %s, title= %s, hcol_beg= %d, hcol_end= %d" % (len(mcol_list)-1, sheet_nm, ch_type, title, hcol_beg, hcol_end), file=sys.stderr)
           if verbose:
              print("sheet= %s ch= %d hro= %d hc= %d hce= %d, dr= %d, dre= %d" % (sheet_nm, c, hrow_beg, hcol_beg, hcol_end, drow_beg, drow_end))
           ch_style = 10
@@ -1079,43 +1102,58 @@ for bmi in range(base_mx+1):
              continue
           # Configure the first series.
           got_how_many_series_for_chart = 0
+          num_series = 0
           for hh in range(len(mcol_list)):
+              #print("tsv_2_xlsx.py: ckckck at2, sheet_nm= %s, ch_typ= %s, title= %s, hh= %d" % (sheet_nm, ch_type, title, hh))
               for h in range(mcol_list[hh][0], mcol_list[hh][1]):
+                  #print("tsv_2_xlsx.py: ckckck at3, sheet_nm= %s, ch_typ= %s, title= %s, h= %d, mcol0= %d mcol1= %d" % (sheet_nm, ch_type, title, h, mcol_list[hh][0], mcol_list[hh][1]))
                   if h < 0:
                      print("What going on2, sheet_nm= %s, ch_typ= %s, file= %s, hcol_beg= %d, hcol_end= %d" % (sheet_nm, ch_type, x, hcol_beg, hcol_end), file=sys.stderr)
                   if drow_beg < 0 or drow_end < 0:
                      print("What going on3, sheet_nm= %s, ch_typ= %s, file= %s, drow_beg= %d drow_end= %d hcol_beg= %d, hcol_end= %d" % (sheet_nm, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end), file=sys.stderr)
                      continue
                   got_how_many_series_for_chart += 1
+                  #print("tsv_2_xlsx.py: ckckck at4, sheet_nm= %s, ch_typ= %s, title= %s, h= %d, mcol0= %d mcol1= %d" % (sheet_nm, ch_type, title, h, mcol_list[hh][0], mcol_list[hh][1]))
                   if do_avg == False or do_avg_write == True:
                    use_drow_end = drow_end
                    if ch_type == "column" or ch_type == "column_stacked":
-                     print("ck col chart, sheet_nm= %s, ch_typ= %s, file= %s, drow_beg= %d drow_end= %d hcol_beg= %d, hcol_end= %d, ph_add= %d, h= %d" % (sheet_nm, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end, ph_add, h), chart1, file=sys.stderr)
+                     if verbose > 0:
+                        print("ck col chart, sheet_nm= %s, ch_typ= %s, file= %s, drow_beg= %d drow_end= %d hcol_beg= %d, hcol_end= %d, ph_add= %d, h= %d" % (sheet_nm, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end, ph_add, h), chart1, file=sys.stderr)
                      use_drow_end = drow_end
                    if chart1 != None and ((ch_type == "column" or ch_type == "column_stacked") or drow_end  > (drow_beg+1)):
                     rc = 0;
-                    #print("got bef add_series");
+                    #print("got bef add_series ch_type= ", ch_type, ", title= ", title, ", drow_beg= ", drow_beg, ", drow_end= ", drow_end);
+                    use_color = num_series % len(gcolor_lst)
+                    num_series = num_series + 1
+                    a_s = {
+                         'name':       [wrksh_nm, hrow_beg, h+ph_add],
+                         'values':     [wrksh_nm, drow_beg, h+ph_add, use_drow_end, h+ph_add],
+                    }
                     if use_cats:
-                     #print("got add_series1\n");
-                     rc = chart1.add_series({
-                         'name':       [wrksh_nm, hrow_beg, h+ph_add],
-                         'categories': [wrksh_nm, drow_beg, dcol_cat+ph_add, use_drow_end, dcol_cat+ph_add],
-                         'values':     [wrksh_nm, drow_beg, h+ph_add, use_drow_end, h+ph_add],
-                     })
-                    else:
-                     #print("got add_series2\n");
-                     rc = chart1.add_series({
-                         'name':       [wrksh_nm, hrow_beg, h+ph_add],
-                         'values':     [wrksh_nm, drow_beg, h+ph_add, use_drow_end, h+ph_add],
-                     })
+                       a_s['categories'] = [wrksh_nm, drow_beg, dcol_cat+ph_add, use_drow_end, dcol_cat+ph_add]
+                    if (mcol_list[hh][1]-mcol_list[hh][0]) > 1:
+                       a_s['points'] = [{'fill': {'color': gcolor_lst[use_color]}}]
+                    a_s['line'] = {'color': gcolor_lst[use_color]}
+                    #print("got add_series1, a_s= ", a_s);
+                    rc = chart1.add_series(a_s)
           if got_how_many_series_for_chart == 0:
              print("What going on4, sheet_nm= %s, ch_typ= %s, file= %s, drow_beg= %d drow_end= %d hcol_beg= %d, hcol_end= %d" % (sheet_nm, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end), file=sys.stderr)
           if chart1 != None and (do_avg == False or do_avg_write == True):
              chart1.set_title ({'name': title})
-             chart1.set_style(ch_style)
+             if 'style' in ch_opts[c]:
+                chart1.set_style(ch_opts[c]['style'])
+                print("got per chart ch_opts style= ", ch_opts[c]['style'], file=sys.stderr)
+             else:
+                chart1.set_style(ch_style)
              if chart_show_blanks_set == True:
                 print("chart1.show_blanks_as(%s)" % (chart_show_blanks_as), file=sys.stderr)
                 chart1.show_blanks_as(chart_show_blanks_as)
+             if 'chart_show_blanks_as' in ch_opts[c]:
+                chart1.show_blanks_as(ch_opts[c]['chart_show_blanks_as'])
+             if 'set_x_axis_name' in ch_opts[c]:
+                chart1.set_x_axis({'name': ch_opts[c]['set_x_axis_name']})
+             if 'set_y_axis_name' in ch_opts[c]:
+                chart1.set_y_axis({'name': ch_opts[c]['set_y_axis_name']})
              
              use_xbase = 25
              if ch_size[0] == 1:
@@ -1174,8 +1212,9 @@ for bmi in range(base_mx+1):
                            ch_top_at_row = ch_sh_arr[ch_sh_row-1][0] + int(ch_size[2]*ch_size[1])
                         ch_sh_arr.append([ch_top_at_row, ch_left_at_col])
                      if ch_sh_row >= len(ch_sh_arr) or not ch_sh_row in ch_sh_arr:
-                        print("err: ch_sh_row= %d len(ch_sh_arr)= %d, x= %s\n" % (ch_sh_row, len(ch_sh_arr), x), file=sys.stderr)
-                        #print("err: len(ch_sh_arr[ch_sh_row])= %d, x= %s\n" % (len(ch_sh_arr[ch_sh_row]), x), file=sys.stderr)
+                       if verbose > 0:
+                         print("info ch_sh_row= %d len(ch_sh_arr)= %d, x= %s\n" % (ch_sh_row, len(ch_sh_arr), x), file=sys.stderr)
+                         #print("err: len(ch_sh_arr[ch_sh_row])= %d, x= %s\n" % (len(ch_sh_arr[ch_sh_row]), x), file=sys.stderr)
                      else:
                         ch_top_at_row = ch_sh_arr[ch_sh_row][0]
              if worksheet_charts != None:
