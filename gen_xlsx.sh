@@ -603,8 +603,8 @@ else
          DIR=$STR
          #echo "$0.$LINENO: -__________- using2 DIR= $DIR, orig DIR= $DIR_ORIG" > /dev/stderr
        else
-         echo "$0.$LINENO: didn't find 60secs.log nor metric_out nor sys_*_perf_stat.txt file under dir $DIR at line $LINENO Bye"
-         exit
+         echo "$0.$LINENO: didn't find 60secs.log nor metric_out nor sys_*_perf_stat.txt file under dir $DIR. dir_orig= $DIR_ORIG at line $LINENO Bye"
+         exit 1
        fi
      fi
    else
