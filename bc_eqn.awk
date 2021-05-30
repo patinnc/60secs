@@ -16,6 +16,12 @@ function bc_rtn(val, k4, got_rpn_eqn, col_hdr_mx, col_hdr, rw_data,    la, val1,
         if (bc_err != "") { printf("bc_err1= %s\n", bc_err) > "/dev/stderr"; }
         continue;
       }
+      if (oper == "push_interval") {
+        val1=interval+0.0;
+        bc_str = bc_str " " val1;
+        if (bc_err != "") { printf("bc_err1= %s\n", bc_err) > "/dev/stderr"; }
+        continue;
+      }
       if (oper == "push_str") {
         val1=val2+0.0;
         bc_str = bc_str " " val2;
