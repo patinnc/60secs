@@ -17,6 +17,7 @@ PFX=
 SUM_FILE=
 PHASE_FILE=
 END_TM=
+END_TM_IN=
 BEG_TM_IN=
 METRIC_OUT="metric_out"
 METRIC_AVG="metric_out.average"
@@ -66,6 +67,8 @@ while getopts "hvASa:B:b:c:D:d:e:g:i:j:m:o:P:p:s:t:x:" opt; do
       ;;
     e )
       END_TM=$OPTARG
+      END_TM_IN=$OPTARG
+      echo "$0.$LINENO: top END_TM_IN= $END_TM_IN"
       ;;
     g )
       G_SUM+=("$OPTARG")
@@ -393,9 +396,11 @@ if [ -e run.log ]; then
  fi
 fi
 
-
+if [ -e $DIR/../run.log ]; then
+  TST_END_TM=`cat $DIR/../run.log | awk '/ end /{printf("%d\n", $2);exit;}'`
+fi
 BEG=`cat $DIR/60secs.log | awk '{n=split($0, arr);printf("%s\n", arr[n]);exit;}'`
-BEG_ADJ=`cat $DIR/60secs.log | awk '
+BEG_ADJ=`cat $DIR/60secs.log | awk -v script="$0.$LINENO.awk" '
    function dt_to_epoch(date_str, offset) {
    # started on Tue Dec 10 23:23:30 2019
    # Dec 10 23:23:30 2019
@@ -410,7 +415,7 @@ BEG_ADJ=`cat $DIR/60secs.log | awk '
      dt_str = darr[6] " " mnth_num " " darr[2] " " darr[3] " " darr[4] " " darr[5];
      printf("dt_str= %s\n", dt_str) > "/dev/stderr";
      epoch = mktime(dt_str);
-     printf("epoch= %s offset= %s\n", epoch, offset) > "/dev/stderr";
+     printf("%s epoch= %s offset= %s\n", script, epoch, offset) > "/dev/stderr";
      return epoch + offset;
    }
    {
@@ -420,7 +425,7 @@ BEG_ADJ=`cat $DIR/60secs.log | awk '
      num_int = sprintf("%d", epoch_in);
      print ENVIRON["AWKPATH"] > "/dev/stderr";
      num_dec = epoch_in - num_int;
-     printf("BEG_ADJ: epoch_in= %f num_int= %s, num_dec= %s, in_str= %s\n", epoch_in, num_int, num_dec, $0) > "/dev/stderr";
+     printf("%s BEG_ADJ: epoch_in= %f num_int= %s, num_dec= %s, in_str= %s\n", script, epoch_in, num_int, num_dec, $0) > "/dev/stderr";
      n=split($0, arr);
      j = 3;
      if (arr[j] != "at") {
@@ -446,6 +451,12 @@ BEG_ADJ=`cat $DIR/60secs.log | awk '
 if [ "$BEG_TM_IN" != "" ]; then
   BEG=$BEG_TM_IN
   echo "$0 set BEG_TM= $BEG_TM_IN"
+fi
+    echo "$0.$LINENO got here" > /dev/stderr
+    #exit 1
+if [ "$END_TM_IN" == "" -a "$TST_END_TM" != "" ]; then
+  END_TM=$TST_END_TM
+  echo "$0.$LINENO END_TM= $END_TM"
 fi
 echo "awk time offset hours BEG_ADJ= $BEG_ADJ  BEG_TM= $BEG, BEG_TM_IN= $BEG_TM_IN"
 #exit
@@ -1218,7 +1229,7 @@ trows++; printf("\t\n") > NFL;
 #12:01:02 AM    0   10.10    4.04    2.02    0.00    0.00    0.00    0.00    0.00    0.00   83.84
 #12:01:02 AM    1    1.03    6.19    2.06    0.00    0.00    0.00    0.00    0.00    0.00   90.72
 
-    awk -v script="$0.$LINENO.awk" -v options="$OPTIONS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" '
+    awk -v script="$0.$LINENO.mpstat.awk" -v options="$OPTIONS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" '
      BEGIN{
         beg=1;
         grp_mx=0;
@@ -1226,10 +1237,12 @@ trows++; printf("\t\n") > NFL;
         ts_beg += 0;
         ts_end += 0;
         epoch_init = 0;
+        dt_fmt_has_am_pm = 1;
         got_skip_mpstat_percpu_charts = index(options, "mpstat_skip_percpu_charts");
         if (got_skip_mpstat_percpu_charts > 0) {
            printf("%s: going to skip_mpstat_percpu_charts due to string found in options\n", script) > "/dev/stderr";
         }
+        printf("%s _______beg mpstat data, ts_beg= %s, ts_end= %s\n", script, ts_beg, ts_end) > "/dev/stderr";
       }
       function dt_to_epoch(hhmmss, ampm) {
          # the epoch seconds from the date time info in the file is local time,not UTC.
@@ -1246,34 +1259,41 @@ trows++; printf("\t\n") > NFL;
             dt_tm["hh"] += 12;
          }
          dt_str = dt_beg["yy"] " " dt_beg["mm"] " " dt_beg["dd"] " " dt_tm["hh"] " " dt_tm["mm"] " " dt_tm["ss"];
-         #printf("dt_str= %s\n", dt_str) > "/dev/stderr";
+         printf("%s dt_str= %s\n", script, dt_str) > "/dev/stderr";
          epoch = mktime(dt_str);
-         #printf("epoch= %s offset= %s\n", epoch, offset);
+         printf("%s epoch= %s offset= %s, ts_beg= %s\n", script, epoch, offset, ts_beg) > "/dev/stderr";
          if (epoch_init == 0) {
              epoch_init = epoch;
          }
          epoch = ts_beg + (epoch - epoch_init + 1); # the plus 1 assumes a 1 second interval.
          if ((epoch-ts_beg) < 0.0) {
-            printf("epoch= %f, hhmmss= %s, dt_str= %s ts_beg= %f. epoch-ts_beg= %f ampm= %s bye\n", epoch, hhmmss, dt_str, ts_beg, epoch-ts_beg, ampm) > "/dev/stderr";
+            printf("%s epoch= %f, hhmmss= %s, dt_str= %s ts_beg= %f. epoch-ts_beg= %f ampm= %s bye\n", script, epoch, hhmmss, dt_str, ts_beg, epoch-ts_beg, ampm) > "/dev/stderr";
             exit;
          }
          return epoch;
       }
      /^Linux/{
         if (NR == 1) {
-          for (i=1; i <= NF; i++) {
+          for (i=NF; i > 0; i--) {
+                printf("%s beg_line= %s\n", script, $0) > "/dev/stderr";
              if (match($i, /^[0-9][0-9]\/[0-9][0-9]\/[0-9][0-9][0-9][0-9]/)) {
                 dt_beg["yy"] = substr($i, 7);
                 dt_beg["mm"] = substr($i, 1, 2);
                 dt_beg["dd"] = substr($i, 4, 2);
-                printf("beg_date= mm.dd.yyyy %s.%s.%s\n", dt_beg["mm"], dt_beg["dd"], dt_beg["yy"]) > "/dev/stderr";
+                printf("%s beg_date= mm.dd.yyyy %s.%s.%s\n", script, dt_beg["mm"], dt_beg["dd"], dt_beg["yy"]) > "/dev/stderr";
                 #break;
+             } else if (match($i, /^[0-9][0-9]\/[0-9][0-9]\/[0-9][0-9]/)) {
+                dt_beg["yy"] = "20" substr($i, 7, 2);
+                dt_beg["mm"] = substr($i, 1, 2);
+                dt_beg["dd"] = substr($i, 4, 2);
+                printf("%s beg_date= mm.dd.yyyy %s.%s.%s\n", script, dt_beg["mm"], dt_beg["dd"], dt_beg["yy"]) > "/dev/stderr";
+                break;
              }
              if (i == NF && $i == "CPU)") {
-                num_cpus = substr(fld_prv, 2)+0;
+                num_cpus = substr($(i-1), 2, length($(i-1)))+0;
                 num_cpus_pct = num_cpus * 100.0;
+                printf("%s num_cpus= %d\n", script, num_cpus) > "/dev/stderr";
              }
-             fld_prv = $i;
           }
         }
        next;
@@ -1287,6 +1307,12 @@ trows++; printf("\t\n") > NFL;
      /%idle/{
         if (beg == 1 && ($2 == "AM" || $2 == "PM")) {
            epoch = dt_to_epoch($1, $2);
+           dt_fmt_has_am_pm = 1;
+           tm_beg = epoch;
+        }
+        if (beg == 1 && $2 == "CPU") {
+           epoch = dt_to_epoch($1, "AM");
+           dt_fmt_has_am_pm = 0;
            tm_beg = epoch;
         }
         if (beg == 0) { next; }
@@ -1297,12 +1323,19 @@ trows++; printf("\t\n") > NFL;
         next;
      }
      {
-        grp=$3;
+        if (dt_fmt_has_am_pm == 1) {
+          grp=$3;
+        } else {
+          grp=$2;
+        }
         if (index($0, "Average") == 1) {
-		next;
-	}
-        if ($2 == "AM" || $2 == "PM") {
+          next;
+        }
+        if (dt_fmt_has_am_pm == 1 && ($2 == "AM" || $2 == "PM")) {
            epoch = dt_to_epoch($1, $2);
+        }
+        if (dt_fmt_has_am_pm == 0) {
+           epoch = dt_to_epoch($1, "AM");
         }
         if (ts_end > 0.0 && epoch > ts_end) {
            next;
@@ -1317,7 +1350,11 @@ trows++; printf("\t\n") > NFL;
         rw = ++grp_row[g];
         tm_rw[rw] = epoch;
         j=0;
-        for (i=3; i <= NF; i++) {
+        i_beg = 3;
+        if (dt_fmt_has_am_pm == 0) {
+          i_beg = 2;
+        }
+        for (i=i_beg; i <= NF; i++) {
           grp_list[g,rw,++j] = $i;
         }
         grp_col[g] = j;
