@@ -11,7 +11,7 @@ function rpn_eval(x) {
          if(x == "+") rpn_push(rpn_first + rpn_second);
     else if(x == "-") rpn_push(rpn_first - rpn_second);
     else if(x == "*") rpn_push(rpn_first * rpn_second);
-    else if(x == "/") rpn_push(rpn_first / rpn_second);
+    else if(x == "/") { if (rpn_second == 0.0) { rpn_err = "div by 0";} else {rpn_push(rpn_first / rpn_second);} }
     else rpn_err = "Bad operator: " + x;
   }
 }
@@ -60,7 +60,7 @@ function rpn_rtn(val, k4, got_rpn_eqn, col_hdr_mx, col_hdr, rw_data,    la, val1
       }
       if (oper == "oper") {
         rpn_eval(val2);
-        if (rpn_err != "") { printf("rpn_err4= %s, oper= %s, val= %s\n", rpn_err, oper, val2) > "/dev/stderr"; }
+        if (rpn_err != "") { printf("rpn_err4= %s, oper= %s, val= %s\n", rpn_err, oper, val2) > "/dev/stderr"; return; }
         continue;
       }
    }
