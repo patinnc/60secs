@@ -531,6 +531,10 @@ function dt_to_epoch(offset) {
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
    got_rpn_eqn[kmx, ++kkmx, "val"]="/";
    got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+   #got_rpn_eqn[kmx, ++kkmx, "val"]=num_sockets;
+   #got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+   #got_rpn_eqn[kmx, ++kkmx, "val"]="/";
+   #got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
    got_rpn_eqn[kmx,      1,"max"]=kkmx;
    lkfor[kmx,1]=L3_cha_misses_out_str;
    lkfor[kmx,2]=L3_cha_misses_str;
@@ -540,13 +544,13 @@ function dt_to_epoch(offset) {
    kkmx = 0;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
    got_lkfor[kmx,2]=3; # num of fields to look for
-   #got_lkfor[kmx,3]=1.0e-9 * num_sockets;
+   got_lkfor[kmx,3]=inv_num_sockets;
    got_lkfor[kmx,3]=1.0;
    got_lkfor[kmx,4]="bc_eqn"; # operation x/y/z
    got_lkfor[kmx,5]=1; # instances
    got_lkfor[kmx,6]="";
    #got_lkfor[kmx,6]="div_by_interval"; # 
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" ( "
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" ( " num_sockets " * "
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
    got_rpn_eqn[kmx, ++kkmx, "val"]=L3_cha_misses_out_str;
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
@@ -564,15 +568,11 @@ function dt_to_epoch(offset) {
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
    got_rpn_eqn[kmx, ++kkmx, "val"]=" ) "
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" / ( "
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" / "
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
    got_rpn_eqn[kmx, ++kkmx, "val"]="interval";
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_interval";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" * "
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=num_sockets;
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" ) )";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" )";
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
    got_rpn_eqn[kmx,      1,"max"]=kkmx;
    lkfor[kmx,1]=L3_cha_misses_out_str;
@@ -1673,6 +1673,12 @@ function dt_to_epoch(offset) {
          rpn_err = "";
          rpn_sp = 0;
          val = rpn_rtn(val, k, got_rpn_eqn, col_hdr_mx, col_hdr, rw_data);
+         if (rpn_err != "") {
+           printf("got rpn_rtn err: %s\n", rpn_err) > "/dev/stderr";
+           printf("got err for %s k= %s, numer= %f, lkup[%d,2]= %s, lkup[k,1]= %s evt_inst[lkup[k,1]]= %s, use num_cpus= %s\n",
+            nwfor[k,1,"hdr"], k, numer[k], k, lkup[k,2], lkup[k,1], evt_inst[lkup[k,1]], num_cpus) > "/dev/stderr";
+           exit(1);
+         }
        }
        if (got_lkfor[k,4] == "bc_eqn" && got_lkfor[k,1] == got_lkfor[k,2]) {
          val =  0.0;
