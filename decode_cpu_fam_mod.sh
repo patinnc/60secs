@@ -4,7 +4,12 @@ INF=/proc/cpuinfo
 if [ "$1" != "" ]; then
   INF=$1
 fi
-LANG=/usr/lib/locale/en_US
+export LANGUAGE=en_US.UTF-8
+export LC_ALL=en_US.UTF-8
+export LANG=en_US.UTF-8
+export LC_CTYPE=en_US.UTF-8
+export LC_ALL=C
+
 
 SCR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 AWK_BIN=awk
