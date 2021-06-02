@@ -2120,10 +2120,16 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
           }
         }
       }
-      v = 100.0* tm_attributable_to_cntr_mutt/tm_attributable_to_cntr;
+      v = 0.0;
+      if (tm_attributable_to_cntr > 0) {
+        v = 100.0* tm_attributable_to_cntr_mutt/tm_attributable_to_cntr;
+      }
       printf("total cgrp cpu_time attributable to muttley calls = %.3f%% or %.3f of %.3f, tot time not attributable to muttley calls= %.3f%%, gsum= %.3f\n",
          v , tm_attributable_to_cntr_mutt, tm_attributable_to_cntr, 100.0 - v, gsum);
-      v = 100.0* calls_attributable_to_cntr_mutt/nmutt_calls_tot;
+      v = 0.0;
+      if (nmutt_calls_tot > 0) {
+        v = 100.0* calls_attributable_to_cntr_mutt/nmutt_calls_tot;
+      }
       printf("total %%mutt_calls attributable to cgrs= %.3f%% or %.3f of %.3f, calls not attributable to cgrps= %.3f%%\n",
         v, calls_attributable_to_cntr_mutt, nmutt_calls_tot, 100.0 - v);
     }
