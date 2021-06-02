@@ -1229,7 +1229,7 @@ trows++; printf("\t\n") > NFL;
 #12:01:02 AM    0   10.10    4.04    2.02    0.00    0.00    0.00    0.00    0.00    0.00   83.84
 #12:01:02 AM    1    1.03    6.19    2.06    0.00    0.00    0.00    0.00    0.00    0.00   90.72
 
-    awk -v script="$0.$LINENO.mpstat.awk" -v options="$OPTIONS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" '
+    awk -v script="$0.$LINENO.mpstat.awk" -v sum_file="$SUM_FILE" -v options="$OPTIONS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" '
      BEGIN{
         beg=1;
         grp_mx=0;
@@ -1308,16 +1308,18 @@ trows++; printf("\t\n") > NFL;
         if (beg == 1 && ($2 == "AM" || $2 == "PM")) {
            epoch = dt_to_epoch($1, $2);
            dt_fmt_has_am_pm = 1;
+           hdr_col_off = 3;
            tm_beg = epoch;
         }
         if (beg == 1 && $2 == "CPU") {
            epoch = dt_to_epoch($1, "AM");
            dt_fmt_has_am_pm = 0;
+           hdr_col_off = 2;
            tm_beg = epoch;
         }
         if (beg == 0) { next; }
         beg = 0;
-        for (i=3; i <= NF; i++) {
+        for (i=hdr_col_off; i <= NF; i++) {
          hdrs[++hdr_mx]=$i;
         }
         next;
@@ -1367,7 +1369,93 @@ trows++; printf("This command prints CPU time breakdowns per CPU, which can be u
 trows++; printf("single hot CPU can be evidence of a single-threaded application.\n") > NFL;
 trows++; printf("\n") > NFL;
 
-	for (g=1; g <= grp_mx; g++) {
+          #row++;
+          #printf("title\tmpstat user %%cpu top-like\tsheet\tmpstat\ttype\tscatter_straight\n", grp_nm[g]) > NFL;
+          #row++;
+          #printf("hdrs\t%d\t%d\t%d\t%d\t1\n", trows+row+1, 2, -1, 2) > NFL;
+          row++;
+          printf("title\tmpstat user %%cpu top-like\tsheet\tmpstat\ttype\tline_stacked\n") > NFL;
+          row++;
+          printf("hdrs\t%d\t%d\t%d\t%d\t1\n", trows+row+1, 2, -1, grp_mx) > NFL;
+          col_i = -1;
+          col_u = -1;
+          bckts_mx = 16;
+
+          bckts = (grp_mx-1)/bckts_mx;
+          if (((grp_mx-1) % bckts_mx) != 0) {
+            printf("%s. ________+++++++++ dude, grp_mx-1= %d is not evenly divisible by %d, remainder= %d\n", script, grp_mx-1, bckts_mx, ((grp_mx-1) % bckts_mx)) > "/dev/stderr";
+            exit 1
+          }
+          for (i=1; i <= bckts_mx; i++) { bckt_arr[i] = 0;}
+
+          for (i=1; i <= hdr_mx; i++) {
+            if (hdrs[i] == "%usr") { col_u = i; }
+            if (hdrs[i] == "%idle") { col_i = i; }
+          }
+        #for (g=1; g <= grp_mx; g++) {
+        #  if (got_skip_mpstat_percpu_charts > 0 && grp_nm[g] != "all") {
+        #     continue;
+        #  }
+          tab="";
+          printf("TS\tts_rel\t") > NFL;
+          for (i=1; i <= grp_mx; i++) {
+            n = grp_nm[i];
+            if (n == "all") { continue;}
+            printf("%s%s", tab, grp_nm[i]) > NFL;
+            #printf("%s%s", tab, "%user cpu") > NFL;
+            tab="\t";
+          }
+          row++;
+          printf("\n") > NFL;
+          for (r=1; r <= grp_row[1]; r++) {
+            tab="";
+            printf("%.3f\t%.4f\t", tm_rw[r], tm_rw[r]-ts_beg) > NFL;
+            v = 0.0;
+            tm_dff = (r > 1 ? tm_rw[r] - tm_rw[r-1] : tm_rw[r] - ts_beg);
+            for (c=1; c <= grp_mx; c++) {
+              n = grp_nm[c];
+              if (n == "all") { continue;}
+              v = grp_list[c,r,col_u];
+              bckt = int(n/bckts) + 1;
+              bckt_arr[bckt] += tm_dff * v/100.0;
+              #bckt_arr[bckt] += v;
+              printf("%s%.3f", tab, v) > NFL;
+              tab="\t";
+            }
+            row++;
+            printf("\n") > NFL;
+          }
+          row++;
+          printf("\n") > NFL;
+        #}
+        row++;
+        printf("\n") > NFL;
+
+          tot_tm_dff = tm_rw[grp_row[1]] - ts_beg;
+          row++;
+          printf("title\tmpstat %% cpus_in_buckets_used histogram, bucktet size= %d cpus\tsheet\tmpstat\ttype\tcolumn\n", bckts) > NFL;
+          row++;
+          printf("hdrs\t%d\t%d\t%d\t%d\t-1\n", trows+row+1, 0, trows+row+2, 15) > NFL;
+          tab="";
+          for (i=1; i <= bckts_mx; i++) {
+            j = (i-1)*bckts;
+            k = i*bckts -1;
+            printf("%s%d-%d", tab, j, k) > NFL;
+            tab="\t";
+          }
+          row++;
+          printf("\n") > NFL;
+          tab="";
+          for (i=1; i <= bckts_mx; i++) {
+            printf("%s%.3f", tab, 100.0*bckt_arr[i]/(bckts*tot_tm_dff)) > NFL;
+            tab="\t";
+          }
+          row++;
+          printf("\n") > NFL;
+          row++;
+          printf("\n") > NFL;
+
+        for (g=1; g <= grp_mx; g++) {
           if (got_skip_mpstat_percpu_charts > 0 && grp_nm[g] != "all") {
              continue;
           }
@@ -1377,7 +1465,14 @@ trows++; printf("\n") > NFL;
           printf("hdrs\t%d\t%d\t%d\t%d\t1\n", trows+row+1, 3, trows+1+row+grp_row[g], hdr_mx+1) > NFL;
           tab="";
           printf("TS\tts_rel\t") > NFL;
+          col_i = -1;
+          col_u = -1;
+          sum_i = 0; #idle
+          sum_u = 0; #user
+          sum_n = 0;
           for (i=1; i <= hdr_mx; i++) {
+            if (hdrs[i] == "%usr") { col_u = i; }
+            if (hdrs[i] == "%idle") { col_i = i; }
             printf("%s%s", tab, hdrs[i]) > NFL;
             tab="\t";
           }
@@ -1387,6 +1482,8 @@ trows++; printf("\n") > NFL;
             tab="";
             printf("%.3f\t%.4f\t", tm_rw[r], tm_rw[r]-ts_beg) > NFL;
             for (c=1; c <= hdr_mx; c++) {
+              if (c == col_i) { sum_n++; sum_i += grp_list[g,r,c]; }
+              if (c == col_u) {          sum_u += grp_list[g,r,c]; }
               printf("%s%s", tab, grp_list[g,r,c]) > NFL;
               tab="\t";
             }
@@ -1395,8 +1492,17 @@ trows++; printf("\n") > NFL;
           }
           row++;
           printf("\n") > NFL;
+          if (sum_file != "") {
+            v = sum_u/sum_n;
+            printf("mpstat\tmpstat\t%s\tuser %%cpu %s\n", v, grp_nm[g]) >> sum_file;
+            v = sum_i/sum_n;
+            printf("mpstat\tmpstat\t%s\tidle %%cpu %s\n", v, grp_nm[g]) >> sum_file;
+          }
         }
-       close(NFL);
+        close(NFL);
+        if (sum_file != "") {
+          close(sum_file);
+        }
      }
    ' $i
    ck_last_rc $? $LINENO
