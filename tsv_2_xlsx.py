@@ -1219,11 +1219,17 @@ for bmi in range(base_mx+1):
                         ch_top_at_row = ch_sh_arr[ch_sh_row][0]
              if worksheet_charts != None:
                 worksheet_charts.write(ch_top_at_row -1, ch_left_at_col+1, title);
-                rc = worksheet_charts.insert_chart(ch_top_at_row, ch_left_at_col, chart1, ch_opt)
+                if num_series == 0:
+                   print("error: got num_series = 0 for chart1 title= %s file= %s" % (title, x), file=sys.stderr)
+                else:
+                   rc = worksheet_charts.insert_chart(ch_top_at_row, ch_left_at_col, chart1, ch_opt)
                 if options_all_charts_one_row == True:
                    all_charts_one_row[fo2][2] += 1
              else:
-                rc = worksheet.insert_chart(ch_top_at_row, ch_left_at_col, chart1, ch_opt)
+                if num_series == 0:
+                   print("error: got num_series = 0 for chart2 title= %s file= %s" % (title, x), file=sys.stderr)
+                else:
+                   rc = worksheet.insert_chart(ch_top_at_row, ch_left_at_col, chart1, ch_opt)
              if rc == -1:
                 print("insert chart failed for sheet= %s, chart= %s, row_beg= %d hcol_end= %d\n" % (sheet_nm, title, hrow_beg, hcol_end), file=sys.stderr)
              ch_array.append([sheet_nm, ch_top_at_row, ch_left_at_col])
