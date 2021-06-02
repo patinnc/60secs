@@ -418,6 +418,11 @@ function dt_to_epoch(offset) {
    kmx = 0;
    def_inst = num_cpus;
 
+   inv_num_sockets = 0;
+   if (num_sockets != "" && num_sockets > 0) {
+     inv_num_sockets = 1.0/num_sockets;
+   }
+
    if (amd_cpu == 0) {
    kmx++;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
@@ -431,10 +436,33 @@ function dt_to_epoch(offset) {
    nwfor[kmx,1,"hdr"]="%not_halted";
    nwfor[kmx,1,"alias"]="metric_CPU utilization %";
 
-   inv_num_sockets = 0;
-   if (num_sockets != "" && num_sockets > 0) {
-     inv_num_sockets = 1.0/num_sockets;
-   }
+   kmx++;
+   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+   got_lkfor[kmx,2]=2; # num of fields to look for
+   got_lkfor[kmx,3]=1.0; # a factor
+   got_lkfor[kmx,4]="bc_eqn"; # operation x/y/z
+   got_lkfor[kmx,5]=1; # instances
+   got_lkfor[kmx,6]=""; # instances
+   kkmx = 0;
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" 100.0 * ( "
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=cpu_cycles_str;
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" - ( 0.5 * "
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="cpu_clk_unhalted.thread_any";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" ) ) / ( 0.5 * "
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="cpu_clk_unhalted.thread_any";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" ) "
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+   got_rpn_eqn[kmx,      1,"max"]=kkmx;
+   lkfor[kmx,1]=cpu_cycles_str;
+   lkfor[kmx,2]="cpu_clk_unhalted.thread_any"; 
+   nwfor[kmx,1,"hdr"]="%both_HT_threads_active";
+
 
    kmx++;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
@@ -582,6 +610,30 @@ function dt_to_epoch(offset) {
    printf("%s _____ L3_cha_misses_out_str= %s L3_cha_misses_str= %s L3_cha_clockticks_str= %s inv_num_sockets= %f\n",
      script, L3_cha_misses_out_str, L3_cha_misses_str, L3_cha_clockticks_str, inv_num_sockets) > "/dev/stderr";
 
+
+   kmx++;
+   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+   got_lkfor[kmx,2]=2; # num of fields to look for
+   got_lkfor[kmx,3]=1.0;
+   got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
+   got_lkfor[kmx,5]=1; # instances
+   got_lkfor[kmx,6]=""; # 
+   #got_lkfor[kmx,6]="div_by_interval"; # 
+   kkmx = 0;
+   got_rpn_eqn[kmx, ++kkmx, "val"]=100.0;
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=L3_cha_misses_str;
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="*"; # 100 * mperf
+   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=L3_cha_access_str;
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="/";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+   got_rpn_eqn[kmx,      1,"max"]=kkmx;
+   lkfor[kmx,1]=L3_cha_misses_str;
+   lkfor[kmx,2]=L3_cha_access_str;
+   nwfor[kmx,1,"hdr"]="%LLC misses";
 
    kmx++;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
@@ -1441,10 +1493,13 @@ function dt_to_epoch(offset) {
         if (index(nwfor[k,1,"hdr"], "GB/s") > 0) {
           bw_cols[++bw_cols_mx] = cols;
         }
-        if (index(nwfor[k,1,"hdr"], "not_halted") > 0 || index(nwfor[k,1,"hdr"], "%LLC misses") > 0) {
+        if (index(nwfor[k,1,"hdr"], "not_halted") > 0 || index(nwfor[k,1,"hdr"], "%LLC misses") > 0 ||  index(nwfor[k,1,"hdr"], "%both_HT_threads_active") > 0) {
           unhalted_cols[++unhalted_cols_mx] = cols;
           if (index(nwfor[k,1,"hdr"], "%LLC misses") > 0) {
             got_LLC_pct_misses = k;
+          }
+          if (index(nwfor[k,1,"hdr"], "%both_HT_threads_active") > 0) {
+            got_both_HT_threads_active = k;
           }
         }
         if (nwfor[k,1,"hdr"] == "hw prefetch remote bw (GB/s)") {
@@ -1801,11 +1856,15 @@ function dt_to_epoch(offset) {
      printf("\n") > out_file;
    }
    if (unhalted_cols_mx > 0) {
-     xtra_str = "";
+     xtra_str  = "";
+     xtra_str2 = "";
      if (got_LLC_pct_misses > -1) {
        xtra_str = ", %LLC misses"
      }
-     printf("\ntitle\t%s %%cpus not halted (running)%s\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, xtra_str, pfx, sheet) > out_file;
+     if (got_both_HT_threads_active != "") {
+         xtra_str2 = ", %both_HT_threads_active";
+     }
+     printf("\ntitle\t%s %%cpus not halted (running)%s%s\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, xtra_str, xtra_str2, pfx, sheet) > out_file;
      printf("hdrs\t%d\t%d\t%d\t%d\t%d", rows+1, bcol, -1, evt_idx+extra_cols+4, ts_col) > out_file;
      for (i=1; i <= unhalted_cols_mx; i++) {
        printf("\t%d\t%d", unhalted_cols[i], unhalted_cols[i]) > out_file;
