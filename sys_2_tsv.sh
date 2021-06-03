@@ -1265,7 +1265,7 @@ trows++; printf("\t\n") > NFL;
          if (epoch_init == 0) {
              epoch_init = epoch;
          }
-         epoch = ts_beg + (epoch - epoch_init + 1); # the plus 1 assumes a 1 second interval.
+         epoch = ts_beg + (epoch - epoch_init);
          if ((epoch-ts_beg) < 0.0) {
             printf("%s epoch= %f, hhmmss= %s, dt_str= %s ts_beg= %f. epoch-ts_beg= %f ampm= %s bye\n", script, epoch, hhmmss, dt_str, ts_beg, epoch-ts_beg, ampm) > "/dev/stderr";
             exit;
@@ -1299,7 +1299,7 @@ trows++; printf("\t\n") > NFL;
        next;
      }
      {
-	FNM=ARGV[ARGIND];
+        FNM=ARGV[ARGIND];
         NFL=FNM ".tsv";
         NFLA=FNM ".all.tsv";
         if (NF==0) { next; }
@@ -1310,9 +1310,9 @@ trows++; printf("\t\n") > NFL;
            dt_fmt_has_am_pm = 1;
            hdr_col_off = 3;
            tm_beg = epoch;
-        }
-        if (beg == 1 && $2 == "CPU") {
+        } else if (beg == 1 && $2 == "CPU") {
            epoch = dt_to_epoch($1, "AM");
+           printf("%s beg_tm= %d, epoch= %d\n", beg, epoch, ts_beg) > "/dev/stderr";
            dt_fmt_has_am_pm = 0;
            hdr_col_off = 2;
            tm_beg = epoch;
