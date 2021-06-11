@@ -689,6 +689,8 @@ END{
   trows_bot = trows;
   trows++;
   printf("\n") > NFL;
+  trows++;
+  printf("\n") > NFL;
   if (mb_mx > 0) {
     trows++;
     printf("title\t%sBandwidths\tsheet\titp_metric\ttype\tscatter_straight\n", title_pfx) > NFL;
@@ -697,6 +699,8 @@ END{
     for (j=1; j <= mb_mx; j++) {
         printf("\t%d\t%d", mb_arr[j], mb_arr[j]) > NFL;
     }
+    trows++;
+    printf("\n") > NFL;
     trows++;
     printf("\n") > NFL;
   }
@@ -708,6 +712,8 @@ END{
     for (j=1; j <= tmam_mx_L1; j++) {
         printf("\t%d\t%d", tmam_arr_L1[j], tmam_arr_L1[j]) > NFL;
     }
+    trows++;
+    printf("\n") > NFL;
     trows++;
     printf("\n") > NFL;
   }
@@ -723,6 +729,8 @@ END{
     trows++;
     printf("\n") > NFL;
     }
+    trows++;
+    printf("\n") > NFL;
   }
   if (tmam_mx > 0) {
     trows++;
@@ -732,6 +740,8 @@ END{
     for (j=1; j <= tmam_mx; j++) {
         printf("\t%d\t%d", tmam_arr[j], tmam_arr[j]) > NFL;
     }
+    trows++;
+    printf("\n") > NFL;
     trows++;
     printf("\n") > NFL;
   }
@@ -745,6 +755,8 @@ END{
     }
     trows++;
     printf("\n") > NFL;
+    trows++;
+    printf("\n") > NFL;
   }
   if (mpi_mx > 0) {
     trows++;
@@ -756,6 +768,8 @@ END{
     }
     trows++;
     printf("\n") > NFL;
+    trows++;
+    printf("\n") > NFL;
   }
   if (lat_mx > 0) {
     trows++;
@@ -765,6 +779,8 @@ END{
     for (j=1; j <= lat_mx; j++) {
         printf("\t%d\t%d", lat_arr[j], lat_arr[j]) > NFL;
     }
+    trows++;
+    printf("\n") > NFL;
     trows++;
     printf("\n") > NFL;
   }
@@ -793,6 +809,8 @@ END{
     }
     trows++;
     printf("\n") > NFL;
+    trows++;
+    printf("\n") > NFL;
   }
   if (pwr_mx > 0) {
     trows++;
@@ -804,6 +822,8 @@ END{
     }
     trows++;
     printf("\n") > NFL;
+    trows++;
+    printf("\n") > NFL;
   }
   str = eqn_arr[ got_GIPS,      1, "hdr"];
   if (hn_list[str] != "") {
@@ -813,6 +833,8 @@ END{
     trows++;
     printf("hdrs\t%d\t%d\t%d\t%d\t1", trows_top, 3, -1, 3) > NFL;
     printf("\t%d\t%d", hn_list[str], hn_list[str]) > NFL;
+    trows++;
+    printf("\n") > NFL;
     trows++;
     printf("\n") > NFL;
   }
