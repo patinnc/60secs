@@ -2712,7 +2712,15 @@ row += trows;
         v = substr($5, 2, length($5)-2);
         tm_end = v;
       }
+    /Workload elapsed time .copy .* workload .*. = .* seconds/ {
+      pos = index($7, ")");
+      subphs = $7; if (pos > 1) { subphs = substr(subphs, 1, pos); }
+      subphs += 0;
+      subphs_arr[subphs] = $9+0;
+      subphs_mx = subphs;
+    }
       /^ Success .* base refrate ratio=/ {
+        #printf("got cpu2017.001.log line= %s\n", $0) > "/dev/stderr";
         gsub(",", "", $0);
         bm_nm = $2;
         for (i=3; i <= NF; i++) {
@@ -2721,7 +2729,7 @@ row += trows;
           if (index($i, "runtime=") == 1) { run_tm = arr[2]; }
           if (index($i, "copies=") == 1)  { copies = arr[2]; }
         }
-        if (bm_nm != "" && (copies+0) > 1) {
+        if (bm_nm != "" && (copies+0) >= 1) {
           if (!(bm_nm in bm_list)){
             bm_list[bm_nm] = ++bm_mx;
             bm_lkup[bm_mx] = bm_nm;
@@ -2737,6 +2745,10 @@ row += trows;
           b_arr[b_mx,"copies"] = copies;
           b_arr[b_mx,"beg"] = tm_beg;
           b_arr[b_mx,"end"] = tm_end;
+          b_arr[b_mx, "subphs_mx"] = subphs_mx;
+          for (i=1; i <= subphs_mx; i++) {
+            b_arr[b_mx, "subphs", i] = subphs_arr[i];
+          }
         }
       }
       END{
@@ -2755,7 +2767,22 @@ row += trows;
           printf("specint\tspecint\t%s\t\"SI %s %s %s\"\n", copies, nm, "copies", bm_o) >> sum_file;
           printf("specint\tspecint\t%s\t\"SI %s %s %s\"\n", tm_beg, nm, "beg_ts", bm_o) >> sum_file;
           printf("specint\tspecint\t%s\t\"SI %s %s %s\"\n", tm_end, nm, "end_ts", bm_o) >> sum_file;
-          printf("%s_%s %.3f %.3f %.3f\n", nm, bm_o, tm_beg, tm_end, tm_end-tm_beg);
+          do_perlbench_subphase = 0;
+          if (do_perlbench_subphase == 1 && index(nm, "perlbench") > 0) {
+            tm_off = 0.0;
+            sfx[1] = "aaaa";
+            sfx[2] = "bbbb";
+            sfx[3] = "cccc";
+            ev = b_arr[i,"subphs_mx"];
+            #printf("%s_%s %.3f %.3f %.3f\n", "perlb", ev, tm_beg, tm_beg, 0.0);
+            for (j=1; j <= ev; j++) {
+              v = b_arr[i,"subphs", j];
+              printf("%s_%s %.3f %.3f %.3f\n", "500.perl" sfx[j] "" j, j, tm_beg, tm_beg+v, v);
+              tm_beg += v;
+            }
+          } else {
+            printf("%s_%s %.3f %.3f %.3f\n", nm, bm_o, tm_beg, tm_end, tm_end-tm_beg);
+          }
         }
       }
     ' $i`
@@ -2766,6 +2793,8 @@ row += trows;
        #echo  -e "$RESP" > phase_cpu2017.txt
        PHASE_FILE=phase_cpu2017.txt
     fi
+    #echo "$0.$LINENO bye"
+    #exit 1
   fi
   if [[ $i =~ phase_cpu2017.txt ]]; then
     echo "$0.$LINENO: got CPU2017.001.intrate.txt $i at $LINENO" > /dev/stderr
@@ -2774,11 +2803,14 @@ row += trows;
  #subtest beg_epoch end_epoch
       BEGIN{
         subtst=0;
+        tm_beg = ts_beg;
       }
       {
         if (NF >= 3) {
-          printf("specint\tspecint\t%s\t%s beg secs\n", $2-ts_beg, $1) >> sum_file;
-          printf("specint\tspecint\t%s\t%s end secs\n", $3-ts_beg, $1) >> sum_file;
+          if ($0 == "" || substr($1, 1, 1) == "#") { next; }
+          if (tm_beg == "") { tm_beg = $2+0; }
+          printf("specint\tspecint\t%s\t%s beg secs\n", $2-tm_beg, $1) >> sum_file;
+          printf("specint\tspecint\t%s\t%s end secs\n", $3-tm_beg, $1) >> sum_file;
           subtst++;
           sv[subtst,"nm"] = $1;
           sv[subtst,"beg"] = $2;
@@ -2811,7 +2843,7 @@ row += trows;
            if (k == 1 || k == 4) { continue; }
            if (k == 1) { tm = tm - 0.01;}
            if (k == 4) { tm = tm + 0.01;}
-           printf("%s\t%.3f", tm0, tm-ts_beg) > ofile;
+           printf("%s\t%.3f", tm0, tm-tm_beg) > ofile;
            for (i=1; i <= subtst; i++) {
              if (k == 1 || k == 4 || i != j) {
                printf("\t%s", 0) > ofile;
@@ -3518,6 +3550,14 @@ if [ "${#CPU2017LOG[@]}" -gt 0 -a "$PHASE_FILE" == "" ]; then
     BEGIN{
         mx    = 0;
         bm_mx = 0;
+        subphs_mx = 0;
+    }
+    #Workload elapsed time (copy 0 workload 1) = 67.605964 seconds
+    /Workload elapsed time .copy .* workload .*. = .* seconds/ {
+      pos = index($7, ")");
+      subphs = $7; if (pos > 1) { subphs = substr(subphs, 1, pos); }
+      sub_arr[subphs] = $9+0;
+      subphs_mx = subphs;
     }
     #/Copy .* of .* (base refrate) run .* finished at .*.  Total elapsed time:/{
 # Run 520.omnetpp_r base refrate ratio=22.93, runtime=915.660271, copies=16, threads=1, 
@@ -3550,6 +3590,7 @@ if [ "${#CPU2017LOG[@]}" -gt 0 -a "$PHASE_FILE" == "" ]; then
              }
            }
         }
+        if (bm == "500.perlbench_r_1") { printf("bm= %s\n", bm)
         if (!(bm in bm_list)) {
           bm_list[bm] = ++bm_mx;
           bm_lkup[bm_mx] = bm;
