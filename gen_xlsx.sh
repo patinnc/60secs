@@ -1488,7 +1488,7 @@ function arr_in_compare_rev(i1, v1, i2, v2,    l, r)
         arr_in[nn] = sumn;
        }
        asorti(idx, res_i, "arr_in_compare_rev");
-       printf("cg_ lst[%d,"mx"] = %d\n", k, lst[k,"mx"]);
+       #printf("cg_ lst[%d,"mx"] = %d\n", k, lst[k,"mx"]);
        for(i=1; i <= lst[k,"mx"]; i++) {
          lst_srt[k,i] = res_i[i];
          #printf("k= %d srt[%d]= %d, arr= %f\n", k, i, res_i[i], arr_in[i]);
