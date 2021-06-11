@@ -820,7 +820,7 @@ for bmi in range(base_mx+1):
                             except Exception as e:
                                print(e, file=sys.stderr)
                                print("---- error on += of fn_bs_sum  data[%d][%d] filenm= %s, field= " % (ij, h, x), data[ij][h], "type of new val= ", type(data[ij][h]), "is spc= ",data[ij][j]=='', ", base_val= ", fn_bs_sum[fn_bs_i][ij][use_idx], ", line= ", data[ij], file=sys.stderr)
-                               print("---- type of old val: ", type(fn_bs_sum[fn_bs_i][ij][use_idx]), " val of old val: ", fn_bs_sum[fn_bs_i][ij][use_idx], "is spc= ",fn_bs_sum[fn_bs_i][ij][use_idx]=='',file=sys.stderr)
+                               print("---- type of old val: ", type(fn_bs_sum[fn_bs_i][ij][use_idx]), " val of old val: '", fn_bs_sum[fn_bs_i][ij][use_idx], "', is spc= ",fn_bs_sum[fn_bs_i][ij][use_idx]=='',file=sys.stderr)
                                sys.exit(1)
                       else:
                          fn_bs_sum[fn_bs_i][ij][use_idx] = data[ij][h]
@@ -1217,6 +1217,7 @@ for bmi in range(base_mx+1):
                          #print("err: len(ch_sh_arr[ch_sh_row])= %d, x= %s\n" % (len(ch_sh_arr[ch_sh_row]), x), file=sys.stderr)
                      else:
                         ch_top_at_row = ch_sh_arr[ch_sh_row][0]
+             rc = -1
              if worksheet_charts != None:
                 worksheet_charts.write(ch_top_at_row -1, ch_left_at_col+1, title);
                 if num_series == 0:
