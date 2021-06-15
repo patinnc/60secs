@@ -1188,7 +1188,7 @@ for bmi in range(base_mx+1):
                       if dsc != None and not dsc in all_charts_one_row_hash:
                          all_charts_one_row_max += 1
                          file1 = open(desc,"r")  
-                         txt = file1.readline() 
+                         txt = file1.readline().rstrip('\n')
                          file1.close() 
                          all_charts_one_row_hash[dsc] = {"index": all_charts_one_row_max, "charts":0, "txt":txt}
                       dsc_i = -1
