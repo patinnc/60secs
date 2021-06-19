@@ -1117,8 +1117,8 @@ for bmi in range(base_mx+1):
                   if do_avg == False or do_avg_write == True:
                    use_drow_end = drow_end
                    if ch_type == "column" or ch_type == "column_stacked":
-                     if verbose > 0:
-                        print("ck col chart, sheet_nm= %s, ch_typ= %s, file= %s, drow_beg= %d drow_end= %d hcol_beg= %d, hcol_end= %d, ph_add= %d, h= %d" % (sheet_nm, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end, ph_add, h), chart1, file=sys.stderr)
+                     #if verbose > 0:
+                     #   print("ck col chart, sheet_nm= %s, ch_typ= %s, file= %s, drow_beg= %d drow_end= %d hcol_beg= %d, hcol_end= %d, ph_add= %d, h= %d" % (sheet_nm, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end, ph_add, h), chart1, file=sys.stderr)
                      use_drow_end = drow_end
                    if chart1 != None and ((ch_type == "column" or ch_type == "column_stacked") or drow_end  > (drow_beg+1)):
                     rc = 0;
@@ -1131,8 +1131,14 @@ for bmi in range(base_mx+1):
                     }
                     if use_cats:
                        a_s['categories'] = [wrksh_nm, drow_beg, dcol_cat+ph_add, use_drow_end, dcol_cat+ph_add]
-                    if (mcol_list[hh][1]-mcol_list[hh][0]) > 1:
+                    if (mcol_list[hh][1]-mcol_list[hh][0]) > 1 or num_series > 1:
                        a_s['points'] = [{'fill': {'color': gcolor_lst[use_color]}}]
+                       if ch_type == "column_stacked":
+                         if drow_end-drow_beg > 1:
+                            for clr_i in range(drow_end-drow_beg):
+                              #print("use column_stacked[%d] chart gcolor_list[%d], sheet_nm= %s, ch_typ= %s, file= %s, drow_beg= %d drow_end= %d hcol_beg= %d, hcol_end= %d, ph_add= %d, h= %d" % (clr_i, use_color, sheet_nm, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end, ph_add, h), chart1, file=sys.stderr)
+                              a_s['points'].append({'fill': {'color': gcolor_lst[use_color]}})
+                         #print("use chart gcolor_list[%d], sheet_nm= %s, ch_typ= %s, file= %s, drow_beg= %d drow_end= %d hcol_beg= %d, hcol_end= %d, ph_add= %d, h= %d" % (use_color, sheet_nm, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end, ph_add, h), chart1, file=sys.stderr)
                     a_s['line'] = {'color': gcolor_lst[use_color]}
                     #print("got add_series1, a_s= ", a_s);
                     rc = chart1.add_series(a_s)
