@@ -2,6 +2,7 @@
 
 #arg1 is infra_cputime.txt filename
 VERBOSE=0
+export LC_ALL=C
 
 while getopts "hvf:m:n:o:O:S:" opt; do
   case ${opt} in

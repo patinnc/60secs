@@ -1,5 +1,6 @@
 #!/bin/bash
 
+export LC_ALL=C
 while getopts "hf:t:" opt; do
   case ${opt} in
     f )

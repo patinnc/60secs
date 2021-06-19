@@ -26,6 +26,7 @@
 #   MSR_TURBO_RATIO_LIMIT       0x1ad  Table 2-45
 #   MSR_TURBO_RATIO_LIMIT_CORES 0x1ae  Table 2-45
 
+export LC_ALL=C
 SCR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 GOV_IN=
 FREQ_IN=

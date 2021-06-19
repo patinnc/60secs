@@ -4,6 +4,7 @@
 # arg2 (optional) is specint .log
 # for example:
 # ../perf_stat_scatter.sh B20a_specint_prf/prf_data_specint.txt B20a_specint_prf/20-01-15_130627_specint/result/CPU2017.001.log  > tmp.tsv
+export LC_ALL=C
 SCR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 FILES=
 SPECINT_LOG=

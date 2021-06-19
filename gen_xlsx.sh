@@ -6,6 +6,7 @@ SCR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 echo "SCR_DIR= $SCR_DIR" > /dev/stderr
 
 
+export LC_ALL=C
 declare -a REGEX
 declare -a SKU
 DIR=

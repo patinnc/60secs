@@ -8,6 +8,7 @@
 #
 # excel formula to convert UTC epoch to localtme =(B5/86400)+DATE(1970,1,1)
 #
+export LC_ALL=C
 DIR=
 SHEETS=
 SCR_DIR=`dirname $0`
