@@ -125,7 +125,7 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
     if (qpi_tx != "" ) { unc_upi_bytes = qpi_tx; }
     #if (tor_ins != "") { L3m = tor_ins; }
     #if (tor_occ != "") { L3cyc = tor_occ; }
-    printf("tor_ins = %s, tor_occ= %s, unc_cha_miss= %s, unc_cha_occ= %s, unc_cha_clk= %s\n", tor_ins, tor_occ, unc_cha_miss, unc_cha_occ, unc_cha_clk);
+    #printf("tor_ins = %s, tor_occ= %s, unc_cha_miss= %s, unc_cha_occ= %s, unc_cha_clk= %s\n", tor_ins, tor_occ, unc_cha_miss, unc_cha_occ, unc_cha_clk);
   }
   {
     j = 0;
@@ -200,6 +200,7 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
    n=split($1, arr, ";");
    tm_i = ck_tm(arr[1]);
    evt[UNC,tm_i] += arr[2]+0;
+   #printf("unc_rd_wr %s, v= %s bw= %f\n", arr[4], arr[2], 64.0e-9*evt[UNC,tm_i]) > "/dev/stderr";
    #exit;
       next;
  }
@@ -334,6 +335,7 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
       }
       if (h[j] == "LatUnc(ns)") {
           #v = evt[unc_cha_occ,i]/evt[unc_cha_miss,i]/(sockets*evt[unc_cha_occ,i,"inst"]);
+#"expression" : "(1000000000 * [UNC_CHA_TOR_OCCUPANCY.IA_MISS.0x40433] / [UNC_CHA_TOR_INSERTS.IA_MISS.0x40433]) / ( [UNC_CHA_CLOCKTICKS] / ([const_cha_count] * [const_socket_count]) )"
           v  = 0.0;
           v1 = 0.0;
           v2 = 0.0;
@@ -342,6 +344,7 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
           }
           
           if (sockets > 0) { skt = sockets; } else { skt = 1.0; }
+#v1 = (1.0e-9*evt[unc_cha_clk,i]/tm_dff)/(skt*evt[unc_cha_clk,i,"inst"]);
           if (evt[unc_cha_clk,i,"inst"] > 0) {
             v1 = evt[unc_cha_clk,i]/(evt[unc_cha_clk,i,"ns"]);
           }
@@ -350,27 +353,38 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
           }
           #printf("v= %f v1 = %f, v2= %f, inst= %f, skt= %s\n", v, v1, v2, evt[unc_cha_clk,i,"inst"], skt) > "/dev/stderr";
           v = v2;
+	  #if (evt[unc_cha_clk,i,"inst"] > 0) {
+          #v = (1.0e-9*evt[unc_cha_clk,i]/tm_dff)/evt[unc_cha_clk,i,"inst"];
+          #}
+          #if (v > 0 && evt[unc_cha_miss,i] > 0) {
+          #v = evt[unc_cha_occ,i]/evt[unc_cha_miss,i]/v;
+          #if (sockets > 0) { v /= sockets; }
+          #}
+          #L3lat_cycles = v;
           LatUncNs = v;
       }
       if (h[j] == "LatUncCycls") {
           #v = evt[unc_cha_occ,i]/evt[unc_cha_miss,i]/(sockets*evt[unc_cha_occ,i,"inst"]);
-          if (evt[unc_cha_miss,i] > 0) {
-            v = evt[unc_cha_occ,i]/evt[unc_cha_miss,i];
-            if (sockets > 0) { v /= sockets; }
-          }
+	  if (evt[unc_cha_miss,i] > 0) {
+          v = evt[unc_cha_occ,i]/evt[unc_cha_miss,i];
+          if (sockets > 0) { v /= sockets; }
+          #if (did_sockets_msg != 1) { did_sockets_msg = 1; printf("got sockets= %d\n", sockets) > "/dev/stderr";}
+	  }
+          #v = evt[L3cyc,i]/evt[L3m,i];
           if (LatUncNs > 0.0) {
             v = LatUncNs * tsc_ghz;
           }
           L3lat_cycles = v;
       }
       if (h[j] == "LatUncBW") {
-        if (evt[unc_cha_clk,i,"inst"] > 0) {
+	  if (evt[unc_cha_clk,i,"inst"] > 0) {
           v = (1.0e-9*evt[unc_cha_clk,i]/tm_dff)/evt[unc_cha_clk,i,"inst"];
-        }
-        if (v > 0 && evt[unc_cha_miss,i] > 0) {
+          }
+          if (v > 0 && evt[unc_cha_miss,i] > 0) {
           v = 64.0e-9*evt[unc_cha_miss,i]/tm_dff;
           #if (sockets > 0) { v /= sockets; }
-        }
+          }
+          #L3lat_cycles = v;
       }
       if (h[j] == "Lat(ns)") {
         v = lat_fctr * evt[L3cyc,i]/evt[L3m,i];
