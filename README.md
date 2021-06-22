@@ -1,4 +1,4 @@
-# 60secs Tool (OPPAT)
+# 60secs Tool
 
 # Table of Contents
 - [Introduction](#introduction)
@@ -9,6 +9,8 @@
 ## Introduction
 60secs is based on Brendan Gregg's "Linux Performance Analysis in 60 seconds" article.
 See his [PDF article](http://www.brendangregg.com/Articles/Netflix_Linux_Perf_Analysis_60s.pdf)
+
+[Project page with more examples and sample spreadsheets](https://patinnc.github.io/60secs/)
 
 --------------------------------------------------------------------------------
 ## Data Collection
