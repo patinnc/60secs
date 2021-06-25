@@ -79,14 +79,14 @@ while getopts "hvbcwa:C:d:E:i:p:t:W:x:" opt; do
       ;;
     W )
       WATCH_IN="$OPTARG"
-      echo "WATCH_IN $OPTARG" > /dev/stderr
+      echo "$0.$LINENO WATCH_IN $OPTARG" > /dev/stderr
       ;;
     x )
       EXCLUDE=$OPTARG
       ;;
     p )
       if [ "$OPTARG" != "" -a ! -x $OPTARG ]; then
-        echo "didn't find perf binary. You entered \"-p $OPTARG\""
+        echo "$0.$LINENO didn't find perf binary. You entered \"-p $OPTARG\""
         exit
       fi
       PERF_BIN=$OPTARG
@@ -147,18 +147,18 @@ while getopts "hvbcwa:C:d:E:i:p:t:W:x:" opt; do
       echo "      This is optional. Can be itimer or lock. Used for specifying the event for the flamegraph sampling of java"
       echo "      default is itimer"
       echo "   -p full_path_to_perf_binary  the perf binary might not be in the path so use this option to specify it"
-      echo "      default is 'perf'"
+      echo "      default is '$SCR_DIR/perf'"
       echo "   -W cmd  cmd to execute every -i seconds. Enclose cmd in dbl quotes"
       echo "      default is to not do a watch cmd"
       echo "   -v verbose mode. display each file after creating it."
       exit
       ;;
     : )
-      echo "Invalid option: $OPTARG requires an argument" 1>&2
+      echo "$0.$LINENO Invalid option: $OPTARG requires an argument" 1>&2
       exit
       ;;
     \? )
-      echo "Invalid option: $OPTARG" 1>&2
+      echo "$0.$LINENO Invalid option: $OPTARG" 1>&2
       exit
       ;;
   esac
@@ -599,59 +599,66 @@ for TSKj in `seq $TB $TE`; do
     if [ -e $FL ]; then
       rm $FL
     fi
-    ms=$(($INTRVL*1000))
-    EVT=
-    echo "do perf stat for $WAIT secs"
-    if [ "$CPU_DECODE" == "Broadwell" -o "$CPU_DECODE" == "Haswell" ]; then
-    IMC0_RDWR="uncore_imc_0/name='unc0_read_write',umask=0x0f,event=0x04/"
-    IMC1_RDWR="uncore_imc_1/name='unc1_read_write',umask=0x0f,event=0x04/"
-    IMC2_RDWR="uncore_imc_2/name='unc2_read_write',umask=0x0f,event=0x04/"
-    IMC3_RDWR="uncore_imc_3/name='unc3_read_write',umask=0x0f,event=0x04/"
-    IMC4_RDWR="uncore_imc_4/name='unc4_read_write',umask=0x0f,event=0x04/"
-    EVT=",$IMC0_RDWR,$IMC1_RDWR,$IMC2_RDWR,$IMC3_RDWR,$IMC4_RDWR,qpi_data_bandwidth_tx,qpi_ctl_bandwidth_tx"
-    fi
-    if [ "$CPU_DECODE" == "Skylake" ]; then
-    IMC0_RDWR="uncore_imc_0/name='unc0_read_write',umask=0x0f,event=0x04/"
-    IMC1_RDWR="uncore_imc_1/name='unc1_read_write',umask=0x0f,event=0x04/"
-    IMC2_RDWR="uncore_imc_2/name='unc2_read_write',umask=0x0f,event=0x04/"
-    IMC3_RDWR="uncore_imc_3/name='unc3_read_write',umask=0x0f,event=0x04/"
-    IMC4_RDWR="uncore_imc_4/name='unc4_read_write',umask=0x0f,event=0x04/"
-    #EVT=$IMC0_RDWR,$IMC1_RDWR,$IMC2_RDWR,$IMC3_RDWR,$IMC4_RDWR
-    EVT=",$IMC0_RDWR,$IMC1_RDWR,$IMC2_RDWR,$IMC3_RDWR,$IMC4_RDWR,qpi_data_bandwidth_tx,qpi_ctl_bandwidth_tx"
-    fi
-    if [ "$CPU_DECODE" == "Cascade Lake" ]; then
-    IMC0_RDWR="uncore_imc_0/name='unc0_read_write',umask=0x0f,event=0x04/"
-    IMC1_RDWR="uncore_imc_1/name='unc1_read_write',umask=0x0f,event=0x04/"
-    IMC2_RDWR="uncore_imc_2/name='unc2_read_write',umask=0x0f,event=0x04/"
-    IMC3_RDWR="uncore_imc_3/name='unc3_read_write',umask=0x0f,event=0x04/"
-    IMC4_RDWR=
-    if [ -e /sys/devices/uncore_imc_4 ]; then
-      IMC4_RDWR="uncore_imc_4/name='unc4_read_write',umask=0x0f,event=0x04/"
-    fi
-    IMC5_RDWR=
-    if [ -e /sys/devices/uncore_imc_5 ]; then
-      IMC5_RDWR=",uncore_imc_5/name='unc5_read_write',umask=0x0f,event=0x04/"
-    fi
-    UIP0=
-    UIP1=
-    UIP2=
-    if [ -e /sys/devices/uncore_upi_0 ]; then
-     UPI0=",uncore_upi_0/event=0x02,umask=0x0f,name='qpi_data_bandwidth_tx0'/"
-    fi
-    if [ -e /sys/devices/uncore_upi_1 ]; then
-     UPI1=",uncore_upi_1/event=0x02,umask=0x0f,name='qpi_data_bandwidth_tx1'/"
-    fi
-    if [ -e /sys/devices/uncore_upi_2 ]; then
-     UPI2=",uncore_upi_2/event=0x02,umask=0x0f,name='qpi_data_bandwidth_tx2'/"
-    fi
-    EVT=",$IMC0_RDWR,$IMC1_RDWR,$IMC2_RDWR,$IMC3_RDWR,$IMC4_RDWR${IMC5_RDWR}${UPI0}${UPI1}${UPI2}"
-    fi
-    EVT="instructions,cycles,ref-cycles,LLC-load-misses${EVT}"
-    echo "do: $PERF_BIN stat -x \";\"  --per-socket -a -I $ms -o $FL -e $EVT" > /dev/stderr
-    echo "do: $PERF_BIN stat -x \";\"  --per-socket -a -I $ms -o $FL -e $EVT" 
-    $PERF_BIN stat -x ";"  --per-socket -a -I $ms -o $FL -e $EVT sleep $WAIT &
+    if [ 1 == 1 ]; then
+      CURDIR=`pwd`
+      nohup $SCR_DIR/do_perf3.sh -p $CURDIR -I $INTRVL -b $PERF_BIN -w $WAIT &> do_perf3.log &
     TSK_PID[$TSKj]=$!
     PRF_PID=$!
+    else
+      ms=$(($INTRVL*1000))
+      EVT=
+      echo "do perf stat for $WAIT secs"
+      if [ "$CPU_DECODE" == "Broadwell" -o "$CPU_DECODE" == "Haswell" ]; then
+      IMC0_RDWR="uncore_imc_0/name='unc0_read_write',umask=0x0f,event=0x04/"
+      IMC1_RDWR="uncore_imc_1/name='unc1_read_write',umask=0x0f,event=0x04/"
+      IMC2_RDWR="uncore_imc_2/name='unc2_read_write',umask=0x0f,event=0x04/"
+      IMC3_RDWR="uncore_imc_3/name='unc3_read_write',umask=0x0f,event=0x04/"
+      IMC4_RDWR="uncore_imc_4/name='unc4_read_write',umask=0x0f,event=0x04/"
+      EVT=",$IMC0_RDWR,$IMC1_RDWR,$IMC2_RDWR,$IMC3_RDWR,$IMC4_RDWR,qpi_data_bandwidth_tx,qpi_ctl_bandwidth_tx"
+      fi
+      if [ "$CPU_DECODE" == "Skylake" ]; then
+      IMC0_RDWR="uncore_imc_0/name='unc0_read_write',umask=0x0f,event=0x04/"
+      IMC1_RDWR="uncore_imc_1/name='unc1_read_write',umask=0x0f,event=0x04/"
+      IMC2_RDWR="uncore_imc_2/name='unc2_read_write',umask=0x0f,event=0x04/"
+      IMC3_RDWR="uncore_imc_3/name='unc3_read_write',umask=0x0f,event=0x04/"
+      IMC4_RDWR="uncore_imc_4/name='unc4_read_write',umask=0x0f,event=0x04/"
+      #EVT=$IMC0_RDWR,$IMC1_RDWR,$IMC2_RDWR,$IMC3_RDWR,$IMC4_RDWR
+      EVT=",$IMC0_RDWR,$IMC1_RDWR,$IMC2_RDWR,$IMC3_RDWR,$IMC4_RDWR,qpi_data_bandwidth_tx,qpi_ctl_bandwidth_tx"
+      fi
+      if [ "$CPU_DECODE" == "Cascade Lake" ]; then
+      IMC0_RDWR="uncore_imc_0/name='unc0_read_write',umask=0x0f,event=0x04/"
+      IMC1_RDWR="uncore_imc_1/name='unc1_read_write',umask=0x0f,event=0x04/"
+      IMC2_RDWR="uncore_imc_2/name='unc2_read_write',umask=0x0f,event=0x04/"
+      IMC3_RDWR="uncore_imc_3/name='unc3_read_write',umask=0x0f,event=0x04/"
+      IMC4_RDWR=
+      if [ -e /sys/devices/uncore_imc_4 ]; then
+        IMC4_RDWR="uncore_imc_4/name='unc4_read_write',umask=0x0f,event=0x04/"
+      fi
+      IMC5_RDWR=
+      if [ -e /sys/devices/uncore_imc_5 ]; then
+        IMC5_RDWR=",uncore_imc_5/name='unc5_read_write',umask=0x0f,event=0x04/"
+      fi
+      UIP0=
+      UIP1=
+      UIP2=
+      if [ -e /sys/devices/uncore_upi_0 ]; then
+       UPI0=",uncore_upi_0/event=0x02,umask=0x0f,name='qpi_data_bandwidth_tx0'/"
+      fi
+      if [ -e /sys/devices/uncore_upi_1 ]; then
+       UPI1=",uncore_upi_1/event=0x02,umask=0x0f,name='qpi_data_bandwidth_tx1'/"
+      fi
+      if [ -e /sys/devices/uncore_upi_2 ]; then
+       UPI2=",uncore_upi_2/event=0x02,umask=0x0f,name='qpi_data_bandwidth_tx2'/"
+      fi
+      EVT=",$IMC0_RDWR,$IMC1_RDWR,$IMC2_RDWR,$IMC3_RDWR,$IMC4_RDWR${IMC5_RDWR}${UPI0}${UPI1}${UPI2}"
+      fi
+      EVT="instructions,cycles,ref-cycles,LLC-load-misses${EVT}"
+      echo "do: $PERF_BIN stat -x \";\"  --per-socket -a -I $ms -o $FL -e $EVT" > /dev/stderr
+      echo "do: $PERF_BIN stat -x \";\"  --per-socket -a -I $ms -o $FL -e $EVT" 
+      $PERF_BIN stat -x ";"  --per-socket -a -I $ms -o $FL -e $EVT sleep $WAIT &
+    TSK_PID[$TSKj]=$!
+    PRF_PID=$!
+    fi
   fi
 
   if [[ $TSK == *"sched_switch"* ]]; then
@@ -851,6 +858,14 @@ if [ "$BKGRND" == "1" ]; then
   PID_LST=
   PID_LST_NC=
   CMA=
+  if [ "$PRF_PID" != "" ]; then
+    $RESP=`pgrep pfay1_sleep.sh | head -1`
+    if [ "$RESP" != "" ]; then
+     PID_LST=$RESP
+     PID_LST_NC=$RESP
+     CMA=","
+    fi
+  fi
   for TSKj in `seq $TB $TE`; do
     TSK=${TSK_LST[$TSKj]}
     TSKPID=${TSK_PID[$TSKj]}
