@@ -54,6 +54,7 @@ sum_all_base = ""
 
 #print("%f" % (1.0/0.0))  # force an error for testing to check error handling
 
+# check actual cmdline args
 options, remainder = getopt.getopt(sys.argv[1:], 'Aa:b:c:d:e:f:i:m:o:O:P:p:s:S:v', [
                                                          'average',
                                                          'avg_dir',
@@ -200,6 +201,10 @@ if options_filename != "":
    opt_fl = []
    with open(options_filename, 'rU') as tsv:
        for line in csv.reader(tsv, dialect="excel-tab"):
+           #print("try options_file %s line %s" % (options_filename, line), file=sys.stderr)
+           if len(line) > 0 and len(line[0]) > 0 and line[0][0] == "#":
+             #print("skip options_file %s line %s" % (options_filename, line), file=sys.stderr)
+             continue
            opt_fl.append(line)
 
 if len(opt_fl) > 0:
@@ -290,6 +295,7 @@ def ck_set_col_width(wrksht, nm):
     return
 
    
+# now check the options in the options file
 for fo2 in range(len(fl_options)):
    fo = fo2
    if verbose > 0:
@@ -311,8 +317,21 @@ for fo2 in range(len(fl_options)):
                                                             'sum_all=',
                                                             'verbose',
                                                             ])
+   for opt, arg in options:
+       if opt in ('-A', '--average'):
+           do_avg = True
+       elif opt in ('-p', '--prefix'):
+           prefix = arg
+           prefix_dict[fo] = prefix
+
    for x in remainder:
-      base = os.path.basename(x)
+      pfx = ""
+      if fo in prefix_dict:
+         pfx = prefix_dict[fo]
+      pfx_xtra = ""
+      if not do_avg:
+        pfx_xtra = pfx
+      base = os.path.basename(x) + pfx_xtra
       if got_sum_all > 0 and got_drop_summary and len(base) >= 7 and base[0:7] == "summary":
          print("skip sum_file x= %s" % (x), file=sys.stderr)
          continue
@@ -521,7 +540,13 @@ for bmi in range(base_mx+1):
 #         if do_it == False:
 #            continue
 
-      base = os.path.basename(x)
+      pfx = ""
+      if fo in prefix_dict:
+         pfx = prefix_dict[fo]
+      pfx_xtra = ""
+      if not do_avg:
+        pfx_xtra = pfx
+      base = os.path.basename(x) + pfx_xtra
       if not base in fn_bs_lkup:
          fn_bs_lkup_mx += 1
          fn_bs_lkup[base] = fn_bs_lkup_mx
@@ -574,6 +599,7 @@ for bmi in range(base_mx+1):
       else:
          data = fn_bs_data[bmi][fo]
       
+      print("do_avg= %d bmi= %d, " % (do_avg, bmi), ", fo= ", fo, file=sys.stderr)
       chrts = 0
       ch_arr = []
       ch_opts  = []
@@ -899,7 +925,13 @@ for bmi in range(base_mx+1):
             if verbose > 0:
                print("----  write_rows2= %d, write_rows3= %d" % (write_rows, write_rows3), file=sys.stderr)
             #with open('new_tsv.tsv', 'w', newline='') as csvfile:
-            base = os.path.basename(x)
+            pfx = ""
+            if fo in prefix_dict:
+               pfx = prefix_dict[fo]
+            pfx_xtra = ""
+            if not do_avg:
+               pfx_xtra = pfx
+            base = os.path.basename(x) + pfx_xtra
             nw_nm = base
             if avg_dir != None:
                nw_nm = avg_dir + "/" + nw_nm
