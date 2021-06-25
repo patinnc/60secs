@@ -34,6 +34,7 @@ IFS_SV=$IFS
 PY_PID=
 BK_PID=()
 BK_DIR=()
+RPS_ARR=()
 if [[ "$OSTYP" == "linux-gnu"* ]]; then
    NUM_CPUS=`grep -c processor /proc/cpuinfo`
 elif [[ "$OSTYP" == "darwin"* ]]; then
@@ -60,8 +61,9 @@ BACKGROUND=$(($NUM_CPUS+2))  # setting this to 0 turns off launching sys_2_tsv.s
 echo "$0 ${@}"
 echo "BACKGROUND= $BACKGROUND  NUM_CPUS= $NUM_CPUS"
 JOB_ID=0
+AVERAGE=0
 
-while getopts "hvASa:b:B:c:D:d:e:F:g:I:j:m:N:o:P:r:s:X:x:" opt; do
+while getopts "AhvSa:b:B:c:D:d:e:F:g:I:j:m:N:o:P:r:s:X:x:" opt; do
   case ${opt} in
     A )
       AVERAGE=1
@@ -134,8 +136,8 @@ while getopts "hvASa:b:B:c:D:d:e:F:g:I:j:m:N:o:P:r:s:X:x:" opt; do
       echo "$0 split data files into columns"
       echo "Usage: $0 [-h] -d sys_data_dir [-v] [ -p prefix ]"
       echo "   -a avg_dir requires -A. Average tsv files will be put in this dir"
-      echo "   -A   flag indicating you want to average the same file from multiple dirs into 1 sheet."
-      echo "          The default is to create 1 sheet per file per directory"
+      echo "   -A flag indicating you want to average the same file from multiple dirs into 1 sheet."
+      echo "          The default is to not average all the files (get 1 sheet per dir"
       echo "   -b begin_timestamp  exclude data until this timestamp (UTC epoch timestamp)"
       echo "   -B background_processs_allowed  max background processes allowed. if 0 then no background processes. default is $BACKGROUND"
       echo "   -d dir containing sys_XX_* files created by 60secs.sh"
@@ -164,6 +166,8 @@ while getopts "hvASa:b:B:c:D:d:e:F:g:I:j:m:N:o:P:r:s:X:x:" opt; do
       echo "           this can be useful if you are using compare_summary_table.sh to create a comparison of multiple summary sheets"
       echo "         'get_max_val' when consolidating values for spreadsheet, don't get the avareage value, get the max value"
       echo "         'get_perf_stat_max_val' when consolidating values for spreadsheet, don't get the avareage value, get the max value, this one is for perf_stat_scatter.awk"
+      echo "         'chart_size{width_scale,height_scale[,y_units,x_units]}' 2,2 is the default. (charts tiled left to right... about 15 cells wide and 30 rows high)."
+      echo "            1,1,15,8 is good for multi-row charting (smaller charts)"
       echo "   -P phase_file"
       echo "   -r regex   regex expression to select directories"
       echo "   -S    skip creating detail xlsx file, just do the summary all spreadsheet"
@@ -257,6 +261,11 @@ fi
 get_abs_filename() {
   # $1 : relative filename
   echo "$(cd "$(dirname "$1")" && pwd)/$(basename "$1")"
+}
+
+get_abs_dir() {
+  # $1 : relative filename
+  echo "$(cd "$(dirname "$1")" && pwd)"
 }
 
 export AWKPATH=$SCR_DIR
@@ -709,6 +718,7 @@ done
 DIR_NUM=0
 for i in $LST; do
  OPT_DESC_FILE=
+ i_abs_dir=$(get_abs_dir $i)
  if [ "$DESC_FILE" == "" ]; then
    if [ -e $i/desc.txt ]; then
       FLS=$(get_abs_filename "$i/desc.txt")
@@ -717,6 +727,7 @@ for i in $LST; do
       fi
    fi
  fi
+ IDIR_ABS      OPT_DESC_FILE=$(get_abs_filename "$i/desc.txt")
  if [ $VERBOSE -gt 0 ]; then
    pushd $i
  else
@@ -734,6 +745,27 @@ for i in $LST; do
  RPS="${RPS}"
  if [ "$RPS" == "" ]; then
    RPS="1rps"
+ fi
+ if [ "$RPS" != "" ]; then
+ if [[ $RPS =~ v[0-9]* ]]; then
+   RC=`echo $i | awk '/cpus/{n=split($0, arr, "_"); str=""; for (i=1; i <= n; i++) { if (index(arr[i], "cpus") > 0) { str = arr[i]; } }} END{printf("%s", str);}'`
+   if [ "$RC" != "" ]; then
+     RPS=$RC
+     if [ $NUM_DIRS -gt 1 ]; then
+       RPS_ARR[$DIR_NUM]=$RC
+     else
+       RPS_ARR[$JOB_ID]=$RC
+     fi
+     printf "RPS_ARR[%s]= %s, NUM_DIRS= %d DIR_NUM= %d\n" $JOB_ID $RC $NUM_DIRS $DIR_NUM > /dev/stderr
+     if [ "$OPT_DESC_FILE" == "" ]; then
+       printf "$0.$LINENO opt_desc_file RC= %s i= %s\n"  $RC $i_abs_dir/desc.txt > /dev/stderr
+       echo "$RC" > $i_abs_dir/desc.txt
+       OPT_DESC_FILE=$(get_abs_filename "$i_abs_dir/desc.txt")
+       printf "$0.$LINENO opt_desc_file= %s  i= %s\n" $OPT_DESC_FILE $i_abs_dir > /dev/stderr
+       OPT_DESC_FILE_ARR[$DIR_NUM]=$OPT_DESC_FILE
+     fi
+   fi
+ fi
  fi
  if [ "$SUM_FILE" != "" ]; then
    if [ -e $SUM_FILE ]; then
@@ -768,8 +800,10 @@ for i in $LST; do
   echo "$0.$LINENO ____got BEG_TM_IN=\"$BEG_TM_IN\"" > /dev/stderr
  fi
  OPT_END_TM=
+ if [ "$AVERAGE" == "1" ]; then
  if [ "$END_TM_IN" != "" ]; then
     OPT_END_TM=" -e $END_TM_IN "
+ fi
  fi
  OPT_SKIP=
  if [ "$SKIP_XLS" -gt "0" ]; then
@@ -818,14 +852,24 @@ for i in $LST; do
  if [ "$SKIP_SYS_2_TSV" == "0" ]; then
    SYS_2_TSV_STDOUT_FILE=tmp.jnk
    if [ $VERBOSE -gt 0 ]; then
-     echo "$SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p \"$RPS\" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i \"*.png\" -s $SUM_FILE -x $XLS.xlsx -o $OPT_OPT $OPT_PH -t $DIR &> $SYS_2_TSV_STDOUT_FILE" &
+     OPT_P=$RPS
+     if [ $NUM_DIRS -gt 1 ]; then
+       RESP=${RPS_ARR[$DIR_NUM]}
+     else
+       RESP=${RPS_ARR[$JOB_ID]}
+     fi
+     #printf "RPS_ARR[%s]= %s, NUM_DIRS= %d DIR_NUM= %d\n" $JOB_ID $RC $NUM_DIRS $DIR_NUM > /dev/stderr
+     if [ "$RESP" != "" ]; then
+       OPT_P=$RESP
+     fi
+     echo "$SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p \"$OPT_P\" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i \"*.png\" -s $SUM_FILE -x $XLS.xlsx -o $OPT_OPT $OPT_PH -t $DIR &> $SYS_2_TSV_STDOUT_FILE" &
    fi
    if [ "$BACKGROUND" -le "0" ]; then
-          $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$RPS" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o $OPT_OPT $OPT_PH -t $DIR &> $SYS_2_TSV_STDOUT_FILE
+          $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$OPT_P" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o $OPT_OPT $OPT_PH -t $DIR &> $SYS_2_TSV_STDOUT_FILE
           RC=$?
           ck_last_rc $RC $LINENO
    else
-          $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$RPS" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o $OPT_OPT $OPT_PH -t $DIR &> $SYS_2_TSV_STDOUT_FILE &
+          $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$OPT_P" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o $OPT_OPT $OPT_PH -t $DIR &> $SYS_2_TSV_STDOUT_FILE &
           LPID=$!
           RC=$?
           BK_DIR[$LPID]=$i
@@ -898,8 +942,12 @@ wait_for_all() {
 
 wait_for_all $LINENO
 
+CHART_SIZE=`echo -e "$OPTIONS" | awk '/chart_size{/{pos = index($0, "chart_size{"); str = substr($0, pos, length($0)); pos = index(str, "{"); str = substr(str, pos+1, length(str)); pos = index(str, "}"); str = substr(str, 1, pos-1); printf("%s", str); }'`
+
 MUTT_ARR=()
+i_idx=-1
 for i in $LST; do
+ i_idx=$((i_idx+1))
  if [ $VERBOSE -gt 0 ]; then
    pushd $i
  else
@@ -924,8 +972,18 @@ for i in $LST; do
  if [ $VERBOSE -gt 0 ]; then
    echo "$0 SM_FL= $SM_FL  SUM_FILE= $SUM_FILE"
  fi
- echo -e "-p\t\"$RPS\"" >> $ALST
- echo -e "-s\t2,2" >> $ALST
+ OPT_P=$RPS
+ if [ $NUM_DIRS -gt 1 ]; then
+   RESP=${RPS_ARR[$i_idx]}
+ else
+   RESP=${RPS_ARR[$JOB_ID]}
+ fi
+ printf "RPS_ARR= %s i_idx= %s DIR_NUM= %s\n" $RESP $i_idx $DIR_NUM > /dev/stderr
+ if [ "$RESP" != "" ]; then
+   OPT_P=$RESP
+ fi
+ echo -e "-p\t\"$OPT_P\"" >> $ALST
+echo -e "-s\t$CHART_SIZE" >> $ALST
  if [ "$AVERAGE" == "1" ]; then
     echo -e "-A" >> $ALST
  fi
@@ -939,6 +997,11 @@ for i in $LST; do
    if [ -e desc.txt ]; then
       FLS=$(get_abs_filename "desc.txt")
       OPT_DESC_FILE="$FLS"
+   fi
+ fi
+ if [ "$AVERAGE" == "0" ]; then
+   if [ "${OPT_DESC_FILE_ARR[$i_idx]}" != "" ]; then
+     OPT_DESC_FILE=${OPT_DESC_FILE_ARR[$i_idx]}
    fi
  fi
  if [ "$OPT_DESC_FILE" != "" ]; then
@@ -987,6 +1050,7 @@ for i in $LST; do
  FLS=`ls -1 $SM_FL $i/*txt.tsv`
  FLS_IC=`ls -1  $i/*txt.tsv | grep infra_cputime`
  FLS_PS=`ls -1  $i/*txt.tsv | grep perf_stat`
+ FLS_MP=`ls -1  $i/*txt.tsv | grep mpstat`
  echo "$0.$LINENO ++++++++FLS_PS= $FLS_PS" > /dev/stderr
  if [ "$FLS_PS" == "" ]; then
    FLS_PS=`ls -1  $i/../*txt.tsv | grep perf_stat`
@@ -1068,33 +1132,46 @@ fi
   #printf "title\tsum_all\tsheet\tsum_all\ttype\tcopy\n"  >> $SUM_ALL
   #printf "hdrs\t2\t0\t-1\t%d\t-1\n"  500 >> $SUM_ALL
   #printf "Resource\tTool\tMetric\taverage\n" >> $SUM_ALL;
-if [ "$FLS_IC" != "" -o "$FLS_PS" != "" ]; then
+if [ "$FLS_IC" != "" -o "$FLS_PS" != "" -o "$FLS_MP" != "" ]; then
   OPT_METRIC=" -m sum "
   OPT_METRIC=" -m sum_per_server "
   OPT_METRIC=" -m avg "
-  OFILE=infra_cputime_sum_${JOB_ID}.tsv
-  if [ -e $OFILE ]; then
-    rm $OFILE
-  fi
 #abc
-  if [ "$FLS_IC" != "" -o "$FLS_PS" != "" ]; then
-  #if [ $VERBOSE -gt 0 ]; then
-  echo "$SCR_DIR/redo_chart_table.sh -O $OPTIONS -S $SUM_ALL -f $ALST -o $OFILE   -g infra_cputime $OPT_METRIC -r 50 -t __all__"
-  #fi
-        $SCR_DIR/redo_chart_table.sh -O $OPTIONS -S $SUM_ALL -f $ALST -o $OFILE   -g infra_cputime $OPT_METRIC -r 50 -t __all__ 
-  ck_last_rc $? $LINENO
-  fi
+  if [ "$AVERAGE" == "1" ]; then
+    if [ "$FLS_IC" != "" ]; then
+     OFILE=infra_cputime_sum_${JOB_ID}.tsv
+     if [ -e $OFILE ]; then
+       rm $OFILE
+     fi
+     #if [ $VERBOSE -gt 0 ]; then
+      echo "$SCR_DIR/redo_chart_table.sh -O $OPTIONS -S $SUM_ALL -f $ALST -o $OFILE   -g infra_cputime $OPT_METRIC -r 50 -t __all__"
+     #fi
+            $SCR_DIR/redo_chart_table.sh -O $OPTIONS -S $SUM_ALL -f $ALST -o $OFILE   -g infra_cputime $OPT_METRIC -r 50 -t __all__ 
+     ck_last_rc $? $LINENO
+    fi
+    if [ "$FLS_MP" != "" ]; then
+     OFILE=sys_mpstat_sum_${JOB_ID}.tsv
+     if [ -e $OFILE ]; then
+       rm $OFILE
+     fi
+      #if [ $VERBOSE -gt 0 ]; then
+      echo "$SCR_DIR/redo_chart_table.sh -O $OPTIONS -S $SUM_ALL -f $ALST -o $OFILE   -g mpstat $OPT_METRIC -r 50 -t __all__"
+      #fi
+            $SCR_DIR/redo_chart_table.sh -O $OPTIONS -S $SUM_ALL -f $ALST -o $OFILE   -g mpstat $OPT_METRIC -r 50 -t __all__ 
+      ck_last_rc $? $LINENO
+    fi
   if [ "$FLS_PS" != "" ]; then
-  OFILE=sys_perf_stat_sum_${JOB_ID}.tsv
-  if [ -e $OFILE ]; then
-    rm $OFILE
+    OFILE=sys_perf_stat_sum_${JOB_ID}.tsv
+    if [ -e $OFILE ]; then
+      rm $OFILE
+    fi
+    if [ $VERBOSE -gt 0 ]; then
+      echo "$SCR_DIR/redo_chart_table.sh -O $OPTIONS -S $SUM_ALL -f $ALST -o $OFILE   -g perf_stat $OPT_METRIC -r 50 -t __all__"
+    fi
+    echo "$SCR_DIR/redo_chart_table.sh -O $OPTIONS -S $SUM_ALL -f $ALST -o $OFILE   -g perf_stat $OPT_METRIC -r 50 -t __all__" > /dev/stderr
+          $SCR_DIR/redo_chart_table.sh -O $OPTIONS -S $SUM_ALL -f $ALST -o $OFILE   -g perf_stat $OPT_METRIC -r 50 -t __all__ 
+    ck_last_rc $? $LINENO
   fi
-  if [ $VERBOSE -gt 0 ]; then
-  echo "$SCR_DIR/redo_chart_table.sh -O $OPTIONS -S $SUM_ALL -f $ALST -o $OFILE   -g perf_stat $OPT_METRIC -r 50 -t __all__"
-  fi
-  echo "$SCR_DIR/redo_chart_table.sh -O $OPTIONS -S $SUM_ALL -f $ALST -o $OFILE   -g perf_stat $OPT_METRIC -r 50 -t __all__" > /dev/stderr
-        $SCR_DIR/redo_chart_table.sh -O $OPTIONS -S $SUM_ALL -f $ALST -o $OFILE   -g perf_stat $OPT_METRIC -r 50 -t __all__ 
-  ck_last_rc $? $LINENO
   fi
 fi
 
@@ -1133,7 +1210,7 @@ if [ "$DO_TSV_2_XLS" == "1" ]; then
   if [ $VERBOSE -gt 0 ]; then
   echo "$0: awk -v mk_sum_all="$MK_SUM_ALL" -v input_file=\"$ALST\" -v sum_all=\"$SUM_ALL\" -v sum_file=\"$SUM_FILE\" -v curdir=\"$got_pwd\" "
   fi
-  awk -v options="$OPTIONS" -v script="$0.$LINENO.awk" -v job_id="$JOB_ID" -v verbose="$VERBOSE" -v mk_sum_all="$MK_SUM_ALL" -v input_file="$ALST" -v sum_all="$SUM_ALL" -v sum_file="$SUM_FILE" -v sum_all_avg_by_metric="$SUM_ALL_AVG_BY_METRIC" -v curdir="$got_pwd" '
+  awk -v average_in="$AVERAGE" -v options="$OPTIONS" -v script="$0.$LINENO.awk" -v job_id="$JOB_ID" -v verbose="$VERBOSE" -v mk_sum_all="$MK_SUM_ALL" -v input_file="$ALST" -v sum_all="$SUM_ALL" -v sum_file="$SUM_FILE" -v sum_all_avg_by_metric="$SUM_ALL_AVG_BY_METRIC" -v curdir="$got_pwd" '
     @include "get_excel_col_letter_from_number.awk"
     BEGIN{
       sum_files=0;
@@ -1745,8 +1822,19 @@ function arr_in_compare_rev(i1, v1, i2, v2,    l, r)
         last_non_blank = -1;
         first_blank = -1;
         first_infra_cputime = -1;
+        first_mpstat_line = -1;
         first_perf_stat = -1;
         while ((getline line < flnm) > 0) {
+          if (average_in == 1) {
+           if (index(line, "mpstat") > 0) {
+              ++first_mpstat_line;
+              if (first_mpstat_line == 0) {
+                line = "sys_mpstat_sum_" job_id ".tsv";
+              } else {
+                continue;
+              }
+              # this line will be handled outside
+           }
            if (index(line, "infra_cputime") > 0) {
               ++first_infra_cputime;
               if (first_infra_cputime == 0) {
@@ -1765,6 +1853,7 @@ function arr_in_compare_rev(i1, v1, i2, v2,    l, r)
               }
               # this line will be handled outside
            }
+          }
            ln++;
            if (first_blank == -1 && length(line) == 0) {
              first_blank = ln;
@@ -1931,7 +2020,7 @@ function arr_in_compare_rev(i1, v1, i2, v2,    l, r)
          fi
       fi
       echo -e "-p\t\"$RPS\"" >> $ALST
-      echo -e "-s\t2,2" >> $ALST
+      echo -e "-s\t$CHART_SIZE" >> $ALST
       if [ "$DESC_FILE" != "" ]; then
         echo -e "-d\t\"$DESC_FILE\"" >> $ALST
       fi
@@ -1989,6 +2078,7 @@ function arr_in_compare_rev(i1, v1, i2, v2,    l, r)
   fi
   OPT_TM=
   echo "$0.$LINENO ____got BEG_TM_IN=\"$BEG_TM_IN\"" > /dev/stderr
+  if [ "$AVERAGE" == "1" ]; then
   if [ "$BEG_TM_IN" != "" ]; then
      OPT_TM=" -b $BEG_TM_IN "
   fi
@@ -1997,6 +2087,7 @@ function arr_in_compare_rev(i1, v1, i2, v2,    l, r)
      echo "$0.$LINENO ____got END_TM=\"$END_TM\"" > /dev/stderr
      END_TM=`echo "$END_TM"|head -1`
      OPT_TM="$OPT_TM -e $END_TM "
+  fi
   fi
   echo "$0.$LINENO ____got OPT_TM=\"$OPT_TM\"" > /dev/stderr
 
@@ -2025,7 +2116,7 @@ function arr_in_compare_rev(i1, v1, i2, v2,    l, r)
   #if [ $VERBOSE -gt 0 ]; then
     echo "$0.$LINENO python $SCR_DIR/tsv_2_xlsx.py $OPT_SM $OPT_a $OPT_A $OPT_TM $OPT_OPTIONS $OPT_M -f $ALST $SHEETS" > /dev/stderr
   #fi
-        python $SCR_DIR/tsv_2_xlsx.py $OPT_SM $OPT_a $OPT_A $OPT_TM $OPT_OPTIONS $OPT_M -f $ALST $SHEETS &> $FSTDOUT
+        python $SCR_DIR/tsv_2_xlsx.py -v $OPT_SM $OPT_a $OPT_A $OPT_TM $OPT_OPTIONS $OPT_M -f $ALST $SHEETS &> $FSTDOUT
         PY_RC=$?
         PY_PID=$!
         #sleep 1
