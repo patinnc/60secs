@@ -283,6 +283,17 @@ if [ "$INTERVAL" != "" ]; then
 fi
 echo "using interval $INTRVL seconds"
 
+TM_BEG=`date +"%s"`
+TM_END=$((TM_BEG+WAIT))
+
+ck_time() {
+  TM_CUR=`date +"%s"`
+  if [ $TM_CUR -gt $TM_END ]; then
+    echo "$0.$LINENO set GOT_QUIT due to TM_CUR= $TM_CUR > TM_END $TM_END"
+    GOT_QUIT=1
+  fi
+}
+
 if [ "$TSK" == "-1" ]; then
  TB=0
  TE=$TLAST
@@ -439,6 +450,7 @@ for TSKj in `seq $TB $TE`; do
         break
       fi
       sleep $INTRVL
+      ck_time
       if [ "$GOT_QUIT" == "1" ]; then
          break
       fi
@@ -489,9 +501,9 @@ for TSKj in `seq $TB $TE`; do
       rm $FL
     fi
     if [ "$BKGRND" == "0" ]; then
-      vmstat $INTRVL $COUNT > $FL
+      vmstat -t $INTRVL $COUNT > $FL
     else
-      vmstat $INTRVL $COUNT > $FL &
+      vmstat -t $INTRVL $COUNT > $FL &
       TSK_PID[$TSKj]=$!
     fi
   fi
@@ -744,6 +756,7 @@ for TSKj in `seq $TB $TE`; do
       fi
       printf "power i= %d of %d, elap secs= %d curtm= %d, endtm= %d\n" $i $WAIT $ELAP $CDT  $EDT
       sleep $INTRVL
+      ck_time
       if [ "$GOT_QUIT" == "1" ]; then
          break
       fi
@@ -788,6 +801,7 @@ for TSKj in `seq $TB $TE`; do
       fi
       #printf "\rwatch i= %d of %d, elap secs= %d curtm= %d, endtm= %d" $i $WAIT $ELAP $CDT  $EDT
       sleep $INTRVL
+      ck_time
       if [ "$GOT_QUIT" == "1" ]; then
          break
       fi
@@ -821,6 +835,7 @@ for TSKj in `seq $TB $TE`; do
       if [ $j -ge $WAIT ]; then
         break
       fi
+      ck_time
       if [ "$GOT_QUIT" == "1" ]; then
          break
       fi
@@ -887,11 +902,12 @@ if [ "$BKGRND" == "1" ]; then
   fi
 fi
 DO_W=0
-if [ "$PID_LST_NC" != "" -o "$FL_PWR" != "" ]; then
+if [ "$PID_LST_NC" != "" -o "$FL_PWR" != "" -o "$FL_WATCH" != "" ]; then
  DO_W=1
 fi
+echo "$0.$LINENO WAIT_AT_END= $WAIT_AT_END DO_W= $DO_W"
 if [ "$WAIT_AT_END" == "1" -a "$DO_W" == "1" ]; then
-  echo "waiting for $WAIT seconds"
+  echo "$0.$LINENO waiting for $WAIT seconds"
   #sleep $WAIT
   j=0
     BDT=`date +%s`
@@ -947,6 +963,7 @@ if [ "$WAIT_AT_END" == "1" -a "$DO_W" == "1" ]; then
          GOT_QUIT=1
       fi
     fi
+      ck_time
     if [ "$GOT_QUIT" == "1" ]; then
        echo "quitting loop due signal" > /dev/stderr
        echo "PID_LST_NC= b${PID_LST_NC}b" > /dev/stderr
