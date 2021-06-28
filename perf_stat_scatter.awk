@@ -409,10 +409,20 @@ function dt_to_epoch(offset) {
      }
    }
    got_bad_spec_evts = 0;
-   for (i=0; i <= evt_idx; i++) {
-     if (evt_lkup[i] == "uops_issued.any") { got_bad_spec_evts++; }
-     if (evt_lkup[i] == "uops_retired.retire_slots") { got_bad_spec_evts++; }
-     if (evt_lkup[i] == "int_misc.recovery_cycles_any") { got_bad_spec_evts++; }
+   need_bad_spec_evts = -1;
+   if (cpu_type != "Ice Lake") {
+     for (i=0; i <= evt_idx; i++) {
+       if (evt_lkup[i] == "uops_issued.any") { got_bad_spec_evts++; }
+       if (evt_lkup[i] == "uops_retired.retire_slots") { got_bad_spec_evts++; }
+       if (evt_lkup[i] == "int_misc.recovery_cycles_any") { got_bad_spec_evts++; }
+     }
+     need_bad_spec_evts = 3;
+   } else {
+     for (i=0; i <= evt_idx; i++) {
+       if (evt_lkup[i] == "topdown-bad-spec") { got_bad_spec_evts++; }
+       if (evt_lkup[i] == "cpu/slots/") { got_bad_spec_evts++; }
+     }
+     need_bad_spec_evts = 2;
    }
    printf("perf_stat_scatter.sh: ref_cycles_str= %s, cpu_cycles_str= %s\n", ref_cycles_str, cpu_cycles_str) > "/dev/stderr";
    kmx = 0;
@@ -1109,7 +1119,7 @@ function dt_to_epoch(offset) {
    # 100*(${ITP_UOP_ANY}-${ITP_UOP}+((4.0*${ITP_MISC})/${thr_per_core}))/${itp_denom}
 #             "name"       : "metric_TMAM_Bad_Speculation(%)",
 #             "expression" : "100 * ([UOPS_ISSUED.ANY] - [UOPS_RETIRED.RETIRE_SLOTS] + ((4 * [INT_MISC.RECOVERY_CYCLES_ANY]) / [const_thread_count])) / (4 * ([CPU_CLK_UNHALTED.THREAD_ANY] / [const_thread_count])) "
-   if (got_bad_spec_evts == 3) {
+   if (cpu_type != "Ice Lake" && got_bad_spec_evts == need_bad_spec_evts) {
    kmx++;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
    got_lkfor[kmx,2]=5; # num of fields to look for
@@ -1187,7 +1197,7 @@ function dt_to_epoch(offset) {
 
 #    rpn operations
 #    TBD repeating this stuff for sockets. Right now (if you had per-socket data and -o dont_sum_sockets) you wouldnt match up the column header because youd have " S0" or " S1" socket suffix
-   if (got_bad_spec_evts == 3) {
+   if (cpu_type != "Ice Lake" && got_bad_spec_evts == need_bad_spec_evts) {
    kmx++;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
    got_lkfor[kmx,2]=4; # num of fields to look for
@@ -1515,7 +1525,9 @@ function dt_to_epoch(offset) {
           L3_latency_cols[++L3_latency_cols_mx] = cols;
         }
         if (index(nwfor[k,1,"hdr"], "not_halted") > 0 || index(nwfor[k,1,"hdr"], "TMAM") > 0 || index(nwfor[k,1,"hdr"], "power_pkg (watts)") > 0) {
-          TMAM_cols[++TMAM_cols_mx] = cols;
+          if (index(nwfor[k,1,"hdr"], "TMAM_Sum") == 0) {
+            TMAM_cols[++TMAM_cols_mx] = cols;
+          }
         }
         if (index(nwfor[k,1,"hdr"], "%dispatch_stalls_") > 0) {
           TMAM_cols[++TMAM_cols_mx] = cols;
@@ -1523,7 +1535,7 @@ function dt_to_epoch(offset) {
         if (nwfor[k,1,"hdr"] == "IPC" || index(nwfor[k,1,"hdr"], "GHz") > 0 || index(nwfor[k,1,"hdr"], "PKI") > 0) {
           ipc_cols[++ipc_cols_mx] = cols;
         }
-        if (got_bad_spec_evts == 3) {
+        if (got_bad_spec_evts == need_bad_spec_evts) {
         if (index(nwfor[k,1,"hdr"], "metric_TMAM_Bad_Speculation(%)") > 0) {
           ++got_mini_ITP;
           ITP_lvl[got_mini_ITP,1] = cols;
