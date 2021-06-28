@@ -1012,12 +1012,22 @@ trows++; printf("\t$ power") > NFL;
 # 4  0      0 1329084 842316 44802156    0    0    51    37    0    0 16  2 81  0  0
 # 4  0      0 1319472 842316 44802156    0    0     0    12 20779 58660 14  1 85  0  0
 # 2  0      0 1384300 842320 44802160    0    0     0   356 17266 81860 11  1 88  0  0
+#procs -----------memory---------- ---swap-- -----io---- -system-- ------cpu----- -----timestamp-----
+# r  b   swpd   free   buff  cache   si   so    bi    bo   in   cs us sy id wa st                 PDT
+# 2  0      0 788814272  42920 490300    0    0     0     0    1    1  0  0 100  0  0 2021-06-26 13:14:55
+# 8  0      0 787426944  49736 772984    0    0  3575  7574 3081 1217  6  0 94  0  0 2021-06-26 13:15:25
+# 8  0      0 787579520  50260 1063436    0    0  1014 13481 2600  815  6  0 94  0  0 2021-06-26 13:15:55
+# 8  0      0 787232448  52096 1390556    0    0   784 21540 3444 1150  7  1 93  0  0 2021-06-26 13:16:25
 
     DURA=`awk -v ts_beg="$BEG" -v ts_end="$END_TM" 'BEGIN{ts_beg+=0.0;ts_end+=0.0; if (ts_beg > 0.0 && ts_end > 0.0) {printf("%d\n", ts_end-ts_beg); } else {printf("-1\n");};exit;}'`
-    awk -v pfx="$PFX" -v max_lines="$DURA" -v sum_file="$SUM_FILE" -v sum_flds="runnable{vmstat runnable PIDs|OS},interrupts/s{|OS},context switch/s{|OS},%user{|CPU},%idle{|CPU|%stdev}" '
-     BEGIN{beg=1;col_mx=-1;mx=0;
-        n_sum = 0;
-        max_lines += 0;
+    awk -v ts_beg="$BEG" -v pfx="$PFX" -v max_lines="$DURA" -v sum_file="$SUM_FILE" -v sum_flds="runnable{vmstat runnable PIDs|OS},interrupts/s{|OS},context switch/s{|OS},%user{|CPU},%idle{|CPU|%stdev}" '
+     BEGIN{
+       beg=1;
+       col_mx=-1;
+       mx=0;
+       n_sum = 0;
+       max_lines += 0;
+       has_ts = 0;
        if (sum_file != "" && sum_flds != "") {
          n_sum = split(sum_flds, sum_arr, ",");
          for (i_sum=1; i_sum <= n_sum; i_sum++) {
@@ -1055,10 +1065,13 @@ trows++; printf("\t$ power") > NFL;
        }
      }
      /^procs/{
+       if (index($0, "timestamp") > 0) {
+         has_ts = 1;
+       }
        next;
      }
      {
-	FNM=ARGV[ARGIND];
+       	FNM=ARGV[ARGIND];
         NFL=FNM ".tsv";
         if (max_lines > 0.0 && mx > max_lines) {
           exit;
@@ -1066,6 +1079,14 @@ trows++; printf("\t$ power") > NFL;
      }
      /swpd/{
         if (beg == 0) { next; }
+        if (has_ts == 1) {
+          ts_tz = $(NF);
+          $(NF) = "ts_dt";
+          ts_dt_col = NF;
+          NF++;
+          $(NF) = "ts_tm";
+          ts_tm_col = NF;
+        }
         beg = 0;
         for (i=1; i <= NF; i++) {
          hdrs[i]=$i;
@@ -1121,8 +1142,16 @@ trows++; printf("\tThe CPUs are also well over 90%% utilized on average. This is
 trows++; printf("\tof saturation using the \"r\" column.\n") > NFL;
 trows++; printf("\t\n") > NFL;
 
+       col_beg=0;
+       col_end = col_mx;
+       col_ts = -1;
+       if (has_ts == 1) {
+         col_beg=2;
+         col_end = col_mx; # dont plot the date & time string
+         col_ts = 1;
+       }
        printf("title\tvmstat all\tsheet\tvmstat\ttype\tline\n") > NFL;
-       printf("hdrs\t%d\t0\t%d\t%d\t-1\n", 2+trows, mx+1+trows, col_mx) > NFL;
+       printf("hdrs\t%d\t%s\t%d\t%d\t%d\n", 2+trows, col_beg, mx+1+trows, col_end, col_ts) > NFL;
        r_col = -1;
        b_col = -1;
        us_col = -1;
@@ -1174,10 +1203,33 @@ trows++; printf("\t\n") > NFL;
           nwln = nwln "" sep "" str;
           sep = "\t";
        }
+       #start vmstat at Sat Jun 26 13:14:55 PDT 2021 1624738495.312025602
+       if (has_ts == 1) {
+         printf("%s\t%s\t", "timestamp", "ts_rel") > NFL;
+       }
+     
        printf("%s\n", nwln) > NFL;
        for (i=2; i <= mx; i++) {
           if (n_sum > 0) {
             n = split(sv[i], arr, "\t");
+            if (has_ts == 1) {
+              dt = arr[ts_dt_col];
+              tm = arr[ts_tm_col];
+              ndt = split(dt, dt_arr, "-");
+              ntm = split(tm, tm_arr, ":");
+              dt_str = dt_arr[1] " " dt_arr[2] " " dt_arr[3] " " tm_arr[1] " " tm_arr[2] " " tm_arr[3];
+              epch=mktime(dt_str);
+              if (ts_beg0 == "") {
+                ts_beg0 = epch;
+                # mktime uses current timezone which may be different then data time zone
+                # assume that 1st epoch time is within an hour of ts_beg.
+                ts_beg_i = sprintf("%d", ts_beg) + 0;
+                ts_intrvl = (epch - ts_beg_i) % 3600; 
+                #printf("dt= %s, tm= %s, epch= %s, ts_beg= %s dt_str= %s, ts_intrvl= %s\n", dt, tm, epch, ts_beg, dt_str, ts_intrvl);
+                #exit(1);
+              }
+              printf("%3f\t%.3f\t", ts_beg+(epch - ts_beg0), epch - ts_beg0) > NFL;
+            }
             for (i_sum=1; i_sum <= n_sum; i_sum++) {
               j = sum_lkup[i_sum];
               sum_occ[i_sum] += 1;
@@ -1188,14 +1240,19 @@ trows++; printf("\t\n") > NFL;
           }
           printf("%s\n", sv[i]) > NFL;
        }
+       #printf("hdrs\t%d\t%s\t%d\t%d\t%d\n", 2+trows, col_beg, mx+1+trows, col_end, col_ts) > NFL;
        printf("\ntitle\tvmstat cpu\tsheet\tvmstat\ttype\tline\n") > NFL;
-       printf("hdrs\t%d\t0\t%d\t%d\t-1\t%d\t%d\t%d\t%d\t%d\t%d\n", 2+trows, mx+1+trows, col_mx, r_col, r_col, b_col, b_col, us_col, col_mx) > NFL;
+       printf("hdrs\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", 2+trows, col_beg, mx+1+trows, col_end, col_ts, r_col+col_beg, r_col+col_beg, b_col+col_beg, b_col+col_beg, us_col+col_beg, col_mx) > NFL;
+
        printf("\ntitle\tvmstat interrupts & context switches\tsheet\tvmstat\ttype\tline\n") > NFL;
-       printf("hdrs\t%d\t0\t%d\t%d\t-1\t%d\t%d\t%d\t%d\n", 2+trows, mx+1+trows, col_mx, in_col, in_col, cs_col, cs_col) > NFL;
+       printf("hdrs\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", 2+trows, col_beg, mx+1+trows, col_end, col_ts, in_col+col_beg, in_col+col_beg, cs_col+col_beg, cs_col+col_beg) > NFL;
+
        printf("\ntitle\tvmstat memory cache, free & buffers\tsheet\tvmstat\ttype\tline\n") > NFL;
-       printf("hdrs\t%d\t0\t%d\t%d\t-1\t%d\t%d\t%d\t%d\t%d\t%d\n", 2+trows, mx+1+trows, col_mx, cache_col, cache_col, free_col, free_col, buff_col, buff_col) > NFL;
+       printf("hdrs\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", 2+trows, col_beg, mx+1+trows, col_end, col_ts, cache_col+col_beg, cache_col+col_beg, free_col+col_beg, free_col+col_beg, buff_col+col_beg, buff_col+col_beg) > NFL;
+
        printf("\ntitle\tvmstat IO blocks in & blocks out\tsheet\tvmstat\ttype\tline\n") > NFL;
-       printf("hdrs\t%d\t0\t%d\t%d\t-1\t%d\t%d\t%d\t%d\n", 2+trows, mx+1+trows, col_mx, bi_col, bi_col, bo_col, bo_col) > NFL;
+       printf("hdrs\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", 2+trows, col_beg, mx+1+trows, col_end, col_ts, bi_col+col_beg, bi_col+col_beg, bo_col+col_beg, bo_col+col_beg) > NFL;
+
        close(NFL);
        if (n_sum > 0) {
           for (i_sum=1; i_sum <= n_sum; i_sum++) {
@@ -2991,11 +3048,20 @@ row += trows;
    SHEETS="$SHEETS $i.tsv"
  fi
   if [[ $i == *"_watch.txt"* ]]; then
+    # /sys/devices/virtual/thermal/thermal_zone\
+    GOT_TEMP=
+    if [ -e run.log ]; then
+      RESP=`grep "/sys/devices/virtual/thermal/thermal_zone.*temp" run.log`
+      echo "$0.$LINENO ck for temperature watch file= $RESP"
+      if [ "$RESP" != "" ]; then
+        GOT_TEMP=1
+      fi
+    fi
     echo "do watch"
 # ==beg 0 date 1580278735.829557760
 #-rw-r--r-- 1 udocker udocker 17097435 May 24 03:18 /var/log/udocker/gmatching/performance/gmatching/gmatching.log
 
-    awk -v ts_beg="$BEG" -v pfx="$PFX" '
+    awk -v got_temp="$GOT_TEMP" -v ts_beg="$BEG" -v pfx="$PFX" '
      BEGIN{
        beg=1;col_mx=-1;mx=0;
      }
@@ -3004,6 +3070,7 @@ row += trows;
        NFL=FNM ".tsv";
        tm = $4;
        sv_tm[++mx]=tm;
+       sv_arr[mx,"mx"] = 0;
        next;
      }
      /^==end /{
@@ -3014,11 +3081,40 @@ row += trows;
      { # has to be an ls -l file line
         sz = $5+0;
         sv_sz[mx]=sz;
+        i = ++sv_arr[mx,"mx"];
+        sv_arr[mx,"val",i] = $0;
      }
      END{
        row=0;
        wraps = 0;
        sz = 0;
+       if (got_temp == 1) {
+         row=-1;
+         skts = sv_arr[1,"mx"];
+         row++;
+         printf("title\twatch log temperatures vs time\tsheet\twatch\ttype\tscatter_straight\n") > NFL;
+         row++;
+         printf("hdrs\t%d\t%d\t-1\t%d\t1\n", row+1, 2, skts+1) > NFL;
+         row++;
+         printf("temperature sockets %d\n", skts);
+         printf("TS\tts_rel") > NFL;
+         for (i=1; i <= skts; i++) {
+           printf("\ttemperature skt %d", i) > NFL;
+         }
+         printf("\n") > NFL;
+         for (i=1; i <= mx; i++) {
+           printf("=%.4f\t%.3f", sv_tm[i], sv_tm[i]-ts_beg) > NFL;
+           for (j=1; j <= skts; j++) {
+             printf("\t%.3f", 0.001 * sv_arr[i,"val",j]) > NFL;
+           }
+           row++;
+           printf("\n") > NFL;
+         }
+         row++;
+         printf("\n") > NFL;
+         close(NFL);
+         exit(0);
+       }
        for (i=2; i <= mx; i++) {
          sz0 = sv_sz[i-1];
          sz1 = sv_sz[i];
