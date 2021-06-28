@@ -395,7 +395,7 @@ for bmi in range(base_mx+1):
 
    image_files=[]
    prefix = ""
-   ch_size = [1.0, 1.0, 15.0, 15.0]
+   ch_size = [1.0, 1.0, 15.0, 8.0]
 
    # if orient_vert == true then put charts down same column.
    # if False, put charts across same row (so scroll right to see charts). This is useful if you start data at row 40 then charts won't obscure data.
@@ -1207,6 +1207,8 @@ for bmi in range(base_mx+1):
                    if ch_array[ch_ln_prev][0] == sheet_nm:
                       ch_top_at_row = ch_array[ch_ln_prev][1] + int(ch_size[2]*ch_size[1])
                       ch_left_at_col = ch_array[ch_ln_prev][3] + 0
+                      if verbose > 0:
+                            print("ch_left_at_col1= ", ch_left_at_col, ", title= ", title, file=sys.stderr)
                 #print("+_++__insert chart for sheet= %s, chart= %s, at_row= %d at_col= %d" % (sheet_nm, title, ch_top_at_row, ch_left_at_col), file=sys.stderr)
              else:
                 ch_top_at_row = 1
@@ -1216,18 +1218,31 @@ for bmi in range(base_mx+1):
                    if ch_array[ch_ln_prev][0] == sheet_nm:
                       ch_top_at_row = ch_array[ch_ln_prev][1] + 0
                       ch_left_at_col = ch_array[ch_ln_prev][2] + int(ch_size[2])
+                      if verbose > 0:
+                            print("ch_left_at_col2= ", ch_left_at_col, ", title= ", title, file=sys.stderr)
                 #print("sh %s ch %s row= %d col= %d" % (sheet_nm, title, ch_top_at_row, ch_left_at_col))
                 #print("++++__insert chart for sheet= %s, chart= %s, at_row= %d at_col= %d" % (sheet_nm, title, ch_top_at_row, ch_left_at_col), file=sys.stderr)
                 if worksheet_charts != None:
-                   if options_all_charts_one_row == True and desc != None:
+                   desc_str = None
+                   if options_all_charts_one_row == True:
+                      if desc == None:
+                        desc_str = str(fo)
+                        all_charts_one_row[fo2][3] = desc_str
+                      else:
+                        desc_str = desc
+
+                   if options_all_charts_one_row == True and desc_str != None:
                       if verbose > 0:
                          print("++++__calc0  chart for sheet= %s, fo2= %d desc= %s" % (sheet_nm, fo2, all_charts_one_row[fo2][3]), file=sys.stderr)
                       dsc = all_charts_one_row[fo2][3]
                       if dsc != None and not dsc in all_charts_one_row_hash:
                          all_charts_one_row_max += 1
-                         file1 = open(desc,"r")  
-                         txt = file1.readline().rstrip('\n')
-                         file1.close() 
+                         if desc != None:
+                            file1 = open(desc,"r")  
+                            txt = file1.readline().rstrip('\n')
+                            file1.close() 
+                         else:
+                            txt = desc_str
                          all_charts_one_row_hash[dsc] = {"index": all_charts_one_row_max, "charts":0, "txt":txt}
                       dsc_i = -1
                       if dsc != None:
@@ -1235,11 +1250,15 @@ for bmi in range(base_mx+1):
                          ch_in_rw = all_charts_one_row_hash[dsc]["charts"]
                          all_charts_one_row[dsc_i][0] = 3+ dsc_i * (3+int(ch_size[1]*ch_size[2]))
                          all_charts_one_row[dsc_i][1] = ch_in_rw * int(ch_size[3])
+                         if verbose > 0:
+                            print("ch_left_at_cola= ", all_charts_one_row[dsc_i][1], ", title= ", title,  file=sys.stderr)
                          if ch_in_rw == 0:
                             worksheet_charts.write(all_charts_one_row[dsc_i][0]-2, 0, txt);
                          ch_top_at_row  = all_charts_one_row[dsc_i][0]
                          ch_left_at_col = all_charts_one_row[dsc_i][1]
                          all_charts_one_row_hash[dsc]["charts"] += 1
+                         if verbose > 0:
+                            print("ch_left_at_col3= ", ch_left_at_col, ", title= ", title,  file=sys.stderr)
                          
                       if verbose > 0:
                          print("chart sheet= %s, row_beg= %d col= %d, title= %s" % (sheet_nm, ch_top_at_row, ch_left_at_col, title), file=sys.stderr)
@@ -1249,6 +1268,8 @@ for bmi in range(base_mx+1):
                         if ch_sh_row > 0:
                            ch_top_at_row = ch_sh_arr[ch_sh_row-1][0] + int(ch_size[2]*ch_size[1])
                         ch_sh_arr.append([ch_top_at_row, ch_left_at_col])
+                        if verbose > 0:
+                          print("ch_left_at_col4= ", ch_left_at_col, ", title= ", title, file=sys.stderr)
                      if ch_sh_row >= len(ch_sh_arr) or not ch_sh_row in ch_sh_arr:
                        if verbose > 0:
                          print("info ch_sh_row= %d len(ch_sh_arr)= %d, x= %s\n" % (ch_sh_row, len(ch_sh_arr), x), file=sys.stderr)
