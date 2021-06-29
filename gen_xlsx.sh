@@ -758,11 +758,13 @@ for i in $LST; do
      fi
      printf "RPS_ARR[%s]= %s, NUM_DIRS= %d DIR_NUM= %d\n" $JOB_ID $RC $NUM_DIRS $DIR_NUM > /dev/stderr
      if [ "$OPT_DESC_FILE" == "" ]; then
+       if [ "$AVERAGE" != "0" ]; then
        printf "$0.$LINENO opt_desc_file RC= %s i= %s\n"  $RC $i_abs_dir/desc.txt > /dev/stderr
        echo "$RC" > $i_abs_dir/desc.txt
        OPT_DESC_FILE=$(get_abs_filename "$i_abs_dir/desc.txt")
        printf "$0.$LINENO opt_desc_file= %s  i= %s\n" $OPT_DESC_FILE $i_abs_dir > /dev/stderr
        OPT_DESC_FILE_ARR[$DIR_NUM]=$OPT_DESC_FILE
+       fi
      fi
    fi
  fi
