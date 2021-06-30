@@ -6,6 +6,7 @@ function bc_rtn(val, k4, got_rpn_eqn, col_hdr_mx, col_hdr, rw_data,    la, val1,
    prt_it=1;
    bc_err = "";
    bc_str = "";
+   str = "";
    for(la=1; la <= got_rpn_eqn[k4,1,"max"]; la++) {
       bc_err = "";
       oper = got_rpn_eqn[k4,la,"opr"];
@@ -18,6 +19,12 @@ function bc_rtn(val, k4, got_rpn_eqn, col_hdr_mx, col_hdr, rw_data,    la, val1,
       }
       if (oper == "push_interval") {
         val1=interval+0.0;
+        bc_str = bc_str " " val1;
+        if (bc_err != "") { printf("bc_err1= %s\n", bc_err) > "/dev/stderr"; }
+        continue;
+      }
+      if (oper == "push_sv_avg_freq_ghz") {
+        val1=sv_avg_freq_ghz+0.0;
         bc_str = bc_str " " val1;
         if (bc_err != "") { printf("bc_err1= %s\n", bc_err) > "/dev/stderr"; }
         continue;
