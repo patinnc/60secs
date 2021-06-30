@@ -2759,7 +2759,13 @@ row += trows;
 #   Run Reported: 00:09:22 (562 821444034 562.821444)
 #  Success 500.perlbench_r base refrate ratio=181.03, runtime=562.821444, copies=64, threads=1, power=0.00W, temp=0.00 degC, humidity=0.00%
     #awk -v sum_file="/dev/stderr" '
-    RESP=`awk -v sum_file="$SUM_FILE" '
+    RESP=`awk -v option_str="$OPTIONS" -v sum_file="$SUM_FILE" '
+      BEGIN{
+        do_perlbench_subphase = 0;
+        if (index(option_str, "do_perlbench_subphase{1}") > 0) {
+          do_perlbench_subphase = 1;
+        }
+      }
       /  Rate Start: / {
         bm_nm = "";
         copies = 0;
@@ -2825,7 +2831,6 @@ row += trows;
           printf("specint\tspecint\t%s\t\"SI %s %s %s\"\n", copies, nm, "copies", bm_o) >> sum_file;
           printf("specint\tspecint\t%s\t\"SI %s %s %s\"\n", tm_beg, nm, "beg_ts", bm_o) >> sum_file;
           printf("specint\tspecint\t%s\t\"SI %s %s %s\"\n", tm_end, nm, "end_ts", bm_o) >> sum_file;
-          do_perlbench_subphase = 0;
           if (do_perlbench_subphase == 1 && index(nm, "perlbench") > 0) {
             tm_off = 0.0;
             sfx[1] = "aaaa";
@@ -2854,6 +2859,7 @@ row += trows;
     #echo "$0.$LINENO bye"
     #exit 1
   fi
+#abcd
   if [[ $i =~ phase_cpu2017.txt ]]; then
     echo "$0.$LINENO: got CPU2017.001.intrate.txt $i at $LINENO" > /dev/stderr
     OFILE="$i.tsv"
