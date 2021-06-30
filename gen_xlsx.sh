@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash 
 #SCR_DIR=`dirname $(readlink -e $0)`
 #SCR_DIR=`dirname $0`
 #SCR_DIR=`dirname "$(readlink -f "$0")"`
@@ -62,8 +62,9 @@ echo "$0 ${@}"
 echo "BACKGROUND= $BACKGROUND  NUM_CPUS= $NUM_CPUS"
 JOB_ID=0
 AVERAGE=0
+CLIPX=
 
-while getopts "AhvSa:b:B:c:D:d:e:F:g:I:j:m:N:o:P:r:s:X:x:" opt; do
+while getopts "AhvSa:b:B:c:C:D:d:e:F:g:I:j:m:N:o:P:r:s:X:x:" opt; do
   case ${opt} in
     A )
       AVERAGE=1
@@ -85,6 +86,9 @@ while getopts "AhvSa:b:B:c:D:d:e:F:g:I:j:m:N:o:P:r:s:X:x:" opt; do
       ;;
     c )
       CLIP=$OPTARG
+      ;;
+    C )
+      CLIPX=$OPTARG
       ;;
     D )
       DEBUG_OPT=$OPTARG
@@ -633,8 +637,37 @@ LST=$DIR
 if [ $VERBOSE -gt 0 ]; then
   echo "$0.$LINENO DIR: $DIR"
 fi
+#pwd > /dev/stderr
 #  echo "$0.$LINENO DIR: $DIR"
-#exit
+#exit 1
+declare -A PHS_ARR
+declare -A PHS_DIR_LIST
+declare -A PHS_DIR_LKUP
+declare -A PHS_DIR_NAME
+#PHS_ARR=()
+j=-1
+for i in $LST; do
+  j=$((j+1))
+  echo "$0.$LINENO dir $i"
+  if [ "$PHASE_FILE" != "" ]; then
+    RESP=`find $i -name $PHASE_FILE`
+    echo "$0.$LINENO find phase= $RESP"
+    if [ "$CLIPX" != "" -a "$RESP" != "" ]; then
+      CLIP_BEG_END=(`cat $RESP | awk -v clip="$CLIPX" '{if (index($0, clip) > 0) { beg= $2; end= $3; printf("%d\n%d\n", beg, end);exit;}}'`)
+      echo "$0.$LINENO CLIPX= $CLIPX CLIP_BEG_END= ${CLIP_BEG_END[@]}"
+      if [ ${CLIP_BEG_END[0]} != "" -a ${CLIP_BEG_END[1]} != "" ]; then
+        PHS_DIR_NAME[$i,$CLIPX]=$j
+        PHS_DIR_LIST[$i]=$j
+        PHS_DIR_LKUP[$j]=$i
+        PHS_ARR[$j,0]=${CLIP_BEG_END[0]}
+        PHS_ARR[$j,1]=${CLIP_BEG_END[1]}
+      fi
+    fi
+  fi
+done
+echo "$0.$LINENO PHS_ARR= ${PHS_ARR[@]}"
+#echo "$0.$LINENO PHS_DIR_LKUP= ${PHS_DIR_LKUP[@]}"
+#exit 1
 
 if [ "$SKU_LEN" != "0" ]; then
   echo "$0.$LINENO SKU= ${SKU[@]}"
@@ -727,7 +760,7 @@ for i in $LST; do
       fi
    fi
  fi
- IDIR_ABS      OPT_DESC_FILE=$(get_abs_filename "$i/desc.txt")
+ #IDIR_ABS      OPT_DESC_FILE=$(get_abs_filename "$i/desc.txt")
  if [ $VERBOSE -gt 0 ]; then
    pushd $i
  else
@@ -806,6 +839,14 @@ for i in $LST; do
  if [ "$END_TM_IN" != "" ]; then
     OPT_END_TM=" -e $END_TM_IN "
  fi
+ fi
+ #DIRN=${PHS_DIR_LIST[$i]}
+ DIRN=${PHS_DIR_NAME[$i,$CLIPX]}
+ echo "$0.$LINENO phs_arr dirn= $DIRN"
+ if [ "$DIRN" != "" ]; then
+   OPT_BEG_TM=" -b ${PHS_ARR[$DIRN,0]} "
+   OPT_END_TM=" -e ${PHS_ARR[$DIRN,1]} "
+   echo "$0.$LINENO phs_arr dirn= $DIRN OPT_BEG_TM= $OPT_BEG_TM OPT_END_TM= $OPT_END_TM"
  fi
  OPT_SKIP=
  if [ "$SKIP_XLS" -gt "0" ]; then
