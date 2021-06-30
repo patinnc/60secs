@@ -31,6 +31,18 @@ function rpn_rtn(val, k4, got_rpn_eqn, col_hdr_mx, col_hdr, rw_data,    la, val1
         if (rpn_err != "") { printf("rpn_err1= %s\n", rpn_err) > "/dev/stderr"; }
         continue;
       }
+      if (oper == "push_interval") {
+        val1=interval+0.0;
+        rpn_push(val1);
+        if (rpn_err != "") { printf("rpn_err1= %s\n", rpn_err) > "/dev/stderr"; }
+        continue;
+      }
+      if (oper == "push_sv_avg_freq_ghz") {
+        val1=sv_avg_freq_ghz+0.0;
+        rpn_push(val1);
+        if (rpn_err != "") { printf("rpn_err1= %s\n", rpn_err) > "/dev/stderr"; }
+        continue;
+      }
       if (oper == "push_row_val" || oper == "push_row_val2") {
         val1= "";
         if (got_rpn_eqn[k4,la,"lkup_col"]=="") {
