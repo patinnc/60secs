@@ -42,6 +42,10 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
    }
    }
   BEGIN{
+#    10.013064568;3909750994;;L3_accesses;80100000630;100.00;4.068;M/sec
+#    10.013064568;5063462830;;L3_lat_out_cycles;80100005350;100.00;5.268;M/sec
+#    10.013064568;214924035;;L3_lat_out_misses;80100007663;100.00;0.224;M/sec
+
     i=0;
     #UNC = ++i; hdr[UNC] = "mem_bw";
     #L3m = ++i; hdr[L3m] = "L3misses";
@@ -84,8 +88,8 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
     lkup[++j] = "unc_c_tor_inserts.miss_opcode.0x182";   tor_ins = j;
     lkup[++j] = "unc_c_tor_occupancy.miss_opcode.0x182"; tor_occ = j;
     lkup[++j] = "unc_c_clockticks";                      tor_clk = j;
-    lkup[++j] = "L3_lat_out_misses";    L3m = j;
-    lkup[++j] = "L3_accesses";          L3a = j;
+    lkup[++j] = "l3_lat_out_misses";    L3m = j;
+    lkup[++j] = "l3_accesses";          L3a = j;
     lkup[++j] = "hwprefetch_local";     pfl = j;
     lkup[++j] = "hwprefetch_remote";    pfr = j;
     lkup[++j] = "mem_local";            meml = j;
@@ -143,9 +147,9 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
 #        }
         evt_list[v] = j;
         evt_lkup[j] = v;
+        evt_mx = j;
       }
     }
-    evt_last = i;
     if (offc_dmnd_data_rd != "") { L3m = offc_dmnd_data_rd; }
     if (offc_out_dmnd_data_rd != "") { L3cyc = offc_out_dmnd_data_rd; }
     if (qpi_tx != "" ) { unc_upi_bytes = qpi_tx; }
@@ -157,7 +161,6 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
     j = 0;
 #   some events are alternative ways to get the same count (like msr/aperf/ is same as cycles (but msr/aperf/ doesnt use up an event counter)
     if (index($0, "msr/aperf/") > 0) { j=cyc; }
-    else if (index($0, "L3_lat_out_cycles") > 0) { j=L3cyc; }
     else if (index($0, "msr/mperf/") > 0) { j=mperf; }
     else if (index($0, "msr/irperf/") > 0) { j=instr; }
     else if (index($0, "instructions") > 0) { j=instr; }
@@ -165,10 +168,20 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
     if (j == 0) {
       n=split($1, arr, ";");
       e = tolower(arr[4]);
+      if (e == "") { next; }
       if (e in evt_list) {
         #printf("got e= %s\n", e);
         j = evt_list[e];
+      } else {
+        if (index(e, "_read_write") == 0 && index(e, "unc_") != 1) {
+        evt_list[e] = ++evt_mx;
+        evt_lkup[evt_mx] = e;
+        j = evt_mx;
+        printf("added evt[%d]= %s\n", j, e);
+        }
       }
+      if (index(e, "l3_lat_out_cycles") > 0) { L3cyc = j; }
+      if (index(e, "l3_lat_out_misses") > 0) { L3m = j; }
     }
     if (j != 0) {
       n=split($1, arr, ";");
