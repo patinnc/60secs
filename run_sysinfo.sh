@@ -6,8 +6,9 @@ SCR_DIR=`dirname $(readlink -e $0)`
 CFG_DIR=
 RUN_TM=1
 PREFIX_DIR=0
+QUIT=0
 
-while getopts "hPlc:p:" opt; do
+while getopts "hPlqc:p:" opt; do
   case ${opt} in
     c )
       CFG_DIR=$OPTARG
@@ -20,6 +21,9 @@ while getopts "hPlc:p:" opt; do
       ;;
     P )
       PREFIX_DIR=1
+      ;;
+    q )
+      QUIT=1
       ;;
     h )
       echo "$0 run compute and disk benchmarks using config files in cfg_dir and put results in results dir"
@@ -34,10 +38,10 @@ while getopts "hPlc:p:" opt; do
       exit
       ;;
     : )
-      echo "Invalid option: $OPTARG requires an argument" 1>&2
+      echo "$0.$LINENO Invalid option: $OPTARG requires an argument" 1>&2
       ;;
     \? )
-      echo "Invalid option: $OPTARG" 1>&2
+      echo "$0.$LINENO Invalid option: $OPTARG" 1>&2
       ;;
   esac
 done
@@ -57,7 +61,10 @@ mkdir -p $result
 pushd $result
 OUT_FILE=sysinfo.txt
 
-cmds=("hostname" "uname -a" "lsb_release -a" "cat /etc/os-release" "lscpu" "who -r" "cat /proc/meminfo" "numactl --hardware" "df -h ." "dmidecode" "lshw" "lstopo --of txt --whole-io" "lstopo --no-io" "lsblk" "fdisk -l" "lspci -vv" "lspci -t" "cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_driver" "cat /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor" "java -version" "which java" "gcc --version" "rdmsr 0x1ad" "cpuid" "lsblk -P -o NAME,SIZE,MODEL")
+cmds=("hostname" "uname -a" "lsb_release -a" "cat /etc/os-release" "lscpu" "who -r" "cat /proc/meminfo" "numactl --hardware" "df -h ." "dmidecode" "lshw" "lstopo --of txt --whole-io" "lstopo --no-io" "lsblk" "fdisk -l" "lspci -vv" "lspci -t" "cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_driver" "cat /sys/devices/system/cpu/cpu*/cpufreq/scaling_governor" "java -version" "which java" "gcc --version" "rdmsr 0x1ad" "cpuid" "lsblk -P -o NAME,SIZE,MODEL")
+
+TS=`date +%s.%N`
+echo "beg sysinfo $TS" >> phase.txt
 
 date > $OUT_FILE
 for cmd in "${cmds[@]}"; do
@@ -71,12 +78,41 @@ hwinfo > hwinfo.txt
 lsblk -P -o "NAME,SIZE,MODEL" > lsblk_sz_model.txt
 
 SPIN_BIN=$SCR_DIR/extras/spin.x
-$SPIN_BIN -t 10 -w freq > spin_freq.txt
+$SPIN_BIN -t 10 -w freq_sml > spin_freq.txt
 $SPIN_BIN -t 10 -w mem_bw -s 100m -b 64 > spin_bw.txt
-$SPIN_BIN -t 10 -w mem_bw_remote -s 100m -b 64 > spin_bw_remote.txt
+lscpu > lscpu.txt
+lscpu -e > lscpu_e.txt
 
-echo "finished sysinfo"
+numactl -H > numactl_H.txt
+NDS=`awk '/^available: .* nodes /{printf("%s\n", $2);exit;}' numactl_H.txt`
+CpusPerNode=`awk '/^node 0 cpus: /{printf("%s\n", NF-3);exit;}' numactl_H.txt`
+OFILE=spin_bw_remote.txt
+echo "numa_nodes= $NDS" > $OFILE
+echo "cpus/node= $CpusPerNode" >> $OFILE
+echo "spin numa memory bandwidth matrix GB/s"  >> $OFILE
+printf "Numa node\t" >> $OFILE
+for ((i=0; i < $NDS; i++)); do
+  printf "%d\t" $i >> $OFILE
+done
+printf "\n" >> $OFILE
+#work= mem_bw, threads= 4, total perf= 12.025 GB/sec
+for ((i=0; i < $NDS; i++)); do
+  printf "%d\t" $i  >> $OFILE
+  for ((j=0; j < $NDS; j++)); do
+     RESP=`numactl -N $i -m $j $SPIN_BIN -w mem_bw -t 1 -s 100m -b 64 -P -n $CpusPerNode 2> /dev/null`
+     PERF=`echo "$RESP" | grep "total perf=" | awk '{printf("%s\n", $7);}'`
+     printf "%s\t" $PERF  >> $OFILE
+  done
+  printf "\n"  >> $OFILE
+done
+
+TS=`date +%s.%N`
+echo "end sysinfo $TS" >> phase.txt
 popd
 
-exit
+if [ "$QUIT" == "1" ]; then
+  $SCR_DIR/quit_monitoring.sh 
+fi
+
+exit 0
 
