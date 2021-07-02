@@ -1,5 +1,6 @@
 #!/bin/bash
 
+export LC_ALL=C
 INF=/proc/cpuinfo
 if [ "$1" != "" ]; then
   INF=$1
