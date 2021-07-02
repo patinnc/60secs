@@ -267,7 +267,6 @@ echo "# started on $dtc $dte" > $FL
       fi
       EVTF="cpu-clock,msr/aperf/,msr/mperf/$IRPERF"
       CYCLES_ANY="cpu/name='cycles_any',event=0x76,cmask=0x1,inv=0/"
-      NOINST="{cpu/event=0xb5,umask=0x01,name=DeDisDispatchStalls.NoInstructions/}"
       BR_MISP_CYCLES="cpu/name='br_misp_cycles',event=0xc3,cmask=0x1,inv=0/"
       RET_INST_CYCLES="cpu/name='ret_inst_cycles',event=0xc0,cmask=0x1,inv=0/"
       RET_UOPS="cpu/name='ret_uops',event=0xc1/"
@@ -297,7 +296,7 @@ echo "# started on $dtc $dte" > $FL
       if [ "$CK_PWR" != "" ]; then
         PWR_EVT=",power/energy-pkg/"
       fi
-      EVT="$EVTF,${NOINST},${RET_INST_CYCLES},${RET_UOPS_CYCLES}${MEMBW}${L3ACC}${L3LAT},$HWPF_LCL,$HWPF_RMT,$MEM_LCL,$MEM_RMT${PWR_EVT}"
+      EVT="$EVTF,${RET_INST_CYCLES},${RET_UOPS_CYCLES}${MEMBW}${L3ACC}${L3LAT},$HWPF_LCL,$HWPF_RMT,$MEM_LCL,$MEM_RMT${PWR_EVT}"
       #EVT="$EVTF,$DISP_STALL1,$DISP_STALL0,stalled-cycles-backend,stalled-cycles-frontend"
     else
       # ice lake topdown events
