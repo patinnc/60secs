@@ -401,6 +401,9 @@ function prt_rpn_eqn(kmx,   i, str) {
        L3_cha_misses_str =  evt_lkup[i];
        got_unc_cha_miss= 1;
      }
+     if (levt == "l3_accesses") {
+       L3_cha_access_str = evt_lkup[i];
+     }
      if (levt == "msr/aperf/") {
        L3_cha_clockticks_str = evt_lkup[i];
        got_unc_cha_clockticks = 1;
