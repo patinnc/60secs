@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash 
 
 # ./sys_2_tsv.sh -d some_dir_with_files_created_by_60secs_sh
 # 60secs.sh creates the sys_*.txt files which are read by sys_2_tsv.sh and.
