@@ -77,6 +77,9 @@ function trim(s) { return rtrim(ltrim(s)); }
       }
    }
    if (index(FNM, "result.csv") > 0) {
+        if (index($0,"TMA_") > 0) {
+          gsub("TMA_", "TMAM_", $0);
+        }
       if (fl0 == 0) {
        #printf("got result.csv= %s\n", FNM) > "/dev/stderr";
       }
@@ -108,12 +111,18 @@ function trim(s) { return rtrim(ltrim(s)); }
         ts_time = $7;
         ts_year = $8;
         ts_epoch = $10;
+        if (ts_epoch == "EPOCH") {
+          ts_epoch = $11;
+        }
         printf("ts_epoch= %s for line= %s\n", ts_epoch, $0) > "/dev/stderr";
         got_result_csv_epoch=1;
         next;
         #nextfile;
       }
       if (got_result_csv_epoch == 1 && length($0) > 1) {
+        if (index($0,"TMA_") > 0) {
+          gsub("TMA_", "TMAM_", $0);
+        }
         n = split($0, arr, ",");
         res_ts_off = arr[1];
         if (!(res_ts_off in res_ts_list)) {
@@ -125,6 +134,9 @@ function trim(s) { return rtrim(ltrim(s)); }
       next;
    }
    if (index(FNM, metric_avg) > 0) {
+        if (index($0,"TMA_") > 0) {
+          gsub("TMA_", "TMAM_", $0);
+        }
      if (!(FNM in avg_file_list)) {
         avg_file_list[FNM] = ++avg_file_mx;
         avg_file_lkup[avg_file_mx] = FNM;
@@ -133,6 +145,12 @@ function trim(s) { return rtrim(ltrim(s)); }
         next;
      }
      avg_file_i = avg_file_list[FNM];
+     if (index($0,"TMA_") > 0) {
+       gsub("TMA_", "TMAM_", $0);
+     }
+     if (index($0,"TMA.") > 0) {
+       gsub(/TMA./, "TMAM.", $0);
+     }
      n = split($0, arr, ",");
      if (!(arr[1] in sv_aln_list)) {
        amx++;
@@ -147,6 +165,9 @@ function trim(s) { return rtrim(ltrim(s)); }
    }
    if (index(FNM, metric_file) > 0) {
      NFL=FNM ".tsv";
+        if (index($0, "metric_TMA_") > 0) {
+          gsub("metric_TMA_", "metric_TMAM_", $0);
+        }
      if (hdr == "") {
         hdr = $0;
         metric_file_hdr = $0;
@@ -203,6 +224,13 @@ END{
   num_cpus = cpu_count * skt_count * ht_count;
   printf("metric_out: num_cpus= %d\n", num_cpus) > "/dev/stderr";
   hn = split(hdr, harr, ",");
+  for (i=1; i <= hn; i++) {
+    if (index(harr[i], "metric_TMA_") == 1) {
+      gsub("metric_TMA_", "metric_TMAM_", harr[i]);
+    }else if (index(harr[i], "metric_TMA.") == 1) {
+      gsub("metric_TMA.", "metric_TMAM.", harr[i]);
+    }
+  }
   extr_col = 1;
 
   emx = 0;
@@ -526,6 +554,18 @@ END{
   prev_lvl="";
   L2_mx=1;
   tmam_hdr_L2[L2_mx] = "";
+  tma_str = "tmam";
+  got_tmam = 0;
+  for (i=1; i <= hn; i++) {
+     str = tolower(harr[i]);
+     if (index(str, "%") > 0 && index(str, tma_str) > 0) {
+       got_tmam = 1;
+       break;
+     }
+  }
+  if (got_tmam == 0) {
+    tma_str = "tma";
+  }
   for (i=1; i <= hn; i++) {
      printf("\t%s", harr[i]) > NFL;
      hn_list[harr[i]] = i;
@@ -536,7 +576,7 @@ END{
         mb_arr[++mb_mx] = i+extr_col;
         #printf("MB hdr= %s, mx= %d\n", harr[i], mb_arr[mb_mx]) > "/dev/stderr";
      }
-     if (index(str, "%") > 0 && index(str, "tmam") == 0) {
+     if (index(str, "%") > 0 && index(str, tma_str) == 0) {
         pct_arr[++pct_mx] = i+extr_col;
      }
      if (index(str, "latency") > 0) {
@@ -554,14 +594,14 @@ END{
      if (index(str, "mpi") > 0 || index(str, "per instr") > 0) {
         mpi_arr[++mpi_mx] = i+extr_col;
      }
-     if (index(str, "tmam") > 0 || index(str, "metric_cpu utilization %") > 0) {
+     if (index(str, tma_str) > 0 || index(str, "metric_cpu utilization %") > 0) {
         tmam_arr[++tmam_mx] = i+extr_col;
      }
-     pos2d = index(str, "tmam_..");
-     pos3d = index(str, "tmam_....");
-     pos4d = index(str, "tmam_......");
-     pos5d = index(str, "tmam_........");
-     if (index(str, "tmam") > 0 && pos2d == 0 && index(str, "cycles_both") == 0 && index(str, "coreipc") == 0) {
+     pos2d = index(str, tma_str"_..");
+     pos3d = index(str, tma_str"_....");
+     pos4d = index(str, tma_str"_......");
+     pos5d = index(str, tma_str"_........");
+     if (index(str, tma_str) > 0 && pos2d == 0 && index(str, "cycles_both") == 0 && index(str, "coreipc") == 0 && index(str, "metric_tma_info_system_smt_2t_utilization") == 0) {
         tmam_arr_L1[++tmam_mx_L1] = i+extr_col;
      }
      if (doing_L2 == 1 && pos2d == 0) {
@@ -611,14 +651,19 @@ END{
      n = split(sv_ln[i], arr, ",");
      if (mx_cols < n) { mx_cols = n; }
      tm = arr[1]+0.0;
+     if (tm < ts_epoch) {
      if (tm in res_ts_lkup) {
        tm_off = res_ts_lkup[tm]+0.0;
      } else {
        printf("missed tm= %s in results.csv\n", tm) > "/dev/stderr";
        tm_off = tm * smp_intrvl;
      }
-     use_line = 1;
      tm_cur = ts_epoch + tm_off;
+     } else {
+       tm_off = tm - ts_epoch;
+     tm_cur = tm;
+     }
+     use_line = 1;
      if ((tm_beg_in != 0.0 && tm_cur < tm_beg_in) || (tm_end_in != 0.0 && tm_cur > tm_end_in)) {
         if (verbose > 0) {
           printf("tmam going to drop line = %d tm_off= %f, tm_beg_in= %f tm_cur= %f, tm_end_in= %f\n", i, tm_off, tm_beg_in, tm_cur, tm_end_in) > "/dev/stderr";
@@ -851,7 +896,7 @@ END{
      close(sum_tmam);
   }
   if (amx == 0) {
-    exit;
+    exit(1);
   }
   an = split(ahdr, harr, ",");
   javg = 0;
@@ -862,7 +907,7 @@ END{
      }
   }
   if (javg == 0) {
-    exit;
+    exit(1);
   }
   #printf("--------got into metric sum_file= %s\n", sum_file) > "/dev/stderr";
   if (bm_mx > 0) {
@@ -895,6 +940,10 @@ END{
   printf("\titp\t%s\t%s\n", "4", "data_col_key") >> sum_file;
   printf("\titp_metric_itp\t%s\t%s\n", "itp_metric_itp", "data_sheet") >> sum_file;
   if (options != "" && index(options, "sum_file_no_formula") > 0) {
+     do_avg=1;
+     printf("using computed averages for summary file\n") > "/dev/stderr";
+  }
+  if (emx == 1 && do_avg == 0) {
      do_avg=1;
      printf("using computed averages for summary file\n") > "/dev/stderr";
   }
@@ -954,4 +1003,5 @@ END{
   }
   printf("\n") >> sum_file;
   close(sum_file);
+  exit(0);
 }
