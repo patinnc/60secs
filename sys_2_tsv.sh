@@ -231,6 +231,13 @@ fi
 
 printf "host\thostname\t%s\thostname\n"  "$HOSTNM" >> $SUM_FILE
 
+CK_DESC=`find . -name desc.txt`
+if [ "$CK_DESC" != "" ]; then
+  CK_DESC=`cat $CK_DESC | head -1`
+  printf "dir\tdesc\t%s\tdesc\n"  "$CK_DESC" >> $SUM_FILE
+fi
+
+
 get_grail_info_for_hostname() {
   if [ "$1" != "" ]; then
     UHOSTNM=$1
