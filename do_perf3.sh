@@ -1,7 +1,7 @@
 #!/bin/bash
 
 SCR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-LANG=/usr/lib/locale/en_US
+export LC_ALL=C
 AWK_BIN=awk
 if [ -e $SCR_DIR/bin/gawk ]; then
   AWK_BIN=$SCR_DIR/bin/gawk
