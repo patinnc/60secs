@@ -687,18 +687,18 @@ fi
 
 TOT_HOSTS=$NUM_HOST
 
-if [ -e $SCR_DIR/jump_box_tools/gen_report.sh ]; then
-  GEN_RPT=$SCR_DIR/jump_box_tools/gen_report.sh
+if [ -e $SCR_DIR/60secs/gen_report.sh ]; then
+  GEN_RPT=$SCR_DIR/60secs/gen_report.sh
 else
   GEN_RPT=$SCR_DIR/gen_report.sh
 fi
-if [ -e $SCR_DIR/jump_box_tools/find_closest_run_cmd_match.sh ]; then
-  FIND_CLOSEST=$SCR_DIR/jump_box_tools/find_closest_run_cmd_match.sh
+if [ -e $SCR_DIR/60secs/find_closest_run_cmd_match.sh ]; then
+  FIND_CLOSEST=$SCR_DIR/60secs/find_closest_run_cmd_match.sh
 else
   FIND_CLOSEST=$SCR_DIR/find_closest_run_cmd_match.sh
 fi
-if [ -e $SCR_DIR/jump_box_tools/fetch_output.sh ]; then
-  FTCH_OUTPUT=$SCR_DIR/jump_box_tools/fetch_output.sh
+if [ -e $SCR_DIR/60secs/fetch_output.sh ]; then
+  FTCH_OUTPUT=$SCR_DIR/60secs/fetch_output.sh
 else
   FTCH_OUTPUT=$SCR_DIR/fetch_output.sh
 fi
