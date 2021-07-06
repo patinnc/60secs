@@ -905,7 +905,7 @@ function prt_rpn_eqn(kmx,   i, str) {
    nwfor[kmx,1,"hdr"]="cpu-cycles/sec (1e9 cycles/sec)";
 
    if (amd_cpu == 1) {
-#            "name"       : "metric_TMAM_Retiring(%)",
+#            "name"       : "topdown_Retiring(%)",
    kmx++;
    kkmx=0;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
@@ -928,12 +928,10 @@ function prt_rpn_eqn(kmx,   i, str) {
    got_rpn_eqn[kmx,      1,"max"]=kkmx;
    lkfor[kmx,1]="ret_uops_cycles";
    lkfor[kmx,2]=cpu_cycles_str;  # get the instances from the first lkfor event
-   nwfor[kmx,1,"hdr"]="metric_TMAM_Retiring(%)";
+   nwfor[kmx,1,"hdr"]="topdown_Retiring(%)";
    }
 
    if (amd_cpu == 0) {
-#"name"       : "metric_TMAM_Info_CoreIPC",
-#                        "expression" : "[instructions] / ([CPU_CLK_UNHALTED.THREAD_ANY] / [const_thread_count])"
    kmx++;
    kkmx=0;
    lkfor[kmx,1]=instructions_str;
@@ -956,11 +954,9 @@ function prt_rpn_eqn(kmx,   i, str) {
    got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
    got_rpn_eqn[kmx,      1,"max"]=kkmx;
    nwfor[kmx,1,"hdr"]="coreIpc";
-   nwfor[kmx,1,"alias"]="metric_TMAM_Info_CoreIPC";
+   nwfor[kmx,1,"alias"]="topdown_Info_CoreIPC";
 
 
-#            "name"       : "metric_TMAM_Retiring(%)",
-#            "expression" : "100 * [UOPS_RETIRED.RETIRE_SLOTS] / (4 * ([CPU_CLK_UNHALTED.THREAD_ANY] / [const_thread_count]))"
    kmx++;
    kkmx=0;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
@@ -992,7 +988,7 @@ function prt_rpn_eqn(kmx,   i, str) {
    lkfor[kmx,1]=tolower("UOPS_RETIRED.RETIRE_SLOTS");
    lkfor[kmx,2]=cpu_cycles_str;  # get the instances from the first lkfor event
    lkfor[kmx,3]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
-   nwfor[kmx,1,"hdr"]="metric_TMAM_Retiring(%)";
+   nwfor[kmx,1,"hdr"]="topdown_Retiring(%)";
 
 #
 #  begin tdicx topdown ice-lake sum
@@ -1042,7 +1038,7 @@ function prt_rpn_eqn(kmx,   i, str) {
    lkfor[kmx,4]="int_misc.uop_dropping";
    lkfor[kmx,5]="topdown-be-bound";
    lkfor[kmx,6]="topdown-bad-spec";
-   nwfor[kmx,1,"hdr"]="metric_TMAM_Sum";
+   nwfor[kmx,1,"hdr"]="topdown_Sum";
 
 #  end   tdicx topdown ice-lake sum
 #
@@ -1071,7 +1067,7 @@ function prt_rpn_eqn(kmx,   i, str) {
    got_rpn_eqn[kmx,      1,"max"]=kkmx;
    lkfor[kmx,1]="topdown-retiring";
    lkfor[kmx,2]="cpu/slots/";
-   nwfor[kmx,1,"hdr"]="metric_TMAM_Retiring(%)";
+   nwfor[kmx,1,"hdr"]="topdown_Retiring(%)";
 
    #if (evt[tdicx_ret,1] != "" && evt[not_deliv,1] != "" && evt[uop_drop,1] != "") {
         #td_fe_v = 100.0*(evt[not_deliv,i]-evt[uop_drop,i])/evt[tdicx_slots,i];
@@ -1102,7 +1098,7 @@ function prt_rpn_eqn(kmx,   i, str) {
    lkfor[kmx,1]="idq_uops_not_delivered.core";
    lkfor[kmx,2]="int_misc.uop_dropping";
    lkfor[kmx,3]="cpu/slots/";
-   nwfor[kmx,1,"hdr"]="metric_TMAM_Frontend_Bound(%)";
+   nwfor[kmx,1,"hdr"]="topdown_Frontend_Bound(%)";
 
 
     #td_be_v = 100.0*evt[tdicx_be,i]/evt[tdicx_slots,i];
@@ -1127,7 +1123,7 @@ function prt_rpn_eqn(kmx,   i, str) {
    got_rpn_eqn[kmx,      1,"max"]=kkmx;
    lkfor[kmx,1]="topdown-be-bound";
    lkfor[kmx,2]="cpu/slots/";
-   nwfor[kmx,1,"hdr"]="metric_TMAM_Backend_bound(%)";
+   nwfor[kmx,1,"hdr"]="topdown_Backend_bound(%)";
 
 
    #uops_issued.any
@@ -1153,11 +1149,8 @@ function prt_rpn_eqn(kmx,   i, str) {
    got_rpn_eqn[kmx,      1,"max"]=kkmx;
    lkfor[kmx,1]="topdown-bad-spec";
    lkfor[kmx,2]="cpu/slots/";
-   nwfor[kmx,1,"hdr"]="metric_TMAM_Bad_Speculation(%)";
+   nwfor[kmx,1,"hdr"]="topdown_Bad_Speculation(%)";
 
-   # 100*(${ITP_UOP_ANY}-${ITP_UOP}+((4.0*${ITP_MISC})/${thr_per_core}))/${itp_denom}
-#             "name"       : "metric_TMAM_Bad_Speculation(%)",
-#             "expression" : "100 * ([UOPS_ISSUED.ANY] - [UOPS_RETIRED.RETIRE_SLOTS] + ((4 * [INT_MISC.RECOVERY_CYCLES_ANY]) / [const_thread_count])) / (4 * ([CPU_CLK_UNHALTED.THREAD_ANY] / [const_thread_count])) "
    if (cpu_type != "Ice Lake" && got_bad_spec_evts == need_bad_spec_evts) {
    kmx++;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
@@ -1193,12 +1186,9 @@ function prt_rpn_eqn(kmx,   i, str) {
    lkfor[kmx,3]="int_misc.recovery_cycles_any";
    lkfor[kmx,4]=cpu_cycles_str;  # get the instances from the first lkfor event
    lkfor[kmx,5]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
-   nwfor[kmx,1,"hdr"]="metric_TMAM_Bad_Speculation(%)";
+   nwfor[kmx,1,"hdr"]="topdown_Bad_Speculation(%)";
    }
 
-#            "name"       : "metric_TMAM_Frontend_Bound(%)",
-#            "expression" : "100 * [IDQ_UOPS_NOT_DELIVERED.CORE] / (4 * ([cpu-cycles] / [const_thread_count]))"
-#  "100 * [IDQ_UOPS_NOT_DELIVERED.CORE] / (4 * ([CPU_CLK_UNHALTED.THREAD_ANY] / [const_thread_count]))"
    kmx++;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
    got_lkfor[kmx,2]=3; # num of fields to look for
@@ -1232,7 +1222,7 @@ function prt_rpn_eqn(kmx,   i, str) {
    lkfor[kmx,1]=tolower("IDQ_UOPS_NOT_DELIVERED.CORE");
    lkfor[kmx,2]=cpu_cycles_str;  # get the instances from the first lkfor event
    lkfor[kmx,3]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
-   nwfor[kmx,1,"hdr"]="metric_TMAM_Frontend_Bound(%)";
+   nwfor[kmx,1,"hdr"]="topdown_Frontend_Bound(%)";
 
 #    rpn operations
 #    TBD repeating this stuff for sockets. Right now (if you had per-socket data and -o dont_sum_sockets) you wouldnt match up the column header because youd have " S0" or " S1" socket suffix
@@ -1247,13 +1237,13 @@ function prt_rpn_eqn(kmx,   i, str) {
    kkmx = 0;
    got_rpn_eqn[kmx, ++kkmx, "val"]=100;
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="metric_TMAM_Retiring(%)"
+   got_rpn_eqn[kmx, ++kkmx, "val"]="topdown_Retiring(%)"
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="metric_TMAM_Frontend_Bound(%)"
+   got_rpn_eqn[kmx, ++kkmx, "val"]="topdown_Frontend_Bound(%)"
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
    got_rpn_eqn[kmx, ++kkmx, "val"]="+";
    got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="metric_TMAM_Bad_Speculation(%)"
+   got_rpn_eqn[kmx, ++kkmx, "val"]="topdown_Bad_Speculation(%)"
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
    got_rpn_eqn[kmx, ++kkmx, "val"]="+";
    got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
@@ -1264,7 +1254,7 @@ function prt_rpn_eqn(kmx,   i, str) {
    lkfor[kmx,2]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
    lkfor[kmx,3]=tolower("IDQ_UOPS_NOT_DELIVERED.CORE");
    lkfor[kmx,4]=cpu_cycles_str;  # get the instances from the first lkfor event
-   nwfor[kmx,1,"hdr"]="metric_TMAM_Backend_bound(%)";
+   nwfor[kmx,1,"hdr"]="topdown_Backend_bound(%)";
    } else {
    kmx++;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
@@ -1278,11 +1268,11 @@ function prt_rpn_eqn(kmx,   i, str) {
 #abc
    got_rpn_eqn[kmx, ++kkmx, "val"]="100.0 - ( ";
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="metric_TMAM_Retiring(%)"
+   got_rpn_eqn[kmx, ++kkmx, "val"]="topdown_Retiring(%)"
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
    got_rpn_eqn[kmx, ++kkmx, "val"]=" + ";
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="metric_TMAM_Frontend_Bound(%)"
+   got_rpn_eqn[kmx, ++kkmx, "val"]="topdown_Frontend_Bound(%)"
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
    got_rpn_eqn[kmx, ++kkmx, "val"]=" ) ";
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
@@ -1292,7 +1282,7 @@ function prt_rpn_eqn(kmx,   i, str) {
    lkfor[kmx,2]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
    lkfor[kmx,3]=tolower("IDQ_UOPS_NOT_DELIVERED.CORE");
    lkfor[kmx,4]=cpu_cycles_str;  # get the instances from the first lkfor event
-   nwfor[kmx,1,"hdr"]="metric_TMAM_Backend_Bound_BadSpec(%)";
+   nwfor[kmx,1,"hdr"]="topdown_Backend_Bound_BadSpec(%)";
    }
    }
 
@@ -1320,7 +1310,7 @@ function prt_rpn_eqn(kmx,   i, str) {
    got_rpn_eqn[kmx,      1,"max"]=kkmx;
    lkfor[kmx,1]="stalled-cycles-backend";
    lkfor[kmx,2]=cpu_cycles_str;  # get the instances from the first lkfor event
-   nwfor[kmx,1,"hdr"]="metric_TMAM_Backend_Bound_BadSpec(%)";
+   nwfor[kmx,1,"hdr"]="topdown_Backend_Bound_BadSpec(%)";
 
 #    AMD frontend bound
    kmx++;
@@ -1344,7 +1334,7 @@ function prt_rpn_eqn(kmx,   i, str) {
    got_rpn_eqn[kmx,      1,"max"]=kkmx;
    lkfor[kmx,1]="stalled-cycles-frontend";
    lkfor[kmx,2]=cpu_cycles_str;  # get the instances from the first lkfor event
-   nwfor[kmx,1,"hdr"]="metric_TMAM_Frontend_Bound(%)";
+   nwfor[kmx,1,"hdr"]="topdown_Frontend_Bound(%)";
 
 #    AMD %dispatch_stalls_0
    kmx++;
@@ -1563,42 +1553,42 @@ function prt_rpn_eqn(kmx,   i, str) {
         if (nwfor[k,1,"hdr"] == "L3 miss latency (ns)") {
           L3_latency_cols[++L3_latency_cols_mx] = cols;
         }
-        if (index(nwfor[k,1,"hdr"], "not_halted") > 0 || index(nwfor[k,1,"hdr"], "TMAM") > 0 || index(nwfor[k,1,"hdr"], "power_pkg (watts)") > 0) {
-          if (index(nwfor[k,1,"hdr"], "TMAM_Sum") == 0) {
-            TMAM_cols[++TMAM_cols_mx] = cols;
+        if (index(nwfor[k,1,"hdr"], "not_halted") > 0 || index(nwfor[k,1,"hdr"], "topdown_") > 0 || index(nwfor[k,1,"hdr"], "power_pkg (watts)") > 0) {
+          if (index(nwfor[k,1,"hdr"], "topdown_Sum") == 0) {
+            topdown_var_cols[++topdown_var_cols_mx] = cols;
           }
         }
         if (index(nwfor[k,1,"hdr"], "%dispatch_stalls_") > 0) {
-          TMAM_cols[++TMAM_cols_mx] = cols;
+          topdown_var_cols[++topdown_var_cols_mx] = cols;
         }
         if (nwfor[k,1,"hdr"] == "IPC" || index(nwfor[k,1,"hdr"], "GHz") > 0 || index(nwfor[k,1,"hdr"], "PKI") > 0) {
           ipc_cols[++ipc_cols_mx] = cols;
         }
         if (got_bad_spec_evts == need_bad_spec_evts) {
-        if (index(nwfor[k,1,"hdr"], "metric_TMAM_Bad_Speculation(%)") > 0) {
+        if (index(nwfor[k,1,"hdr"], "topdown_Bad_Speculation(%)") > 0) {
           ++got_mini_ITP;
           ITP_lvl[got_mini_ITP,1] = cols;
           ITP_lvl[got_mini_ITP,2] = "bs";
         }
-        if (index(nwfor[k,1,"hdr"], "metric_TMAM_Backend_bound(%)") > 0) {
+        if (index(nwfor[k,1,"hdr"], "topdown_Backend_bound(%)") > 0) {
           ++got_mini_ITP;
           ITP_lvl[got_mini_ITP,1] = cols;
           ITP_lvl[got_mini_ITP,2] = "be";
         }
         } else {
-        if (index(nwfor[k,1,"hdr"], "metric_TMAM_Backend_Bound_BadSpec") > 0) {
+        if (index(nwfor[k,1,"hdr"], "topdown_Backend_Bound_BadSpec") > 0) {
           ++got_mini_ITP;
           ITP_lvl[got_mini_ITP,1] = cols;
           ITP_lvl[got_mini_ITP,2] = "bs";
         }
         }
 
-        if (index(nwfor[k,1,"hdr"], "metric_TMAM_Frontend_Bound") > 0) {
+        if (index(nwfor[k,1,"hdr"], "topdown_Frontend_Bound") > 0) {
           ++got_mini_ITP;
           ITP_lvl[got_mini_ITP,1] = cols;
           ITP_lvl[got_mini_ITP,2] = "fe";
         }
-        if (index(nwfor[k,1,"hdr"], "metric_TMAM_Retiring") > 0) {
+        if (index(nwfor[k,1,"hdr"], "topdown_Retiring") > 0) {
           ++got_mini_ITP;
           ITP_lvl[got_mini_ITP,1] = cols;
           ITP_lvl[got_mini_ITP,2] = "ret";
@@ -1888,11 +1878,11 @@ function prt_rpn_eqn(kmx,   i, str) {
        }
        printf("\n") > out_file;
    }
-   if (TMAM_cols_mx > 0) {
+   if (topdown_var_cols_mx > 0) {
      printf("\ntitle\t%s Top Lev: %%cpus Back/Front End Bound, Retiring\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, pfx, sheet) > out_file;
      printf("hdrs\t%d\t%d\t%d\t%d\t%d", rows+1, bcol, -1, evt_idx+extra_cols+4, ts_col) > out_file;
-     for (i=1; i <= TMAM_cols_mx; i++) {
-       printf("\t%d\t%d", TMAM_cols[i], TMAM_cols[i]) > out_file;
+     for (i=1; i <= topdown_var_cols_mx; i++) {
+       printf("\t%d\t%d", topdown_var_cols[i], topdown_var_cols[i]) > out_file;
      }
      printf("\n") > out_file;
    }
