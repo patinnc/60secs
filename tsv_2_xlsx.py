@@ -1,12 +1,10 @@
 #######################################################################
 #
-# An example of creating Excel Line charts with Python and XlsxWriter.
-#
-# Copyright 2013-2020, John McNamara, jmcnamara@cpan.org
+# started from an example of creating Excel Line charts with Python and XlsxWriter from John McNamara, jmcnamara@cpan.org
+# but massive changes
 #
 # need to install xlsxwriter in python
 # pip install xlsxwriter
-# old: python tsv_2_xlsx.py sys_00_uptime.txt.tsv sys_01_dmesg.txt.tsv sys_02_vmstat.txt.tsv sys_03_mpstat.txt.tsv sys_04_pidstat.txt.tsv sys_05_iostat.txt.tsv sys_06_free.txt.tsv sys_07_sar_dev.txt.tsv sys_08_sar_tcp.txt.tsv sys_09_top.txt.tsv sys_10_perf_stat.txt.tsv
 # python tsv_2_xlsx.py -o tst.xlsx -i "*.png" sys_*.txt.tsv
 #   The optional '-i "*.png"' image file glob is in dbl quotes so it won't get expanded on the command line.
 #   The glob gets expanded in the script. If you don't enclose the glob in quotes then only 1 image file name gets passed to the -i option and the rest get treated as tsv files.
