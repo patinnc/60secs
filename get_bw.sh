@@ -101,6 +101,8 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
     lkup[++j] = "cpu/slots/";           icx_topd_slots = j;
     lkup[++j] = "int_misc.uop_dropping"; icx_uop_drop = j;
     lkup[++j] = "int_misc.recovery_cycles"; icx_recovery_cycles = j;
+    lkup[++j] = "int_misc.recovery_cycles_any"; recovery_cycles = j;
+    lkup[++j] = "uops_issued.any";      uops_issued_any = j;
 
     lkup_mx = j;
 
@@ -257,13 +259,21 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
       icx_td_fe = cats;
       got_icx_td_fe = 1;
    }
+   if (evt[uops_issued_any,1] != "" && evt[ret_slots,1] != "" && evt[recovery_cycles,1] != "" && evt[thr_any,1] != "") {  # so not icx
+      h[++cats] = "%bad_spec";
+      td_bs = cats;
+   }
    if (evt[not_deliv,1] != "" && evt[icx_topd_slots,1] == "") {  # so not icx
       h[++cats] = "%frt_end";
       td_frnt = cats;
    }
-   if (td_ret != "" && td_frnt != "") {
+   if (td_ret != "" && td_frnt != "" && td_bs == "") {
       h[++cats] = "%be_spec";
       td_be_bad_spec = cats;
+   }
+   if (td_ret != "" && td_frnt != "" && td_bs != "") {
+      h[++cats] = "%bck_end";
+      td_bck_end = cats;
    }
    if (evt[ret_cycles,1] != "" && evt[cyc,1] != "") {
       h[++cats] = "%ret_cyc";
@@ -415,8 +425,10 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
       if (h[j] == "MissO/cyc") { v = lat_fctr * evt[L3cyc,i]/evt[cyc,i]; }
       if (h[j] == "IPC") { v = evt[instr,i]/evt[cyc,i]; }
       if (h[j] == "%retiring") { v = 100.0*evt[ret_slots,i]/(4*evt[thr_any,i]/2); td_ret_val = v; }
-      if (h[j] == "%frt_end") { v = 100.0*evt[not_deliv,i]/(4*evt[cyc,i]/2); td_frt_end_val = v; }
+      if (h[j] == "%frt_end") { v = 100.0*evt[not_deliv,i]/(4*evt[thr_any,i]/2); td_frt_end_val = v; }
+      if (h[j] == "%bad_spec") { v = 100.0*(evt[uops_issued_any,i]-evt[ret_slots,i] + ((4*evt[recovery_cycles,i])/2))/(4*evt[thr_any,i]/2); if (v < 0){v=0.0;} td_bad_spec_val = v; }
       if (h[j] == "%be_spec") { v = 100 - td_ret_val - td_frt_end_val; if (v < 0) { v = 0.0; }}
+      if (h[j] == "%bck_end") { v = 100 - td_ret_val - td_frt_end_val - td_bad_spec_val; if (v < 0) { v = 0.0; }}
       if (h[j] == "%ret_cyc") { v = 100.0*evt[ret_cycles,i]/evt[cyc,i]; }
       if (h[j] == "%td_ret" || h[j] == "%td_be" || h[j] == "%td_bs" || h[j] == "%td_fe") {
          if (got_icx_td_sum != i) {
