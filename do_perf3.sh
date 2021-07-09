@@ -306,11 +306,15 @@ echo "# started on $dtc $dte" > $FL
       #  topdown-retiring OR cpu/topdown-retiring/ 
       TD_EVTS=
       if [ "$CPU_DECODE" == "Ice Lake" ]; then
-      RC=`echo "$PERF_LIST" | grep 'topdown-retiring'`
-      if [ "$RC" != "" ]; then
-        TD_EVTS=",cpu/slots/,cpu/name='topdown-bad-spec',event=0xa4,umask=0x8/,cpu/name='topdown-be-bound',event=0xa4,umask=0x02/,cpu/name='topdown-retiring',event=0xc2,umask=0x02/,cpu/name='int_misc.uop_dropping',event=0x0d,umask=0x10/,cpu/name='int_misc.recovery_cycles',event=0x0d,umask=0x01,cmask=0x1,edge=1/"
-        #TD_EVTS=",cpu/slots/,cpu/name='topdown-bad-spec',event=0xa4,umask=0x8/,cpu/name='topdown-be-bound',event=0xa4,umask=0x02/,cpu/name='topdown-retiring',event=0xc2,umask=0x02/,cpu/name='int_misc.uop_dropping',event=0x0d,umask=0x10/"
-      fi
+        RC=`echo "$PERF_LIST" | grep 'topdown-retiring'`
+        if [ "$RC" != "" ]; then
+          TD_EVTS=",cpu/slots/,cpu/name='topdown-bad-spec',event=0xa4,umask=0x8/,cpu/name='topdown-be-bound',event=0xa4,umask=0x02/,cpu/name='topdown-retiring',event=0xc2,umask=0x02/,cpu/name='int_misc.uop_dropping',event=0x0d,umask=0x10/,cpu/name='int_misc.recovery_cycles',event=0x0d,umask=0x01,cmask=0x1,edge=1/"
+          #TD_EVTS=",cpu/slots/,cpu/name='topdown-bad-spec',event=0xa4,umask=0x8/,cpu/name='topdown-be-bound',event=0xa4,umask=0x02/,cpu/name='topdown-retiring',event=0xc2,umask=0x02/,cpu/name='int_misc.uop_dropping',event=0x0d,umask=0x10/"
+        fi
+      else
+        UOPS_ISSUED_ANY=",cpu/event=0x0e,umask=0x01,name='uops_issued.any'/"
+        UOPS_RETIRED_RETIRES_SLOTS=",cpu/event=0xc2,umask=0x02,name='uops_retired.retire_slots'/"
+        INT_MISC_RECOVERY=",cpu/event=0x0d,umask=0x01,any=1,period=2000003,name='int_misc.recovery_cycles_any'/"
       fi
      if [ "$PID" == "" ]; then
       IMC_UMASK=0x0f
@@ -455,18 +459,18 @@ echo "# started on $dtc $dte" > $FL
         IDQ_EVT=",cpu/name='idq_uops_not_delivered.core',event=0x9c,umask=0x01/"
       fi
     fi
-    GOT_UOP_EVT=`echo $PERF_LIST | grep uops_retired.retire_slots`
     UOP_EVT=
-    if [ "$GOT_UOP_EVT" != "" ]; then
-      UOP_EVT=",uops_retired.retire_slots"
-    fi
+    #GOT_UOP_EVT=`echo $PERF_LIST | grep uops_retired.retire_slots`
+    #if [ "$GOT_UOP_EVT" != "" ]; then
+    #  UOP_EVT=",uops_retired.retire_slots"
+    #fi
     GOT_THA_EVT=`echo $PERF_LIST | grep cpu_clk_unhalted.thread_any`
     THA_EVT=
     if [ "$GOT_THA_EVT" != "" ]; then
       THA_EVT=",cpu_clk_unhalted.thread_any"
     fi
     #EVT="cpu-clock,task-clock,instructions,cycles,ref-cycles,idq_uops_not_delivered.core,uops_retired.retire_slots,cpu_clk_unhalted.thread_any,power/energy-pkg/${EVT}${UNC_CHA}${OFFC}"
-    EVT="cpu-clock,instructions,msr/aperf/,msr/mperf/${TD_EVTS}${IDQ_EVT}${UOP_EVT}${THA_EVT}${PWR_EVT}${OFFC}${EVT}${UNC_CHA}"
+    EVT="cpu-clock,instructions,msr/aperf/,msr/mperf/${TD_EVTS}${IDQ_EVT}${UOP_EVT}${THA_EVT}${PWR_EVT}${OFFC}${EVT}${UNC_CHA}${UOPS_ISSUED_ANY}${UOPS_RETIRED_RETIRES_SLOTS}${INT_MISC_RECOVERY}"
     fi
     #echo "do: $PERF_BIN stat -x \";\"  --per-socket -a -I $ms -o $FL -e $EVT" > /dev/stderr
     #echo "do: $PERF_BIN stat -x \";\"  --per-socket -a -I $ms -o $FL -e $EVT"
