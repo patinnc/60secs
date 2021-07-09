@@ -2783,6 +2783,7 @@ row += trows;
         v = substr($5, 2, length($5)-2);
         tm_end = v;
       }
+    #Workload elapsed time (copy 24 workload 3) = 213.587487 seconds
     /Workload elapsed time .copy .* workload .*. = .* seconds/ {
       pos = index($7, ")");
       subphs = $7; if (pos > 1) { subphs = substr(subphs, 1, pos); }
@@ -2847,7 +2848,9 @@ row += trows;
             #printf("%s_%s %.3f %.3f %.3f\n", "perlb", ev, tm_beg, tm_beg, 0.0);
             for (j=1; j <= ev; j++) {
               v = b_arr[i,"subphs", j];
-              printf("%s_%s %.3f %.3f %.3f\n", "500.perl" sfx[j] "" j, j, tm_beg, tm_beg+v, v);
+              nml = "500.perl" sfx[j] "" j;
+              printf("%s_%s %.3f %.3f %.3f\n", nm, j, tm_beg, tm_beg+v, v);
+              printf("specint\tspecint\t%s\t\"SI %s %s %s\"\n", v, nml, "run_tm", bm_o) >> sum_file;
               tm_beg += v;
             }
           } else {
@@ -2858,7 +2861,7 @@ row += trows;
     ' $i`
     ck_last_rc $? $LINENO
     echo "$0.$LINENO got here" > /dev/stderr
-    echo  -e "$RESP" > phase_cpu2017.txt
+    #echo  -e "$RESP" > phase_cpu2017.txt
     if [ "$PHASE_FILE" == "" ]; then
        #echo  -e "$RESP" > phase_cpu2017.txt
        PHASE_FILE=phase_cpu2017.txt
@@ -3829,7 +3832,7 @@ function tot_compare(i1, v1, i2, v2,    l, r)
     }
     ' $RESP`
    ck_last_rc $? $LINENO
-  echo  -e "$PH" > phase_cpu2017.txt
+  #echo  -e "$PH" > phase_cpu2017.txt
   PHASE_FILE=phase_cpu2017.txt
 fi
 
