@@ -652,10 +652,17 @@ j=-1
 for i in $LST; do
   j=$((j+1))
   echo "$0.$LINENO dir $i"
+    ARR=(`find $i -name CPU2017.00*.log`)
+    for ((k=0; k < ${#ARR[@]}; k++)); do
+      v=`dirname ${ARR[$k]}`
+      echo "$0.$LINENO: $SCR_DIR/cpu2017_2_phasefile.sh -i ${ARR[$k]} -o $v/phase_cpu2017.txt  -O $OPTIONS"
+                        $SCR_DIR/cpu2017_2_phasefile.sh -i ${ARR[$k]} -o $v/phase_cpu2017.txt  -O $OPTIONS
+    done
   if [ "$PHASE_FILE" != "" ]; then
     RESP=`find $i -name $PHASE_FILE`
     echo "$0.$LINENO find phase= $RESP"
     if [ "$CLIPX" != "" -a "$RESP" != "" ]; then
+      cat $RESP
       CLIP_BEG_END=(`cat $RESP | awk -v clip="$CLIPX" '{if (index($0, clip) > 0) { beg= $2; end= $3; printf("%d\n%d\n", beg, end);exit;}}'`)
       echo "$0.$LINENO CLIPX= $CLIPX CLIP_BEG_END= ${CLIP_BEG_END[@]}"
       if [ ${CLIP_BEG_END[0]} != "" -a ${CLIP_BEG_END[1]} != "" ]; then
