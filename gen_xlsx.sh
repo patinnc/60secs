@@ -35,6 +35,8 @@ PY_PID=
 BK_PID=()
 BK_DIR=()
 RPS_ARR=()
+SHEETS_DIR=()
+SHEETS_OUT=()
 if [[ "$OSTYP" == "linux-gnu"* ]]; then
    NUM_CPUS=`grep -c processor /proc/cpuinfo`
 elif [[ "$OSTYP" == "darwin"* ]]; then
@@ -232,6 +234,12 @@ if [ "$OPTIONS" != "" ]; then
        echo "$0.$LINENO options: sum_all_avg_by_metric=\"${pfx}\""
        SUM_ALL_AVG_BY_METRIC="$pfx"
    fi
+fi
+
+RESP=`find . -name "sheets_*.txt"`
+if [ "$RESP" != "" ]; then
+  echo "going to delete sheets_*.txt files= $RESP"
+  rm sheets_*.txt
 fi
 
 if [ "$NUM_DIR_IN" != "" ]; then
@@ -927,6 +935,8 @@ for i in $LST; do
           RC=$?
           BK_DIR[$LPID]=$i
           BK_OUT[$LPID]=$SYS_2_TSV_STDOUT_FILE
+          SHEETS_DIR+=($i)
+          SHEETS_OUT+=("sheets_${JOB_ID}.txt")
           if [ $VERBOSE -gt 0 ]; then
             echo "$0.$LINENO LPID= $LPID, RC= $RC"
           fi
@@ -997,6 +1007,9 @@ wait_for_all $LINENO
 
 CHART_SIZE=`echo -e "$OPTIONS" | awk '/chart_size{/{pos = index($0, "chart_size{"); str = substr($0, pos, length($0)); pos = index(str, "{"); str = substr(str, pos+1, length(str)); pos = index(str, "}"); str = substr(str, 1, pos-1); printf("%s", str); }'`
 
+TCUR_DIR=`pwd`
+
+
 MUTT_ARR=()
 i_idx=-1
 for i in $LST; do
@@ -1006,25 +1019,26 @@ for i in $LST; do
  else
    pushd $i > /dev/null
  fi
- if [ "$PHASE_FILE" == "" ]; then
-    RESP=phase_cpu2017.txt
-    if [ $VERBOSE -gt 0 ]; then
-      echo "$0.$LINENO phase blank"
-    fi
-    if [ -e $RESP ]; then
-      echo "$0.$LINENO phase $RESP"
-      #OPT_PH=" -P $i/$RESP "
-      echo -e "-P\t\"$i/$RESP\"" >> $ALST
-      echo "$0.$LINENO phase $OPT_PH"
-    fi
- fi
- SM_FL=
- #if [ ! -e $SUM_FILE ]; then
-   SM_FL=$i/$SUM_FILE
- #fi
- if [ $VERBOSE -gt 0 ]; then
-   echo "$0 SM_FL= $SM_FL  SUM_FILE= $SUM_FILE"
- fi
+ echo "$0.$LINENO after sys_2_tsv.awk dir[$i_idx]= $i   TCUR_DIR= $TCUR_DIR"
+# if [ "$PHASE_FILE" == "" ]; then
+#    RESP=phase_cpu2017.txt
+#    if [ $VERBOSE -gt 0 ]; then
+#      echo "$0.$LINENO phase blank"
+#    fi
+#    if [ -e $RESP ]; then
+#      echo "$0.$LINENO phase $RESP"
+#      #OPT_PH=" -P $i/$RESP "
+#      echo -e "-P\t\"$i/$RESP\"" >> $ALST
+#      echo "$0.$LINENO phase $OPT_PH"
+#    fi
+# fi
+# SM_FL=
+# #if [ ! -e $SUM_FILE ]; then
+#   SM_FL=$i/$SUM_FILE
+# #fi
+# if [ $VERBOSE -gt 0 ]; then
+#   echo "$0 SM_FL= $SM_FL  SUM_FILE= $SUM_FILE"
+# fi
  OPT_P=$RPS
  if [ $NUM_DIRS -gt 1 ]; then
    RESP=${RPS_ARR[$i_idx]}
@@ -1036,7 +1050,7 @@ for i in $LST; do
    OPT_P=$RESP
  fi
  echo -e "-p\t\"$OPT_P\"" >> $ALST
-echo -e "-s\t$CHART_SIZE" >> $ALST
+ echo -e "-s\t$CHART_SIZE" >> $ALST
  if [ "$AVERAGE" == "1" ]; then
     echo -e "-A" >> $ALST
  fi
@@ -1065,75 +1079,153 @@ echo -e "-s\t$CHART_SIZE" >> $ALST
  #echo -e "-o\tchart_new,dont_sum_sockets" >> $ALST
  # itp files
  # yab_cmd files might be in same dir or up 1 level
- if [ -e yab_cmds.json.tsv ]; then
-   FLS=$(get_abs_filename yab_cmds.json.tsv)
-   #FLS=`ls -1 $i/metric_out.tsv`
-   echo -e "${FLS}" >> $ALST
- else
- if [ -e ../yab_cmds.json.tsv ]; then
-   FLS=$(get_abs_filename ../yab_cmds.json.tsv)
-   #FLS=`ls -1 $i/metric_out.tsv`
-   echo -e "${FLS}" >> $ALST
- fi
- fi
- if [ -e metric_out.tsv ]; then
-   FLS=$(get_abs_filename metric_out.tsv)
-   #FLS=`ls -1 $i/metric_out.tsv`
-   echo -e "${FLS}" >> $ALST
- fi
- if [ -e metric_out.csv.tsv ]; then
-   FLS=$(get_abs_filename metric_out.csv.tsv)
-   #FLS=`ls -1 $i/metric_out.tsv`
-   echo -e "${FLS}" >> $ALST
- fi
- #if [ -e infra_cputime.txt.tsv ]; then
- #  FLS=$(get_abs_filename infra_cputime.txt.tsv)
- #  echo -e "${FLS}" >> $ALST
- #fi
+# if [ -e yab_cmds.json.tsv ]; then
+#   FLS=$(get_abs_filename yab_cmds.json.tsv)
+#   echo -e "${FLS}" >> $ALST
+# else
+# if [ -e ../yab_cmds.json.tsv ]; then
+#   FLS=$(get_abs_filename ../yab_cmds.json.tsv)
+#   echo -e "${FLS}" >> $ALST
+# fi
+# fi
+# if [ -e metric_out.tsv ]; then
+#   FLS=$(get_abs_filename metric_out.tsv)
+#   echo -e "${FLS}" >> $ALST
+# fi
+# if [ -e metric_out.csv.tsv ]; then
+#   FLS=$(get_abs_filename metric_out.csv.tsv)
+#   echo -e "${FLS}" >> $ALST
+# fi
  if [ $VERBOSE -gt 0 ]; then
    popd
  else
    popd > /dev/null
+ fi
+ MYSVG=($i/*.svg)
+ if [ "${#MYSVG}" != "0" ]; then
+   SVG=`ls -1 $i/*.svg`
+ fi
+ if [ "$SVG" != "" ]; then
+   SVGS="${SVGS} -f ${SVG}"
  fi
  #FLS=`ls -1 $SM_FL $i/*txt.tsv | grep -v infra_cputime`
  CKNM=$i/muttley_host_calls.tsv
  if [ -e $CKNM ]; then
    MUTT_ARR+=($CKNM)
  fi
- FLS=`ls -1 $SM_FL $i/*txt.tsv`
- FLS_IC=`ls -1  $i/*txt.tsv | grep infra_cputime`
- FLS_PS=`ls -1  $i/*txt.tsv | grep perf_stat`
- FLS_MP=`ls -1  $i/*txt.tsv | grep mpstat`
- echo "$0.$LINENO ++++++++FLS_PS= $FLS_PS" > /dev/stderr
- if [ "$FLS_PS" == "" ]; then
-   FLS_PS=`ls -1  $i/../*txt.tsv | grep perf_stat`
-   echo "$0.$LINENO ++++++++FLS_PS= $FLS_PS"  > /dev/stderr
-   if [ "$FLS_PS" != "" ]; then
-     echo "$0.$LINENO ++++++++FLS= $FLS" > /dev/stderr
-     FLS=`ls -1 $SM_FL $i/*txt.tsv $i/../*txt.tsv`
-     echo "$0.$LINENO ++++++++FLS= $FLS" > /dev/stderr
+ try_phs="phase_cpu2017.txt"
+ if [ "$PHASE_FILE" != "" ]; then
+   try_phs=$PHASE_FILE
+ fi
+ SHEET_FILES=()
+ for ((k=0; k < ${#SHEETS_OUT[@]}; k++)); do
+   CKDIR=$i
+   RESP=`grep "$CKDIR" ${SHEETS_OUT[$k]}`
+   if [ "$RESP" != "" ]; then
+     echo "got SHEETS_OUT[$k]= $RESP, i= $i"
+     SDIR=`echo -e "$RESP" | awk '{ printf("%s\n", $1); }'`
+     SHEET_FILES+=(`echo -e "$RESP" | awk '{ for (i=2; i <= NF; i++) { printf("%s\n", $(i)); } }'`)
+       echo "sheet_files= ${#SHEET_FILES[@]}"
+     FLS=${SHEET_FILES[@]}
+     missed_files=
+     for ((kk=0; kk < ${#SHEET_FILES[@]}; kk++)); do
+       echo "sheet_files[$kk]= ${SHEET_FILES[$kk]}"
+       flnm=${SHEET_FILES[$kk]}
+       if [[ $flnm == *"infra_cputime"* ]]; then
+         FLS_IC=$SDIR/$flnm
+       fi
+       if [[ $flnm == *"perf_stat"* ]]; then
+         FLS_PS=$SDIR/$flnm
+       fi
+       if [[ $flnm == *"mpstat"* ]]; then
+         FLS_MP=$SDIR/$flnm
+       fi
+       if [[ $flnm == *"$try_phs"* ]]; then
+         echo -e "-P\t\"$i/$SDIR/$flnm\"" >> $ALST
+         echo "$0.$LINENO phase $OPT_PH"
+         continue
+       fi
+       if [[ $flnm == *"$SUM_FILE"* ]]; then
+         SM_FL=$flnm
+         if [ $VERBOSE -gt 0 ]; then
+           echo "$0 SM_FL= $SM_FL  SUM_FILE= $SUM_FILE"
+         fi
+         echo -e "$SDIR/${flnm}" >> $ALST
+         continue
+       fi
+       if [[ $flnm == *"yab_cmds.json.tsv"* ]]; then
+         echo -e "$SDIR/${flnm}" >> $ALST
+         continue
+       fi
+       if [[ $flnm == *"metric_out.tsv"* ]]; then
+         echo -e "$SDIR/${flnm}" >> $ALST
+         continue
+       fi
+       if [[ $flnm == *"metric_out.csv.tsv"* ]]; then
+         echo -e "$SDIR/${flnm}" >> $ALST
+         continue
+       fi
+       if [[ $flnm == *"log.tsv"* ]]; then
+         echo -e "$SDIR/${flnm}" >> $ALST
+         continue
+       fi
+       if [[ $flnm == *"txt.tsv"* ]]; then
+         echo -e "$SDIR/${flnm}" >> $ALST
+         continue
+       fi
+       if [[ $flnm == *"current.tsv"* ]]; then
+         echo -e "$SDIR/${flnm}" >> $ALST
+         continue
+       fi
+       if [[ $flnm == *"log.tsv"* ]]; then
+         echo -e "$SDIR/${flnm}" >> $ALST
+         continue
+       fi
+       if [[ $flnm == *"json.tsv"* ]]; then
+         echo -e "$SDIR/${flnm}" >> $ALST
+         continue
+       fi
+       missed_files="$missed_files $flnm"
+     done
+     if [ "$missed_files" != "" ]; then
+       echo "$0.$LINENO: !!!!!!!!!!!!!!! SHEETS missed_files= $missed_files" > /dev/stderr
+     fi
+     break
    fi
- fi
- echo -e "${FLS}" >> $ALST
- MYA=($i/*log.tsv)
- if [ "${#MYA}" != "0" ]; then
-   FLS=`ls -1 $i/*log.tsv`
-   echo -e "${FLS}" >> $ALST
- fi
- MYSVG=($i/*.svg)
- if [ "${#MYSVG}" != "0" ]; then
-   SVG=`ls -1 $i/*.svg`
- fi
- MYA=($i/*current.tsv)
- if [ "${#MYA}" != "0" ]; then
-   FLS=`ls -1 $i/*current.tsv`
-   echo -e "${FLS}" >> $ALST
- fi
- MYA=($i/muttley*.json.tsv)
- if [ "${#MYA}" != "0" ]; then
-   FLS=`ls -1 $i/muttley*.json.tsv`
-   echo -e "${FLS}" >> $ALST
- fi
+ done
+# exit 1
+# if [ "1" == "2" ]; then
+#   FLS=`ls -1 $SM_FL $i/*txt.tsv`
+#   FLS_IC=`ls -1  $i/*txt.tsv | grep infra_cputime`
+#   FLS_PS=`ls -1  $i/*txt.tsv | grep perf_stat`
+#   FLS_MP=`ls -1  $i/*txt.tsv | grep mpstat`
+#   echo "$0.$LINENO ++++++++FLS_PS= $FLS_PS" > /dev/stderr
+#   if [ "$FLS_PS" == "" ]; then
+#     FLS_PS=`ls -1  $i/../*txt.tsv | grep perf_stat`
+#     echo "$0.$LINENO ++++++++FLS_PS= $FLS_PS"  > /dev/stderr
+#     if [ "$FLS_PS" != "" ]; then
+#       echo "$0.$LINENO ++++++++FLS= $FLS" > /dev/stderr
+#       FLS=`ls -1 $SM_FL $i/*txt.tsv $i/../*txt.tsv`
+#       echo "$0.$LINENO ++++++++FLS= $FLS" > /dev/stderr
+#     fi
+#   fi
+#   echo -e "${FLS}" >> $ALST
+#   MYA=($i/*log.tsv)
+#   if [ "${#MYA}" != "0" ]; then
+#     FLS=`ls -1 $i/*log.tsv`
+#     echo -e "${FLS}" >> $ALST
+#   fi
+#   MYA=($i/*current.tsv)
+#   if [ "${#MYA}" != "0" ]; then
+#     FLS=`ls -1 $i/*current.tsv`
+#     echo -e "${FLS}" >> $ALST
+#   fi
+#   MYA=($i/muttley*.json.tsv)
+#   if [ "${#MYA}" != "0" ]; then
+#     FLS=`ls -1 $i/muttley*.json.tsv`
+#     echo -e "${FLS}" >> $ALST
+#   fi
+# fi
 # MYA=($i/sum_all.tsv)
 # if [ "${#MYA}" != "0" ]; then
 #   FLS=`ls -1 $i/sum_all.tsv`
@@ -1142,9 +1234,6 @@ echo -e "-s\t$CHART_SIZE" >> $ALST
  echo -e "" >> $ALST
  if [ "$FCTRS" != "" ]; then
    FCTRS="$FCTRS,"
- fi
- if [ "$SVG" != "" ]; then
-   SVGS="${SVGS} -f ${SVG}"
  fi
  FCTRS="$FCTRS$FCTR"
 done
