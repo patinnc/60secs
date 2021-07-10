@@ -192,6 +192,10 @@ if [ "$PHASE_FILE" != "" ]; then
   echo "PH_TM_END= $PH_TM_END" > /dev/stderr
 fi
 
+SHEETS_FILE=$BASE_DIR/sheets_${JOB_ID}.txt
+if [ -e $SHEETS_FILE ]; then
+  rm $SHEETS_FILE
+fi
 TDIR=$DIR
 if [ "$TDIR" == "." ]; then
   TDIR=${PWD##*/}  
@@ -475,7 +479,7 @@ if [ "$RESP" -eq "0" ]; then
   RESP=`find $CPU2017LOG_RT_PATH -name "CPU2017.00*.log" | wc -l | awk '{printf("%s\n", $1);exit;}'`
 fi
 pwd
-echo "++++++++++find .. -name CPU2017.*.log resp = $RESP" > /dev/stderr
+echo "$0.$LINENO ++++++++++find .. -name CPU2017.*.log resp = $RESP" > /dev/stderr
 CPU2017LOG=()
 if [ "$RESP" -ge "1" -a "$PHASE_FILE" == "" ]; then
   RESP=`find $CPU2017LOG_RT_PATH -name CPU2017.00*.log`
@@ -486,14 +490,33 @@ if [ "$RESP" -ge "1" -a "$PHASE_FILE" == "" ]; then
   for i in $RESP; do echo "echo $0.$LINENO j= $j CPU2017LOG $i ${CPU2017LOG[$j]}"; j=$((j+1)); done
 fi
 EXTRA_FILES=
+ITP_METRIC_OUT_DIR=
+echo "$0.$LINENO metric_out ck dir= $DIR , file= $DIR/$METRIC_OUT"
 if [ -e $DIR/$METRIC_OUT ]; then
   EXTRA_FILES=$DIR/$METRIC_OUT
+  echo "$0.$LINENO metric_out dir= $DIR , file= $DIR/$METRIC_OUT"
 else
   if [ -e $DIR/${METRIC_OUT}.csv ]; then
     EXTRA_FILES=$DIR/${METRIC_OUT}.csv
+    echo "$0.$LINENO metric_out dir= $DIR , file= $DIR/$METRIC_OUT.csv"
+  else
+  CKFL=`find $DIR -name ${METRIC_OUT}.csv`
+  if [ "$CKFL" != "" ]; then
+    EXTRA_FILES=`echo $CKFL|head -1`
+    ITP_METRIC_OUT_DIR=`dirname $EXTRA_FILES`
+    echo "$0.$LINENO metric_out dir= $ITP_METRIC_OUT_DIR , file= $CKFL"
+  else
+    CKFL=`find $DIR/.. -name ${METRIC_OUT}.csv`
+    if [ "$CKFL" != "" ]; then
+      EXTRA_FILES=`echo $CKFL|head -1`
+      ITP_METRIC_OUT_DIR=`dirname $EXTRA_FILES`
+       echo "$0.$LINENO metric_out dir= $ITP_METRIC_OUT_DIR , file= $CKFL"
+    fi
+  fi
   fi
 fi
     echo "$0.$LINENO got here" > /dev/stderr
+    #exit 1
 if [ -e $DIR/infra_cputime.txt ]; then
   EXTRA_FILES="$EXTRA_FILES $DIR/infra_cputime.txt"
   #echo "$0: got $DIR/infra_cputime.txt at $LINENO" > /dev/stderr
@@ -640,19 +663,23 @@ trows++; printf("\n") > NFL;
          SPIN_TXT=$DIR/../spin.txt
       fi
     fi
+    if [ "$ITP_METRIC_OUT_DIR" == "" ]; then
+      ITP_METRIC_OUT_DIR="."
+    fi
     MET_FL=$METRIC_OUT
     MET_AV=$METRIC_AVG
-    if [ ! -e $DIR/$METRIC_OUT ]; then
+    if [ ! -e $ITP_METRIC_OUT_DIR/$METRIC_OUT ]; then
        MET_FL=metric_out.csv
        MET_AV=metric_out.average.csv
     fi
     pwd
-    echo "========SPIN_TXT5= $SPIN_TXT dir= $DIR i= $i, average= $AVERAGE, NCPUS= $NCPUS, MET_FL= $MET_FL, MET_AV= $MET_AV" > /dev/stderr
+    echo "========SPIN_TXT5= $SPIN_TXT dir= $ITP_METRIC_OUT_DIR i= $i, average= $AVERAGE, NCPUS= $NCPUS, MET_FL= $MET_FL, MET_AV= $MET_AV" > /dev/stderr
     export AWKPATH=$SCR_DIR
-    echo awk  -v verbose="$VERBOSE" -v sum_tmam="$SUM_TMAM_FILE" -v options="$OPTIONS" -v tm_beg_in="$BEG_TM_IN" -v tm_end_in="$END_TM" -v do_avg="$AVERAGE" -v sum_file="$SUM_FILE" -v metric_file="$MET_FL" -v metric_avg="$MET_AV" -v pfx="$PFX" -f $SCR_DIR/itp_2_tsv.awk $CPU2017files $DIR/result.csv $DIR/$MET_AV $i $SPIN_TXT
-    awk  -v sum_tmam="$SUM_TMAM_FILE" -v options="$OPTIONS" -v tm_beg_in="$BEG_TM_IN" -v tm_end_in="$END_TM" -v do_avg="$AVERAGE" -v sum_file="$SUM_FILE" -v metric_file="$MET_FL" -v metric_avg="$MET_AV" -v pfx="$PFX" -f $SCR_DIR/itp_2_tsv.awk $CPU2017files $DIR/result.csv $DIR/$MET_AV $i $SPIN_TXT
+    echo awk  -v verbose="$VERBOSE" -v sum_tmam="$SUM_TMAM_FILE" -v options="$OPTIONS" -v tm_beg_in="$BEG_TM_IN" -v tm_end_in="$END_TM" -v do_avg="$AVERAGE" -v sum_file="$SUM_FILE" -v metric_file="$MET_FL" -v metric_avg="$MET_AV" -v pfx="$PFX" -f $SCR_DIR/itp_2_tsv.awk $CPU2017files $ITP_METRIC_OUT_DIR/result.csv $ITP_METRIC_OUT_DIR/$MET_AV $i $SPIN_TXT
+    awk  -v sum_tmam="$SUM_TMAM_FILE" -v options="$OPTIONS" -v tm_beg_in="$BEG_TM_IN" -v tm_end_in="$END_TM" -v do_avg="$AVERAGE" -v sum_file="$SUM_FILE" -v metric_file="$MET_FL" -v metric_avg="$MET_AV" -v pfx="$PFX" -f $SCR_DIR/itp_2_tsv.awk $CPU2017files $ITP_METRIC_OUT_DIR/result.csv $ITP_METRIC_OUT_DIR/$MET_AV $i $SPIN_TXT
     ck_last_rc $? $LINENO
    pwd
+   echo "$0.$LINENO metric_out output tsv= $i.tsv"
    echo "cpu2017log= $CPU2017LOG"
    for ii in ${CPU2017LOG[@]}; do
      if [ -e $ii ]; then
@@ -2869,7 +2896,6 @@ row += trows;
     #echo "$0.$LINENO bye"
     #exit 1
   fi
-#abcd
   if [[ $i =~ phase_cpu2017.txt ]]; then
     echo "$0.$LINENO: got CPU2017.001.intrate.txt $i at $LINENO" > /dev/stderr
     OFILE="$i.tsv"
@@ -3888,8 +3914,12 @@ fi
     SHEETS="$SHEETS $RESP"
   fi
   fi
+  RESP=`pwd`
+  echo -e "$RESP\t$SHEETS" >> $SHEETS_FILE
+  echo "$0.$LINENO SHEETS outfile $BASE_DIR/sheets_${JOB_ID}.txt sheets_str= $SHEETS"
+#abcd
 
-echo "SHEETS= $SHEETS SKIP_XLS= $SKIP_XLS, xls_fl= $XLSX_FILE avg= $AVERAGE"
+echo "$0.$LINENO SHEETS= $SHEETS SKIP_XLS= $SKIP_XLS, xls_fl= $XLSX_FILE avg= $AVERAGE"
 if [ "$SHEETS" != "" -a "$SKIP_XLS" == "0" ]; then
    OPT_I=
    MET_AV=metric_out.average
