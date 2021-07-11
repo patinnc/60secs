@@ -473,17 +473,24 @@ fi
 echo "awk time offset hours BEG_ADJ= $BEG_ADJ  BEG_TM= $BEG, BEG_TM_IN= $BEG_TM_IN"
 #exit
 CPU2017LOG_RT_PATH="."
-RESP=`find $CPU2017LOG_RT_PATH -name "CPU2017.00*.log" | wc -l | awk '{printf("%s\n", $1);exit;}'`
-if [ "$RESP" -eq "0" ]; then
-  CPU2017LOG_RT_PATH=".."
-  RESP=`find $CPU2017LOG_RT_PATH -name "CPU2017.00*.log" | wc -l | awk '{printf("%s\n", $1);exit;}'`
-fi
+CPU2017_LOG_NUM=
+for mm in 2 1; do
+  RESP=`find $CPU2017LOG_RT_PATH -name "CPU2017.00$mm.log" | wc -l | awk '{printf("%s\n", $1);exit;}'`
+  if [ "$RESP" -eq "0" ]; then
+    CPU2017LOG_RT_PATH=".."
+    RESP=`find $CPU2017LOG_RT_PATH -name "CPU2017.00$mm.log" | wc -l | awk '{printf("%s\n", $1);exit;}'`
+  fi
+  if [ "$RESP" -gt "0" ]; then
+    CPU2017_LOG_NUM=$mm
+    break
+  fi
+done
 pwd
 echo "$0.$LINENO ++++++++++find .. -name CPU2017.*.log resp = $RESP" > /dev/stderr
 CPU2017LOG=()
 if [ "$RESP" -ge "1" -a "$PHASE_FILE" == "" ]; then
-  RESP=`find $CPU2017LOG_RT_PATH -name CPU2017.00*.log`
-  echo "find $CPU2017LOG_RT_PATH -name cpu2017.*.log resp = $RESP"
+  RESP=`find $CPU2017LOG_RT_PATH -name CPU2017.00${CPU2017_LOG_NUM}.log`
+  echo "find $CPU2017LOG_RT_PATH -name cpu2017.00${CPU2017_LOG_NUM}.log resp = $RESP"
   CPU2017LOG=($RESP)
   echo "+++CPU2017LOG= ${CPU2017LOG[@]} is list"
   j=0
@@ -532,7 +539,14 @@ if [ -e $DIR/*_specjbb/specjbb.log ]; then
   echo "$0: ____++++++_____got specjbb.log $RESP at $LINENO" > /dev/stderr
 fi
 fi
-for ifl in "phase_cpu2017.txt" "CPU2017.001.intrate.txt" "CPU2017.001.intrate.refrate.txt"  "CPU2017.001.log"; do
+CPU2017_FILES_ARR=()
+if [ "$CPU2017_LOG_NUM" != "" ]; then
+  ifl=$CPU2017_LOG_NUM
+  CPU2017_FILES_ARR=("CPU2017.00${ifl}.intrate.txt" "CPU2017.00${ifl}.intrate.refrate.txt"  "CPU2017.00${ifl}.log")
+
+fi
+#for ifl in "phase_cpu2017.txt" "CPU2017.001.intrate.txt" "CPU2017.001.intrate.refrate.txt"  "CPU2017.001.log"; do
+for ifl in ${CPU2017_FILES_ARR[@]}; do
   if [ -e $DIR/$ifl ]; then
     EXTRA_FILES="$EXTRA_FILES $DIR/$ifl"
     echo "$0: ____++++++_____got $DIR/$ifl at $LINENO" > /dev/stderr
@@ -2782,7 +2796,7 @@ row += trows;
     echo "$0.$LINENO got here" > /dev/stderr
   fi
     echo "$0.$LINENO got here" > /dev/stderr
-  if [[ $i == *"CPU2017.001.log" ]]; then
+  if [[ $i == *"CPU2017.00${CPU2017_LOG_NUM}.log" ]]; then
     echo "$0.$LINENO got here" > /dev/stderr
 # Benchmark Times:
 #   Run Start:    2021-01-30 00:20:38 (1611994838)
@@ -2818,7 +2832,7 @@ row += trows;
       subphs_arr[subphs] = $9+0;
       subphs_mx = subphs;
     }
-      /^ Success .* base refrate ratio=/ {
+      / .* base refrate ratio=/ {
         #printf("got cpu2017.001.log line= %s\n", $0) > "/dev/stderr";
         gsub(",", "", $0);
         bm_nm = $2;
@@ -2897,7 +2911,7 @@ row += trows;
     #exit 1
   fi
   if [[ $i =~ phase_cpu2017.txt ]]; then
-    echo "$0.$LINENO: got CPU2017.001.intrate.txt $i at $LINENO" > /dev/stderr
+    echo "$0.$LINENO: got CPU2017.00${CPU2017_LOG_NUM}.intrate.txt $i at $LINENO" > /dev/stderr
     OFILE="$i.tsv"
     awk -v ofile="$OFILE" -v ts_beg="$BEG"  -v sum_file="$SUM_FILE" '
  #subtest beg_epoch end_epoch
@@ -2958,8 +2972,8 @@ row += trows;
     ' $i
     ck_last_rc $? $LINENO
   fi
-  if [[ $i =~ CPU2017.001.intrate.*txt ]]; then
-    echo "$0.$LINENO: got CPU2017.001.intrate.txt $i at $LINENO" > /dev/stderr
+  if [[ $i =~ CPU2017.00${CPU2017_LOG_NUM}.intrate.*txt ]]; then
+    echo "$0.$LINENO: got CPU2017.00${CPU2017_LOG_NUM}.intrate.txt $i at $LINENO" > /dev/stderr
     awk -v sum_file="$SUM_FILE" '
  #Est. SPECrate2017_int_base             159
  #Est. SPECrate2017_int_peak                                         Not Run
