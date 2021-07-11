@@ -26,7 +26,7 @@
       subphs_arr[subphs] = $9+0;
       subphs_mx = subphs;
     }
-      /^ Success .* base refrate ratio=/ {
+      / base refrate ratio=/ {
         #printf("got cpu2017.001.log line= %s\n", $0) > "/dev/stderr";
         gsub(",", "", $0);
         bm_nm = $2;
