@@ -660,11 +660,17 @@ j=-1
 for i in $LST; do
   j=$((j+1))
   echo "$0.$LINENO dir $i"
-    ARR=(`find $i -name CPU2017.00*.log`)
-    for ((k=0; k < ${#ARR[@]}; k++)); do
-      v=`dirname ${ARR[$k]}`
-      echo "$0.$LINENO: $SCR_DIR/cpu2017_2_phasefile.sh -i ${ARR[$k]} -o $v/phase_cpu2017.txt  -O $OPTIONS"
-                        $SCR_DIR/cpu2017_2_phasefile.sh -i ${ARR[$k]} -o $v/phase_cpu2017.txt  -O $OPTIONS
+    for j in 2 1; do
+      echo "$0.$LINENO try phase_cpu2017.txt find $i -name CPU2017.00$j.log"
+      ARR=(`find $i -name CPU2017.00$j.log`)
+      for ((k=0; k < ${#ARR[@]}; k++)); do
+        v=`dirname ${ARR[$k]}`
+        echo "$0.$LINENO: $SCR_DIR/cpu2017_2_phasefile.sh -i ${ARR[$k]} -o $v/phase_cpu2017.txt  -O $OPTIONS"
+                          $SCR_DIR/cpu2017_2_phasefile.sh -i ${ARR[$k]} -o $v/phase_cpu2017.txt  -O $OPTIONS
+      done
+      if [ "${#ARR[@]}" != "0" ]; then
+        break
+      fi
     done
   if [ "$PHASE_FILE" != "" ]; then
     RESP=`find $i -name $PHASE_FILE`
