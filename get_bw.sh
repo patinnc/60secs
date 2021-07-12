@@ -169,7 +169,11 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
     else if (index($0, "ret_uops_cycles") > 0) { j=ret_cycles; }
     if (j == 0) {
       n=split($1, arr, ";");
-      e = tolower(arr[4]);
+      cpu_col=0;
+      if (index(arr[2], "CPU") == 1) {
+        cpu_col=1;
+      }
+      e = tolower(arr[4+cpu_col]);
       if (e == "") { next; }
       if (e in evt_list) {
         #printf("got e= %s\n", e);
@@ -187,20 +191,28 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
     }
     if (j != 0) {
       n=split($1, arr, ";");
+      cpu_col=0;
+      if (index(arr[2], "CPU") == 1) {
+        cpu_col=1;
+      }
       tm_i = ck_tm(arr[1]);
-      evt[j,tm_i] += arr[2];
+      evt[j,tm_i] += arr[2+cpu_col];
       evt[j,tm_i,"inst"]++;
-      evt[j,tm_i,"ns"] += arr[5];
-      evt[j,tm_i,"multi"] = arr[6];
+      evt[j,tm_i,"ns"] += arr[5+cpu_col];
+      evt[j,tm_i,"multi"] = arr[6+cpu_col];
       #1.002152878;5415357486;;UNC_C_CLOCKTICKS;2005707182;100.00;168.823;M/sec
       next;
     }
   }
   /unc._read_write/{
    n=split($1, arr, ";");
+      cpu_col=0;
+      if (index(arr[2], "CPU") == 1) {
+        cpu_col=1;
+      }
    tm_i = ck_tm(arr[1]);
-   evt[unc_rdwr,tm_i] += arr[2]+0;
-   #printf("unc_rd_wr %s, v= %s bw= %f\n", arr[4], arr[2], 64.0e-9*evt[unc_rdwr,tm_i]) > "/dev/stderr";
+   evt[unc_rdwr,tm_i] += arr[2+cpu_col]+0;
+   #printf("unc_rd_wr %s, v= %s bw= %f\n", arr[4+cpu_col], arr[2+cpu_col], 64.0e-9*evt[unc_rdwr,tm_i]) > "/dev/stderr";
    #exit;
       next;
  }
