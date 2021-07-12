@@ -1533,6 +1533,10 @@ for i in $HOSTS; do
   if [[ $RUN_CMDS == *"ftchpA"* ]]; then
     DO_FTCH=10
   fi
+  if [ "$GOT_QUIT" != "0" ]; then
+    echo "$0.$LINENO quiting due to signal"
+    exit 1
+  fi
 
   if [ "$DO_FTCH" -gt "0" ]; then
     if [ $BKGRND_TASKS_MAX -gt 0 ]; then
