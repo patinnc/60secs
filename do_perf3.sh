@@ -20,10 +20,13 @@ catch_signal() {
 }
 trap 'catch_signal' SIGINT
 
-while getopts "hFvb:I:P:p:w:x:X:" opt; do
+while getopts "hFvb:C:I:P:p:w:W:x:X:" opt; do
   case ${opt} in
     b )
       PERF_BIN_IN=$OPTARG
+      ;;
+    C )
+      CPU_LIST_IN=$OPTARG
       ;;
     F )
       FOREGRND=1
@@ -42,6 +45,9 @@ while getopts "hFvb:I:P:p:w:x:X:" opt; do
       WAIT_IN=$OPTARG
       echo "$0.$LINENO wait_in= $WAIT_IN" > /dev/stderr
       ;;
+    W )
+      WARGS=$OPTARG
+      ;;
     v )
       VERBOSE=$((VERBOSE+1))
       ;;
@@ -55,6 +61,7 @@ while getopts "hFvb:I:P:p:w:x:X:" opt; do
       echo "$0 run itp-lite"
       echo "Usage: $0 [ -v ] [-F] [-b perf_binary] -I interval_in_secs -p proj_dir [ -w wait_in_secs ] [ -x binary_to_be_run ] [ -X args_to_binary_to_be_run ] "
       echo "   -b perf_binary_path  default is $SCR_DIR/perf"
+      echo "   -C cpu_list  default is all cpus. Intended for doing multiple simultaneous perf stat runs"
       echo "   -F foreground  wait for '-x binary_to_be_run' to finish before exiting" 
       echo "   -I interval_in_secs the perf stat output will be written every this number of secs"
       echo "   -P pid_to_monitor  have perf monitor just this pid"
@@ -62,10 +69,13 @@ while getopts "hFvb:I:P:p:w:x:X:" opt; do
       echo "      if you also enter -w time_to_run_in_secs then perf is started in the background and stopped after -w secs"
       echo "   -p proj_dir    output will written to this dir"
       echo "   -w wait_in_secs  the number of secs to run perf (if you are doing sleep) or args for -x exe"
+      echo "   -W args_to_pass_to_perf  args to be passed directly to perf stat."
+      echo "      For instance '-W \" -A \" ' tells perf to show 'per cpu' event counts (don't aggregate to system)."
+      echo "      The is optional."
       echo "   -x executable_or_script  exe_or_script to be run. Default is to sleep for wait_in_secs"
       echo "      if -x is not used or exe is 'sleep' then perf -a option is used (perf -a option means monitor all the system)."
       echo "      if -x is used then perf -a option is not used so perf just runs that exe and only collects stats for that process"
-      echo "   -X exe_args   arg string for -x exe. include in dbl quotes if contain spaces"
+      echo "   -X exe_args   arg string for -x exe. include in dbl quotes if contain spaces."
       echo "   -v verbose mode"
       exit 1
       ;;
@@ -356,7 +366,7 @@ echo "# started on $dtc $dte" > $FL
          UPI2=",uncore_upi_2/event=0x02,umask=0x0f,name='qpi_data_bandwidth_tx2'/"
         fi
       fi
-      EVT="${IMC}${UPI0}${UPI1}${UPI2}"
+      SKT_EVT="${IMC}${UPI0}${UPI1}${UPI2}"
       UNC_CHA=
       for ((i=0; i < 20; i++)); do
         if [ -e /sys/devices/uncore_cha_${i} ]; then
@@ -469,8 +479,9 @@ echo "# started on $dtc $dte" > $FL
     if [ "$GOT_THA_EVT" != "" ]; then
       THA_EVT=",cpu_clk_unhalted.thread_any"
     fi
+    SKT_EVT="${SKT_EVT}${PWR_EVT}${EVT}${UNC_CHA}"
     #EVT="cpu-clock,task-clock,instructions,cycles,ref-cycles,idq_uops_not_delivered.core,uops_retired.retire_slots,cpu_clk_unhalted.thread_any,power/energy-pkg/${EVT}${UNC_CHA}${OFFC}"
-    EVT="cpu-clock,instructions,msr/aperf/,msr/mperf/${TD_EVTS}${IDQ_EVT}${UOP_EVT}${THA_EVT}${PWR_EVT}${OFFC}${EVT}${UNC_CHA}${UOPS_ISSUED_ANY}${UOPS_RETIRED_RETIRES_SLOTS}${INT_MISC_RECOVERY}"
+    EVT="cpu-clock,instructions,msr/aperf/,msr/mperf/${TD_EVTS}${IDQ_EVT}${UOP_EVT}${THA_EVT}${UOPS_ISSUED_ANY}${UOPS_RETIRED_RETIRES_SLOTS}${INT_MISC_RECOVERY}${OFFC}${SKT_EVT}"
     fi
     #echo "do: $PERF_BIN stat -x \";\"  --per-socket -a -I $ms -o $FL -e $EVT" > /dev/stderr
     #echo "do: $PERF_BIN stat -x \";\"  --per-socket -a -I $ms -o $FL -e $EVT"
@@ -485,7 +496,14 @@ echo "# started on $dtc $dte" > $FL
         OPT_A=" -a "
       fi
     fi
-      echo  "$0.$LINENO foregrnd pid wait ms do_cmd: $FOREGRND $PID $WAIT_IN $ms $DO_CMD $EXE_ARGS"
+    if [ "$CPU_LIST_IN" != "" ]; then
+      #OPT_A=" $OPT_A -C $CPU_LIST_IN "
+      OPT_A=" -C $CPU_LIST_IN "
+    fi
+    if [ "$WARGS" != "" ]; then
+      OPT_A=" $OPT_A $WARGS "
+    fi
+    echo  "$0.$LINENO foregrnd pid wait ms do_cmd: $FOREGRND $PID $WAIT_IN $ms $DO_CMD $EXE_ARGS"
     if [ "$PID" == "" -a "$WAIT_IN" == ""  ]; then
       echo $PERF_BIN stat -x ";" --append $OPT_A -I $ms -o $FL -e "$EVT" $DO_CMD $WAIT $EXE_ARGS
       if [ "$FOREGRND" == "0" ]; then
@@ -545,4 +563,4 @@ ts_end=`date "+%s.%N"`
 ts_elap=`$AWK_BIN -v ts_beg="$ts_beg" -v ts_end="$ts_end" 'BEGIN{printf("%f\n", (ts_end+0.0)-(ts_beg+0.0));exit;}'`
 echo "$tstmp $ts_end end elapsed_secs $ts_elap"  >> $RUN_CMDS_LOG
 
-
+ 
