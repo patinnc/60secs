@@ -43,7 +43,7 @@ function rpn_rtn(val, k4, got_rpn_eqn, col_hdr_mx, col_hdr, rw_data,    la, val1
         if (rpn_err != "") { printf("rpn_err1= %s\n", rpn_err) > "/dev/stderr"; }
         continue;
       }
-      if (oper == "push_row_val" || oper == "push_row_val2") {
+      if (oper == "push_row_val" || oper == "push_row_val2" || oper == "push_row_tmr") {
         val1= "";
         if (got_rpn_eqn[k4,la,"lkup_col"]=="") {
           for (lc=0; lc <= col_hdr_mx; lc++) {
@@ -60,7 +60,11 @@ function rpn_rtn(val, k4, got_rpn_eqn, col_hdr_mx, col_hdr, rw_data,    la, val1
         }
         if (got_rpn_eqn[k4,la,"lkup_col"] != -1) {
           lc = got_rpn_eqn[k4,la,"lkup_col"];
-          val1=rw_data[lc]+0.0;
+          if (oper == "push_row_tmr") {
+            val1=tmr_data[lc]+0.0;
+          } else {
+            val1=rw_data[lc]+0.0;
+          }
           rpn_push(val1);
           if (rpn_err != "") { printf("after push rpn_err3= %s\n", rpn_err) > "/dev/stderr"; }
         }
