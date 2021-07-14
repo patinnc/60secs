@@ -3,7 +3,26 @@
 @include "bc_eqn.awk"
 BEGIN{
    row=0;
+   cpu_col = 0;
    evt_idx=-1;
+   num_cpus += 0;
+
+   use_cpu_got_list = 0;
+   if (use_cpus != "") {
+     #perf_cpus=0-47
+     lkfr = "perf_cpus=";
+     pos = index(use_cpus, lkfr);
+     if (pos > 0) {
+       v = substr(use_cpus, pos+length(lkfr), length(use_cpus));
+       # just handle single range of cpus for now
+       n = split(v, arr, "-");
+       v0 = arr[1];
+       v1 = arr[2];
+       use_cpu_got_list = 1;
+       printf("%s perf_cpus= %s to %s\n", script, v0, v1) > "/dev/stderr";
+       for (i=v0; i <= v1; i++) { use_cpu_list[i] = i; }
+     }
+   }
    months="  JanFebMarAprMayJunJulAugSepOctNovDec";
    date_str="";
    got_add_all_to_summary = 0;
@@ -38,7 +57,6 @@ BEGIN{
    ts_initial = 0.0;
    ts_beg += 0.0;
    ts_end += 0.0;
-   num_cpus += 0;
    options_pct_cpu_like_top = 0;
    options_pct_cpu_like_top_fctr = 1.0;
    if (index(options, "%cpu_like_top") > 0) {
@@ -254,6 +272,17 @@ function dt_to_epoch(offset) {
   #  1.004420989;S1;16;30384313506;;instructions;16051372488;100.00;0.84;insn per cycle
 
   n=split($0,arr,";");
+  if (index(arr[2], "CPU") == 1) {
+    cpu_col = 1;
+  }
+  if (cpu_col == 1 && use_cpu_got_list == 1) {
+    v = substr(arr[2], 4, length(arr[2])) + 0
+    if (use_cpu_list[v] == "") {
+      cpus_list_skip++;
+      next;
+    }
+    cpus_list_used++;
+  }
   ts=arr[1];
   if (ts_initial > 0.0) {
      epch = ts_initial + ts;
@@ -275,7 +304,7 @@ function dt_to_epoch(offset) {
     }
     if (i > ph_mx) { next; }
   }
-  skt=arr[2];
+  skt=arr[2+cpu_col];
   skt_incr = 2;
   if (skt != "S0" && skt != "S1" && skt != "S2" && skt != "S3") {
     skt="S0";
@@ -289,14 +318,14 @@ function dt_to_epoch(offset) {
     }
   } else {
     if (options != "" && index(options, "do_sum_sockets") > 0) {
-      inst=arr[3];
+      inst=arr[3+cpu_col];
       skt="S0";
     } else {
-      inst=arr[3];
+      inst=arr[3+cpu_col];
     }
   }
-  val=arr[2+skt_incr];
-  evt=arr[4+skt_incr];
+  val=arr[2+skt_incr+cpu_col];
+  evt=arr[4+skt_incr+cpu_col];
   if (evt == "") {
     next;
   }
@@ -312,8 +341,8 @@ function dt_to_epoch(offset) {
      }
    }
   }
-  tmr=arr[5+skt_incr];
-  pct=arr[6+skt_incr];
+  tmr=arr[5+skt_incr+cpu_col];
+  pct=arr[6+skt_incr+cpu_col];
   #printf("ts= %s, skt= %s, inst= %s val= %s, evt= %s, tmr= %s, pct= %s\n", ts, skt, inst, val, evt, tmr, pct) > "/dev/stderr";
   if ( ck_row[ts,skt] != ts","skt) {
      row++;
@@ -346,8 +375,9 @@ function dt_to_epoch(offset) {
   sv[row,1]=ts;
   sv[row,2]=skt;
   hdr[3+j*2]=evt;
-  sv[row,3+j]=val;
-  sv_tmr[row,3+j]=tmr;
+  sv[row,3+j]+=val;
+  sv_tmr[row,3+j]+=tmr;
+  #inst_by_evt[
   #if (row < 8) {printf("row= %d, j= %d, evt= %s, val= %s\n", row, j, evt, val);}
 }
 function prt_rpn_eqn(kmx,   i, str) {
@@ -362,6 +392,7 @@ function prt_rpn_eqn(kmx,   i, str) {
   #for (ii=1; ii <= st_mx; ii++) {
   #  printf("%s\t%f\t%f\n", st_sv[ii,1], st_sv[ii,2], st_sv[ii,3]);
   #}
+   printf("cpus_list_skip= %d cpus_list_used= %d\n", cpus_list_skip, cpus_list_used);
    ref_cycles_str = "ref-cycles_unknown";
    cpu_cycles_str = "cpu-cycles_unknown";
    instructions_str = "instructions_unknown";
@@ -457,19 +488,81 @@ function prt_rpn_eqn(kmx,   i, str) {
      inv_num_sockets = 1.0/num_sockets;
    }
 
+#  kmx++;
+#  got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+#  got_lkfor[kmx,2]=2; # num of fields to look for
+#  got_lkfor[kmx,3]=1.0e-9; # a factor
+#  got_lkfor[kmx,4]="div"; # operation x/y/z
+#  got_lkfor[kmx,5]=1; # instances
+#  got_lkfor[kmx,6]="div_by_non_halted_interval"; # 
+#  got_lkfor[kmx,"tag"]="avg_freq_ghz";
+#  lkfor[kmx,1]=cpu_cycles_str;
+#  lkfor[kmx,2]="instances";  # get the instances from the first lkfor event
+#  nwfor[kmx,1,"hdr"]="avg_freq (GHz)";
+#  nwfor[kmx,1,"alias"]="metric_CPU operating frequency (in GHz)";
 
-   if (amd_cpu == 0) {
+   # frqGHz = tsc_ghz * evt[cyc,i]/evt[mperf,i]; v = frqGHz;}
    kmx++;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
    got_lkfor[kmx,2]=2; # num of fields to look for
-   got_lkfor[kmx,3]=100.0/(tsc_freq*1.0e9); # a factor
-   got_lkfor[kmx,4]="div"; # operation x/y
+   got_lkfor[kmx,3]=1.0; # a factor
+   got_lkfor[kmx,4]="bc_eqn"; # operation x/y/z
    got_lkfor[kmx,5]=1; # instances
-   got_lkfor[kmx,6]="div_by_interval"; # 
+   got_lkfor[kmx,6]=""; # instances
+   kkmx = 0;
+   got_rpn_eqn[kmx, ++kkmx, "val"]=tsc_freq " * ";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str"
+   got_rpn_eqn[kmx, ++kkmx, "val"]=cpu_cycles_str;
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" / "
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=ref_cycles_str;
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx,      1,"max"]=kkmx;
+   got_lkfor[kmx,"tag"]="avg_freq_ghz";
+   lkfor[kmx,1]=cpu_cycles_str;
+   lkfor[kmx,2]=ref_cycles_str;
+   nwfor[kmx,1,"hdr"]="avg_freq (GHz)";
+   nwfor[kmx,1,"alias"]="metric_CPU operating frequency (in GHz)";
+
+
+   if (amd_cpu == 0) {
+#   kmx++;
+#   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+#   got_lkfor[kmx,2]=2; # num of fields to look for
+#   got_lkfor[kmx,3]=100.0/(tsc_freq*1.0e9); # a factor
+#   got_lkfor[kmx,4]="div"; # operation x/y
+#   got_lkfor[kmx,5]=1; # instances
+#   got_lkfor[kmx,6]="div_by_interval"; # 
+#   lkfor[kmx,1]=ref_cycles_str;
+#   lkfor[kmx,2]="instances";  # get the instances from the first lkfor event
+#   nwfor[kmx,1,"hdr"]="%not_halted";
+#   nwfor[kmx,1,"alias"]="metric_CPU utilization %";
+
+   # bsy = 1.0e-9*(evt[mperf,i])/(num_cpus * tsc_ghz * tm_dff); v = 100.0*bsy;
+   kmx++;
+   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+   got_lkfor[kmx,2]=1; # num of fields to look for
+   got_lkfor[kmx,3]=1.0; # a factor
+   got_lkfor[kmx,4]="bc_eqn"; # operation x/y/z
+   got_lkfor[kmx,5]=1; # instances
+   got_lkfor[kmx,6]=""; # instances
+   kkmx = 0;
+   got_rpn_eqn[kmx, ++kkmx, "val"]= 100.0e-9 " * ";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=ref_cycles_str;
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" / ( " num_cpus " * " tsc_freq " * ";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=1.0;
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_interval";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" ) ";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+   got_rpn_eqn[kmx,      1,"max"]=kkmx;
    lkfor[kmx,1]=ref_cycles_str;
-   lkfor[kmx,2]="instances";  # get the instances from the first lkfor event
    nwfor[kmx,1,"hdr"]="%not_halted";
    nwfor[kmx,1,"alias"]="metric_CPU utilization %";
+
 
    kmx++;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
@@ -502,13 +595,31 @@ function prt_rpn_eqn(kmx,   i, str) {
    kmx++;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
    got_lkfor[kmx,2]=1; # num of fields to look for
-   got_lkfor[kmx,3]=inv_num_sockets * 1.0e-9; # a factor
-   got_lkfor[kmx,4]="sum"; # operation x/y
+   got_lkfor[kmx,3]=1.0; # a factor
+   got_lkfor[kmx,4]="bc_eqn"; # operation x/y/z
    got_lkfor[kmx,5]=1; # instances
-   got_lkfor[kmx,6]="div_by_interval"; # 
+   got_lkfor[kmx,6]=""; # instances
+   kkmx = 0;
+   got_rpn_eqn[kmx, ++kkmx, "val"]=L3_cha_clockticks_str;
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" / "
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=L3_cha_clockticks_str;
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_tmr";
+   got_rpn_eqn[kmx,      1,"max"]=kkmx;
    got_lkfor[kmx,"tag"]="uncore_freq";
    lkfor[kmx,1]=L3_cha_clockticks_str;
    nwfor[kmx,1,"hdr"]="uncore_freq (GHz)";
+
+#   kmx++;
+#   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+#   got_lkfor[kmx,2]=1; # num of fields to look for
+#   got_lkfor[kmx,3]=inv_num_sockets * 1.0e-9; # a factor
+#   got_lkfor[kmx,4]="sum"; # operation x/y
+#   got_lkfor[kmx,5]=1; # instances
+#   got_lkfor[kmx,6]="div_by_tmr_interval"; # 
+#   lkfor[kmx,1]=L3_cha_clockticks_str;
+#   nwfor[kmx,1,"hdr"]="uncore_freq (GHz)";
    }
 
 #    rpn operations
@@ -546,19 +657,6 @@ function prt_rpn_eqn(kmx,   i, str) {
    kmx++;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
    got_lkfor[kmx,2]=2; # num of fields to look for
-   got_lkfor[kmx,3]=1.0e-9; # a factor
-   got_lkfor[kmx,4]="div"; # operation x/y/z
-   got_lkfor[kmx,5]=1; # instances
-   got_lkfor[kmx,6]="div_by_non_halted_interval"; # 
-   got_lkfor[kmx,"tag"]="avg_freq_ghz";
-   lkfor[kmx,1]=cpu_cycles_str;
-   lkfor[kmx,2]="instances";  # get the instances from the first lkfor event
-   nwfor[kmx,1,"hdr"]="avg_freq (GHz)";
-   nwfor[kmx,1,"alias"]="metric_CPU operating frequency (in GHz)";
-
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=2; # num of fields to look for
    got_lkfor[kmx,3]=1000.0; # a factor
    got_lkfor[kmx,4]="div"; # operation
    got_lkfor[kmx,5]=1; # instances
@@ -584,25 +682,34 @@ function prt_rpn_eqn(kmx,   i, str) {
    } else {
      got_lkfor[kmx,3]=1.0; 
    }
-   got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
+   #got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
+   got_lkfor[kmx,4]="bc_eqn"; # operation x/y/z
    got_lkfor[kmx,5]=1; # instances
    got_lkfor[kmx,6]=""; # 
    #got_lkfor[kmx,6]="div_by_interval"; # 
    kkmx = 0;
-   got_rpn_eqn[kmx, ++kkmx, "val"]=lat_fctr;
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" ( " lat_fctr " * ";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
    got_rpn_eqn[kmx, ++kkmx, "val"]=L3_cha_misses_out_str;
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="*";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" / "
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
    got_rpn_eqn[kmx, ++kkmx, "val"]=L3_cha_misses_str;
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="/";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   #got_rpn_eqn[kmx, ++kkmx, "val"]=num_sockets;
-   #got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
-   #got_rpn_eqn[kmx, ++kkmx, "val"]="/";
-   #got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" ) ";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+
+#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+#   got_rpn_eqn[kmx, ++kkmx, "val"]=lat_fctr;
+#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+#   got_rpn_eqn[kmx, ++kkmx, "val"]=L3_cha_misses_out_str;
+#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+#   got_rpn_eqn[kmx, ++kkmx, "val"]="*";
+#   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+#   got_rpn_eqn[kmx, ++kkmx, "val"]=L3_cha_misses_str;
+#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+#   got_rpn_eqn[kmx, ++kkmx, "val"]="/";
+#   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
    got_rpn_eqn[kmx,      1,"max"]=kkmx;
    lkfor[kmx,1]=L3_cha_misses_out_str;
    lkfor[kmx,2]=L3_cha_misses_str;
@@ -618,8 +725,8 @@ function prt_rpn_eqn(kmx,   i, str) {
    got_lkfor[kmx,5]=1; # instances
    got_lkfor[kmx,6]="";
    got_lkfor[kmx,"tag"]="L3_lat_ns";
-   #got_lkfor[kmx,6]="div_by_interval"; # 
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" ( " num_sockets " * " lat_fctr " * ";
+   #got_rpn_eqn[kmx, ++kkmx, "val"]=" ( " num_sockets " * " lat_fctr " * ";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" ( " lat_fctr " * ";
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
    got_rpn_eqn[kmx, ++kkmx, "val"]=L3_cha_misses_out_str;
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
@@ -627,29 +734,23 @@ function prt_rpn_eqn(kmx,   i, str) {
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
    got_rpn_eqn[kmx, ++kkmx, "val"]=L3_cha_misses_str;
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" ) / ( ( ";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" ) / ( ";
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   if (amd_cpu == 0) {
-   got_rpn_eqn[kmx, ++kkmx, "val"]=L3_cha_clockticks_str;
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" / "
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=1000000000;
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" ) "
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" / "
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="interval";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_interval";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" )";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   } else {
-   got_rpn_eqn[kmx, ++kkmx, "val"]="sv_avg_freq_ghz";
+#   if (amd_cpu == 0) {
+#   got_rpn_eqn[kmx, ++kkmx, "val"]=L3_cha_clockticks_str;
+#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+#   got_rpn_eqn[kmx, ++kkmx, "val"]=" / "
+#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+#   got_rpn_eqn[kmx, ++kkmx, "val"]=L3_cha_clockticks_str;
+#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_tmr";
+#   got_rpn_eqn[kmx, ++kkmx, "val"]=" )";
+#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+#   } else {
+   got_rpn_eqn[kmx, ++kkmx, "val"]="1.0";
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_sv_avg_freq_ghz";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" ) )";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" ) ";
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   }
+#   }
    got_rpn_eqn[kmx,      1,"max"]=kkmx;
    lkfor[kmx,1]=L3_cha_misses_out_str;
    lkfor[kmx,2]=L3_cha_misses_str;
@@ -1660,7 +1761,7 @@ function prt_rpn_eqn(kmx,   i, str) {
      if (ts_end > 0.0 && use_epoch > ts_end) {
        continue;
      }
-     printf("%.4f\t%s\t%s\t%.4f", use_epoch, sv[i,1], sv[i,1], interval) > out_file;
+     printf("%.4f\t%.3f\t%s\t%.4f", use_epoch, sv[i,1], sv[i,1], interval) > out_file;
      rw_data[rw_col++] = use_epoch;
      rw_data[rw_col++] = sv[i,1];
      rw_data[rw_col++] = sv[i,1];
@@ -1675,7 +1776,9 @@ function prt_rpn_eqn(kmx,   i, str) {
        for(j=0; j <= evt_idx; j++) {
          if (k == 1) {
            printf("\t%s", sv[i,3+j]) > out_file;
-           rw_data[rw_col++] = sv[i,3+j];
+           rw_data[rw_col]  = sv[i,3+j];
+           tmr_data[rw_col] = sv_tmr[i,3+j];
+           rw_col++;
            do_summary(cols, sv[i,3+j]+0.0, use_epoch+0.0, interval, k);
            cols++;
          }
@@ -1774,15 +1877,23 @@ function prt_rpn_eqn(kmx,   i, str) {
            printf("got rpn_rtn err: %s\n", rpn_err) > "/dev/stderr";
            printf("got err for %s k= %s, numer= %f, lkup[%d,2]= %s, lkup[k,1]= %s evt_inst[lkup[k,1]]= %s, use num_cpus= %s\n",
             nwfor[k,1,"hdr"], k, numer[k], k, lkup[k,2], lkup[k,1], evt_inst[lkup[k,1]], num_cpus) > "/dev/stderr";
+           prt_rpn_eqn(k);
            exit(1);
          }
        }
        if (got_lkfor[k,4] == "bc_eqn" && got_lkfor[k,1] == got_lkfor[k,2]) {
          val =  0.0;
          prt_it=1;
-         rpn_err = "";
-         rpn_sp = 0;
+         bc_err = "";
+         bc_sp = 0;
          val = bc_rtn(val, k, got_rpn_eqn, col_hdr_mx, col_hdr, rw_data);
+         if (bc_err != "") {
+           printf("got bc_rtn err: %s\n", bc_err) > "/dev/stderr";
+           printf("got err for %s k= %s, numer= %f, lkup[%d,2]= %s, lkup[k,1]= %s evt_inst[lkup[k,1]]= %s, use num_cpus= %s\n",
+            nwfor[k,1,"hdr"], k, numer[k], k, lkup[k,2], lkup[k,1], evt_inst[lkup[k,1]], num_cpus) > "/dev/stderr";
+           prt_rpn_eqn(k);
+           exit(1);
+         }
          #if (got_lkfor[k,"tag"] == "L3_lat_ns") {
          #  printf("L3_lat_ns: eqn= %s = %f\n", bc_str, val);
          #}
