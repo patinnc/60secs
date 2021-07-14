@@ -16,9 +16,10 @@ BEG=
 SUM_FILE=
 END_TM=
 OUT_FILE=
+USE_CPUS=
 MEM_SPEED_MHz=
 
-while getopts "hvb:C:c:D:e:f:M:O:o:P:p:s:S:l:" opt; do
+while getopts "hvb:C:c:D:e:f:M:O:o:P:p:s:S:u:l:" opt; do
   case ${opt} in
     b )
       BEG=$OPTARG
@@ -49,6 +50,9 @@ while getopts "hvb:C:c:D:e:f:M:O:o:P:p:s:S:l:" opt; do
       ;;
     S )
       SUM_FILE=$OPTARG
+      ;;
+    u )
+      USE_CPUS="$USE_CPUS $OPTARG"
       ;;
     O )
       OUT_FILE=$OPTARG
@@ -108,6 +112,7 @@ while getopts "hvb:C:c:D:e:f:M:O:o:P:p:s:S:l:" opt; do
       echo "   -p prefix_str.  prefix each sheet name with this string."
       echo "   -s sheet_name.  Used by tsv_2_xlsx.py. string has to comply with Excel sheet name rules"
       echo "   -S sum_file     Output summary stats to this file"
+      echo "   -u use_cpus     a range of cpus to use. Assumes that the perf data is collected at the cpu level (perf stat -A...)"
       echo "   -l SpecInt CPU2017 log (like result/CPU2017.001.log)"
       echo "   -v verbose mode"
       exit
@@ -207,9 +212,10 @@ fi
 
 export AWKPATH=$SCR_DIR
 
+echo "$0.$LINENO file_sets use_cpus= $USE_CPUS" > /dev/stderr
 
-echo $0.$LINENO awk -v cpu_type="$CPU_TYPE" -v phase_file="$PHASE_FILE" -v phase_clip="$CLIP_IN" -v tm_beg_run_log="$TM_BEG_RUN_LOG"  -v out_file="$OUT_FILE" -v script="$0.$LINENO" -v amd_cpu="$AMD_CPU" -v num_sockets="$SOCKETS" -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s|memory},LLC-misses PKI{|memory},%not_halted{|CPU},avg_freq{avg_freq GHz|CPU},QPI_BW{QPI_BW GB/s|memory interconnect},power_pkg {power pkg (watts)|power}" -f $SCR_DIR/perf_stat_scatter.awk $FILES $CPU2017files > /dev/stderr
-awk -v cpu_type="$CPU_TYPE"  -v mem_speed_mhz="$MEM_SPEED_MHz" -v phase_file="$PHASE_FILE" -v phase_clip="$CLIP_IN"  -v tm_beg_run_log="$TM_BEG_RUN_LOG" -v out_file="$OUT_FILE" -v script="$0.$LINENO"  -v amd_cpu="$AMD_CPU" -v num_sockets="$SOCKETS" -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s|memory},LLC-misses PKI{|memory},%not_halted{|CPU},avg_freq{avg_freq GHz|CPU},QPI_BW{QPI_BW GB/s|memory interconnect},power_pkg {power pkg (watts)|power}" -f $SCR_DIR/perf_stat_scatter.awk $FILES $CPU2017files
+echo $0.$LINENO awk -v use_cpus="$USE_CPUS" -v cpu_type="$CPU_TYPE" -v phase_file="$PHASE_FILE" -v phase_clip="$CLIP_IN" -v tm_beg_run_log="$TM_BEG_RUN_LOG"  -v out_file="$OUT_FILE" -v script="$0.$LINENO" -v amd_cpu="$AMD_CPU" -v num_sockets="$SOCKETS" -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s|memory},LLC-misses PKI{|memory},%not_halted{|CPU},avg_freq{avg_freq GHz|CPU},QPI_BW{QPI_BW GB/s|memory interconnect},power_pkg {power pkg (watts)|power}" -f $SCR_DIR/perf_stat_scatter.awk $FILES $CPU2017files > /dev/stderr
+awk -v use_cpus="$USE_CPUS" -v cpu_type="$CPU_TYPE"  -v mem_speed_mhz="$MEM_SPEED_MHz" -v phase_file="$PHASE_FILE" -v phase_clip="$CLIP_IN"  -v tm_beg_run_log="$TM_BEG_RUN_LOG" -v out_file="$OUT_FILE" -v script="$0.$LINENO"  -v amd_cpu="$AMD_CPU" -v num_sockets="$SOCKETS" -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s|memory},LLC-misses PKI{|memory},%not_halted{|CPU},avg_freq{avg_freq GHz|CPU},QPI_BW{QPI_BW GB/s|memory interconnect},power_pkg {power pkg (watts)|power}" -f $SCR_DIR/perf_stat_scatter.awk $FILES $CPU2017files
           RC=$?
           if [ $RC -gt 0 ]; then
             RESP=`pwd`
