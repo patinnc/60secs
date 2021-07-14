@@ -58,7 +58,7 @@ fi
 #echo "$0.$LINENO hi" > /dev/stderr
 export AWKPATH=$SCR_DIR
 
-awk -v out_file="$OUTFILE" -v sum_file="$SUMFILE" -v options="$OPTIONS" -f $SCR_DIR/cpu2017_2_phasefile.awk $CPU2017_LOG
+awk -v verbose="$VERBOSE" -v out_file="$OUTFILE" -v sum_file="$SUMFILE" -v options="$OPTIONS" -f $SCR_DIR/cpu2017_2_phasefile.awk $CPU2017_LOG
 exit $!
 
 
