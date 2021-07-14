@@ -25,6 +25,8 @@ METRIC_AVG="metric_out.average"
 SUM_TMAM_FILE="sum_TMAM.tsv"
 MUTTLEY_OUT_FILE="muttley_host_calls.tsv"
 SKIP_XLS=0
+FS_ARR_INIT=0
+FS_ARR_MX=0
 MAX_VAL=
 AVERAGE=0
 CLIP=
@@ -582,6 +584,100 @@ FILES2=`ls -1 $DIR/../sys_*_*.txt`
 if [ "$FILES2" != "" ]; then
     FILES="$FILES $FILES2"
 fi
+
+declare -A FS_ARR
+
+parse_file_sets() {
+  if [ "$FS_ARR_INIT" == "1" ]; then
+    return
+  fi
+  FS_ARR_INIT=1
+  FS_ARR_MX=0
+  echo "$0.$LINENO options= $OPTIONS"
+  if [[ "$OPTIONS" == *"file_sets{"* ]]; then
+    echo "$0.$LINENO got file_sets."
+    file_set_arr=(`awk -v options="$OPTIONS" '
+       BEGIN{
+         nopt="";
+         lkfor = "file_sets{";
+         nopt = options;
+         while(1) {
+           pos = index(nopt, lkfor);
+           if (pos > 0) {
+             str = substr(nopt, pos+length(lkfor), length(nopt));
+             endpos = index(str, "}");
+             fs_str = substr(str, 1, endpos-1);
+             str = substr(str, endpos+1, length(str));
+             #printf("fs: oldstr= %s\n", nopt) > "/dev/stderr";
+             #printf("fs: fs_str= %s\n", fs_str) > "/dev/stderr";
+             #printf("fs: remndr= %s\n", str) > "/dev/stderr";
+             printf("%s\n", fs_str);
+             nopt = str;
+           } else {
+             break;
+           }
+         }
+         exit(1);
+       }'`)
+    FS_ARR_MX=${#file_set_arr[@]}
+    for ((jj=0; jj < ${#file_set_arr[@]}; jj++)); do
+       v=${file_set_arr[$jj]}
+       echo "$0.$LINENO fs_str_arr[$jj]= $v"
+       #awk -v v="$v" 'BEGIN{ pos=index(v,"/"); if (pos == 0) {exit(1);}; str=substr(v,pos+1,length(v)); pos=index(str, "/"); if (pos == 0) {exit(1);}; str=substr(str, 1, pos-1); printf("%s", str); exit(0); }'
+       arr=(`awk -v v="$v" '
+          BEGIN{
+            pos=index(v,"/");
+            if (pos == 0) {exit(1);};
+            str=substr(v,pos+1,length(v));
+            pos=index(str, "/");
+            if (pos == 0) {exit(1);};
+            rem=substr(str, pos+1, length(str));
+            str=substr(str, 1, pos-1);
+            printf("%s\n", str);
+            rem=substr(rem, 2, length(rem));
+            printf("%s\n", rem);
+            exit(0);
+          }'`)
+       #echo "$0.$LINENO file_sets arr= ${arr[@]}"
+       FS_ARR[$jj,"rgx"]=${arr[0]};
+       FS_ARR[$jj,"arg"]=${arr[1]};
+       echo $0.$LINENO: FS_arr[$jj,"rgx"]= ${FS_ARR[$jj,"rgx"]}, arg= ${FS_ARR[$jj,"arg"]}
+    done
+  fi
+  echo "$0.$LINENO ck file_sets. FS_ARR_MX= $FS_ARR_MX"
+  #exit 1
+}
+
+parse_file_sets
+
+
+ck_file_sets_arr() {
+  echo "$0.$LINENO file_sets options= $OPTIONS"
+  RESP=`pwd`
+  kk=-1
+  for ii in $FILES; do
+      kk=$((kk+1))
+      FL=$RESP/$ii
+      echo "$0.$LINENO file[$kk] , try rgx= $FS_ARR_MX, FL= $FL"
+      for ((jj=0; jj < $FS_ARR_MX; jj++)); do
+        if [[ $FL =~ ${FS_ARR[$jj,"rgx"]} ]]; then
+          echo "$0.$LINENO dir[$kk]= rgx[$jj] match"
+          FS_ARR[$jj,"match"]=$kk
+          FS_ARR[$jj,"file"]=$ii
+        else
+          echo "$0.$LINENO dir[$kk]= rgx[$jj] miss"
+        fi
+      done
+  done
+  #echo "$0.$LINENO bye ck_file_sets_arr()"
+  #exit 1
+}
+#abcd
+
+ck_file_sets_arr 
+#echo "$0.$LINENO bye"
+#exit 1
+
 for i in $FILES; do
  if [ -e job_${JOB_ID}.stop ]; then
     RESP=`head -1 job_${JOB_ID}.stop`
@@ -2757,10 +2853,17 @@ row += trows;
        echo "File $i has less than 10 lines ($RESP lines) so skipped it" > /dev/stderr
     else
     echo "$0.$LINENO bef perf_stat_scatter.sh phase= $PHASE_FILE clip= $CLIP $OPT_C $OPT_P"
+    PS_CPUS=
+    for ((jj=0; jj < $FS_ARR_MX; jj++)); do
+        if [ ${FS_ARR[$jj,"match"]} != "" ]; then
+          V=${FS_ARR[$jj,"arg"]}
+          PS_CPUS="$PS_CPUS -u $V "
+        fi
+    done
 
     echo "do perf_stat data $i with BEG= $BEG, end= $END_TM" > /dev/stderr
-    echo  $SCR_DIR/perf_stat_scatter.sh $OPT_MEM $OPT_P $OPT_C $OPT_D -b "$BEG"  $OPT_TME  -o "$OPTIONS" -O $i.tsv -f $i -S $SUM_FILE
-          $SCR_DIR/perf_stat_scatter.sh $OPT_MEM $OPT_P $OPT_C $OPT_D -b "$BEG"  $OPT_TME  -o "$OPTIONS" -O $i.tsv -f $i -S $SUM_FILE
+    echo  $SCR_DIR/perf_stat_scatter.sh $OPT_MEM $OPT_P $OPT_C $OPT_D -b "$BEG"  $OPT_TME  -o "$OPTIONS" -O $i.tsv -f $i $PS_CPUS -S $SUM_FILE
+          $SCR_DIR/perf_stat_scatter.sh $OPT_MEM $OPT_P $OPT_C $OPT_D -b "$BEG"  $OPT_TME  -o "$OPTIONS" -O $i.tsv -f $i $PS_CPUS -S $SUM_FILE
           ck_last_rc $? $LINENO
     fi
   fi
@@ -3931,7 +4034,6 @@ fi
   RESP=`pwd`
   echo -e "$RESP\t$SHEETS" >> $SHEETS_FILE
   echo "$0.$LINENO SHEETS outfile $BASE_DIR/sheets_${JOB_ID}.txt sheets_str= $SHEETS"
-#abcd
 
 echo "$0.$LINENO SHEETS= $SHEETS SKIP_XLS= $SKIP_XLS, xls_fl= $XLSX_FILE avg= $AVERAGE"
 if [ "$SHEETS" != "" -a "$SKIP_XLS" == "0" ]; then
