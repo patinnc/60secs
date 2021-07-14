@@ -35,7 +35,7 @@ function bc_rtn(val, k4, got_rpn_eqn, col_hdr_mx, col_hdr, rw_data,    la, val1,
         if (bc_err != "") { printf("bc_err1= %s\n", bc_err) > "/dev/stderr"; }
         continue;
       }
-      if (oper == "push_row_val" || oper == "push_row_val2") {
+      if (oper == "push_row_val" || oper == "push_row_val2" || oper == "push_row_tmr") {
         val1= "";
         if (got_rpn_eqn[k4,la,"lkup_col"]=="") {
           for (lc=0; lc <= col_hdr_mx; lc++) {
@@ -46,15 +46,19 @@ function bc_rtn(val, k4, got_rpn_eqn, col_hdr_mx, col_hdr, rw_data,    la, val1,
           }
           if (got_rpn_eqn[k4,la,"lkup_col"]=="") {
             got_rpn_eqn[k4,la,"lkup_col"] = -1;
-            rpn_err = "missed_col " la " " val2;
-            printf("got rpn_err2 = %s\n", rpn_err) > "/dev/stderr";
+            bc_err = "missed_col " la " " val2;
+            printf("bc_eqn.awk got bc_err2 = %s\n", bc_err) > "/dev/stderr";
           }
         }
         if (got_rpn_eqn[k4,la,"lkup_col"] != -1) {
           lc = got_rpn_eqn[k4,la,"lkup_col"];
-          val1=rw_data[lc]+0.0;
+          if (oper == "push_row_tmr") {
+            val1=tmr_data[lc]+0.0;
+          } else {
+            val1=rw_data[lc]+0.0;
+          }
           bc_str = bc_str " " val1;
-          if (bc_err != "") { printf("after push bc_err3= %s\n", bc_err) > "/dev/stderr"; }
+          if (bc_err != "") { printf("bc_eqn.awk after push bc_err3= %s\n", bc_err) > "/dev/stderr"; }
         }
         if (val1 == "") {
            prt_it = 0;
@@ -68,7 +72,7 @@ function bc_rtn(val, k4, got_rpn_eqn, col_hdr_mx, col_hdr, rw_data,    la, val1,
      cmd = "echo \"scale=8; " bc_str "\" | bc -l ";
      cmd | getline val;
      close(cmd);
-     printf("bc_eqn: cmd= \"%s\", val= %f\n", cmd, val) > "/dev/stderr";
+     printf("bc_eqn.awk: cmd= \"%s\", val= %f\n", cmd, val) > "/dev/stderr";
    } else {
      # val = sprintf("%f", bc_str);
      str = bc_str;
@@ -91,7 +95,10 @@ function try_calc3( e) {
     #NF > 0 
     f = 1;
     e = expr();
-    if (f <= NF) { printf("error at %s\n", $f) }
+    if (f <= NF) { 
+        printf("bc_eqn.awk: error at %s\n", $f) 
+        bc_err = sprintf("bc_eqn.awk: error at %s\n", $f) 
+    }
     #else {printf("\t%.8g\n", e); return e;}
     else {return e;}
 }
@@ -111,16 +118,27 @@ function term(  e) {        # factor | factor [*/] factor
 }
 
 function factor(  e) {      # number | (expr)
-    if ($f ~ /^[+-]?([0-9]+[.]?[0-9]*|[.][0-9]+)$/) {
+    isnum = 0;
+    if ($f != "(") {
+      # 5.61541e-09 
+      v = $f + 0.0;
+      if (v != 0.0) {
+        isnum = 1;
+      }
+    }
+    if (($f ~ /^[+-]?([0-9]+[.]?[0-9]*|[.][0-9]+)$/) || isnum == 1) {
         return $(f++);
     } else if ($f == "(") {
         f++;
         e = expr();
-        if ($(f++) != ")")
-            printf("error: missing ) at %s\n", $f);
+        if ($(f++) != ")") {
+            printf("bc_eqn.awk error: missing ) at %s\n", $f);
+            bc_err = sprintf("bc_eqn.awk error: missing ) at %s\n", $f);
+        }
         return e;
     } else {
-        printf("error: expected number or ( at %s\n", $f);
+        printf("bc_eqn.awk error: expected number or ( at %s\n", $f);
+        bc_err = sprintf("bc_eqn.awk error: expected number or ( at %s\n", $f);
         return 0;
     }
 }
