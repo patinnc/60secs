@@ -1,7 +1,9 @@
       BEGIN{
         do_perlbench_subphase = 0;
         if (index(options, "do_perlbench_subphase{1}") > 0) {
-          printf("got do_perlbench_subphase{1}\n") > "/dev/stderr";
+          if (verbose > 0) {
+            printf("got do_perlbench_subphase{1}\n") > "/dev/stderr";
+          }
           do_perlbench_subphase = 1;
         }
         if (out_file == "") {
@@ -59,7 +61,9 @@
         }
       }
       END{
-      printf("specint b_mx= %d\n", b_mx) > "/dev/stderr";
+      if (verbose > 0) {
+        printf("specint b_mx= %d\n", b_mx) > "/dev/stderr";
+      }
         for(i=1; i <= b_mx; i++) {
           bm_i = b_arr[i,1];
           bm_o = b_arr[i,2];
