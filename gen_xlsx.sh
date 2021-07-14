@@ -382,8 +382,6 @@ if [ "$UHOSTNM" != "" ]; then
 fi
 }
 
-
-
 get_dir_list() {
    local CKF=$1
    DIR=$2
@@ -428,7 +426,6 @@ get_dir_list() {
    done
    DIR=$STR
    echo "$0.$LINENO +___________-- get_dir_list: j= $j DIR= $DIR" > /dev/stderr
-   #exit 1
 }
 
 OPT_a=
@@ -648,6 +645,8 @@ LST=$DIR
 if [ $VERBOSE -gt 0 ]; then
   echo "$0.$LINENO DIR: $DIR"
 fi
+
+
 #pwd > /dev/stderr
 #  echo "$0.$LINENO DIR: $DIR"
 #exit 1
@@ -659,14 +658,18 @@ declare -A PHS_DIR_NAME
 j=-1
 for i in $LST; do
   j=$((j+1))
-  echo "$0.$LINENO dir $i"
+  if [ $VERBOSE -gt 0 ]; then
+    echo "$0.$LINENO dir $i"
+  fi
     for j in 2 1; do
       echo "$0.$LINENO try phase_cpu2017.txt find $i -name CPU2017.00$j.log"
       ARR=(`find $i -name CPU2017.00$j.log`)
       for ((k=0; k < ${#ARR[@]}; k++)); do
         v=`dirname ${ARR[$k]}`
-        echo "$0.$LINENO: $SCR_DIR/cpu2017_2_phasefile.sh -i ${ARR[$k]} -o $v/phase_cpu2017.txt  -O $OPTIONS"
-                          $SCR_DIR/cpu2017_2_phasefile.sh -i ${ARR[$k]} -o $v/phase_cpu2017.txt  -O $OPTIONS
+        if [ $VERBOSE -gt 0 ]; then
+           echo "$0.$LINENO: $SCR_DIR/cpu2017_2_phasefile.sh -i ${ARR[$k]} -o $v/phase_cpu2017.txt  -O $OPTIONS"
+        fi
+                             $SCR_DIR/cpu2017_2_phasefile.sh -i ${ARR[$k]} -o $v/phase_cpu2017.txt  -O "$OPTIONS"
       done
       if [ "${#ARR[@]}" != "0" ]; then
         break
@@ -894,6 +897,10 @@ for i in $LST; do
  else
    OPT_OPT=$OPT_OPT_DEF
  fi
+ if [ $VERBOSE -gt 0 ]; then
+   echo "$0.$LINENO file_sets options= $OPTIONS"
+   echo "$0.$LINENO file_sets opt_opt= $OPT_OPT"
+ fi
  OPT_A=
  if [ "$AVERAGE" != "0" ]; then
    if [ $NUM_DIRS -gt 1 ]; then
@@ -929,14 +936,14 @@ for i in $LST; do
      if [ "$RESP" != "" ]; then
        OPT_P=$RESP
      fi
-     echo "$SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p \"$OPT_P\" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i \"*.png\" -s $SUM_FILE -x $XLS.xlsx -o $OPT_OPT $OPT_PH -t $DIR &> $SYS_2_TSV_STDOUT_FILE" &
+     echo "$SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p \"$OPT_P\" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i \"*.png\" -s $SUM_FILE -x $XLS.xlsx -o "$OPT_OPT" $OPT_PH -t $DIR &> $SYS_2_TSV_STDOUT_FILE" &
    fi
    if [ "$BACKGROUND" -le "0" ]; then
-          $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$OPT_P" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o $OPT_OPT $OPT_PH -t $DIR &> $SYS_2_TSV_STDOUT_FILE
+          $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$OPT_P" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o "$OPT_OPT" $OPT_PH -t $DIR &> $SYS_2_TSV_STDOUT_FILE
           RC=$?
           ck_last_rc $RC $LINENO
    else
-          $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$OPT_P" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o $OPT_OPT $OPT_PH -t $DIR &> $SYS_2_TSV_STDOUT_FILE &
+          $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$OPT_P" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o "$OPT_OPT" $OPT_PH -t $DIR &> $SYS_2_TSV_STDOUT_FILE &
           LPID=$!
           RC=$?
           BK_DIR[$LPID]=$i
@@ -1025,7 +1032,9 @@ for i in $LST; do
  else
    pushd $i > /dev/null
  fi
- echo "$0.$LINENO after sys_2_tsv.awk dir[$i_idx]= $i   TCUR_DIR= $TCUR_DIR"
+ if [ $VERBOSE -gt 0 ]; then
+   echo "$0.$LINENO after sys_2_tsv.awk dir[$i_idx]= $i   TCUR_DIR= $TCUR_DIR"
+ fi
 # if [ "$PHASE_FILE" == "" ]; then
 #    RESP=phase_cpu2017.txt
 #    if [ $VERBOSE -gt 0 ]; then
@@ -1128,7 +1137,9 @@ for i in $LST; do
    CKDIR=$i
    RESP=`grep "$CKDIR" ${SHEETS_OUT[$k]}`
    if [ "$RESP" != "" ]; then
-     echo "got SHEETS_OUT[$k]= $RESP, i= $i"
+     if [ $VERBOSE -gt 0 ]; then
+       echo "got SHEETS_OUT[$k]= $RESP, i= $i"
+     fi
      SDIR=`echo -e "$RESP" | awk '{ printf("%s\n", $1); }'`
      SHEET_FILES+=(`echo -e "$RESP" | awk '{ for (i=2; i <= NF; i++) { printf("%s\n", $(i)); } }'`)
        echo "sheet_files= ${#SHEET_FILES[@]}"
@@ -1292,9 +1303,9 @@ if [ "$FLS_IC" != "" -o "$FLS_PS" != "" -o "$FLS_MP" != "" ]; then
        rm $OFILE
      fi
      #if [ $VERBOSE -gt 0 ]; then
-      echo "$SCR_DIR/redo_chart_table.sh -O $OPTIONS -S $SUM_ALL -f $ALST -o $OFILE   -g infra_cputime $OPT_METRIC -r 50 -t __all__"
+      echo "$SCR_DIR/redo_chart_table.sh -O "$OPTIONS" -S $SUM_ALL -f $ALST -o $OFILE   -g infra_cputime $OPT_METRIC -r 50 -t __all__"
      #fi
-            $SCR_DIR/redo_chart_table.sh -O $OPTIONS -S $SUM_ALL -f $ALST -o $OFILE   -g infra_cputime $OPT_METRIC -r 50 -t __all__ 
+            $SCR_DIR/redo_chart_table.sh -O "$OPTIONS" -S $SUM_ALL -f $ALST -o $OFILE   -g infra_cputime $OPT_METRIC -r 50 -t __all__ 
      ck_last_rc $? $LINENO
     fi
     if [ "$FLS_MP" != "" ]; then
@@ -1303,9 +1314,9 @@ if [ "$FLS_IC" != "" -o "$FLS_PS" != "" -o "$FLS_MP" != "" ]; then
        rm $OFILE
      fi
       #if [ $VERBOSE -gt 0 ]; then
-      echo "$SCR_DIR/redo_chart_table.sh -O $OPTIONS -S $SUM_ALL -f $ALST -o $OFILE   -g mpstat $OPT_METRIC -r 50 -t __all__"
+      echo "$SCR_DIR/redo_chart_table.sh -O "$OPTIONS" -S $SUM_ALL -f $ALST -o $OFILE   -g mpstat $OPT_METRIC -r 50 -t __all__"
       #fi
-            $SCR_DIR/redo_chart_table.sh -O $OPTIONS -S $SUM_ALL -f $ALST -o $OFILE   -g mpstat $OPT_METRIC -r 50 -t __all__ 
+            $SCR_DIR/redo_chart_table.sh -O "$OPTIONS" -S $SUM_ALL -f $ALST -o $OFILE   -g mpstat $OPT_METRIC -r 50 -t __all__ 
       ck_last_rc $? $LINENO
     fi
   if [ "$FLS_PS" != "" ]; then
@@ -1314,10 +1325,10 @@ if [ "$FLS_IC" != "" -o "$FLS_PS" != "" -o "$FLS_MP" != "" ]; then
       rm $OFILE
     fi
     if [ $VERBOSE -gt 0 ]; then
-      echo "$SCR_DIR/redo_chart_table.sh -O $OPTIONS -S $SUM_ALL -f $ALST -o $OFILE   -g perf_stat $OPT_METRIC -r 50 -t __all__"
+      echo "$SCR_DIR/redo_chart_table.sh -O "$OPTIONS" -S $SUM_ALL -f $ALST -o $OFILE   -g perf_stat $OPT_METRIC -r 50 -t __all__"
     fi
-    echo "$SCR_DIR/redo_chart_table.sh -O $OPTIONS -S $SUM_ALL -f $ALST -o $OFILE   -g perf_stat $OPT_METRIC -r 50 -t __all__" > /dev/stderr
-          $SCR_DIR/redo_chart_table.sh -O $OPTIONS -S $SUM_ALL -f $ALST -o $OFILE   -g perf_stat $OPT_METRIC -r 50 -t __all__ 
+    echo "$SCR_DIR/redo_chart_table.sh -O "$OPTIONS" -S $SUM_ALL -f $ALST -o $OFILE   -g perf_stat $OPT_METRIC -r 50 -t __all__" > /dev/stderr
+          $SCR_DIR/redo_chart_table.sh -O "$OPTIONS" -S $SUM_ALL -f $ALST -o $OFILE   -g perf_stat $OPT_METRIC -r 50 -t __all__ 
     ck_last_rc $? $LINENO
   fi
   fi
@@ -2061,7 +2072,9 @@ function arr_in_compare_rev(i1, v1, i2, v2,    l, r)
        echo "$0.$LINENO =========== pwd = $got_pwd ========="
     fi
     USE_DIR=
-    echo "$0.$LINENO find $DIR_1ST_DIR -name 60secs.log" > /dev/stderr
+    if [ $VERBOSE -gt 0 ]; then
+      echo "$0.$LINENO find $DIR_1ST_DIR -name 60secs.log" > /dev/stderr
+    fi
     RESP=`find $DIR_1ST_DIR -name 60secs.log | head -1 | wc -l | awk '{$1=$1;print}'`
     BTM=
     ETM=
@@ -2262,9 +2275,9 @@ function arr_in_compare_rev(i1, v1, i2, v2,    l, r)
     fi
  fi
   #if [ $VERBOSE -gt 0 ]; then
-    echo "$0.$LINENO python $SCR_DIR/tsv_2_xlsx.py $OPT_SM $OPT_a $OPT_A $OPT_TM $OPT_OPTIONS $OPT_M -f $ALST $SHEETS" > /dev/stderr
+    echo "$0.$LINENO python $SCR_DIR/tsv_2_xlsx.py $OPT_SM $OPT_a $OPT_A $OPT_TM -O "$OPTIONS" $OPT_M -f $ALST $SHEETS" > /dev/stderr
   #fi
-        python $SCR_DIR/tsv_2_xlsx.py -v $OPT_SM $OPT_a $OPT_A $OPT_TM $OPT_OPTIONS $OPT_M -f $ALST $SHEETS &> $FSTDOUT
+        python $SCR_DIR/tsv_2_xlsx.py -v $OPT_SM $OPT_a $OPT_A $OPT_TM -O "$OPTIONS" $OPT_M -f $ALST $SHEETS &> $FSTDOUT
         PY_RC=$?
         PY_PID=$!
         #sleep 1
