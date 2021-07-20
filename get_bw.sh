@@ -194,6 +194,10 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
       evt[j,tm_i,"inst"]++;
       evt[j,tm_i,"ns"] += arr[5+cpu_col];
       evt[j,tm_i,"multi"] = arr[6+cpu_col];
+      evt[j,"tot"] += arr[2+cpu_col];
+      evt[j,"tot","inst"]++;
+      evt[j,"tot","ns"] += arr[5+cpu_col];
+      evt[j,"tot","multi"] = arr[6+cpu_col];
       #1.002152878;5415357486;;UNC_C_CLOCKTICKS;2005707182;100.00;168.823;M/sec
       next;
     }
@@ -205,7 +209,12 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
         cpu_col=1;
       }
    tm_i = ck_tm(arr[1]);
-   evt[unc_rdwr,tm_i] += arr[2+cpu_col]+0;
+   j = unc_rdwr;
+   evt[j,tm_i] += arr[2+cpu_col]+0;
+   evt[j,"tot"] += arr[2+cpu_col]+0;
+   #evt[j,tm_i,"inst"]++;
+   #evt[j,tm_i,"ns"] += arr[5+cpu_col];
+   #evt[j,tm_i,"multi"] = arr[6+cpu_col];
    #printf("unc_rd_wr %s, v= %s bw= %f\n", arr[4+cpu_col], arr[2+cpu_col], 64.0e-9*evt[unc_rdwr,tm_i]) > "/dev/stderr";
    #exit;
       next;
@@ -321,10 +330,19 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
    if (index(vendor, "AMD") > 0) {
       lat_fctr = 16.0;
    }
-   for (i=1; i <= tm_mx; i++) {
-    tm_dff = tm_lkup[i] - tm_lkup[i-1];
-    tm_elap = tm_lkup[i];
-    printf("%8.3f", tm_elap);
+   for (kk=1; kk <= tm_mx+1; kk++) {
+    if (kk <= tm_mx) {
+      i = kk;
+      tm_dff = tm_lkup[i] - tm_lkup[i-1];
+      tm_elap = tm_lkup[i];
+      printf("%8.3f", tm_elap);
+    } else {
+      i = "tot";
+      tm_dff = tm_lkup[tm_mx];
+      tm_elap = tm_lkup[tm_mx];
+      printf(" avg_tot");
+      #printf("tm_dff= %f tm_elap= %f\n", tm_dff, tm_elap);
+    }
     #printf(" unc_rdwr=%d, evt[unc_rdwr,%d] %f\n", unc_rdwr,i,evt[unc_rdwr,i]);
     LatUncNs = 0.0;
     for (j=1; j <= cats; j++) {
