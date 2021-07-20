@@ -89,6 +89,9 @@ while getopts "hFvb:C:I:P:p:w:W:x:X:" opt; do
       ;;
   esac
 done
+echo "$0.$LINENO processed args"
+printf " %q" "${@}"
+printf "\n"
 shift $((OPTIND -1))
 
 if [ "$PERF_BIN_IN" == "" ]; then
