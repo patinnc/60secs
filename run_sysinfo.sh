@@ -106,6 +106,13 @@ for ((i=0; i < $NDS; i++)); do
   printf "\n"  >> $OFILE
 done
 
+
+
+BIOS_BIN=$SCR_DIR/extras/SCELNX_64_v5.03.1127
+if [ -e $BIOS_BIN ]; then
+  $BIOS_BIN /o /s nvram.out
+fi
+
 TS=`date +%s.%N`
 echo "end sysinfo $TS" >> phase.txt
 popd
