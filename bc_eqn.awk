@@ -78,7 +78,9 @@ function bc_rtn(val, k4, got_rpn_eqn, col_hdr_mx, col_hdr, rw_data,    la, val1,
      str = bc_str;
      n = split(str, arr, " ");
      NF = n;
-     for (ii=1; ii <= n; ii++) { $ii = arr[ii]; }
+     for (ii=1; ii <= n; ii++) { 
+       $ii = arr[ii]; 
+     }
      for (ii=1; ii <= n; ii++) { 
        vv=try_calc3(arr[ii]);
      } 
