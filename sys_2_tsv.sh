@@ -586,6 +586,7 @@ if [ "$FILES2" != "" ]; then
 fi
 
 declare -A FS_ARR
+declare -A PC_ARR
 
 parse_file_sets() {
   if [ "$FS_ARR_INIT" == "1" ]; then
@@ -594,6 +595,57 @@ parse_file_sets() {
   FS_ARR_INIT=1
   FS_ARR_MX=0
   echo "$0.$LINENO options= $OPTIONS"
+  if [[ "$OPTIONS" == *"perf_cpu_groups{"* ]]; then
+    echo "$0.$LINENO got options perf_cpu_groups."
+    perf_cpu_arr=(`awk -v options="$OPTIONS" '
+       BEGIN{
+         nopt="";
+         lkfor = "perf_cpu_groups{";
+         nopt = options;
+         while(1) {
+           pos = index(nopt, lkfor);
+           if (pos > 0) {
+             str = substr(nopt, pos+length(lkfor), length(nopt));
+             endpos = index(str, "}");
+             fs_str = substr(str, 1, endpos-1);
+             str = substr(str, endpos+1, length(str));
+             #printf("fs: oldstr= %s\n", nopt) > "/dev/stderr";
+             #printf("fs: fs_str= %s\n", fs_str) > "/dev/stderr";
+             #printf("fs: remndr= %s\n", str) > "/dev/stderr";
+             printf("%s\n", fs_str);
+             nopt = str;
+           } else {
+             break;
+           }
+         }
+         exit(1);
+       }'`)
+    PC_ARR_MX=${#perf_cpu_arr[@]}
+    for ((jj=0; jj < ${#perf_cpu_arr[@]}; jj++)); do
+       v=${perf_cpu_arr[$jj]}
+       echo "$0.$LINENO pc_str_arr[$jj]= $v"
+       #awk -v v="$v" 'BEGIN{ pos=index(v,"/"); if (pos == 0) {exit(1);}; str=substr(v,pos+1,length(v)); pos=index(str, "/"); if (pos == 0) {exit(1);}; str=substr(str, 1, pos-1); printf("%s", str); exit(0); }'
+       arr=(`awk -v v="$v" '
+          BEGIN{
+            pos=index(v,"/");
+            if (pos == 0) {exit(1);};
+            str=substr(v,pos+1,length(v));
+            pos=index(str, "/");
+            if (pos == 0) {exit(1);};
+            rem=substr(str, pos+1, length(str));
+            str=substr(str, 1, pos-1);
+            printf("%s\n", str);
+            rem=substr(rem, 2, length(rem));
+            printf("%s\n", rem);
+            exit(0);
+          }'`)
+       echo "$0.$LINENO perf_cpu_groups arr= ${arr[0]} ${arr[1]} ${arr[2]}"
+       PC_ARR[$jj,"rgx"]=${arr[0]}
+       PC_ARR[$jj,"arg"]=${arr[1]}
+       echo "$0.$LINENO: PC_ARR[$jj,rgx]= ${PC_ARR[$jj,'rgx']}, arg= ${PC_ARR[$jj,'arg']}"
+    done
+    return
+  fi
   if [[ "$OPTIONS" == *"file_sets{"* ]]; then
     echo "$0.$LINENO got file_sets."
     file_set_arr=(`awk -v options="$OPTIONS" '
@@ -672,9 +724,55 @@ ck_file_sets_arr() {
   #echo "$0.$LINENO bye ck_file_sets_arr()"
   #exit 1
 }
+
+ck_perf_cpu_arr() {
+  echo "$0.$LINENO file_sets options= $OPTIONS"
+  RESP=`pwd`
+  kk=-1
+  pcg_file=`find $RESP -name perf_cpu_groups.txt`
+  if [ "$pcg_file" == "" ]; then
+    return
+  fi
+  pcg_got_match=0
+  for ii in $FILES; do
+      kk=$((kk+1))
+      FL=$RESP/$ii
+      echo "$0.$LINENO file[$kk] , try rgx= $PC_ARR_MX, FL= $FL"
+      for ((jj=0; jj < $PC_ARR_MX; jj++)); do
+        if [[ $FL =~ ${PC_ARR[$jj,"rgx"]} ]]; then
+          PC_ARR[$jj,"match"]=$kk
+          PC_ARR[$jj,"file"]=$ii
+          PC_ARR[$jj,"arg"]=`awk -v lkfor="${PC_ARR[$jj,'rgx']}" '
+             BEGIN{
+               printf("lkfor= %s\n", lkfor) > "/dev/stderr";
+             }
+             {
+               if (index($0, lkfor) > 0) {
+                 printf("awk mtch line= %s\n", $0) > "/dev/stderr";
+                 n = split($0, arr, "\t");
+                 printf("%s\n", arr[3]); exit(0);
+               }
+             }' $pcg_file`
+          echo "$0.$LINENO dir[$kk]= rgx[$jj] match, cpus= " ${PC_ARR[$jj,"arg"]}
+          printf "perf_cpu_groups\tperf_cpu_groups\t\"%s\"\tsubtest\n" "${PC_ARR[$jj,'rgx']}" >> $SUM_FILE;
+          printf "perf_cpu_groups\tperf_cpu_groups\t\"%s\"\tcpus_used\n" "${PC_ARR[$jj,'arg']}" >> $SUM_FILE;
+          pcg_got_match=1
+        else
+          echo "$0.$LINENO dir[$kk]= rgx[$jj] miss"
+        fi
+      done
+  done
+  if [ "$pcg_file" != "" -a "$pcg_got_match" == "0" ]; then
+     printf "perf_cpu_groups\tperf_cpu_groups\t\"%s\"\tsubtest\n" "all" >> $SUM_FILE;
+     printf "perf_cpu_groups\tperf_cpu_groups\t\"%s\"\tcpus_used\n" "all" >> $SUM_FILE;
+  fi
+  #echo "$0.$LINENO bye ck_perf_cpu_arr()"
+  #exit 1
+}
 #abcd
 
 ck_file_sets_arr 
+ck_perf_cpu_arr 
 #echo "$0.$LINENO bye"
 #exit 1
 
@@ -2860,6 +2958,13 @@ row += trows;
           PS_CPUS="$PS_CPUS -u $V "
         fi
     done
+    for ((jj=0; jj < $PC_ARR_MX; jj++)); do
+        if [ ${PC_ARR[$jj,"match"]} != "" ]; then
+          V=${PC_ARR[$jj,"arg"]}
+          PS_CPUS="$PS_CPUS -u $V "
+        fi
+    done
+    echo "$0.$LINENO: PS_CPUS= $PS_CPUS"
 
     echo "do perf_stat data $i with BEG= $BEG, end= $END_TM" > /dev/stderr
     echo  $SCR_DIR/perf_stat_scatter.sh $OPT_MEM $OPT_P $OPT_C $OPT_D -b "$BEG"  $OPT_TME  -o "$OPTIONS" -O $i.tsv -f $i $PS_CPUS -S $SUM_FILE
