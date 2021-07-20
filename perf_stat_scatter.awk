@@ -6,6 +6,7 @@ BEGIN{
    cpu_col = 0;
    evt_idx=-1;
    num_cpus += 0;
+   got_err = 0;
 
    use_cpu_got_list = 0;
    if (use_cpus != "") {
@@ -14,6 +15,7 @@ BEGIN{
      pos = index(use_cpus, lkfr);
      if (pos > 0) {
        v = substr(use_cpus, pos+length(lkfr), length(use_cpus));
+       gsub(" ", "", v);
        # just handle single range of cpus for now
        n = split(v, arr, "-");
        v0 = arr[1];
@@ -21,6 +23,32 @@ BEGIN{
        use_cpu_got_list = 1;
        printf("%s perf_cpus= %s to %s\n", script, v0, v1) > "/dev/stderr";
        for (i=v0; i <= v1; i++) { use_cpu_list[i] = i; }
+     } else {
+       printf("%s perf_cpu_group= %s\n", script, use_cpus);
+       #      got_err = 1;
+       #      exit(1);
+       use_cpu_got_list = 1;
+       gsub(" ", "", use_cpus);
+       n = split(use_cpus, arr, ",");
+       for (i=1; i <= n; i++) {
+         if (index(arr[i], "-") > 0) {
+           n1 = split(arr[i], arr1, "-");
+           if (n1 != 2) {
+             printf("%s awk: not sure what is going on here: expected range like x-y. got %s in use_cpus string %s. bye.\n", script, arr[i], use_cpus);
+             got_err = 1;
+             exit(1);
+           }
+           for (j=arr1[1]; j <= arr1[2]; j++) {
+             use_cpu_list[j] = j;
+             printf("use_cpu_list[%d]\n", j);
+           }
+         } else {
+             use_cpu_list[arr[i]] = arr[i]+0;
+             printf("use_cpu_list[%d]= %s\n", arr[i], use_cpu_list[arr[i]]);
+         }
+       }
+       #got_err = 1;
+       #exit(1);
      }
    }
    months="  JanFebMarAprMayJunJulAugSepOctNovDec";
@@ -273,7 +301,12 @@ function dt_to_epoch(offset) {
 
   n=split($0,arr,";");
   if (index(arr[2], "CPU") == 1) {
+    # if we have a 'CPU' column then we ran perf with 'perf stat -A ' to get the per-cpu CPU column
     cpu_col = 1;
+    # if you do perf 'per-cpu' (with -A option) then cpu_clk_unhalted.thread_any behaves just like 'cycles'
+    # at least on cascade lake and debian 5.10
+    # so set thr_per_core = 1
+    thr_per_core = 1;
   }
   if (cpu_col == 1 && use_cpu_got_list == 1) {
     v = substr(arr[2], 4, length(arr[2])) + 0
@@ -389,6 +422,10 @@ function prt_rpn_eqn(kmx,   i, str) {
    printf("prt_rpn_eqn[%d], %s: eqn= %s\n", kmx, nwfor[kmx,1,"hdr"], str);
 }
  END{
+   if (got_err == 1) {
+     printf("%s awk got error. bye\n", script) > "/dev/stderr";
+     exit(1);
+   }
   #for (ii=1; ii <= st_mx; ii++) {
   #  printf("%s\t%f\t%f\n", st_sv[ii,1], st_sv[ii,2], st_sv[ii,3]);
   #}
@@ -436,8 +473,7 @@ function prt_rpn_eqn(kmx,   i, str) {
        L3_cha_access_str = evt_lkup[i];
      }
      if (levt == "msr/aperf/") {
-       L3_cha_clockticks_str = evt_lkup[i];
-       got_unc_cha_clockticks = 1;
+       cpu_cycles_str = evt_lkup[i];
      }
      # the unc_cha_tor_inserts events are Intel L3 events
      if (levt == "unc_cha_tor_inserts.ia_miss.0x40433") {
@@ -699,17 +735,6 @@ function prt_rpn_eqn(kmx,   i, str) {
    got_rpn_eqn[kmx, ++kkmx, "val"]=" ) ";
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
 
-#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-#   got_rpn_eqn[kmx, ++kkmx, "val"]=lat_fctr;
-#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
-#   got_rpn_eqn[kmx, ++kkmx, "val"]=L3_cha_misses_out_str;
-#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-#   got_rpn_eqn[kmx, ++kkmx, "val"]="*";
-#   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-#   got_rpn_eqn[kmx, ++kkmx, "val"]=L3_cha_misses_str;
-#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-#   got_rpn_eqn[kmx, ++kkmx, "val"]="/";
-#   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
    got_rpn_eqn[kmx,      1,"max"]=kkmx;
    lkfor[kmx,1]=L3_cha_misses_out_str;
    lkfor[kmx,2]=L3_cha_misses_str;
@@ -1063,28 +1088,24 @@ function prt_rpn_eqn(kmx,   i, str) {
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
    got_lkfor[kmx,2]=3; # num of fields to look for
    got_lkfor[kmx,3]="1.0";
-   got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
+   #got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
+   got_lkfor[kmx,4]="bc_eqn"; # operation x/y/z
    got_lkfor[kmx,5]=1; # instances
    got_lkfor[kmx,6]=""; # 
    # 100*${ITP_UOP}/(4*(${ITP_ANY}/${thr_per_core}))
-   got_rpn_eqn[kmx, ++kkmx, "val"]=100;
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" 100.0 * ";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
    got_rpn_eqn[kmx, ++kkmx, "val"]=tolower("UOPS_RETIRED.RETIRE_SLOTS");
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="*";   # 100 * uop_ret
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=4.0;
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" / ( 4.0 * ( ";  
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
    got_rpn_eqn[kmx, ++kkmx, "val"]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="*";   # 100 * uop_ret
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=thr_per_core;
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="/";   # clk_unh.thr_any / thr_cou
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="/";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" / ";   # 100 * uop_ret
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=thr_per_core " ) ) ";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+
    got_rpn_eqn[kmx,      1,"max"]=kkmx;
    lkfor[kmx,1]=tolower("UOPS_RETIRED.RETIRE_SLOTS");
    lkfor[kmx,2]=cpu_cycles_str;  # get the instances from the first lkfor event
