@@ -30,8 +30,9 @@ if [ -e $LSCPU ]; then
   ' $LSCPU`)
   echo "LSCPU_INFO= ${LSCPU_INFO[@]}"
 fi
+thr_per_core=2
   
-awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSCPU_INFO[1]}" -v num_cpus="${LSCPU_INFO[0]}" -v dlm=" " '
+awk -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSCPU_INFO[1]}" -v num_cpus="${LSCPU_INFO[0]}" -v dlm=" " '
    function ck_tm(tm) {
    if (!(tm in tm_list)) {
      tm_list[tm] = ++tm_mx;
@@ -166,6 +167,7 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
       cpu_col=0;
       if (index(arr[2], "CPU") == 1) {
         cpu_col=1;
+        #if (thr_per_core == 2) { thr_per_core = 1; }
       }
       e = tolower(arr[4+cpu_col]);
       if (e == "") { next; }
@@ -453,9 +455,9 @@ awk -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSC
       }
       if (h[j] == "MissO/cyc") { v = lat_fctr * evt[L3cyc,i]/evt[cyc,i]; }
       if (h[j] == "IPC") { v = evt[instr,i]/evt[cyc,i]; }
-      if (h[j] == "%retiring") { v = 100.0*evt[ret_slots,i]/(4*evt[thr_any,i]/2); td_ret_val = v; }
-      if (h[j] == "%frt_end") { v = 100.0*evt[not_deliv,i]/(4*evt[thr_any,i]/2); td_frt_end_val = v; }
-      if (h[j] == "%bad_spec") { v = 100.0*(evt[uops_issued_any,i]-evt[ret_slots,i] + ((4*evt[recovery_cycles,i])/2))/(4*evt[thr_any,i]/2); if (v < 0){v=0.0;} td_bad_spec_val = v; }
+      if (h[j] == "%retiring") { v = 100.0*evt[ret_slots,i]/(4*evt[thr_any,i]/thr_per_core); td_ret_val = v; }
+      if (h[j] == "%frt_end") { v = 100.0*evt[not_deliv,i]/(4*evt[thr_any,i]/thr_per_core); td_frt_end_val = v; }
+      if (h[j] == "%bad_spec") { v = 100.0*(evt[uops_issued_any,i]-evt[ret_slots,i] + ((4*evt[recovery_cycles,i])/2))/(4*evt[thr_any,i]/thr_per_core); if (v < 0){v=0.0;} td_bad_spec_val = v; }
       if (h[j] == "%be_spec") { v = 100 - td_ret_val - td_frt_end_val; if (v < 0) { v = 0.0; }}
       if (h[j] == "%bck_end") { v = 100 - td_ret_val - td_frt_end_val - td_bad_spec_val; if (v < 0) { v = 0.0; }}
       if (h[j] == "%ret_cyc") { v = 100.0*evt[ret_cycles,i]/evt[cyc,i]; }
