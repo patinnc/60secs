@@ -488,9 +488,10 @@ echo "# started on $dtc $dte" > $FL
     fi
     #echo "do: $PERF_BIN stat -x \";\"  --per-socket -a -I $ms -o $FL -e $EVT" > /dev/stderr
     #echo "do: $PERF_BIN stat -x \";\"  --per-socket -a -I $ms -o $FL -e $EVT"
+    OPT_PID=
     if [ "$PID" != "" ]; then
-        DO_CMD=" --pid $PID "
-    else
+        OPT_PID=" --pid $PID "
+    fi
       if [ "$EXE_IN" == "" ]; then
         DO_CMD="$SCR_DIR/pfay1_sleep.sh"
         OPT_A=" -a "
@@ -498,7 +499,6 @@ echo "# started on $dtc $dte" > $FL
         DO_CMD="$EXE_IN"
         OPT_A=" -a "
       fi
-    fi
     if [ "$CPU_LIST_IN" != "" ]; then
       #OPT_A=" $OPT_A -C $CPU_LIST_IN "
       OPT_A=" -C $CPU_LIST_IN "
@@ -519,12 +519,12 @@ echo "# started on $dtc $dte" > $FL
     else
       echo $0.$LINENO $PERF_BIN stat -x ";" --append $OPT_A -I $ms -o $FL -e "$EVT" $DO_CMD $WAIT $EXE_ARGS
       if [ "$FOREGRND" == "1" -a "$PID" != "" -a "$WAIT_IN" != ""  ]; then
-           $PERF_BIN stat -x ";" --append $OPT_A -I $ms -o $FL -e "$EVT" $DO_CMD $WAIT $EXE_ARGS
+           $PERF_BIN stat -x ";" --append $OPT_A -I $ms -o $FL -e "$EVT" $OPT_PID $DO_CMD $WAIT $EXE_ARGS
       else
         if [ "$FOREGRND" == "0" ]; then
-           $PERF_BIN stat -x ";" --append $OPT_A -I $ms -o $FL -e "$EVT" $DO_CMD $WAIT $EXE_ARGS &
+           $PERF_BIN stat -x ";" --append $OPT_A -I $ms -o $FL -e "$EVT" $OPT_PID  $DO_CMD $WAIT $EXE_ARGS &
         else
-           $PERF_BIN stat -x ";" --append $OPT_A -I $ms -o $FL -e "$EVT" $DO_CMD $WAIT $EXE_ARGS
+           $PERF_BIN stat -x ";" --append $OPT_A -I $ms -o $FL -e "$EVT" $OPT_PID  $DO_CMD $WAIT $EXE_ARGS
         fi
       PRF_PID=$!
       echo "started perf pid= $PRF_PID doing $DO_CMD $WAIT seconds in background"
