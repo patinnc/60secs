@@ -1,12 +1,40 @@
 #!/bin/bash
 
-INFILE=$1
+thr_per_core=2
+
+while getopts "hf:t:" opt; do
+  case ${opt} in
+    f )
+      FILE_IN=$OPTARG
+      ;;
+    t )
+      THR_PER_CORE_IN=$OPTARG
+      ;;
+    h )
+      echo "$0 -f sys_perf_stat_event_file [ -t threads_per_core ] to compute some metrics"
+      echo " Usually this is a perf stat file created by 60secs/do_perf3.sh "
+      echo "   -f sys_perf_stat_event_file"
+      echo "   -t threads_per_core. Default is 2. This option lets you override the thr_per_core variable in topdown equations"
+      exit 1
+      ;;
+    : )
+      echo "$0.$LINENO Invalid option: $OPTARG requires an argument" 1>&2
+      exit 1
+      ;;
+    \? )
+      echo "$0.$LINENO Invalid option: $OPTARG" 1>&2
+      exit 1
+      ;;
+  esac
+done
+
+INFILE=$FILE_IN
 if [ "$INFILE" == "" ]; then
-  echo "1st arg must be perf stat output file"
+  echo "-f filename1 arg must be perf stat output file"
   exit 1
 fi
 if [ ! -e $INFILE ]; then
-  echo "perf_stat file $INFILE not found"
+  echo "perf_stat file -f $INFILE not found"
   exit 1
 fi
 DIR=`dirname $INFILE`
@@ -30,7 +58,9 @@ if [ -e $LSCPU ]; then
   ' $LSCPU`)
   echo "LSCPU_INFO= ${LSCPU_INFO[@]}"
 fi
-thr_per_core=2
+if [ "$THR_PER_CORE_IN" != "" ]; then
+  thr_per_core=$THR_PER_CORE_IN
+fi
   
 awk -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSCPU_INFO[1]}" -v num_cpus="${LSCPU_INFO[0]}" -v dlm=" " '
    function ck_tm(tm) {
