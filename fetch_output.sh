@@ -47,8 +47,23 @@ excl_file=
 if [ "$RESP" == "" ]; then
   echo "no specint/benchspec/CPU dir"
 else
-  excl_file=./dyno_fetch_tar_exclude_dirs.txt
+  excl_file=dyno_fetch_tar_exclude_dirs.txt
+  echo "got specint/benchspec/CPU resp= $RESP"
   echo "$RESP" > $excl_file
+  pwd
+fi
+RESP=`find . -type d -print | grep "specint/tmp$" | sed 's/^.\///; s/$/\/*/'`
+#excl_file=
+if [ "$RESP" == "" ]; then
+  echo "no specint/tmp dir"
+else
+  echo "got specint/tmp resp= $RESP"
+  if [ "$excl_file" != "" ]; then
+  echo "$RESP" >> $excl_file
+  else
+  excl_file=dyno_fetch_tar_exclude_dirs.txt
+  echo "$RESP" > $excl_file
+  fi
 fi
 cd ..
 echo "DIRNM= $DIRNM"
@@ -58,10 +73,11 @@ if [ "$excl_file" == "" ]; then
   echo "do tar -czvf $TAR_FILE $DIRNM"
   tar -czvf $TAR_FILE $DIRNM
 else
-  echo cat $excl_file
-       cat $excl_file
-  echo "do tar -czv --exclude-from=$excl_file -f $TAR_FILE $DIRNM"
-  tar -czv --exclude-from=$excl_file -f $TAR_FILE $DIRNM
+  pwd
+  echo cat $DIRNM/$excl_file
+       cat $DIRNM/$excl_file
+  echo "do tar -czv --exclude-from=$DIRNM/$excl_file -f $TAR_FILE $DIRNM"
+  tar -czv --exclude-from=$DIRNM/$excl_file -f $TAR_FILE $DIRNM
 fi
 ls -l $TAR_FILE
 pwd
