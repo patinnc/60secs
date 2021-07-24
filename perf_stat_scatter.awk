@@ -302,11 +302,20 @@ function dt_to_epoch(offset) {
   n=split($0,arr,";");
   if (index(arr[2], "CPU") == 1) {
     # if we have a 'CPU' column then we ran perf with 'perf stat -A ' to get the per-cpu CPU column
+    if (cpu_col == 0) {
+      if (use_cpus == "") {
+        printf("%s  got per-cpu perf data file but use_cpus is blank so not going to set thr_per_core = 1\n", script) > "/dev/stderr";
+      } else {
+        printf("%s  got per-cpu perf data file. going to set thr_per_core from %d to %d\n", script, thr_per_core, 1) > "/dev/stderr";
+      }
+    }
     cpu_col = 1;
     # if you do perf 'per-cpu' (with -A option) then cpu_clk_unhalted.thread_any behaves just like 'cycles'
     # at least on cascade lake and debian 5.10
     # so set thr_per_core = 1
-    thr_per_core = 1;
+    if (use_cpus != "") {
+      thr_per_core = 1;
+    }
   }
   if (cpu_col == 1 && use_cpu_got_list == 1) {
     v = substr(arr[2], 4, length(arr[2])) + 0
