@@ -30,6 +30,9 @@
     }
       / base refrate ratio=/ {
         #printf("got cpu2017.001.log line= %s\n", $0) > "/dev/stderr";
+        if ($1 == "Error") {
+          next;
+        }
         gsub(",", "", $0);
         bm_nm = $2;
         for (i=3; i <= NF; i++) {
