@@ -490,7 +490,8 @@ done
 pwd
 echo "$0.$LINENO ++++++++++find .. -name CPU2017.*.log resp = $RESP" > /dev/stderr
 CPU2017LOG=()
-if [ "$RESP" -ge "1" -a "$PHASE_FILE" == "" ]; then
+#if [ "$RESP" -ge "1" -a "$PHASE_FILE" == "" ]; then
+if [ "$RESP" -ge "1" ]; then
   RESP=`find $CPU2017LOG_RT_PATH -name CPU2017.00${CPU2017_LOG_NUM}.log`
   echo "find $CPU2017LOG_RT_PATH -name cpu2017.00${CPU2017_LOG_NUM}.log resp = $RESP"
   CPU2017LOG=($RESP)
@@ -641,7 +642,7 @@ parse_file_sets() {
           }'`)
        echo "$0.$LINENO perf_cpu_groups arr= ${arr[0]} ${arr[1]} ${arr[2]}"
        PC_ARR[$jj,"rgx"]=${arr[0]}
-       PC_ARR[$jj,"arg"]=${arr[1]}
+       PC_ARR[$jj,"arg"]=
        echo "$0.$LINENO: PC_ARR[$jj,rgx]= ${PC_ARR[$jj,'rgx']}, arg= ${PC_ARR[$jj,'arg']}"
     done
     return
@@ -734,34 +735,29 @@ ck_perf_cpu_arr() {
     return
   fi
   pcg_got_match=0
-  for ii in $FILES; do
-      kk=$((kk+1))
-      FL=$RESP/$ii
-      echo "$0.$LINENO file[$kk] , try rgx= $PC_ARR_MX, FL= $FL"
+      echo "$0.$LINENO file[$kk] , try rgx2= $PC_ARR_MX, FL= $pcg_file, lkfor0= ${PC_ARR[0,'rgx']}, pcg_file= $pcg_file"
       for ((jj=0; jj < $PC_ARR_MX; jj++)); do
-        if [[ $FL =~ ${PC_ARR[$jj,"rgx"]} ]]; then
-          PC_ARR[$jj,"match"]=$kk
-          PC_ARR[$jj,"file"]=$ii
+          PC_ARR[$jj,"match"]=$jj
+          PC_ARR[$jj,"file"]=$pcg_file
+          PC_ARR[$jj,"arg"]=""
+          echo "$0.$LINENO try PC_ARR[$jj,'arg']= awk -v lkfor=${PC_ARR[$jj,'rgx']} script"
           PC_ARR[$jj,"arg"]=`awk -v lkfor="${PC_ARR[$jj,'rgx']}" '
              BEGIN{
-               printf("lkfor= %s\n", lkfor) > "/dev/stderr";
+               printf("perf_cpu_groups lkfor= %s\n", lkfor) > "/dev/stderr";
              }
              {
                if (index($0, lkfor) > 0) {
-                 printf("awk mtch line= %s\n", $0) > "/dev/stderr";
+                 printf("perf_cpu_groups awk mtch nf= %d line= %s\n", NF, $0) > "/dev/stderr";
                  n = split($0, arr, "\t");
-                 printf("%s\n", arr[3]); exit(0);
+                 printf("%s\n", arr[3]);
+                 exit(0);
                }
              }' $pcg_file`
-          echo "$0.$LINENO dir[$kk]= rgx[$jj] match, cpus= " ${PC_ARR[$jj,"arg"]}
+          echo "$0.$LINENO PC_ARR[$jj]= rgx[$jj] match2, cpus= " ${PC_ARR[$jj,"arg"]}
           printf "perf_cpu_groups\tperf_cpu_groups\t\"%s\"\tsubtest\n" "${PC_ARR[$jj,'rgx']}" >> $SUM_FILE;
           printf "perf_cpu_groups\tperf_cpu_groups\t\"%s\"\tcpus_used\n" "${PC_ARR[$jj,'arg']}" >> $SUM_FILE;
           pcg_got_match=1
-        else
-          echo "$0.$LINENO dir[$kk]= rgx[$jj] miss"
-        fi
       done
-  done
   if [ "$pcg_file" != "" -a "$pcg_got_match" == "0" ]; then
      printf "perf_cpu_groups\tperf_cpu_groups\t\"%s\"\tsubtest\n" "all" >> $SUM_FILE;
      printf "perf_cpu_groups\tperf_cpu_groups\t\"%s\"\tcpus_used\n" "all" >> $SUM_FILE;
@@ -2953,14 +2949,14 @@ row += trows;
     echo "$0.$LINENO bef perf_stat_scatter.sh phase= $PHASE_FILE clip= $CLIP $OPT_C $OPT_P"
     PS_CPUS=
     for ((jj=0; jj < $FS_ARR_MX; jj++)); do
-        if [ ${FS_ARR[$jj,"match"]} != "" ]; then
-          V=${FS_ARR[$jj,"arg"]}
+        V=${FS_ARR[$jj,"arg"]}
+        if [ ${FS_ARR[$jj,"match"]} != "" -a "$V" != "" ]; then
           PS_CPUS="$PS_CPUS -u $V "
         fi
     done
     for ((jj=0; jj < $PC_ARR_MX; jj++)); do
-        if [ ${PC_ARR[$jj,"match"]} != "" ]; then
-          V=${PC_ARR[$jj,"arg"]}
+        V=${PC_ARR[$jj,"arg"]}
+        if [ $V != "" ]; then
           PS_CPUS="$PS_CPUS -u $V "
         fi
     done
@@ -3042,6 +3038,9 @@ row += trows;
     }
       / .* base refrate ratio=/ {
         #printf("got cpu2017.001.log line= %s\n", $0) > "/dev/stderr";
+        if ($1 == "Error") {
+          next;
+        }
         gsub(",", "", $0);
         bm_nm = $2;
         for (i=3; i <= NF; i++) {
@@ -3904,9 +3903,11 @@ if [ "$SUM_FILE" != "" ]; then
    ' 
    ck_last_rc $? $LINENO
 fi
-if [ "${#CPU2017LOG[@]}" -gt 0 -a "$PHASE_FILE" == "" ]; then
+#if [ "${#CPU2017LOG[@]}" -gt 0 -a "$PHASE_FILE" == "" ]; then
+echo "$0.$LINENO cpu2017 array= ${CPU2017LOG[@]}"
+if [ "${#CPU2017LOG[@]}" -gt 0 ]; then
   RESP="${CPU2017LOG[@]}"
-  echo "+++find $CPU2017LOG_RT_PATH -name cpu2017.*.log resp = $RESP"
+  echo "$0.$LINENO +++find $CPU2017LOG_RT_PATH -name cpu2017.*.log resp = $RESP"
   PH=`awk -v dir="$(pwd)" -v sum_file="$SUM_FILE" -v ofile="bmark.txt" '
     BEGIN{
         mx    = 0;
@@ -3951,7 +3952,7 @@ if [ "${#CPU2017LOG[@]}" -gt 0 -a "$PHASE_FILE" == "" ]; then
              }
            }
         }
-        if (bm == "500.perlbench_r_1") { printf("bm= %s\n", bm)
+        if (bm == "500.perlbench_r_1") { printf("bm= %s\n", bm); }
         if (!(bm in bm_list)) {
           bm_list[bm] = ++bm_mx;
           bm_lkup[bm_mx] = bm;
@@ -3975,9 +3976,9 @@ if [ "${#CPU2017LOG[@]}" -gt 0 -a "$PHASE_FILE" == "" ]; then
         bm_arr[bm_idx,bm_val,"run_time"] = run_tm;
         bm_arr[bm_idx,bm_val,"copies"] = copies;
         printf("SpecInt benchmark\t%s\nratio\t%s\nrun_tm\t%s\ncopies\t%s\n", bm, rat, run_tm, copies) > ofile;
-        printf("SpecInt\tSI benchmark\t%s\tSI %s ratio %s\n", rat, bm, bm_val) >> sum_file;
-        printf("SpecInt\tSI benchmark\t%s\tSI %s run_time %s\n", run_tm, bm, bm_val) >> sum_file;
-        printf("SpecInt\tSI benchmark\t%s\tSI %s copies %s\n", copies, bm, bm_val) >> sum_file;
+        #printf("SpecInt\tSI benchmark\t%s\tSI %s ratio %s\n", rat, bm, bm_val) >> sum_file;
+        #printf("SpecInt\tSI benchmark\t%s\tSI %s run_time %s\n", run_tm, bm, bm_val) >> sum_file;
+        #printf("SpecInt\tSI benchmark\t%s\tSI %s copies %s\n", copies, bm, bm_val) >> sum_file;
         #printf("got cpu2017 line= %s\n", $4);
     }
 # Run 520.omnetpp_r base refrate ratio=22.93, runtime=915.660271, copies=16, threads=1, 
@@ -4037,9 +4038,11 @@ function tot_compare(i1, v1, i2, v2,    l, r)
          #delete arr;
          #delete idx;
          sum = 0.0;
+         sum_cpus = 0.0;
          n   = 0;
          for(j=1; j <= bm_vals[i]; j++) {
             sum += bm_arr[i,j,"ratio"];
+            sum_cpus += bm_arr[i,j,"copies"];
             n++;
             #idx[j] = j;
          }
@@ -4047,6 +4050,7 @@ function tot_compare(i1, v1, i2, v2,    l, r)
            valid = 0;
          } else {
            varr[i] = sum/n;
+           vcpus[i] = sum_cpus/n;
          }
          #asorti(idx, res_i, "tot_compare")
          #if (bm_vals[i] <= 2 ) {
@@ -4069,12 +4073,13 @@ function tot_compare(i1, v1, i2, v2,    l, r)
          str = "ok";
          y = 0.25 * varr[perl_i] + 0.25 * varr[xalanc_i] + 0.5 * varr[omne_i];
          z = varr[perl_i] + varr[xalanc_i] + varr[omne_i];
-         z3 = (cpus > 0.0 ? z /= cpus : 0.0);
+         zcpus = vcpus[perl_i] + vcpus[xalanc_i] + vcpus[omne_i];
+         z3 = (zcpus > 0.0 ? z /= zcpus : 0.0);
        }
        str = sprintf("%s.%d.%d.%d", str, bm_vals[omne_i], bm_vals[perl_i], bm_vals[xalanc_i]);
-       printf("SpecInt\tSI benchmark\t%s\tSI new score_v2 valid? omnetpp.perlbench.xalanc\n", str) >> sum_file;
-       printf("SI new score_v2= %.3f, bm_mx= %f\n", y, bm_mx) > "/dev/stderr";
-       printf("SpecInt\tSI benchmark\t%s\tSI new score_v2\n", y) >> sum_file;
+       printf("SpecInt\tSI benchmark\t%s\tSI new score_v3 valid? omnetpp.perlbench.xalanc\n", str) >> sum_file;
+       #printf("SI new score_v2= %.3f, bm_mx= %f\n", y, bm_mx) > "/dev/stderr";
+       #printf("SpecInt\tSI benchmark\t%s\tSI new score_v2\n", y) >> sum_file;
        printf("SpecInt\tSI benchmark\t%s\tSI NCU score_v3\n", z3) >> sum_file;
        printf("SpecInt\tSI benchmark\t%s\tSI cpus\n", cpus) >> sum_file;
     }
