@@ -2956,7 +2956,7 @@ row += trows;
     done
     for ((jj=0; jj < $PC_ARR_MX; jj++)); do
         V=${PC_ARR[$jj,"arg"]}
-        if [ $V != "" ]; then
+        if [ "$V" != "" ]; then
           PS_CPUS="$PS_CPUS -u $V "
         fi
     done
