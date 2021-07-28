@@ -2,8 +2,11 @@
 
 thr_per_core=2
 
-while getopts "hf:t:" opt; do
+while getopts "hc:f:t:" opt; do
   case ${opt} in
+    c )
+      CPU_GROUP=$OPTARG
+      ;;
     f )
       FILE_IN=$OPTARG
       ;;
@@ -13,6 +16,7 @@ while getopts "hf:t:" opt; do
     h )
       echo "$0 -f sys_perf_stat_event_file [ -t threads_per_core ] to compute some metrics"
       echo " Usually this is a perf stat file created by 60secs/do_perf3.sh "
+      echo "   -c cpu_group select string. select line from perf_cpu_groups.txt file. Like 'perl' selects the cpus which ran perl. Assumes perf stat data is by cpu"
       echo "   -f sys_perf_stat_event_file"
       echo "   -t threads_per_core. Default is 2. This option lets you override the thr_per_core variable in topdown equations"
       exit 1
@@ -37,8 +41,35 @@ if [ ! -e $INFILE ]; then
   echo "perf_stat file -f $INFILE not found"
   exit 1
 fi
-DIR=`dirname $INFILE`
+if [ -d  $INFILE ]; then
+  DIR0=$INFILE
+  ARR=(`find $INFILE -name "sys_*_perf_stat.txt"`)
+  N=${#ARR[@]}
+  if [ "$N" == "0" ]; then
+    echo "$0.$LINENO you entered dirname $INFILE but I didn't find any sys_*_perf_stat.txt file under that dir. bye"
+    exit 1
+  fi
+  INFILE=${ARR[0]}
+  DIR=`dirname $INFILE`
+  if [ "$N" > "1" ]; then
+    echo "$0.$LINENO you entered dirname $DIR0. Found $N sys_*_perf_stat.txt file under that dir."
+    echo "$0.$LINENO sys_*_perf_stat.txt ${ARR[@]}"
+  fi
+  echo "$0.$LINENO using file ${ARR[0]}"
+else
+  DIR=`dirname $INFILE`
+fi
 echo "DIR= $DIR"
+PCG_FILE=$DIR/perf_cpu_groups.txt
+if [ -e $PCG_FILE -a "$CPU_GROUP" != "" ]; then
+  PCG_LIST=`grep "$CPU_GROUP" $PCG_FILE | awk '{printf("%s\n", $3);exit(1);}'`
+  echo "pcg_file cpu list= $PCG_LIST"
+  if [ "$PCG_LIST" == "" ]; then
+    echo "$0.$LINENO you entered -c $CPU_GROUP but didn't find the string in $PCG_FILE. below is the content of the file. Bye"
+    cat $PCG_FILE
+    exit 1
+  fi
+fi
 LSCPU=$DIR/lscpu.txt
 LSCPU_INFO=()
 if [ -e $LSCPU ]; then
@@ -62,7 +93,7 @@ if [ "$THR_PER_CORE_IN" != "" ]; then
   thr_per_core=$THR_PER_CORE_IN
 fi
   
-awk -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSCPU_INFO[1]}" -v num_cpus="${LSCPU_INFO[0]}" -v dlm=" " '
+awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSCPU_INFO[1]}" -v num_cpus="${LSCPU_INFO[0]}" -v dlm=" " '
    function ck_tm(tm) {
    if (!(tm in tm_list)) {
      tm_list[tm] = ++tm_mx;
@@ -76,7 +107,13 @@ awk -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_INFO[3]}" -v vendor="${L
 #    10.013064568;3909750994;;L3_accesses;80100000630;100.00;4.068;M/sec
 #    10.013064568;5063462830;;L3_lat_out_cycles;80100005350;100.00;5.268;M/sec
 #    10.013064568;214924035;;L3_lat_out_misses;80100007663;100.00;0.224;M/sec
-
+    if (pcg_list != "") {
+      gsub(" ", "", pcg_list);
+      n = split(pcg_list, arr, ",");
+      for (i=1; i <= n; i++) {
+        cpu_list[arr[i]+0] = arr[i] + 0;
+      }
+    }
     i=0;
     #UNC = ++i; hdr[UNC] = "mem_bw";
     #L3m = ++i; hdr[L3m] = "L3misses";
@@ -112,6 +149,9 @@ awk -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_INFO[3]}" -v vendor="${L
     lkup[++j] = "instructions";                          instr     = j;
     lkup[++j] = "uops_retired.retire_slots";             ret_slots = j;
     lkup[++j] = "cpu_clk_unhalted.thread_any";           thr_any   = j;
+    lkup[++j] = "cpu_clk_unhalted.one_thread_active";    clk_one_thr   = j;
+    lkup[++j] = "cpu_clk_unhalted.ref_xclk";             clk_ref_xclk  = j;
+#    return ((EV("CPU_CLK_UNHALTED.THREAD", level) / 2) * (1 + EV("CPU_CLK_UNHALTED.ONE_THREAD_ACTIVE", level) / EV("CPU_CLK_UNHALTED.REF_XCLK", level))) if ebs_mode else(EV("CPU_CLK_UNHALTED.THREAD_ANY", level) / 2) if smt_enabled else CLKS(self, EV, level)
     lkup[++j] = "idq_uops_not_delivered.core";           not_deliv = j;
     #lkup[++j] = "offcore_requests.demand_data_rd"
     #lkup[++j] = "offcore_requests_outstanding.demand_data_rd"; 
@@ -192,13 +232,19 @@ awk -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_INFO[3]}" -v vendor="${L
     else if (index($0, "msr/irperf/") > 0) { j=instr; }
     else if (index($0, "instructions") > 0) { j=instr; }
     else if (index($0, "ret_uops_cycles") > 0) { j=ret_cycles; }
-    if (j == 0) {
       n=split($1, arr, ";");
       cpu_col=0;
-      if (index(arr[2], "CPU") == 1) {
+      if (n > 2 && index(arr[2], "CPU") == 1) {
         cpu_col=1;
+        cpu_num= substr(arr[2], 4, length(arr[2])) + 0;
+        got_cpu[cpu_num] = 1;
+        if (pcg_list != "" && cpu_list[cpu_num] == "") {
+          skp_cpu[cpu_num] = 1;
+          next;
+        }
         #if (thr_per_core == 2) { thr_per_core = 1; }
       }
+    if (j == 0) {
       e = tolower(arr[4+cpu_col]);
       if (e == "") { next; }
       if (e in evt_list) {
@@ -253,6 +299,9 @@ awk -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_INFO[3]}" -v vendor="${L
  }
  END{
    #exit;
+   for (i=0; i < num_cpus; i++) {
+     if (skp_cpu[i] == 1) { printf("skipped cpu %d\n", i);}
+   }
    tm_lkup[0] = 0.0;
    cats=0;
    if (evt[unc_rdwr,1] != "") {
@@ -282,9 +331,16 @@ awk -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_INFO[3]}" -v vendor="${L
    if (evt[instr,1] != "" && evt[cyc,1] != "") {
       h[++cats] = "IPC";
    }
-   if (evt[ret_slots,1] != "" && evt[thr_any,1] != "") {
+   if (evt[ret_slots,1] != "" && evt[cyc,1] != "" && evt[clk_one_thr,1] != "" && evt[clk_ref_xclk,1] != "") {
+#    return ((EV("CPU_CLK_UNHALTED.THREAD", level) / 2) * (1 + EV("CPU_CLK_UNHALTED.ONE_THREAD_ACTIVE", level) / EV("CPU_CLK_UNHALTED.REF_XCLK", level))) if ebs_mode else(EV("CPU_CLK_UNHALTED.THREAD_ANY", level) / 2) if smt_enabled else CLKS(self, EV, level)
       h[++cats] = "%retiring";
       td_ret = cats;
+      got_clx_td_ret = 1;
+   } else {
+    if (evt[ret_slots,1] != "" && evt[thr_any,1] != "") {
+      h[++cats] = "%retiring";
+      td_ret = cats;
+    } 
    } 
    if (evt[icx_topd_slots,1] != "" && evt[icx_topd_ret,1] != "") {
       h[++cats] = "%td_ret";
@@ -306,7 +362,8 @@ awk -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_INFO[3]}" -v vendor="${L
       icx_td_fe = cats;
       got_icx_td_fe = 1;
    }
-   if (evt[uops_issued_any,1] != "" && evt[ret_slots,1] != "" && evt[recovery_cycles,1] != "" && evt[thr_any,1] != "") {  # so not icx
+   #printf("\nuops_iss= %s, ret_slots= %s, rec_cy= %s, td_ret = %s\n", evt[uops_issued_any,1], evt[ret_slots,1], evt[recovery_cycles,1], td_ret);
+   if (evt[uops_issued_any,1] != "" && evt[ret_slots,1] != "" && evt[recovery_cycles,1] != "" && td_ret > 0) {  # so not icx
       h[++cats] = "%bad_spec";
       td_bs = cats;
    }
@@ -485,9 +542,21 @@ awk -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_INFO[3]}" -v vendor="${L
       }
       if (h[j] == "MissO/cyc") { v = lat_fctr * evt[L3cyc,i]/evt[cyc,i]; }
       if (h[j] == "IPC") { v = evt[instr,i]/evt[cyc,i]; }
-      if (h[j] == "%retiring") { v = 100.0*evt[ret_slots,i]/(4*evt[thr_any,i]/thr_per_core); td_ret_val = v; }
-      if (h[j] == "%frt_end") { v = 100.0*evt[not_deliv,i]/(4*evt[thr_any,i]/thr_per_core); td_frt_end_val = v; }
-      if (h[j] == "%bad_spec") { v = 100.0*(evt[uops_issued_any,i]-evt[ret_slots,i] + ((4*evt[recovery_cycles,i])/2))/(4*evt[thr_any,i]/thr_per_core); if (v < 0){v=0.0;} td_bad_spec_val = v; }
+      if (h[j] == "%retiring" && got_clx_td_ret != 1) {
+         td_denom = (4*evt[thr_any,i]/thr_per_core);
+         v = 100.0*evt[ret_slots,i]/td_denom;
+         td_ret_val = v;
+      }
+      if (h[j] == "%retiring" && got_clx_td_ret == 1) {
+   #if (evt[ret_slots,1] != "" && evt[cyc,1] != "" && evt[clk_one_thr,1) != "" && evt[clk_ref_xclk,1] != "") {
+#    return ((EV("CPU_CLK_UNHALTED.THREAD", level) / 2) * (1 + EV("CPU_CLK_UNHALTED.ONE_THREAD_ACTIVE", level) / EV("CPU_CLK_UNHALTED.REF_XCLK", level))) if ebs_mode else(EV("CPU_CLK_UNHALTED.THREAD_ANY", level) / 2) if smt_enabled else CLKS(self, EV, level)
+        #td_denom = ((4 * evt[cyc,i] / 2) * (1 + evt[clk_one_thr,i] / evt[clk_ref_xclk,i]));
+        td_denom = ((4 * evt[cyc,i]));
+        v = 100.0 * evt[ret_slots,i] / td_denom;
+        td_ret_val = v;
+      }
+      if (h[j] == "%frt_end") { v = 100.0*evt[not_deliv,i]/td_denom; td_frt_end_val = v; }
+      if (h[j] == "%bad_spec") { v = 100.0*(evt[uops_issued_any,i]-evt[ret_slots,i] + ((4*evt[recovery_cycles,i])/2))/td_denom; if (v < 0){v=0.0;} td_bad_spec_val = v; }
       if (h[j] == "%be_spec") { v = 100 - td_ret_val - td_frt_end_val; if (v < 0) { v = 0.0; }}
       if (h[j] == "%bck_end") { v = 100 - td_ret_val - td_frt_end_val - td_bad_spec_val; if (v < 0) { v = 0.0; }}
       if (h[j] == "%ret_cyc") { v = 100.0*evt[ret_cycles,i]/evt[cyc,i]; }
