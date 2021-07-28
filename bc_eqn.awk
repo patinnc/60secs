@@ -1,7 +1,7 @@
 # https://web.archive.org/web/20081020065322/http://cm.bell-labs.com/cm/cs/who/bwk/awkcode.txt
 # search for calc3
 
-function bc_rtn(val, k4, got_rpn_eqn, col_hdr_mx, col_hdr, rw_data,    la, val1, lc, prt_it, oper, val2, ii, vv, n, str) {
+function bc_rtn(val, k4, got_rpn_eqn, col_hdr_mx, col_hdr, rw_data, glbl_row_arr,    la, val1, lc, prt_it, oper, val2, ii, vv, vv2, vv3, n, str, myv) {
    val =  0.0;
    prt_it=1;
    bc_err = "";
@@ -34,6 +34,18 @@ function bc_rtn(val, k4, got_rpn_eqn, col_hdr_mx, col_hdr, rw_data,    la, val1,
         bc_str = bc_str " " val2;
         if (bc_err != "") { printf("bc_err1= %s\n", bc_err) > "/dev/stderr"; }
         continue;
+      }
+      if (oper == "push_glbl_row_arr") {
+          if (glbl_row_arr[val2] == "") {
+            bc_err = "missed col " val2 " for glbl_row_arr for row " la;
+            printf("bc_eqn.awk got bc_err4 = %s\n", bc_err) > "/dev/stderr";
+            return 0;
+          } else {
+            val1 = glbl_row_arr[val2];
+            bc_str = bc_str " " val1;
+            #printf("got for eqn %d glbl_row_arr[%s]= %g\n", k4, val2, val1) > "/dev/stderr";
+          }
+          continue;
       }
       if (oper == "push_row_val" || oper == "push_row_val2" || oper == "push_row_tmr") {
         val1= "";
@@ -81,6 +93,7 @@ function bc_rtn(val, k4, got_rpn_eqn, col_hdr_mx, col_hdr, rw_data,    la, val1,
      for (ii=1; ii <= n; ii++) { 
        $ii = arr[ii]; 
      }
+     #printf("ret eqn line= %s\n", $0);
      for (ii=1; ii <= n; ii++) { 
        vv=try_calc3(arr[ii]);
      } 
@@ -114,8 +127,21 @@ function expr(  e) {        # term | term [+-] term
 
 function term(  e) {        # factor | factor [*/] factor
     e = factor();
+    vv2 = e;
+    vv3 = f;
     while ($f == "*" || $f == "/")
+      if ($f == "/") {
+        f++;
+        myv = factor();
+        if (myv == "" || myv == 0.0) {
+          printf("bc_eqn.awk: div %s f= %s by 0 error at \"%s\", line= %s\n", vv2, vv3, $e $f, $0);
+          bc_err = sprintf("bc_eqn.awk: error at %s\n", $f); 
+          #return 0;
+        }
+        e = e / myv;
+      } else {
         e = $(f++) == "*" ? e * factor() : e / factor();
+      }
     return e;
 }
 
@@ -139,8 +165,8 @@ function factor(  e) {      # number | (expr)
         }
         return e;
     } else {
-        printf("bc_eqn.awk error: expected number or ( at %s\n", $f);
-        bc_err = sprintf("bc_eqn.awk error: expected number or ( at %s\n", $f);
+        printf("bc_eqn.awk error: expected number or ( at \"%s\"\n", $f);
+        bc_err = sprintf("bc_eqn.awk error: expected number or ( at \"%s\"\n", $f);
         return 0;
     }
 }
