@@ -307,15 +307,13 @@ function dt_to_epoch(offset) {
         printf("%s  got per-cpu perf data file but use_cpus is blank so not going to set thr_per_core = 1\n", script) > "/dev/stderr";
       } else {
         printf("%s  got per-cpu perf data file. going to set thr_per_core from %d to %d\n", script, thr_per_core, 1) > "/dev/stderr";
+        thr_per_core = 1;
       }
+      # if you do perf 'per-cpu' (with -A option) then cpu_clk_unhalted.thread_any behaves just like 'cycles'
+      # at least on cascade lake and debian 5.10
+      # so set thr_per_core = 1
     }
     cpu_col = 1;
-    # if you do perf 'per-cpu' (with -A option) then cpu_clk_unhalted.thread_any behaves just like 'cycles'
-    # at least on cascade lake and debian 5.10
-    # so set thr_per_core = 1
-    if (use_cpus != "") {
-      thr_per_core = 1;
-    }
   }
   if (cpu_col == 1 && use_cpu_got_list == 1) {
     v = substr(arr[2], 4, length(arr[2])) + 0
@@ -608,33 +606,95 @@ function prt_rpn_eqn(kmx,   i, str) {
    nwfor[kmx,1,"hdr"]="%not_halted";
    nwfor[kmx,1,"alias"]="metric_CPU utilization %";
 
-
+   if (cpu_type != "Ice Lake") {
    kmx++;
+   kkmx=0;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
    got_lkfor[kmx,2]=2; # num of fields to look for
+   got_lkfor[kmx,3]="1.0";
+   #got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
+   got_lkfor[kmx,4]="bc_eqn"; # operation x/y/z
+   got_lkfor[kmx,5]=1; # instances
+   got_lkfor[kmx,6]=""; # 
+   # 100*${ITP_UOP}/(4*(${ITP_ANY}/${thr_per_core}))
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" ( 4.0 * ( ";  
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" / ";   # 100 * uop_ret
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=thr_per_core " ) ) ";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+#abcd
+   got_rpn_eqn[kmx,      1,"max"]=kkmx;
+   lkfor[kmx,1]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
+   lkfor[kmx,2]=cpu_cycles_str;
+   nwfor[kmx,1,"hdr"]="td_denom";
+   nwfor[kmx,1,"save_glbl_row_arr"]="td_denom";
+   }
+
+   if (cpu_type != "Ice Lake") {
+
+#    return ((EV("CPU_CLK_UNHALTED.THREAD", level) / 2) * (1 + EV("CPU_CLK_UNHALTED.ONE_THREAD_ACTIVE", level) / EV("CPU_CLK_UNHALTED.REF_XCLK", level))) if ebs_mode else(EV("CPU_CLK_UNHALTED.THREAD_ANY", level) / 2) if smt_enabled else CLKS(self, EV, level)
+   kmx++;
+   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+   got_lkfor[kmx,2]=3; # num of fields to look for
    got_lkfor[kmx,3]=1.0; # a factor
    got_lkfor[kmx,4]="bc_eqn"; # operation x/y/z
    got_lkfor[kmx,5]=1; # instances
    got_lkfor[kmx,6]=""; # instances
    kkmx = 0;
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" 100.0 * ( "
+# abcd
+   # td_denom = ((4 * evt[cyc,i] / 2) * (1 + evt[clk_one_thr,i] / evt[clk_ref_xclk,i]));
+   got_rpn_eqn[kmx, ++kkmx, "val"]="( 4.0 * "
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
    got_rpn_eqn[kmx, ++kkmx, "val"]=cpu_cycles_str;
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" - ( 0.5 * "
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" / 2.0 ) * ( 1.0 + ";
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="cpu_clk_unhalted.thread_any";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="cpu_clk_unhalted.one_thread_active";
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" ) ) / ( 0.5 * "
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" / "
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="cpu_clk_unhalted.thread_any";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="cpu_clk_unhalted.ref_xclk";
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" ) "
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" )"
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
    got_rpn_eqn[kmx,      1,"max"]=kkmx;
    lkfor[kmx,1]=cpu_cycles_str;
-   lkfor[kmx,2]="cpu_clk_unhalted.thread_any"; 
-   nwfor[kmx,1,"hdr"]="%both_HT_threads_active";
+   lkfor[kmx,2]="cpu_clk_unhalted.one_thread_active";
+   lkfor[kmx,3]="cpu_clk_unhalted.ref_xclk";
+   nwfor[kmx,1,"hdr"]="td_denom";
+   nwfor[kmx,1,"save_glbl_row_arr"]="td_denom";
+   prt_rpn_eqn(kmx);
+   }
+
+#   kmx++;
+#   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+#   got_lkfor[kmx,2]=2; # num of fields to look for
+#   got_lkfor[kmx,3]=1.0; # a factor
+#   got_lkfor[kmx,4]="bc_eqn"; # operation x/y/z
+#   got_lkfor[kmx,5]=1; # instances
+#   got_lkfor[kmx,6]=""; # instances
+#   kkmx = 0;
+#   got_rpn_eqn[kmx, ++kkmx, "val"]=" 100.0 * ( "
+#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+#   got_rpn_eqn[kmx, ++kkmx, "val"]=cpu_cycles_str;
+#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+#   got_rpn_eqn[kmx, ++kkmx, "val"]=" - ( 0.5 * "
+#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+#   got_rpn_eqn[kmx, ++kkmx, "val"]="cpu_clk_unhalted.thread_any";
+#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+#   got_rpn_eqn[kmx, ++kkmx, "val"]=" ) ) / ( 0.5 * "
+#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+#   got_rpn_eqn[kmx, ++kkmx, "val"]="cpu_clk_unhalted.thread_any";
+#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+#   got_rpn_eqn[kmx, ++kkmx, "val"]=" ) "
+#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+#   got_rpn_eqn[kmx,      1,"max"]=kkmx;
+#   lkfor[kmx,1]=cpu_cycles_str;
+#   lkfor[kmx,2]="cpu_clk_unhalted.thread_any"; 
+#   nwfor[kmx,1,"hdr"]="%both_HT_threads_active";
 
 
    kmx++;
@@ -674,21 +734,21 @@ function prt_rpn_eqn(kmx,   i, str) {
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
    got_lkfor[kmx,2]=1; # num of fields to look for
    got_lkfor[kmx,3]=1.0; # 100.0 * mperf / (num_cpus * tsc_freq);
-   got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
+   got_lkfor[kmx,4]="bc_eqn"; # operation x/y/z
    got_lkfor[kmx,5]=1; # instances
    #got_lkfor[kmx,6]=""; # 
    got_lkfor[kmx,6]="div_by_interval"; # 
    kkmx = 0;
-   got_rpn_eqn[kmx, ++kkmx, "val"]=100;
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="100 * ";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
    got_rpn_eqn[kmx, ++kkmx, "val"]="msr/mperf/"
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="*"; # 100 * mperf
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" / (";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
    got_rpn_eqn[kmx, ++kkmx, "val"]= num_cpus * 1.0e6 * tsc_freq;
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="/";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=")";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="str";
    got_rpn_eqn[kmx,      1,"max"]=kkmx;
    lkfor[kmx,1]=tolower("msr/mperf/");
    nwfor[kmx,1,"hdr"]="%not_halted";
@@ -1092,10 +1152,47 @@ function prt_rpn_eqn(kmx,   i, str) {
    nwfor[kmx,1,"alias"]="topdown_Info_CoreIPC";
 
 
+   if (cpu_type != "Ice Lake") {
    kmx++;
    kkmx=0;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=3; # num of fields to look for
+   got_lkfor[kmx,2]=1; # num of fields to look for
+   got_lkfor[kmx,3]="1.0";
+   #got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
+   got_lkfor[kmx,4]="bc_eqn"; # operation x/y/z
+   got_lkfor[kmx,5]=1; # instances
+   got_lkfor[kmx,6]=""; # 
+   # 100*${ITP_UOP}/(4*(${ITP_ANY}/${thr_per_core}))
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" 400.0 * ";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=cpu_cycles_str;
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" / "
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="td_denom";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_glbl_row_arr";
+#   got_rpn_eqn[kmx, ++kkmx, "val"]=" / ( 4.0 * ( ";  
+#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+#   got_rpn_eqn[kmx, ++kkmx, "val"]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");
+#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+#   got_rpn_eqn[kmx, ++kkmx, "val"]=" / ";   # 100 * uop_ret
+#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+#   got_rpn_eqn[kmx, ++kkmx, "val"]=thr_per_core " ) ) ";
+#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+#abcd
+   got_rpn_eqn[kmx,      1,"max"]=kkmx;
+   lkfor[kmx,1]=cpu_cycles_str;
+   lkfor[kmx,2]="td_denom";  # get the instances from the first lkfor event
+   #lkfor[kmx,3]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
+   nwfor[kmx,1,"hdr"]="pct_cycles(%)";
+   prt_rpn_eqn(kmx);
+   }
+
+   if (cpu_type != "Ice Lake") {
+   kmx++;
+   kkmx=0;
+   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+   got_lkfor[kmx,2]=1; # num of fields to look for
    got_lkfor[kmx,3]="1.0";
    #got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
    got_lkfor[kmx,4]="bc_eqn"; # operation x/y/z
@@ -1106,20 +1203,26 @@ function prt_rpn_eqn(kmx,   i, str) {
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
    got_rpn_eqn[kmx, ++kkmx, "val"]=tolower("UOPS_RETIRED.RETIRE_SLOTS");
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" / ( 4.0 * ( ";  
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" / "
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" / ";   # 100 * uop_ret
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=thr_per_core " ) ) ";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-
+   got_rpn_eqn[kmx, ++kkmx, "val"]="td_denom";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_glbl_row_arr";
+#   got_rpn_eqn[kmx, ++kkmx, "val"]=" / ( 4.0 * ( ";  
+#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+#   got_rpn_eqn[kmx, ++kkmx, "val"]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");
+#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+#   got_rpn_eqn[kmx, ++kkmx, "val"]=" / ";   # 100 * uop_ret
+#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+#   got_rpn_eqn[kmx, ++kkmx, "val"]=thr_per_core " ) ) ";
+#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+#abcd
    got_rpn_eqn[kmx,      1,"max"]=kkmx;
    lkfor[kmx,1]=tolower("UOPS_RETIRED.RETIRE_SLOTS");
-   lkfor[kmx,2]=cpu_cycles_str;  # get the instances from the first lkfor event
-   lkfor[kmx,3]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
+   lkfor[kmx,2]="td_denom";  # get the instances from the first lkfor event
+   #lkfor[kmx,3]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
    nwfor[kmx,1,"hdr"]="topdown_Retiring(%)";
+   prt_rpn_eqn(kmx);
+   }
 
 #
 #  begin tdicx topdown ice-lake sum
@@ -1200,6 +1303,7 @@ function prt_rpn_eqn(kmx,   i, str) {
    lkfor[kmx,2]="cpu/slots/";
    nwfor[kmx,1,"hdr"]="topdown_Retiring(%)";
 
+   if (cpu_type == "Ice Lake") {
    #if (evt[tdicx_ret,1] != "" && evt[not_deliv,1] != "" && evt[uop_drop,1] != "") {
         #td_fe_v = 100.0*(evt[not_deliv,i]-evt[uop_drop,i])/evt[tdicx_slots,i];
         #td_sum = td_ret_v + td_bs_v + td_fe_v + td_be_v;
@@ -1230,6 +1334,7 @@ function prt_rpn_eqn(kmx,   i, str) {
    lkfor[kmx,2]="int_misc.uop_dropping";
    lkfor[kmx,3]="cpu/slots/";
    nwfor[kmx,1,"hdr"]="topdown_Frontend_Bound(%)";
+   }
 
 
     #td_be_v = 100.0*evt[tdicx_be,i]/evt[tdicx_slots,i];
@@ -1285,12 +1390,13 @@ function prt_rpn_eqn(kmx,   i, str) {
    if (cpu_type != "Ice Lake" && got_bad_spec_evts == need_bad_spec_evts) {
    kmx++;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=5; # num of fields to look for
+   got_lkfor[kmx,2]=4; # num of fields to look for
    got_lkfor[kmx,3]="1.0";
    got_lkfor[kmx,4]="bc_eqn"; # operation x/y/z
    got_lkfor[kmx,5]=1; # instances
    got_lkfor[kmx,6]=""; # 
 #    bc like operations, space between all operators and values
+   #(EV("UOPS_ISSUED.ANY", 1) - Retired_Slots(self, EV, 1) + Pipeline_Width * Recovery_Cycles(self, EV, 1)) / SLOTS(self, EV, 1)
    kkmx = 0;
    got_rpn_eqn[kmx, ++kkmx, "val"]="100.0 * ( ";
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
@@ -1300,91 +1406,85 @@ function prt_rpn_eqn(kmx,   i, str) {
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
    got_rpn_eqn[kmx, ++kkmx, "val"]="uops_retired.retire_slots"; 
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" + ( ( 4.0 * ";  
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" + 4.0 * ";  
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
    got_rpn_eqn[kmx, ++kkmx, "val"]="int_misc.recovery_cycles_any";
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" ) / " thr_per_core " ) ) / ( 4.0 * ( ";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" ) / "
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" / " thr_per_core " ) )"; 
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="td_denom";   # 100 * uop_ret
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_glbl_row_arr";
    got_rpn_eqn[kmx,      1,"max"]=kkmx;
 
    lkfor[kmx,1]="uops_issued.any";
    lkfor[kmx,2]="uops_retired.retire_slots";
    lkfor[kmx,3]="int_misc.recovery_cycles_any";
    lkfor[kmx,4]=cpu_cycles_str;  # get the instances from the first lkfor event
-   lkfor[kmx,5]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
+   #lkfor[kmx,5]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
    nwfor[kmx,1,"hdr"]="topdown_Bad_Speculation(%)";
+   # td from pmu-tools (not smt)
+   # retiring = Retired_Slots(self, EV, 1) / SLOTS(self, EV, 1)
+   # fe bound = EV("IDQ_UOPS_NOT_DELIVERED.CORE", 1) / SLOTS(self, EV, 1)
+   # bs       = (EV("UOPS_ISSUED.ANY", 1) - Retired_Slots(self, EV, 1) + Pipeline_Width * Recovery_Cycles(self, EV, 1)) / SLOTS(self, EV, 1) # recov_cycles no any if per-pid
+   # be bound = 1 - self.Frontend_Bound.compute(EV) - (EV("UOPS_ISSUED.ANY", 1) + Pipeline_Width * Recovery_Cycles(self, EV, 1)) / SLOTS(self, EV, 1)
    }
 
+   if (cpu_type != "Ice Lake") {
    kmx++;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=3; # num of fields to look for
+   got_lkfor[kmx,2]=1; # num of fields to look for
    got_lkfor[kmx,3]="1.0";
-   got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
+   got_lkfor[kmx,4]="bc_eqn"; # operation x/y/z
    got_lkfor[kmx,5]=1; # instances
    got_lkfor[kmx,6]=""; # 
-#    rpn operations
    kkmx = 0;
-   got_rpn_eqn[kmx, ++kkmx, "val"]=100;
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+   # EV("IDQ_UOPS_NOT_DELIVERED.CORE", 1) / SLOTS(self, EV, 1)
+   got_rpn_eqn[kmx, ++kkmx, "val"]="100 * ";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
    got_rpn_eqn[kmx, ++kkmx, "val"]="idq_uops_not_delivered.core";
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="*";  
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=4.0;
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="*";   
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=thr_per_core;
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="/"; 
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="/";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   got_rpn_eqn[kmx,      1,"max"]=kkmx;
-
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" / ";  
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
+   got_rpn_eqn[kmx, ++kkmx, "val"]="td_denom";   # 100 * uop_ret
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_glbl_row_arr";
    got_rpn_eqn[kmx,      1,"max"]=kkmx;
    lkfor[kmx,1]=tolower("IDQ_UOPS_NOT_DELIVERED.CORE");
-   lkfor[kmx,2]=cpu_cycles_str;  # get the instances from the first lkfor event
-   lkfor[kmx,3]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
+   #lkfor[kmx,2]=cpu_cycles_str;  # get the instances from the first lkfor event
+   #lkfor[kmx,3]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
    nwfor[kmx,1,"hdr"]="topdown_Frontend_Bound(%)";
+   }
 
 #    rpn operations
 #    TBD repeating this stuff for sockets. Right now (if you had per-socket data and -o dont_sum_sockets) you wouldnt match up the column header because youd have " S0" or " S1" socket suffix
    if (cpu_type != "Ice Lake" && got_bad_spec_evts == need_bad_spec_evts) {
    kmx++;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=4; # num of fields to look for
+   got_lkfor[kmx,2]=3; # num of fields to look for
    got_lkfor[kmx,3]="1.0";
-   got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
+   got_lkfor[kmx,4]="bc_eqn"; # operation x/y/z
    got_lkfor[kmx,5]=1; # instances
    got_lkfor[kmx,6]=""; # 
    kkmx = 0;
-   got_rpn_eqn[kmx, ++kkmx, "val"]=100;
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
+   # 1 - self.Frontend_Bound.compute(EV) - (EV("UOPS_ISSUED.ANY", 1) + Pipeline_Width * Recovery_Cycles(self, EV, 1)) / SLOTS(self, EV, 1)
+   got_rpn_eqn[kmx, ++kkmx, "val"]="100 - ( ";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
    got_rpn_eqn[kmx, ++kkmx, "val"]="topdown_Retiring(%)"
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" + ";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
    got_rpn_eqn[kmx, ++kkmx, "val"]="topdown_Frontend_Bound(%)"
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="+";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" + ";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
    got_rpn_eqn[kmx, ++kkmx, "val"]="topdown_Bad_Speculation(%)"
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="+";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="-";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" ) ";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
    got_rpn_eqn[kmx,      1,"max"]=kkmx;
    lkfor[kmx,1]=tolower("UOPS_RETIRED.RETIRE_SLOTS");
-   lkfor[kmx,2]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
-   lkfor[kmx,3]=tolower("IDQ_UOPS_NOT_DELIVERED.CORE");
-   lkfor[kmx,4]=cpu_cycles_str;  # get the instances from the first lkfor event
+   #lkfor[kmx,2]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
+   lkfor[kmx,2]=tolower("IDQ_UOPS_NOT_DELIVERED.CORE");
+   lkfor[kmx,3]=cpu_cycles_str;  # get the instances from the first lkfor event
    nwfor[kmx,1,"hdr"]="topdown_Backend_bound(%)";
    } else {
    kmx++;
@@ -1584,6 +1684,17 @@ function prt_rpn_eqn(kmx,   i, str) {
        }
      }
    }
+
+# delow is try at checking for glbl_row_arr
+    if (1==2) {
+   for (k=1; k <= kmx; k++) { 
+     for (j=1; j <= got_lkfor[k,2]; j++) { 
+       if (nwfor[k,1,"hdr"] == lkfor[k,j]) {
+         nwfor[kmx,1,"save_glbl_row_arr"]="td_denom";
+       }
+     }
+   }
+   }
    extra_cols=0;
    for (k=1; k <= kmx; k++) { 
      for (j=1; j <= got_lkfor[k,2]; j++) { 
@@ -1603,6 +1714,9 @@ function prt_rpn_eqn(kmx,   i, str) {
      if (got_lkfor[k,1] == got_lkfor[k,2] || (got_lkfor[k,"typ_match"] == "require_any" && got_lkfor[k,1] > 0)) {
         printf("use nwfor[%d,1,hdr]=%s, extra_cols= %d\n", k, nwfor[k,1,"hdr"], extra_cols) > "/dev/stderr";
         extra_cols++;
+     }
+     if (nwfor[k,1,"hdr"] == "td_denom") {
+       printf("nwfor[%d,1, hdr]== %s, got_lkfor1= %d got_lkfor2= %d\n", k, nwfor[k,1, "hdr"], got_lkfor[k,1], got_lkfor[k,2]) > "/dev/stderr";
      }
    }
    printf("perf_stat_scatter.awk: extra_cols= %d\n", extra_cols) > "/dev/stderr";
@@ -1916,13 +2030,23 @@ function prt_rpn_eqn(kmx,   i, str) {
          prt_it=1;
          bc_err = "";
          bc_sp = 0;
-         val = bc_rtn(val, k, got_rpn_eqn, col_hdr_mx, col_hdr, rw_data);
+         #if (k == 25) {
+         #  printf("retire eqn 25: glbl_row_arr[td_denom]= %s\n", glbl_row_arr["td_denom"]);
+         #}
+         val = bc_rtn(val, k, got_rpn_eqn, col_hdr_mx, col_hdr, rw_data, glbl_row_arr);
          if (bc_err != "") {
+           printf("got bc_rtn err: %s\n", bc_err);
+           printf("got err for %s k= %s, numer= %f, lkup[%d,2]= %s, lkup[k,1]= %s evt_inst[lkup[k,1]]= %s, use num_cpus= %s\n",
+            nwfor[k,1,"hdr"], k, numer[k], k, lkup[k,2], lkup[k,1], evt_inst[lkup[k,1]], num_cpus);
            printf("got bc_rtn err: %s\n", bc_err) > "/dev/stderr";
            printf("got err for %s k= %s, numer= %f, lkup[%d,2]= %s, lkup[k,1]= %s evt_inst[lkup[k,1]]= %s, use num_cpus= %s\n",
             nwfor[k,1,"hdr"], k, numer[k], k, lkup[k,2], lkup[k,1], evt_inst[lkup[k,1]], num_cpus) > "/dev/stderr";
            prt_rpn_eqn(k);
            exit(1);
+         }
+         if (nwfor[k,1,"save_glbl_row_arr"] != "" ) {
+           v = nwfor[k,1,"save_glbl_row_arr"];
+           glbl_row_arr[v] = val;
          }
          #if (got_lkfor[k,"tag"] == "L3_lat_ns") {
          #  printf("L3_lat_ns: eqn= %s = %f\n", bc_str, val);
