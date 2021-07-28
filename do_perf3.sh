@@ -317,6 +317,26 @@ echo "# started on $dtc $dte" > $FL
       #  topdown-be-bound OR cpu/topdown-be-bound/
       #  topdown-fe-bound OR cpu/topdown-fe-bound/
       #  topdown-retiring OR cpu/topdown-retiring/ 
+      DO_ANY="0x1"
+      NEED_JUST_CYCLES=0
+      if [ "$PID" != "" ]; then
+        NEED_JUST_CYCLES=1
+      else
+        if [ "$WARGS" != "" ]; then
+         if [[ "$WARGS" == *"-A"* ]]; then
+          NEED_JUST_CYCLES=1
+          echo "$0.$LINENO set cpu_clk_unhalted.thread_any to just cycles"
+         fi
+        fi
+      fi
+      DO_ANY="0x1"
+      GOT_THA_EVT=`echo $PERF_LIST | grep cpu_clk_unhalted.thread_any`
+      THA_EVT=
+      if [ "$GOT_THA_EVT" != "" ]; then
+        THA_EVT=",cpu_clk_unhalted.thread_any"
+      else
+        THA_EVT=",cpu/name='cpu_clk_unhalted.thread_any',event=0x3c,any=${DO_ANY}/"
+      fi
       TD_EVTS=
       if [ "$CPU_DECODE" == "Ice Lake" ]; then
         RC=`echo "$PERF_LIST" | grep 'topdown-retiring'`
@@ -325,9 +345,17 @@ echo "# started on $dtc $dte" > $FL
           #TD_EVTS=",cpu/slots/,cpu/name='topdown-bad-spec',event=0xa4,umask=0x8/,cpu/name='topdown-be-bound',event=0xa4,umask=0x02/,cpu/name='topdown-retiring',event=0xc2,umask=0x02/,cpu/name='int_misc.uop_dropping',event=0x0d,umask=0x10/"
         fi
       else
+        #    return ((EV("CPU_CLK_UNHALTED.THREAD", level) / 2) * (1 + EV("CPU_CLK_UNHALTED.ONE_THREAD_ACTIVE", level) / EV("CPU_CLK_UNHALTED.REF_XCLK", level))) if ebs_mode else(EV("CPU_CLK_UNHALTED.THREAD_ANY", level) / 2) if smt_enabled else CLKS(self, EV, level)
         UOPS_ISSUED_ANY=",cpu/event=0x0e,umask=0x01,name='uops_issued.any'/"
-        UOPS_RETIRED_RETIRES_SLOTS=",cpu/event=0xc2,umask=0x02,name='uops_retired.retire_slots'/"
-        INT_MISC_RECOVERY=",cpu/event=0x0d,umask=0x01,any=1,period=2000003,name='int_misc.recovery_cycles_any'/"
+        UOPS_RETIRED_RETIRE_SLOTS=",cpu/event=0xc2,umask=0x02,name='uops_retired.retire_slots'/"
+        #echo "got NEED_JUST_CYCLES == $NEED_JUST_CYCLES, THA_EVT= $THA_EVT"
+        if [ "$NEED_JUST_CYCLES" == "1" ]; then
+          CLK_ONE_THREAD_ACTIVE=",cpu/event=0x3c,umask=0x02,name='cpu_clk_unhalted.one_thread_active'/"
+          CLK_REF_XCLK=",cpu/event=0x3c,umask=0x01,name='cpu_clk_unhalted.ref_xclk'/"
+          THA_EVT=
+        fi
+        #INT_MISC_RECOVERY=",cpu/event=0x0d,umask=0x01,any=1,period=2000003,name='int_misc.recovery_cycles_any'/"
+        INT_MISC_RECOVERY=",cpu/event=0x0d,umask=0x01,any=${DO_ANY},name='int_misc.recovery_cycles_any'/"
       fi
      if [ "$PID" == "" ]; then
       IMC_UMASK=0x0f
@@ -477,14 +505,9 @@ echo "# started on $dtc $dte" > $FL
     #if [ "$GOT_UOP_EVT" != "" ]; then
     #  UOP_EVT=",uops_retired.retire_slots"
     #fi
-    GOT_THA_EVT=`echo $PERF_LIST | grep cpu_clk_unhalted.thread_any`
-    THA_EVT=
-    if [ "$GOT_THA_EVT" != "" ]; then
-      THA_EVT=",cpu_clk_unhalted.thread_any"
-    fi
     SKT_EVT="${SKT_EVT}${PWR_EVT}${EVT}${UNC_CHA}"
     #EVT="cpu-clock,task-clock,instructions,cycles,ref-cycles,idq_uops_not_delivered.core,uops_retired.retire_slots,cpu_clk_unhalted.thread_any,power/energy-pkg/${EVT}${UNC_CHA}${OFFC}"
-    EVT="cpu-clock,instructions,msr/aperf/,msr/mperf/${TD_EVTS}${IDQ_EVT}${UOP_EVT}${THA_EVT}${UOPS_ISSUED_ANY}${UOPS_RETIRED_RETIRES_SLOTS}${INT_MISC_RECOVERY}${OFFC}${SKT_EVT}"
+    EVT="cpu-clock,instructions,msr/aperf/,msr/mperf/${TD_EVTS}${IDQ_EVT}${UOP_EVT}${THA_EVT}${UOPS_ISSUED_ANY}${UOPS_RETIRED_RETIRE_SLOTS}${CLK_ONE_THREAD_ACTIVE}${CLK_REF_XCLK}${INT_MISC_RECOVERY}${OFFC}${SKT_EVT}"
     fi
     #echo "do: $PERF_BIN stat -x \";\"  --per-socket -a -I $ms -o $FL -e $EVT" > /dev/stderr
     #echo "do: $PERF_BIN stat -x \";\"  --per-socket -a -I $ms -o $FL -e $EVT"
