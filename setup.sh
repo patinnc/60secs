@@ -1,4 +1,5 @@
 echo "Installing Required Global packages"
+export DEBIAN_FRONTEND=noninteractive
 apt-get -y install sudo
 apt-get -y install msr-tools
 apt-get -y install hwloc
