@@ -317,19 +317,20 @@ echo "# started on $dtc $dte" > $FL
       #  topdown-be-bound OR cpu/topdown-be-bound/
       #  topdown-fe-bound OR cpu/topdown-fe-bound/
       #  topdown-retiring OR cpu/topdown-retiring/ 
-      DO_ANY="0x1"
+      DO_ANY="0x01"
       NEED_JUST_CYCLES=0
       if [ "$PID" != "" ]; then
         NEED_JUST_CYCLES=1
+        DO_ANY="0x00"
       else
         if [ "$WARGS" != "" ]; then
          if [[ "$WARGS" == *"-A"* ]]; then
           NEED_JUST_CYCLES=1
+          DO_ANY="0x00"
           echo "$0.$LINENO set cpu_clk_unhalted.thread_any to just cycles"
          fi
         fi
       fi
-      DO_ANY="0x1"
       GOT_THA_EVT=`echo $PERF_LIST | grep cpu_clk_unhalted.thread_any`
       THA_EVT=
       if [ "$GOT_THA_EVT" != "" ]; then
@@ -339,6 +340,8 @@ echo "# started on $dtc $dte" > $FL
       fi
       TD_EVTS=
       if [ "$CPU_DECODE" == "Ice Lake" ]; then
+        # event attr any not defined on ice lake
+        THA_EVT=
         RC=`echo "$PERF_LIST" | grep 'topdown-retiring'`
         if [ "$RC" != "" ]; then
           TD_EVTS=",cpu/slots/,cpu/name='topdown-bad-spec',event=0xa4,umask=0x8/,cpu/name='topdown-be-bound',event=0xa4,umask=0x02/,cpu/name='topdown-retiring',event=0xc2,umask=0x02/,cpu/name='int_misc.uop_dropping',event=0x0d,umask=0x10/,cpu/name='int_misc.recovery_cycles',event=0x0d,umask=0x01,cmask=0x1,edge=1/"
