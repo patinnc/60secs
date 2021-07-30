@@ -529,28 +529,28 @@ echo "# started on $dtc $dte" > $FL
       #OPT_A=" $OPT_A -C $CPU_LIST_IN "
       OPT_A=" -C $CPU_LIST_IN "
     fi
-    if [ "$WARGS" != "" ]; then
-      OPT_A=" $OPT_A $WARGS "
-    fi
-    echo  "$0.$LINENO foregrnd pid wait ms do_cmd: $FOREGRND $PID $WAIT_IN $ms $DO_CMD $EXE_ARGS"
+    #if [ "$WARGS" != "" ]; then
+    #  OPT_A=" $OPT_A $WARGS "
+    #fi
+    echo  "$0.$LINENO foregrnd pid wait ms do_cmd: $FOREGRND $PID $WAIT_IN $ms $WARGS $DO_CMD $EXE_ARGS"
     if [ "$PID" == "" -a "$WAIT_IN" == ""  ]; then
-      echo $PERF_BIN stat -x ";" --append $OPT_A -I $ms -o $FL -e "$EVT" $DO_CMD $WAIT $EXE_ARGS
+      echo $PERF_BIN stat -x ";" --append $OPT_A -I $ms -o $FL -e "$EVT" $WARGS $DO_CMD $WAIT $EXE_ARGS
       if [ "$FOREGRND" == "0" ]; then
-           $PERF_BIN stat -x ";" --append $OPT_A -I $ms -o $FL -e "$EVT" $DO_CMD $WAIT $EXE_ARGS &
+           $PERF_BIN stat -x ";" --append $OPT_A -I $ms -o $FL -e "$EVT" $WARGS $DO_CMD $WAIT $EXE_ARGS &
       else
-           $PERF_BIN stat -x ";" --append $OPT_A -I $ms -o $FL -e "$EVT" $DO_CMD $WAIT $EXE_ARGS
+           $PERF_BIN stat -x ";" --append $OPT_A -I $ms -o $FL -e "$EVT" $WARGS $DO_CMD $WAIT $EXE_ARGS
       fi
       PRF_PID=$!
       echo "started perf pid= $PRF_PID monitoring $PID. going to sleep $WAIT seconds"
     else
-      echo $0.$LINENO $PERF_BIN stat -x ";" --append $OPT_A -I $ms -o $FL -e "$EVT" $DO_CMD $WAIT $EXE_ARGS
+      echo $0.$LINENO $PERF_BIN stat -x ";" --append $OPT_A -I $ms -o $FL -e "$EVT" $WARGS $DO_CMD $WAIT $EXE_ARGS
       if [ "$FOREGRND" == "1" -a "$PID" != "" -a "$WAIT_IN" != ""  ]; then
-           $PERF_BIN stat -x ";" --append $OPT_A -I $ms -o $FL -e "$EVT" $OPT_PID $DO_CMD $WAIT $EXE_ARGS
+           $PERF_BIN stat -x ";" --append $OPT_A -I $ms -o $FL -e "$EVT" $OPT_PID $WARGS $DO_CMD $WAIT $EXE_ARGS
       else
         if [ "$FOREGRND" == "0" ]; then
-           $PERF_BIN stat -x ";" --append $OPT_A -I $ms -o $FL -e "$EVT" $OPT_PID  $DO_CMD $WAIT $EXE_ARGS &
+           $PERF_BIN stat -x ";" --append $OPT_A -I $ms -o $FL -e "$EVT" $OPT_PID  $WARGS $DO_CMD $WAIT $EXE_ARGS &
         else
-           $PERF_BIN stat -x ";" --append $OPT_A -I $ms -o $FL -e "$EVT" $OPT_PID  $DO_CMD $WAIT $EXE_ARGS
+           $PERF_BIN stat -x ";" --append $OPT_A -I $ms -o $FL -e "$EVT" $OPT_PID  $WARGS $DO_CMD $WAIT $EXE_ARGS
         fi
       PRF_PID=$!
       echo "started perf pid= $PRF_PID doing $DO_CMD $WAIT seconds in background"
