@@ -174,6 +174,8 @@ awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_
     lkup[++j] = "int_misc.recovery_cycles"; icx_recovery_cycles = j;
     lkup[++j] = "int_misc.recovery_cycles_any"; recovery_cycles = j;
     lkup[++j] = "uops_issued.any";      uops_issued_any = j;
+    lkup[++j] = "cycle_activity.stalls_total";       cyc_act_stalls_tot = j;
+    lkup[++j] = "uops_executed.cycles_ge_1_uop_exe"; uop_exe_cyc_ge1    = j;
 
     lkup_mx = j;
 
@@ -379,6 +381,12 @@ awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_
       h[++cats] = "%bck_end";
       td_bck_end = cats;
    }
+   if (evt[cyc_act_stalls_tot,1] != "" && evt[cyc,1] != "") {
+      h[++cats] = "%cyc_be";
+   }
+   if (evt[uop_exe_cyc_ge1,1] != "" && evt[cyc,1] != "") {
+      h[++cats] = "%cyc_uopRet";
+   }
    if (evt[ret_cycles,1] != "" && evt[cyc,1] != "") {
       h[++cats] = "%ret_cyc";
    }
@@ -560,6 +568,8 @@ awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_
       if (h[j] == "%be_spec") { v = 100 - td_ret_val - td_frt_end_val; if (v < 0) { v = 0.0; }}
       if (h[j] == "%bck_end") { v = 100 - td_ret_val - td_frt_end_val - td_bad_spec_val; if (v < 0) { v = 0.0; }}
       if (h[j] == "%ret_cyc") { v = 100.0*evt[ret_cycles,i]/evt[cyc,i]; }
+      if (h[j] == "%cyc_be")  { v = 100.0*evt[cyc_act_stalls_tot,i]/evt[cyc,i]; }
+      if (h[j] == "%cyc_uopRet")  { v = 100.0*evt[uop_exe_cyc_ge1,i]/evt[cyc,i]; }
       if (h[j] == "%td_ret" || h[j] == "%td_be" || h[j] == "%td_bs" || h[j] == "%td_fe") {
          if (got_icx_td_sum != i) {
            got_icx_td_sum  = i;
