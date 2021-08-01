@@ -359,6 +359,8 @@ echo "# started on $dtc $dte" > $FL
         fi
         #INT_MISC_RECOVERY=",cpu/event=0x0d,umask=0x01,any=1,period=2000003,name='int_misc.recovery_cycles_any'/"
         INT_MISC_RECOVERY=",cpu/event=0x0d,umask=0x01,any=${DO_ANY},name='int_misc.recovery_cycles_any'/"
+        CYC_ACT_STALLS_TOT=",cpu/name='cycle_activity.stalls_total',cmask=0x4,umask=0x4,event=0xa3/"
+        UOP_EXE_CYC_GE1=",cpu/name='uops_executed.cycles_ge_1_uop_exe',cmask=0x1,umask=0x1,event=0xb1/"
       fi
      if [ "$PID" == "" ]; then
       IMC_UMASK=0x0f
@@ -510,7 +512,7 @@ echo "# started on $dtc $dte" > $FL
     #fi
     SKT_EVT="${SKT_EVT}${PWR_EVT}${EVT}${UNC_CHA}"
     #EVT="cpu-clock,task-clock,instructions,cycles,ref-cycles,idq_uops_not_delivered.core,uops_retired.retire_slots,cpu_clk_unhalted.thread_any,power/energy-pkg/${EVT}${UNC_CHA}${OFFC}"
-    EVT="cpu-clock,instructions,msr/aperf/,msr/mperf/${TD_EVTS}${IDQ_EVT}${UOP_EVT}${THA_EVT}${UOPS_ISSUED_ANY}${UOPS_RETIRED_RETIRE_SLOTS}${CLK_ONE_THREAD_ACTIVE}${CLK_REF_XCLK}${INT_MISC_RECOVERY}${OFFC}${SKT_EVT}"
+    EVT="cpu-clock,instructions,msr/aperf/,msr/mperf/${TD_EVTS}${IDQ_EVT}${UOP_EVT}${THA_EVT}${UOPS_ISSUED_ANY}${UOPS_RETIRED_RETIRE_SLOTS}${CYC_ACT_STALLS_TOT}${UOP_EXE_CYC_GE1}${CLK_ONE_THREAD_ACTIVE}${CLK_REF_XCLK}${INT_MISC_RECOVERY}${OFFC}${SKT_EVT}"
     fi
     #echo "do: $PERF_BIN stat -x \";\"  --per-socket -a -I $ms -o $FL -e $EVT" > /dev/stderr
     #echo "do: $PERF_BIN stat -x \";\"  --per-socket -a -I $ms -o $FL -e $EVT"
