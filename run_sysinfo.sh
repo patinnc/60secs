@@ -14,7 +14,7 @@ while getopts "hPlqc:p:" opt; do
       CFG_DIR=$OPTARG
       ;;
     l )
-      RUN_TM=10
+      RUN_TM=$OPTARG
       ;;
     p )
       PROJ_DIR=$OPTARG
@@ -32,8 +32,8 @@ while getopts "hPlqc:p:" opt; do
       echo "     by default the host results dir name $PROJ_DIR"
       echo "     If you specify a project dir the benchmark results are looked for"
       echo "     under /project_dir/"
-      echo "   -l run spin.x for 10 seconds instead of 1 sec. 3 different runs are done of spin.x so this can take all cpus for 30 seconds"
-      echo "      the default is 1 second/run"
+      echo "   -l spin.x_run_time_in_secs  spin.x uses all cpus. Default is 1 sec. spin.x does 3 different runs so -l 10 secs can take all cpus for 30 seconds"
+      echo "      the default is 1 second/run. -l 0 skips spin.x which is recommended for production boxes"
       echo "   -P prefix subdir name 'sysinfo' with timestamp YY-MM-DD_HHMMSS_. Default is don't prefix it"
       exit
       ;;
@@ -78,8 +78,12 @@ hwinfo > hwinfo.txt
 lsblk -P -o "NAME,SIZE,MODEL" > lsblk_sz_model.txt
 
 SPIN_BIN=$SCR_DIR/extras/spin.x
-$SPIN_BIN -t 10 -w freq_sml > spin_freq.txt
-$SPIN_BIN -t 10 -w mem_bw -s 100m -b 64 > spin_bw.txt
+if [ "$RUN_TM" != "" ]; then
+if [ $RUN_TM -gt 0 ]; then
+  $SPIN_BIN -t $RUN_TM -w freq_sml > spin_freq.txt
+  $SPIN_BIN -t $RUN_TM -w mem_bw -s 100m -b 64 > spin_bw.txt
+fi
+fi
 lscpu > lscpu.txt
 lscpu -e > lscpu_e.txt
 
@@ -89,6 +93,8 @@ CpusPerNode=`awk '/^node 0 cpus: /{printf("%s\n", NF-3);exit;}' numactl_H.txt`
 OFILE=spin_bw_remote.txt
 echo "numa_nodes= $NDS" > $OFILE
 echo "cpus/node= $CpusPerNode" >> $OFILE
+
+if [[ $RUN_TM -gt 0 ]]; then
 echo "spin numa memory bandwidth matrix GB/s"  >> $OFILE
 printf "Numa node\t" >> $OFILE
 for ((i=0; i < $NDS; i++)); do
@@ -105,6 +111,7 @@ for ((i=0; i < $NDS; i++)); do
   done
   printf "\n"  >> $OFILE
 done
+fi
 
 
 
