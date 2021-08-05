@@ -164,7 +164,7 @@ function trim(s) { return rtrim(ltrim(s)); }
      next;
    }
    if (index(FNM, metric_file) > 0) {
-     NFL=FNM ".tsv";
+     NFL=work_dir "/" FNM ".tsv";
         if (index($0, "metric_TMA_") > 0) {
           gsub("metric_TMA_", "metric_TMAM_", $0);
         }
