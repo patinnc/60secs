@@ -5,7 +5,7 @@ import sys
 import os
 
 
-options, remainder = getopt.getopt(sys.argv[1:], 'vf:b:d:e:m:o:S:s:t:', ['verbose', 'file=', 'beg=',
+options, remainder = getopt.getopt(sys.argv[1:], 'vf:b:d:e:m:o:S:s:t:w:', ['verbose', 'file=', 'beg=',
                                                          'desc=',
                                                          'end=',
                                                          'match=',
@@ -13,6 +13,7 @@ options, remainder = getopt.getopt(sys.argv[1:], 'vf:b:d:e:m:o:S:s:t:', ['verbos
                                                          'Sheet=',
                                                          'summary=',
                                                          'type=',
+                                                         'work_dir=',
                                                          ])
 hdr = ""
 sum_file = ""
@@ -47,6 +48,8 @@ for opt, arg in options:
         sum_file = arg
     if opt in ('-S', '--Sheet'):
         sheet_nm = arg
+    if opt in ('-w', '--work_dir'):
+        work_dir = arg
 
 if verbose > 0:
    print("________json_2_tsv.py: got match_intrvl= %d" % (match_intrvl), file=sys.stderr)
