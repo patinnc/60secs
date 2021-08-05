@@ -44,7 +44,7 @@ ck_last_rc() {
    fi
 }
 
-while getopts "hvASa:B:b:c:D:d:e:g:i:j:m:o:P:p:s:t:x:" opt; do
+while getopts "hvASa:B:b:c:D:d:e:g:i:j:m:o:P:p:s:t:w:x:" opt; do
   case ${opt} in
     A )
       AVERAGE=1
@@ -95,13 +95,17 @@ while getopts "hvASa:B:b:c:D:d:e:g:i:j:m:o:P:p:s:t:x:" opt; do
       PHASE_FILE=$OPTARG
       ;;
     s )
-      SUM_FILE=$OPTARG
+      SUM_FILE_IN=$OPTARG
       ;;
     S )
       SKIP_XLS=1
       ;;
     t )
       TOP_DIR=$OPTARG
+      ;;
+    w )
+      WORK_DIR=$OPTARG
+      echo "$0.$LINENO: WORK_DIR= $WORK_DIR" > /dev/stderr
       ;;
     x )
       XLSX_FILE=$OPTARG
@@ -141,6 +145,7 @@ while getopts "hvASa:B:b:c:D:d:e:g:i:j:m:o:P:p:s:t:x:" opt; do
       echo "   -s sum_file summary_file"
       echo "   -S   skip creating detail xlsx file. Useful for when we are doing multiple directories"
       echo "   -t top_dir  top directory"
+      echo "   -w work_dir  work directory all output tsv files should be put here"
       echo "   -v verbose mode"
       exit 1
       ;;
@@ -153,6 +158,8 @@ while getopts "hvASa:B:b:c:D:d:e:g:i:j:m:o:P:p:s:t:x:" opt; do
   esac
 done
 shift $((OPTIND -1))
+
+echo "$0.$LINENO: WORK_DIR= $WORK_DIR" > /dev/stderr
 
 #echo "$0: top BEG_TM_IN= $BEG_TM_IN" > /dev/stderr
 
@@ -175,6 +182,9 @@ if [ "$AVG_DIR" != "" ]; then
    fi
    OPT_a=" -a $AVG_DIR "
 fi
+if [ "$SUM_FILE_IN" != "" ]; then
+  SUM_FILE=$WORK_DIR/$SUM_FILE_IN
+fi
 echo "$0: SUM_FILE= $SUM_FILE" > /dev/stderr
 if [ "$SUM_FILE" != "" ]; then
   printf "title\tsummary\tsheet\tsummary\ttype\tcopy\n"  > $SUM_FILE;
@@ -194,7 +204,7 @@ if [ "$PHASE_FILE" != "" ]; then
   echo "PH_TM_END= $PH_TM_END" > /dev/stderr
 fi
 
-SHEETS_FILE=$BASE_DIR/sheets_${JOB_ID}.txt
+SHEETS_FILE=$WORK_DIR/sheets.txt
 if [ -e $SHEETS_FILE ]; then
   rm $SHEETS_FILE
 fi
@@ -781,7 +791,7 @@ for i in $FILES; do
  echo $i
   if [[ $i == *"_uptime.txt"* ]]; then
     echo "do uptime"
-    awk -v pfx="$PFX" '
+    awk -v work_dir="$WORK_DIR" -v pfx="$PFX" '
       BEGIN{beg=1;mx=0}
       function ltrim(s) { sub(/^[ \t\r\n]+/, "", s); return s }
       function rtrim(s) { sub(/[ \t\r\n,]+$/, "", s); return s }
@@ -793,7 +803,7 @@ for i in $FILES; do
 
       /load average/ {
 	FNM=ARGV[ARGIND];
-        NFL=FNM ".tsv";
+        NFL=work_dir "/" FNM ".tsv";
         n = split($0, arr, /[ ,]/);
         for (i=1; i <= NF; i++) {
            if ($i == "average:") {
@@ -833,6 +843,7 @@ trows++; printf("\n") > NFL;
      }
    ' $i
    ck_last_rc $? $LINENO
+   #mv $i.tsv $WORK_DIR
    SHEETS="$SHEETS $i.tsv"
   fi
 
@@ -879,8 +890,8 @@ trows++; printf("\n") > NFL;
     pwd
     echo "========SPIN_TXT5= $SPIN_TXT dir= $ITP_METRIC_OUT_DIR i= $i, average= $AVERAGE, NCPUS= $NCPUS, MET_FL= $MET_FL, MET_AV= $MET_AV" > /dev/stderr
     export AWKPATH=$SCR_DIR
-    echo awk  -v verbose="$VERBOSE" -v sum_tmam="$SUM_TMAM_FILE" -v options="$OPTIONS" -v tm_beg_in="$BEG_TM_IN" -v tm_end_in="$END_TM" -v do_avg="$AVERAGE" -v sum_file="$SUM_FILE" -v metric_file="$MET_FL" -v metric_avg="$MET_AV" -v pfx="$PFX" -f $SCR_DIR/itp_2_tsv.awk $CPU2017files $ITP_METRIC_OUT_DIR/result.csv $ITP_METRIC_OUT_DIR/$MET_AV $i $SPIN_TXT
-    awk  -v sum_tmam="$SUM_TMAM_FILE" -v options="$OPTIONS" -v tm_beg_in="$BEG_TM_IN" -v tm_end_in="$END_TM" -v do_avg="$AVERAGE" -v sum_file="$SUM_FILE" -v metric_file="$MET_FL" -v metric_avg="$MET_AV" -v pfx="$PFX" -f $SCR_DIR/itp_2_tsv.awk $CPU2017files $ITP_METRIC_OUT_DIR/result.csv $ITP_METRIC_OUT_DIR/$MET_AV $i $SPIN_TXT
+    echo awk  -v verbose="$VERBOSE" -v sum_tmam="$WORK_DIR/$SUM_TMAM_FILE" -v options="$OPTIONS" -v tm_beg_in="$BEG_TM_IN" -v tm_end_in="$END_TM" -v do_avg="$AVERAGE" -v sum_file="$SUM_FILE" -v metric_file="$MET_FL" -v metric_avg="$MET_AV" -v pfx="$PFX" -f $SCR_DIR/itp_2_tsv.awk $CPU2017files $ITP_METRIC_OUT_DIR/result.csv $ITP_METRIC_OUT_DIR/$MET_AV $i $SPIN_TXT
+    awk  -v work_dir="$WORK_DIR" -v sum_tmam="$WORK_DIR/$SUM_TMAM_FILE" -v options="$OPTIONS" -v tm_beg_in="$BEG_TM_IN" -v tm_end_in="$END_TM" -v do_avg="$AVERAGE" -v sum_file="$SUM_FILE" -v metric_file="$MET_FL" -v metric_avg="$MET_AV" -v pfx="$PFX" -f $SCR_DIR/itp_2_tsv.awk $CPU2017files $ITP_METRIC_OUT_DIR/result.csv $ITP_METRIC_OUT_DIR/$MET_AV $i $SPIN_TXT
     ck_last_rc $? $LINENO
    pwd
    echo "$0.$LINENO metric_out output tsv= $i.tsv"
@@ -890,6 +901,7 @@ trows++; printf("\n") > NFL;
         echo "found -e $ii"
      fi
    done
+   #mv $i.tsv $WORK_DIR
    SHEETS="$SHEETS $i.tsv"
   fi
 
@@ -910,7 +922,7 @@ trows++; printf("\n") > NFL;
       fi
     fi
 
-    awk -v ts_beg="$BEG" -v ts_end="$UEND_TM" -v pfx="$PFX" -v sum_file="$SUM_FILE" -v sum_flds="avg_60secs{avg_power_60sec_mvg_avg|power|%stdev},max_60secs{max_power_60sec_mvg_avg|power},min_60secs{min_power_60sec_mvg_avg|power},SysFan_Power{|power},MB_HSC_Pwr_Out{|power},Total_Power{|power},Power_CPU{|power},Power_Memory{|power},PSU0_Input{|power},PSU0_Output{|power},PSU1_Input{|power},PSU1_Output{|power},HSC_Input_Power{|power},HSC_Output_Power{|power},PDB_HSC_POUT{|power},P0_Pkg_Power{|power},P1_Pkg_Power{|power},CPU0_VR0_Pout{|power},CPU0_VR1_Pout{|power},CPU1_VR0_Pout{|power},CPU1_VR1_Pout{|power},PCH_VR_POUT{|power},CPU0_DM_VR0_POUT{|power},CPU0_DM_VR1_POUT{|power},CPU1_DM_VR0_POUT{|power},CPU1_DM_VR1_POUT{|power},PSU0_POUT{|power},PSU1_POUT{|power},PSU0_PIN{|power},PSU1_PIN{|power},power{power_inst|power|stdev}" '
+    awk  -v work_dir="$WORK_DIR" -v ts_beg="$BEG" -v ts_end="$UEND_TM" -v pfx="$PFX" -v sum_file="$SUM_FILE" -v sum_flds="avg_60secs{avg_power_60sec_mvg_avg|power|%stdev},max_60secs{max_power_60sec_mvg_avg|power},min_60secs{min_power_60sec_mvg_avg|power},SysFan_Power{|power},MB_HSC_Pwr_Out{|power},Total_Power{|power},Power_CPU{|power},Power_Memory{|power},PSU0_Input{|power},PSU0_Output{|power},PSU1_Input{|power},PSU1_Output{|power},HSC_Input_Power{|power},HSC_Output_Power{|power},PDB_HSC_POUT{|power},P0_Pkg_Power{|power},P1_Pkg_Power{|power},CPU0_VR0_Pout{|power},CPU0_VR1_Pout{|power},CPU1_VR0_Pout{|power},CPU1_VR1_Pout{|power},PCH_VR_POUT{|power},CPU0_DM_VR0_POUT{|power},CPU0_DM_VR1_POUT{|power},CPU1_DM_VR0_POUT{|power},CPU1_DM_VR1_POUT{|power},PSU0_POUT{|power},PSU1_POUT{|power},PSU0_PIN{|power},PSU1_PIN{|power},power{power_inst|power|stdev}" '
     @include "get_excel_col_letter_from_number.awk"
       BEGIN{
         beg=1;
@@ -1014,7 +1026,7 @@ trows++; printf("\n") > NFL;
       }
       {
 	FNM=ARGV[ARGIND];
-        NFL=FNM ".tsv";
+        NFL=work_dir "/" FNM ".tsv";
         if (delloem >= 1) {
           next;
         }
@@ -1081,7 +1093,7 @@ trows++; printf("\n") > NFL;
           rows[rw,typ,i] = va[1] + 0.0;
         }
 	FNM=ARGV[ARGIND];
-        NFL=FNM ".tsv";
+        NFL=work_dir "/" FNM ".tsv";
       }
      END{
        add_col = 1;
@@ -1241,6 +1253,7 @@ trows++; printf("\t$ power") > NFL;
      }
    ' $i
    ck_last_rc $? $LINENO
+   #mv $i.tsv $WORK_DIR
    SHEETS="$SHEETS $i.tsv"
   fi
   if [[ $i == *"_vmstat.txt"* ]]; then
@@ -1258,7 +1271,7 @@ trows++; printf("\t$ power") > NFL;
 # 8  0      0 787232448  52096 1390556    0    0   784 21540 3444 1150  7  1 93  0  0 2021-06-26 13:16:25
 
     DURA=`awk -v ts_beg="$BEG" -v ts_end="$END_TM" 'BEGIN{ts_beg+=0.0;ts_end+=0.0; if (ts_beg > 0.0 && ts_end > 0.0) {printf("%d\n", ts_end-ts_beg); } else {printf("-1\n");};exit;}'`
-    awk -v ts_beg="$BEG" -v pfx="$PFX" -v max_lines="$DURA" -v sum_file="$SUM_FILE" -v sum_flds="runnable{vmstat runnable PIDs|OS},interrupts/s{|OS},context switch/s{|OS},%user{|CPU},%idle{|CPU|%stdev}" '
+    awk -v work_dir="$WORK_DIR"  -v ts_beg="$BEG" -v pfx="$PFX" -v max_lines="$DURA" -v sum_file="$SUM_FILE" -v sum_flds="runnable{vmstat runnable PIDs|OS},interrupts/s{|OS},context switch/s{|OS},%user{|CPU},%idle{|CPU|%stdev}" '
      BEGIN{
        beg=1;
        col_mx=-1;
@@ -1310,7 +1323,7 @@ trows++; printf("\t$ power") > NFL;
      }
      {
        	FNM=ARGV[ARGIND];
-        NFL=FNM ".tsv";
+        NFL=work_dir "/" FNM ".tsv";
         if (max_lines > 0.0 && mx > max_lines) {
           exit;
         }
@@ -1515,6 +1528,7 @@ trows++; printf("\t\n") > NFL;
        }
    ' $i
    ck_last_rc $? $LINENO
+   #mv $i.tsv $WORK_DIR
    SHEETS="$SHEETS $i.tsv"
   fi
   if [[ $i == *"_mpstat.txt"* ]]; then
@@ -1525,7 +1539,7 @@ trows++; printf("\t\n") > NFL;
 #12:01:02 AM    0   10.10    4.04    2.02    0.00    0.00    0.00    0.00    0.00    0.00   83.84
 #12:01:02 AM    1    1.03    6.19    2.06    0.00    0.00    0.00    0.00    0.00    0.00   90.72
 
-    awk -v script="$0.$LINENO.mpstat.awk" -v sum_file="$SUM_FILE" -v options="$OPTIONS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" '
+    awk  -v work_dir="$WORK_DIR" -v script="$0.$LINENO.mpstat.awk" -v sum_file="$SUM_FILE" -v options="$OPTIONS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" '
      BEGIN{
         beg=1;
         grp_mx=0;
@@ -1596,8 +1610,8 @@ trows++; printf("\t\n") > NFL;
      }
      {
         FNM=ARGV[ARGIND];
-        NFL=FNM ".tsv";
-        NFLA=FNM ".all.tsv";
+        NFL=work_dir "/" FNM ".tsv";
+        NFLA=work_dir "/" FNM ".all.tsv";
         if (NF==0) { next; }
      }
      /%idle/{
@@ -1802,8 +1816,10 @@ trows++; printf("\n") > NFL;
      }
    ' $i
    ck_last_rc $? $LINENO
+   #mv $i.tsv $WORK_DIR
    SHEETS="$SHEETS $i.tsv"
   fi
+    echo "$0.$LINENO: WORK_DIR= $WORK_DIR" 
   if [[ $i == *"_pidstat.txt"* ]]; then
     echo "do pidstat"
 #Average:      UID       PID    %usr %system  %guest    %CPU   CPU  Command
@@ -1821,7 +1837,7 @@ trows++; printf("\n") > NFL;
 #Average:      112     43282      17      80  muttley-active
 #Average:    100001     51570      18     776  m3collector
 #aaaa
-    awk -v max_cpus=100 -v sum_file="$SUM_FILE" -v options="$OPTIONS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" -v typ="pidstat" '
+    awk -v work_dir="$WORK_DIR" -v max_cpus=100 -v sum_file="$SUM_FILE" -v options="$OPTIONS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" -v typ="pidstat" '
      BEGIN{
         beg=1;
         grp_mx=0;
@@ -1922,8 +1938,8 @@ trows++; printf("\n") > NFL;
      }
      {
 	FNM=ARGV[ARGIND];
-        NFL=FNM ".tsv";
-        NFLA=FNM ".all.tsv";
+        NFL=work_dir "/" FNM ".tsv";
+        NFLA=work_dir "/" FNM ".all.tsv";
         str="";
         tab="";
         for (i=1; i <= NF; i++) {
@@ -2212,6 +2228,7 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
      }
    ' $i
    ck_last_rc $? $LINENO
+   #mv $i.tsv $WORK_DIR
    SHEETS="$SHEETS $i.tsv"
  fi
   if [[ $i == *"_iostat.txt"* ]]; then
@@ -2225,7 +2242,7 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
 #rkB/s	wkB/s	avgrq-sz	avgqu-sz	await	r_await	w_await	svctm	%util
 
     echo "do iostat"
-    awk -v ts_beg="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" -v typ="iostat"  -v sum_file="$SUM_FILE" -v sum_flds="rkB/s{io RdkB/s|disk},wkB/s{io wrkB/s|disk},avgrq-sz{io avg Req_sz|disk},avgqu-sz{io avg que_sz|disk},%util{io %util|disk}" '
+    awk -v work_dir="$WORK_DIR" -v ts_beg="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" -v typ="iostat"  -v sum_file="$SUM_FILE" -v sum_flds="rkB/s{io RdkB/s|disk},wkB/s{io wrkB/s|disk},avgrq-sz{io avg Req_sz|disk},avgqu-sz{io avg que_sz|disk},%util{io %util|disk}" '
      BEGIN{
         beg=1;
         grp_mx=0;
@@ -2310,8 +2327,8 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
      }
      {
         FNM=ARGV[ARGIND];
-        NFL=FNM ".tsv";
-        NFLA=FNM ".all.tsv";
+        NFL=work_dir "/" FNM ".tsv";
+        NFLA=work_dir "/" FNM ".all.tsv";
      }
      #02/28/2020 10:34:37 PM
      / AM$| PM$/{
@@ -2495,6 +2512,7 @@ row += trows;
      }
    ' $i
    ck_last_rc $? $LINENO
+   #mv $i.tsv $WORK_DIR
    SHEETS="$SHEETS $i.tsv"
  fi
   if [[ $i == *"_sar_dev.txt"* ]]; then
@@ -2506,7 +2524,7 @@ row += trows;
 #12:05:00 AM        lo   1251.00   1251.00    259.82    259.82      0.00      0.00      0.00      0.00
 #12:05:00 AM      ifb0      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00
     echo "do sar_dev"
-    awk -v ts_beg="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" -v typ="sar network IFACE"  -v sum_file="$SUM_FILE" -v sum_flds="rxkB/s{net rdKB/s|network},txkB/s{net wrKB/s|network},%ifutil{net %util|network}" '
+    awk -v work_dir="$WORK_DIR" -v ts_beg="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" -v typ="sar network IFACE"  -v sum_file="$SUM_FILE" -v sum_flds="rxkB/s{net rdKB/s|network},txkB/s{net wrKB/s|network},%ifutil{net %util|network}" '
      BEGIN{beg=1;
         grp_mx=0;
         hdr_mx=0;
@@ -2637,8 +2655,8 @@ row += trows;
      }
      {
         FNM=ARGV[ARGIND];
-        NFL=FNM ".tsv";
-        NFLA=FNM ".all.tsv";
+        NFL=work_dir "/" FNM ".tsv";
+        NFLA=work_dir "/" FNM ".all.tsv";
         if (NR == 1) {
           for (i=1; i <= NF; i++) {
              if (match($i, /^[0-9][0-9]\/[0-9][0-9]\/[0-9][0-9][0-9][0-9]/)) {
@@ -2752,11 +2770,12 @@ row+= trows;
      }
    ' $i
    ck_last_rc $? $LINENO
+   #mv $i.tsv $WORK_DIR
    SHEETS="$SHEETS $i.tsv"
  fi
   if [[ $i == *"_sar_tcp.txt"* ]]; then
     echo "do sar_tcp"
-    awk -v ts_beg="$BEG"  -v ts_end="$END_TM" -v pfx="$PFX" -v typ="sar tcp stats" '
+    awk -v work_dir="$WORK_DIR" -v ts_beg="$BEG"  -v ts_end="$END_TM" -v pfx="$PFX" -v typ="sar tcp stats" '
      BEGIN{beg=1;
         grp_mx=0;
         hdr_mx=0;
@@ -2810,8 +2829,8 @@ row+= trows;
      }
      {
         FNM=ARGV[ARGIND];
-        NFL=FNM ".tsv";
-        NFLA=FNM ".all.tsv";
+        NFL=work_dir "/" FNM ".tsv";
+        NFLA=work_dir "/" FNM ".all.tsv";
         if (NR == 1) {
           for (i=1; i <= NF; i++) {
              if (match($i, /^[0-9][0-9]\/[0-9][0-9]\/[0-9][0-9][0-9][0-9]/)) {
@@ -2918,9 +2937,11 @@ row += trows;
      }
    ' $i
    ck_last_rc $? $LINENO
+   #mv $i.tsv $WORK_DIR
    SHEETS="$SHEETS $i.tsv"
  fi
 
+    echo "$0.$LINENO: WORK_DIR= $WORK_DIR" 
   if [[ $i == *"_perf_stat.txt" ]]; then
     OPT_D=
     if [ "$DEBUG_OPT" != "" ]; then
@@ -2963,8 +2984,8 @@ row += trows;
     echo "$0.$LINENO: PS_CPUS= $PS_CPUS"
 
     echo "do perf_stat data $i with BEG= $BEG, end= $END_TM" > /dev/stderr
-    echo  $SCR_DIR/perf_stat_scatter.sh $OPT_MEM $OPT_P $OPT_C $OPT_D -b "$BEG"  $OPT_TME  -o "$OPTIONS" -O $i.tsv -f $i $PS_CPUS -S $SUM_FILE
-          $SCR_DIR/perf_stat_scatter.sh $OPT_MEM $OPT_P $OPT_C $OPT_D -b "$BEG"  $OPT_TME  -o "$OPTIONS" -O $i.tsv -f $i $PS_CPUS -S $SUM_FILE
+    echo  $SCR_DIR/perf_stat_scatter.sh $OPT_MEM $OPT_P $OPT_C $OPT_D -b "$BEG"  $OPT_TME  -o "$OPTIONS" -O $WORK_DIR/$i.tsv -f $i $PS_CPUS -S $SUM_FILE
+          $SCR_DIR/perf_stat_scatter.sh $OPT_MEM $OPT_P $OPT_C $OPT_D -b "$BEG"  $OPT_TME  -o "$OPTIONS" -O $WORK_DIR/$i.tsv -f $i $PS_CPUS -S $SUM_FILE
           ck_last_rc $? $LINENO
     fi
   fi
@@ -2975,11 +2996,13 @@ row += trows;
     if [ "$LSCPU_FL" != "" ]; then
      INCPUS=`awk '/^CPU.s.:/ { printf("%s\n", $2);exit;}' $LSCPU_FL`
     fi
-    #echo "$0.$LINENO: _____________ INCPUS= $INCPUS, LSCPU_FL= $LSCPU_FL" > /dev/stderr
-    echo "$SCR_DIR/rd_infra_cputime.sh -O "$OPTIONS" -f $i -n $INCPUS -S $SUM_FILE -m $MUTTLEY_OUT_FILE"
-          $SCR_DIR/rd_infra_cputime.sh -O "$OPTIONS" -f $i -n $INCPUS -S $SUM_FILE -m $MUTTLEY_OUT_FILE
+    echo "$0.$LINENO: WORK_DIR= $WORK_DIR" 
+    echo "$0.$LINENO: _____________ INCPUS= $INCPUS, LSCPU_FL= $LSCPU_FL WORK_DIR= $WORK_DIR" > /dev/stderr
+    echo "$SCR_DIR/rd_infra_cputime.sh -w $WORK_DIR -O \"$OPTIONS\" -f $i -n $INCPUS -S $SUM_FILE -m $WORK_DIR/$MUTTLEY_OUT_FILE"
+          $SCR_DIR/rd_infra_cputime.sh -w $WORK_DIR -O "$OPTIONS" -f $i -n $INCPUS -S $SUM_FILE -m $WORK_DIR/$MUTTLEY_OUT_FILE
           ck_last_rc $? $LINENO
-    if [ -e $i.tsv ]; then
+    if [ -e $WORK_DIR/$i.tsv ]; then
+      #mv $i.tsv $WORK_DIR
       SHEETS="$SHEETS $i.tsv"
     fi
   fi
@@ -3119,7 +3142,7 @@ row += trows;
   fi
   if [[ $i =~ phase_cpu2017.txt ]]; then
     echo "$0.$LINENO: got CPU2017.00${CPU2017_LOG_NUM}.intrate.txt $i at $LINENO" > /dev/stderr
-    OFILE="$i.tsv"
+    OFILE="$WORK_DIR/$i.tsv"
     awk -v ofile="$OFILE" -v ts_beg="$BEG"  -v sum_file="$SUM_FILE" '
  #subtest beg_epoch end_epoch
       BEGIN{
@@ -3199,30 +3222,34 @@ row += trows;
     echo "$0.$LINENO got here" > /dev/stderr
   if [[ $i == *"yab_cmds.txt" ]]; then
     echo "$0: got yab_cmds.txt $i at $LINENO" > /dev/stderr
-    echo "$SCR_DIR/rd_yab_json.sh -f $i -S $SUM_FILE"
-          $SCR_DIR/rd_yab_json.sh -f $i -S $SUM_FILE
+    echo "$SCR_DIR/rd_yab_json.sh -w $WORK_DIR -f $i -S $SUM_FILE"
+          $SCR_DIR/rd_yab_json.sh -w $WORK_DIR -f $i -S $SUM_FILE
           ck_last_rc $? $LINENO
-    if [ -e $i.tsv ]; then
+    if [ -e $WORK_DIR/$i.tsv ]; then
       echo "$0: SHEETS add file $i.tsv"
+      #mv $i.tsv $WORK_DIR
       SHEETS="$SHEETS $i.tsv"
     fi
   fi
   if [[ $i == *"yab_cmds.json" ]]; then
     echo "$0: got yab_cmds.json $i at $LINENO" > /dev/stderr
-    echo "$SCR_DIR/rd_yab_json.sh -f $i -S $SUM_FILE"
-          $SCR_DIR/rd_yab_json.sh -f $i -S $SUM_FILE
+    echo "$SCR_DIR/rd_yab_json.sh -w $WORK_DIR -f $i -S $SUM_FILE"
+          $SCR_DIR/rd_yab_json.sh -w $WORK_DIR -f $i -S $SUM_FILE
           ck_last_rc $? $LINENO
-    if [ -e $i.tsv ]; then
+    if [ -e $WORK_DIR/$i.tsv ]; then
       echo "$0: SHEETS add file $i.tsv"
+      #mv $i.tsv $WORK_DIR
       SHEETS="$SHEETS $i.tsv"
     fi
   fi
   if [[ $i == *"_perf_stat.txt.tsv"* ]]; then
+    #mv $i $WORK_DIR
     SHEETS="$SHEETS $i"
   else
     if [[ $i == *"_perf_stat.txt"* ]]; then
     RESP=`head -10 $i |wc -l|awk '{print $1}'`
     if [ $RESP -gt 3 ]; then
+      #mv $i.tsv $WORK_DIR
       SHEETS="$SHEETS $i.tsv"
     fi
     fi
@@ -3231,7 +3258,7 @@ row += trows;
   if [[ $i == *"gmatching_logs.txt" ]]; then
     echo "do gmatching_logs"
     echo "+++++++++do gmatching_logs" > /dev/stderr
-    awk -v ts_beg="$BEG"  -v ts_end="$END_TM" -v pfx="$PFX" -v typ="gmatching errs" -v ts_adj_hrs="$BEG_ADJ" '
+    awk -v work_dir="$WORK_DIR" -v ts_beg="$BEG"  -v ts_end="$END_TM" -v pfx="$PFX" -v typ="gmatching errs" -v ts_adj_hrs="$BEG_ADJ" '
      BEGIN{beg=1;
         chart=typ;
         mx = 0;
@@ -3259,7 +3286,7 @@ row += trows;
       }
      {
         FNM=ARGV[ARGIND];
-        NFL=FNM ".tsv";
+        NFL=work_dir "/" FNM ".tsv";
         v = substr($0, index($0, "[")+1, length($0));
         v = substr(v, 1, index(v, "]")-1);
         yy = substr(v, 1, 4);
@@ -3308,6 +3335,7 @@ row += trows;
      }
    ' $i
    ck_last_rc $? $LINENO
+   #mv $i.tsv $WORK_DIR
    SHEETS="$SHEETS $i.tsv"
  fi
   if [[ $i == *"_watch.txt"* ]]; then
@@ -3324,13 +3352,13 @@ row += trows;
 # ==beg 0 date 1580278735.829557760
 #-rw-r--r-- 1 udocker udocker 17097435 May 24 03:18 /var/log/udocker/gmatching/performance/gmatching/gmatching.log
 
-    awk -v got_temp="$GOT_TEMP" -v ts_beg="$BEG" -v pfx="$PFX" '
+    awk -v work_dir="$WORK_DIR" -v got_temp="$GOT_TEMP" -v ts_beg="$BEG" -v pfx="$PFX" '
      BEGIN{
        beg=1;col_mx=-1;mx=0;
      }
      /^==beg /{
        FNM=ARGV[ARGIND];
-       NFL=FNM ".tsv";
+       NFL=work_dir "/" FNM ".tsv";
        tm = $4;
        sv_tm[++mx]=tm;
        sv_arr[mx,"mx"] = 0;
@@ -3453,6 +3481,7 @@ row += trows;
    }
    ' $i
    ck_last_rc $? $LINENO
+   #mv $i.tsv $WORK_DIR
    SHEETS="$SHEETS $i.tsv"
   fi
   if [[ $i == *"_interrupts.txt"* ]]; then
@@ -3462,11 +3491,11 @@ row += trows;
 #   0:        101          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0  IR-IO-APIC    2-edge      timer
 #   3:          2          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0          0  IR-IO-APIC    3-edge    
 
-    awk -v pfx="$PFX" '
+    awk -v work_dir="$WORK_DIR" -v pfx="$PFX" '
      BEGIN{beg=1;col_mx=-1;mx=0}
      /^==beg /{
        FNM=ARGV[ARGIND];
-       NFL=FNM ".tsv";
+       NFL=work_dir "/" FNM ".tsv";
        row = $2;
        tm = $4;
        getline;
@@ -3570,6 +3599,7 @@ row += trows;
    }
    ' $i
    ck_last_rc $? $LINENO
+   #mv $i.tsv $WORK_DIR
    SHEETS="$SHEETS $i.tsv"
   fi
 #02:53:57    InKB   OutKB   InSeg  OutSeg Reset  AttF %ReTX InConn OutCon Drops
@@ -3584,7 +3614,7 @@ row += trows;
 
   if [[ $i == *"_nicstat.txt"* ]]; then
     echo "do nicstat"
-    awk -v beg_ts="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" -v sum_file="$SUM_FILE" -v sum_flds="InKB{TCP_RdKB/s|network},OutKB{TCP_WrKB/s|network},RdKB{NetDev_RdKB/s|network},WrKB{NetDev_WrKB/s|network},IErr{NetDev_IErr/s|network},OErr{NetDev_OErr/s|network},%Util{NetDev_%Util|network}" '
+    awk -v work_dir="$WORK_DIR" -v beg_ts="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" -v sum_file="$SUM_FILE" -v sum_flds="InKB{TCP_RdKB/s|network},OutKB{TCP_WrKB/s|network},RdKB{NetDev_RdKB/s|network},WrKB{NetDev_WrKB/s|network},IErr{NetDev_IErr/s|network},OErr{NetDev_OErr/s|network},%Util{NetDev_%Util|network}" '
      BEGIN{
         beg_ts += 0.0;
         ts_end += 0.0;
@@ -3641,7 +3671,7 @@ row += trows;
             }
           }
         } else {
-          NFL = FNM ".tsv";
+          NFL = work_dir "/" FNM ".tsv";
           n   = split($0, arr, ":");
           ts  = arr[1];
           typ = arr[2];
@@ -3723,6 +3753,7 @@ row += trows;
    }
    ' $i.hdr $i
    ck_last_rc $? $LINENO
+   #mv $i.tsv $WORK_DIR
    SHEETS="$SHEETS $i.tsv"
   fi
 done
@@ -3735,10 +3766,11 @@ tst_files="latency_histo.json"
 for f in $tst_files; do
   if [ -e $f ]; then
      echo "try latency log $f" > /dev/stderr
-     $SCR_DIR/resp_2_tsv.sh -f $f -s $SUM_FILE $OPT_END_TM
+     $SCR_DIR/resp_2_tsv.sh -w $WORK_DIR -f $f -s $SUM_FILE $OPT_END_TM
      ck_last_rc $? $LINENO
   fi
-  if [ -e $f.tsv ]; then
+  if [ -e $WORK_DIR/$f.tsv ]; then
+     #mv $f.tsv $WORK_DIR
      SHEETS="$SHEETS $f.tsv"
      echo "got latency log $f.tsv" > /dev/stderr
   fi
@@ -3747,13 +3779,14 @@ tst_files="http-status.json"
 for f in $tst_files; do
   if [ -e $f ]; then
      echo "try http-status log $f" > /dev/stderr
-     $SCR_DIR/resp_2_tsv.sh -f $f -s $SUM_FILE  $OPT_END_TM
+     $SCR_DIR/resp_2_tsv.sh -w $WORK_DIR -f $f -s $SUM_FILE  $OPT_END_TM
      ck_last_rc $? $LINENO
   fi
-  if [ -e $f.tsv ]; then
+  if [ -e $WORK_DIR/$f.tsv ]; then
+     #mv $f.tsv $WORK_DIR
      SHEETS="$SHEETS $f.tsv"
-     echo "got http-status log $f.tsv" > /dev/stderr
-     grep title $f.tsv > /dev/stderr
+     echo "got http-status log $WORK_DIR/$f.tsv" > /dev/stderr
+     grep title $WORK_DIR/$f.tsv > /dev/stderr
   fi
 done
 tst_files="RPS.json response_time.json"
@@ -3763,25 +3796,28 @@ for f in $tst_files; do
     OPT_S=" -s $SUM_FILE "
   fi
   if [ -e $f ]; then
-     $SCR_DIR/resp_2_tsv.sh -f $f $OPT_S $OPT_END_TM
+     $SCR_DIR/resp_2_tsv.sh -w $WORK_DIR -f $f $OPT_S $OPT_END_TM
      ck_last_rc $? $LINENO
   fi
-  if [ -e $f.tsv ]; then
+  if [ -e $WORK_DIR/$f.tsv ]; then
+     #mv $f.tsv $WORK_DIR
      SHEETS="$SHEETS $f.tsv"
   fi
 done
 ITP_FILE=$METRIC_OUT.tsv
-if [ ! -e $ITP_FILE ]; then
+if [ ! -e $WORK_DIR/$ITP_FILE ]; then
   ITP_FILE=$METRIC_OUT.csv.tsv
 fi
-if [ -e $ITP_FILE ]; then
+if [ -e $WORK_DIR/$ITP_FILE ]; then
   echo "found itp_file: $ITP_FILE" > /dev/stderr
+  #mv $ITP_FILE $WORK_DIR
   SHEETS="$SHEETS $ITP_FILE"
 fi
 GC_FILE=gc.log.0.current
 if [ -e $GC_FILE ]; then
-  $SCR_DIR/java_gc_log_2_tsv.sh -f $GC_FILE $OPT_END_TM  > $GC_FILE.tsv
+  $SCR_DIR/java_gc_log_2_tsv.sh -f $GC_FILE $OPT_END_TM  > $WORK_DIR/$GC_FILE.tsv
   ck_last_rc $? $LINENO
+  #mv $GC_FILE.tsv $WORK_DIR
   SHEETS="$SHEETS $GC_FILE.tsv"
 fi
 JAVA_COL=java.collapsed
@@ -3797,9 +3833,9 @@ if [ -e $JAVA_COL ]; then
   echo "do svg_to_html.sh " 1>&2
   $SCR_DIR/svg_to_html.sh -r 1 -d . -f java.svg > java.html
   inkscape -z  -w 2400 -j --export-file=java.png  java.svg
-  $SCR_DIR/gen_flamegraph_for_java_in_container_function_hotspot.sh -t count -f $JAVA_COL > $JAVA_COL.tsv
+  $SCR_DIR/gen_flamegraph_for_java_in_container_function_hotspot.sh -t count -f $JAVA_COL > $WORK_DIR/$JAVA_COL.tsv
   if [ "$SUM_FILE" != "" ]; then
-    SAMPLES=`awk '/__total__/{printf("%s\n", $1);exit;}' $JAVA_COL.tsv`
+    SAMPLES=`awk '/__total__/{printf("%s\n", $1);exit;}' $WORK_DIR/$JAVA_COL.tsv`
     DURA_SECS=`awk '/ start /{for(j=1;j<= NF;j++){if ($(j)=="-d"){b=dura=$(j+1);n=gsub("m", "", dura);c=dura+0.0;if (n>0){c*=60.0;}printf("%.3f\n",c);exit;}}}' run.log`
     SMP_PER_SEC=`awk -v samples="$SAMPLES" -v dura="$DURA_SECS" 'BEGIN{samples+=0.0;dura+=0.0;if(dura<=0.0){printf("0.0\n");exit;};printf("%f\n", samples/dura);exit}' run.log`
     echo "====== TOP_DIR= $TOP_DIR" > /dev/stderr
@@ -3807,15 +3843,16 @@ if [ -e $JAVA_COL ]; then
     echo -e "software utilization\tflamegraph\t$FLAME_TYP/s\t=$SMP_PER_SEC" >> $SUM_FILE
     echo "========flamegraph samples= $SAMPLES, dura_secs= $DURA_SECS FL_TYP= $FLAME_TYP, samples/sec= $SMP_PER_SEC" > /dev/stderr
   fi
+  #mv $JAVA_COL.tsv $WORK_DIR
   SHEETS="$SHEETS $JAVA_COL.tsv"
 fi
 if [ "$JAVA_COL_TR" != "" ]; then
  if [ -e $JAVA_COL_TR ]; then
-  $SCR_DIR/gen_flamegraph_for_java_in_container_function_hotspot.sh -t time -f $JAVA_COL_TR > $JAVA_COL_TR.tsv
+  $SCR_DIR/gen_flamegraph_for_java_in_container_function_hotspot.sh -t time -f $JAVA_COL_TR > $WORK_DIR/$JAVA_COL_TR.tsv
   if [ "$SUM_FILE" != "" ]; then
     FLAME_TYP=`awk -v dir="$TOP_DIR" 'BEGIN{str="itimer";if (index(dir, "lock")>0){str="lock";}}/ start /{for(j=1;j<= NF;j++){if ($(j)=="-E"){str=$(j+1);exit;}}}END{printf("%s\n", str);}' run.log`
     if [ "$FLAME_TYP" == "lock" ]; then
-     LOCK_SECS=`awk '/__total__/{printf("%s\n", $1);exit;}' $JAVA_COL_TR.tsv`
+     LOCK_SECS=`awk '/__total__/{printf("%s\n", $1);exit;}' $WORK_DIR/$JAVA_COL_TR.tsv`
      DURA_SECS=`awk '/ start /{for(j=1;j<= NF;j++){if ($(j)=="-d"){b=dura=$(j+1);n=gsub("m", "", dura);c=dura+0.0;if (n>0){c*=60.0;}printf("%.3f\n",c);exit;}}}' run.log`
      SMP_PER_SEC=`awk -v samples="$LOCK_SECS" -v dura="$DURA_SECS" 'BEGIN{samples+=0.0;dura+=0.0;if(dura<=0.0){printf("0.0\n");exit;};printf("%f\n", samples/dura);exit}' run.log`
      echo "====== TOP_DIR= $TOP_DIR" > /dev/stderr
@@ -3823,6 +3860,7 @@ if [ "$JAVA_COL_TR" != "" ]; then
      echo "========flamegraph samples= $LOCK_SECS, dura_secs= $DURA_SECS FL_TYP= $FLAME_TYP, samples/sec= $SMP_PER_SEC" > /dev/stderr
     fi
   fi
+  #mv $JAVA_COL_TR.tsv $WORK_DIR
   SHEETS="$SHEETS $JAVA_COL_TR.tsv"
  fi
 fi
@@ -3835,11 +3873,12 @@ if [ -e $TOPLEV_COL ]; then
   echo "do svg_to_html.sh " 1>&2
   $SCR_DIR/svg_to_html.sh -r 1 -d . -f toplev_slots.svg > toplev_slots.html
   inkscape -z  -w 2400 -j --export-file=toplev_slots.png  toplev_slots.svg
-  $SCR_DIR/gen_flamegraph_for_java_in_container_function_hotspot.sh $TOPLEV_COL > $TOPLEV_COL.tsv
+  $SCR_DIR/gen_flamegraph_for_java_in_container_function_hotspot.sh $TOPLEV_COL > $WORK_DIR/$TOPLEV_COL.tsv
+  #mv $TOPLEV_COL.tsv $WORK_DIR
   SHEETS="$SHEETS $TOPLEV_COL.tsv"
 fi
 if [ "$SUM_FILE" != "" ]; then
-   SHEETS="$SUM_FILE $SHEETS"
+   SHEETS="$SUM_FILE_IN $SHEETS"
    RESP=`cat $SUM_FILE`
    echo -e "$RESP" | awk -v sum_file="$SUM_FILE" '
      BEGIN{
@@ -4101,12 +4140,12 @@ if [ "$PHASE_FILE" == "" ]; then
 fi
 
 
-  RESP=`find . -name "muttley*.json.tsv" | wc -l | awk '{$1=$1;print}'`
+  RESP=`find $WORK_DIR -name "muttley*.json.tsv" | wc -l | awk '{$1=$1;print}'`
   echo "find muttley RESP= $RESP"
   if [ "1" == "2" ]; then
     # lets not do this right now
   if [ "$RESP" != "0" ]; then
-    RESP=`find . -name "muttley*.json.tsv" | xargs`
+    RESP=`find $WORK_DIR -name "muttley*.json.tsv" | xargs`
     echo "+++++++++++++++ multtley RESP= $RESP"
     awk -v cur_dir="$(pwd)" -v sum_file="$SUM_FILE" '
        BEGIN { mx=0; mx_val=-1; }
@@ -4138,12 +4177,13 @@ fi
          }
        }' $RESP
     ck_last_rc $? $LINENO
+    mv $RESP $WORK_DIR
     SHEETS="$SHEETS $RESP"
   fi
   fi
-  RESP=`pwd`
+  RESP=$WORK_DIR
   echo -e "$RESP\t$SHEETS" >> $SHEETS_FILE
-  echo "$0.$LINENO SHEETS outfile $BASE_DIR/sheets_${JOB_ID}.txt sheets_str= $SHEETS"
+  echo "$0.$LINENO SHEETS outfile $WORK_DIR/sheets.txt sheets_str= $SHEETS"
 
 echo "$0.$LINENO SHEETS= $SHEETS SKIP_XLS= $SKIP_XLS, xls_fl= $XLSX_FILE avg= $AVERAGE"
 if [ "$SHEETS" != "" -a "$SKIP_XLS" == "0" ]; then
@@ -4153,11 +4193,11 @@ if [ "$SHEETS" != "" -a "$SKIP_XLS" == "0" ]; then
    if [ ! -e $MET_AV ]; then
      MET_AV=metric_out.average.csv
    fi
-   if [ -e $SUM_TMAM_FILE ]; then
-     MET_AV=$SUM_TMAM_FILE
-     echo "below is sum_tmam_file $SUM_TMAM_FILE for $NM"
-     cp $SUM_TMAM_FILE $NM.sum_tmam.tsv
-     cat $SUM_TMAM_FILE
+   if [ -e $WORK_DIR/$SUM_TMAM_FILE ]; then
+     MET_AV=$WORK_DIR/$SUM_TMAM_FILE
+     echo "below is sum_tmam_file $WORK_DIR/$SUM_TMAM_FILE for $NM"
+     cp $WORK_DIR/$SUM_TMAM_FILE $NM.sum_tmam.tsv
+     cat $WORK_DIR/$SUM_TMAM_FILE
    fi
    if [ -e $MET_AV ]; then
       echo "do flamegraph.pl -f $MET_AV nm= $NM xlxs=$XLSX_FILE" > /dev/stderr
