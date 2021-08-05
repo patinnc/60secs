@@ -9,12 +9,14 @@ echo "SCR_DIR= $SCR_DIR" > /dev/stderr
 export LC_ALL=C
 declare -a REGEX
 declare -a SKU
+declare -a LST_DIR_2_WORK_DIR
 DIR=
 PHASE_FILE=
 OPT_OPT_DEF=chart_new,dont_sum_sockets
 XLSX_FILE=
 END_TM=
 SKIP_XLS=0
+WORK_DIR=`pwd`/work_dir
 NUM_DIR=0
 NUM_DIR_BEG=
 AVERAGE_END=
@@ -66,7 +68,7 @@ JOB_ID=0
 AVERAGE=0
 CLIPX=
 
-while getopts "AhvSa:b:B:c:C:D:d:e:F:g:I:j:m:N:o:P:r:s:X:x:" opt; do
+while getopts "AhvSa:b:B:c:C:D:d:e:F:g:I:j:m:N:o:P:r:s:w:X:x:" opt; do
   case ${opt} in
     A )
       AVERAGE=1
@@ -132,6 +134,9 @@ while getopts "AhvSa:b:B:c:C:D:d:e:F:g:I:j:m:N:o:P:r:s:X:x:" opt; do
     r )
       REGEX+=($OPTARG)
       ;;
+    w )
+      WORK_DIR=$OPTARG
+      ;;
     X )
       AXLSX_FILE=$OPTARG
       ;;
@@ -181,6 +186,7 @@ while getopts "AhvSa:b:B:c:C:D:d:e:F:g:I:j:m:N:o:P:r:s:X:x:" opt; do
       echo "   -r regex   regex expression to select directories"
       echo "   -S    skip creating detail xlsx file, just do the summary all spreadsheet"
       echo "   -s  sku_list  select dirs with sku. have to be able to figure host from path and must have crane list of host info"
+      echo "   -w  work_dir  output tsv files will be put in this dir. Default is $WORK_DIR. Will be created if doesn't exist"
       echo "   -x xlsx_filename  This is passed to tsv_2_xlsx.py as the name of the xlsx. (you need to add the .xlsx)"
       echo "      The default is chart_line.xlsx"
       echo "   -X xlsx_filename  like above but assume path relative to current dir"
@@ -236,10 +242,15 @@ if [ "$OPTIONS" != "" ]; then
    fi
 fi
 
-RESP=`find . -name "sheets_*.txt"`
+echo "$0.$LINENO work_dir= $WORK_DIR"
+if [ ! -d $WORK_DIR ]; then
+  mkdir -p $WORK_DIR
+fi
+
+RESP=`find $WORK_DIR -name "sheets.txt"`
 if [ "$RESP" != "" ]; then
-  echo "going to delete sheets_*.txt files= $RESP"
-  rm sheets_*.txt
+  echo "going to delete sheets.txt files= $RESP"
+  find $WORK_DIR -name "sheets.txt" -exec rm {} \;
 fi
 
 if [ "$NUM_DIR_IN" != "" ]; then
@@ -735,14 +746,14 @@ if [ "$SKU_LEN" != "0" ]; then
 fi
 
 CDIR=`pwd`
-ALST=$CDIR/tsv_2_xlsx_${JOB_ID}.inp
+ALST=$WORK_DIR/$JOB_ID/tsv_2_xlsx_${JOB_ID}.inp
 #echo "ALST= $ALST"
 if [ -e $ALST ]; then
   rm $ALST
 fi
 OXLS=tmp.xlsx
 if [ "$AXLSX_FILE" != "" ]; then
-  OXLS=${AXLSX_FILE}_all.xlsx
+  OXLS=${AXLSX_FILE}.xlsx
 fi
 
 shopt -s nullglob
@@ -923,8 +934,14 @@ for i in $LST; do
       exit 1
     fi
  fi
+   JOB_WORK_DIR=$WORK_DIR/$JOB_ID/$DIR_NUM
+   if [ ! -d $JOB_WORK_DIR ]; then
+     mkdir -p $JOB_WORK_DIR
+   else
+     rm $JOB_WORK_DIR/*
+   fi
+   SYS_2_TSV_STDOUT_FILE=$JOB_WORK_DIR/sys_2_tsv_stdout.txt
  if [ "$SKIP_SYS_2_TSV" == "0" ]; then
-   SYS_2_TSV_STDOUT_FILE=tmp.jnk
    if [ $VERBOSE -gt 0 ]; then
      OPT_P=$RPS
      if [ $NUM_DIRS -gt 1 ]; then
@@ -936,24 +953,27 @@ for i in $LST; do
      if [ "$RESP" != "" ]; then
        OPT_P=$RESP
      fi
-     echo "$SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p \"$OPT_P\" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i \"*.png\" -s $SUM_FILE -x $XLS.xlsx -o "$OPT_OPT" $OPT_PH -t $DIR &> $SYS_2_TSV_STDOUT_FILE" &
    fi
+
+   echo "$0.$LINENO: $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p \"$OPT_P\" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i \"*.png\" -s $SUM_FILE -x $XLS.xlsx -o \"$OPT_OPT\" $OPT_PH -w $JOB_WORK_DIR -t $DIR" > $SYS_2_TSV_STDOUT_FILE
    if [ "$BACKGROUND" -le "0" ]; then
-          $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$OPT_P" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o "$OPT_OPT" $OPT_PH -t $DIR &> $SYS_2_TSV_STDOUT_FILE
+          $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$OPT_P" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o "$OPT_OPT" $OPT_PH -w $JOB_WORK_DIR -t $DIR &>> $SYS_2_TSV_STDOUT_FILE
           RC=$?
           ck_last_rc $RC $LINENO
    else
-          $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$OPT_P" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o "$OPT_OPT" $OPT_PH -t $DIR &> $SYS_2_TSV_STDOUT_FILE &
+          $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$OPT_P" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o "$OPT_OPT" $OPT_PH -w $JOB_WORK_DIR -t $DIR &>> $SYS_2_TSV_STDOUT_FILE &
           LPID=$!
           RC=$?
           BK_DIR[$LPID]=$i
           BK_OUT[$LPID]=$SYS_2_TSV_STDOUT_FILE
           SHEETS_DIR+=($i)
-          SHEETS_OUT+=("sheets_${JOB_ID}.txt")
+          SHEETS_OUT+=("$JOB_WORK_DIR/sheets.txt")
           if [ $VERBOSE -gt 0 ]; then
             echo "$0.$LINENO LPID= $LPID, RC= $RC"
           fi
    fi
+     LST_DIR_2_WORK_DIR[$DIR_NUM]=$JOB_WORK_DIR
+     echo "$0.$LINENO LST_DIR_2_WORK_DIR[$DIR_NUM]= ${LST_DIR_2_WORK_DIR[$DIR_NUM]}"
      LOAD=`uptime | awk '{printf("%.0f\n", $(NF-2)+0.5);}'`
      jbs=0
      for job in `jobs -p`
@@ -963,10 +983,12 @@ for i in $LST; do
      done
      #echo "$0.$LINENO job_id= $JOB_ID jbs= $jbs LOAD= $LOAD BACKGROUND= $BACKGROUND" > /dev/stderr
      jbs=$(($jbs+$LOAD))
+
    if [ "$jbs" -gt "$BACKGROUND" ]; then
      #jbs=0
      for job in `jobs -p`
      do
+
        TS_CUR=`date +%s`
        TS_DFF=$(($TS_CUR-$TS_BEG))
        echo "$0.$LINENO: job_id= $JOB_ID wait for jobs (jbs= $jbs) pid= $job, dir_num= $DIR_NUM of $DIR_NUM_MX, elap_secs= $TS_DFF, load= $LOAD"
@@ -1007,10 +1029,12 @@ wait_for_all() {
        RC=$?
        #if [ "$RC" == "1" -o "$RC" == "2" ]; then
        if [ "$RC" != "0" ]; then
-          echo "$0: sys_2_tsv.sh got error RC= \"$RC\"! at $LINENO. bye. called by line $1" > /dev/stderr
-          echo "$0: look at ${BK_OUT[$job]} in last data dir for error messages" > /dev/stderr
-          echo "$0: dir= ${BK_DIR[$job]}"
-          tail -20 ${BK_DIR[$job]}/${BK_OUT[$job]}
+          echo "$0:$LINENO sys_2_tsv.sh got error RC= \"$RC\"! at $LINENO. bye. called by line $1" > /dev/stderr
+          echo "$0:$LINENO look at ${BK_OUT[$job]} in last data dir for error messages" > /dev/stderr
+          echo "$0:$LINENO dir= ${BK_DIR[$job]}"
+          #tail -20 ${BK_DIR[$job]}/${BK_OUT[$job]}
+          echo "tail -20 ${BK_OUT[$job]}"
+          tail -20 ${BK_OUT[$job]}
           exit 1
        fi
      done
@@ -1019,6 +1043,9 @@ wait_for_all() {
 wait_for_all $LINENO
 
 CHART_SIZE=`echo -e "$OPTIONS" | awk '/chart_size{/{pos = index($0, "chart_size{"); str = substr($0, pos, length($0)); pos = index(str, "{"); str = substr(str, pos+1, length(str)); pos = index(str, "}"); str = substr(str, 1, pos-1); printf("%s", str); }'`
+if [ "$CHART_SIZE" == "" ]; then
+  CHART_SIZE="1,1,15,8"
+fi
 
 TCUR_DIR=`pwd`
 
@@ -1027,10 +1054,14 @@ MUTT_ARR=()
 i_idx=-1
 for i in $LST; do
  i_idx=$((i_idx+1))
+ USE_WORK_DIR=${LST_DIR_2_WORK_DIR[$i_idx]}
+ echo "$0.$LINENO use_work_dir= $USE_WORK_DIR, i_LIST= $i"
  if [ $VERBOSE -gt 0 ]; then
-   pushd $i
+   #pushd $i
+   pushd $USE_WORK_DIR
  else
-   pushd $i > /dev/null
+   #pushd $i > /dev/null
+   pushd $USE_WORK_DIR > /dev/null
  fi
  if [ $VERBOSE -gt 0 ]; then
    echo "$0.$LINENO after sys_2_tsv.awk dir[$i_idx]= $i   TCUR_DIR= $TCUR_DIR"
@@ -1133,18 +1164,23 @@ for i in $LST; do
    try_phs=$PHASE_FILE
  fi
  SHEET_FILES=()
- for ((k=0; k < ${#SHEETS_OUT[@]}; k++)); do
-   CKDIR=$i
-   RESP=`grep "$CKDIR" ${SHEETS_OUT[$k]}`
+ #for ((k=0; k < ${#SHEETS_OUT[@]}; k++)); do
+ for ((k=i_idx; k < i_idx+1; k++)); do
+   #CKDIR=$i
+   #RESP=`grep "$CKDIR" ${SHEETS_OUT[$k]}`
+   RESP=${SHEETS_OUT[$k]}
+   echo "$0.$LINENO ckdir[$k] dir= $i resp= $RESP" > /dev/stderr
    if [ "$RESP" != "" ]; then
      if [ $VERBOSE -gt 0 ]; then
        echo "got SHEETS_OUT[$k]= $RESP, i= $i"
      fi
-     SDIR=`echo -e "$RESP" | awk '{ printf("%s\n", $1); }'`
-     SHEET_FILES+=(`echo -e "$RESP" | awk '{ for (i=2; i <= NF; i++) { printf("%s\n", $(i)); } }'`)
-       echo "sheet_files= ${#SHEET_FILES[@]}"
+     #SDIR=`echo -e "$RESP" | awk '{ printf("%s\n", $1); }'`
+     SDIR=`dirname ${SHEETS_OUT[$k]}`
+     #SHEET_FILES+=(`echo -e "$RESP" | awk '{ for (i=2; i <= NF; i++) { printf("%s\n", $(i)); } }'`)
+     SHEET_FILES+=(`cat $RESP | awk '{ for (i=2; i <= NF; i++) { printf("%s\n", $(i)); } }'`)
      FLS=${SHEET_FILES[@]}
      missed_files=
+     echo "sheet_files= ${#SHEET_FILES[@]}, SDIR= $SDIR, FLS= $FLS"
      for ((kk=0; kk < ${#SHEET_FILES[@]}; kk++)); do
        echo "sheet_files[$kk]= ${SHEET_FILES[$kk]}"
        flnm=${SHEET_FILES[$kk]}
@@ -1153,6 +1189,7 @@ for i in $LST; do
        fi
        if [[ $flnm == *"perf_stat"* ]]; then
          FLS_PS=$SDIR/$flnm
+         echo "$0.$LINENO perf_stat file= $FLS_PS" > /dev/stderr
        fi
        if [[ $flnm == *"mpstat"* ]]; then
          FLS_MP=$SDIR/$flnm
@@ -1256,7 +1293,7 @@ for i in $LST; do
 done
 fi
 
-SUM_ALL=sum_all_${JOB_ID}.tsv
+SUM_ALL=$WORK_DIR/$JOB_ID/sum_all_${JOB_ID}.tsv
 #SUM_ALL=sum_all.tsv
 if [ -e $SUM_ALL ]; then
   MYDIR=`pwd`
@@ -1285,20 +1322,23 @@ if [ "$SVGS" != "" ]; then
   ck_last_rc $? $LINENO
 fi
   
+  echo "$0.$LINENO got here"
   if [ -e $SUM_ALL ]; then
     rm $SUM_ALL
   fi
   #printf "title\tsum_all\tsheet\tsum_all\ttype\tcopy\n"  >> $SUM_ALL
   #printf "hdrs\t2\t0\t-1\t%d\t-1\n"  500 >> $SUM_ALL
   #printf "Resource\tTool\tMetric\taverage\n" >> $SUM_ALL;
+  echo "$0.$LINENO FLS_IC= $FLS_IC FLS_PS= $FLS_PS FLS_MP= $FLS_MP"
 if [ "$FLS_IC" != "" -o "$FLS_PS" != "" -o "$FLS_MP" != "" ]; then
   OPT_METRIC=" -m sum "
   OPT_METRIC=" -m sum_per_server "
   OPT_METRIC=" -m avg "
 #abc
   if [ "$AVERAGE" == "1" ]; then
+    echo "$0.$LINENO got here"
     if [ "$FLS_IC" != "" ]; then
-     OFILE=infra_cputime_sum_${JOB_ID}.tsv
+     OFILE=$WORK_DIR/$JOB_ID/infra_cputime_sum_${JOB_ID}.tsv
      if [ -e $OFILE ]; then
        rm $OFILE
      fi
@@ -1309,7 +1349,7 @@ if [ "$FLS_IC" != "" -o "$FLS_PS" != "" -o "$FLS_MP" != "" ]; then
      ck_last_rc $? $LINENO
     fi
     if [ "$FLS_MP" != "" ]; then
-     OFILE=sys_mpstat_sum_${JOB_ID}.tsv
+     OFILE=$WORK_DIR/$JOB_ID/sys_mpstat_sum_${JOB_ID}.tsv
      if [ -e $OFILE ]; then
        rm $OFILE
      fi
@@ -1319,15 +1359,17 @@ if [ "$FLS_IC" != "" -o "$FLS_PS" != "" -o "$FLS_MP" != "" ]; then
             $SCR_DIR/redo_chart_table.sh -O "$OPTIONS" -S $SUM_ALL -f $ALST -o $OFILE   -g mpstat $OPT_METRIC -r 50 -t __all__ 
       ck_last_rc $? $LINENO
     fi
+  echo "$0.$LINENO got here"
   if [ "$FLS_PS" != "" ]; then
-    OFILE=sys_perf_stat_sum_${JOB_ID}.tsv
+  echo "$0.$LINENO got here"
+    OFILE=$WORK_DIR/$JOB_ID/sys_perf_stat_sum_${JOB_ID}.tsv
     if [ -e $OFILE ]; then
       rm $OFILE
     fi
     if [ $VERBOSE -gt 0 ]; then
       echo "$SCR_DIR/redo_chart_table.sh -O "$OPTIONS" -S $SUM_ALL -f $ALST -o $OFILE   -g perf_stat $OPT_METRIC -r 50 -t __all__"
     fi
-    echo "$SCR_DIR/redo_chart_table.sh -O "$OPTIONS" -S $SUM_ALL -f $ALST -o $OFILE   -g perf_stat $OPT_METRIC -r 50 -t __all__" > /dev/stderr
+    echo "$0.$LINENO $SCR_DIR/redo_chart_table.sh -O "$OPTIONS" -S $SUM_ALL -f $ALST -o $OFILE   -g perf_stat $OPT_METRIC -r 50 -t __all__" > /dev/stderr
           $SCR_DIR/redo_chart_table.sh -O "$OPTIONS" -S $SUM_ALL -f $ALST -o $OFILE   -g perf_stat $OPT_METRIC -r 50 -t __all__ 
     ck_last_rc $? $LINENO
   fi
@@ -1358,8 +1400,8 @@ if [ "$DO_TSV_2_XLS" == "1" ]; then
   done
   if [ "$FLS" != "" ]; then
     echo "$0.$LINENO ---------- got_pwd= $got_pwd --------------------"
-    echo $SCR_DIR/compare_summary_table.sh $FLS -s $SUM_ALL -S "\t"
-         $SCR_DIR/compare_summary_table.sh $FLS -s $SUM_ALL -S "\t"
+    echo $SCR_DIR/compare_summary_table.sh $FLS -w $WORK_DIR -s $SUM_ALL -S "\t"
+         $SCR_DIR/compare_summary_table.sh $FLS -w $WORK_DIR -s $SUM_ALL -S "\t"
     ck_last_rc $? $LINENO
     MK_SUM_ALL=0
   else
@@ -1369,7 +1411,7 @@ if [ "$DO_TSV_2_XLS" == "1" ]; then
   if [ $VERBOSE -gt 0 ]; then
   echo "$0: awk -v mk_sum_all="$MK_SUM_ALL" -v input_file=\"$ALST\" -v sum_all=\"$SUM_ALL\" -v sum_file=\"$SUM_FILE\" -v curdir=\"$got_pwd\" "
   fi
-  awk -v average_in="$AVERAGE" -v options="$OPTIONS" -v script="$0.$LINENO.awk" -v job_id="$JOB_ID" -v verbose="$VERBOSE" -v mk_sum_all="$MK_SUM_ALL" -v input_file="$ALST" -v sum_all="$SUM_ALL" -v sum_file="$SUM_FILE" -v sum_all_avg_by_metric="$SUM_ALL_AVG_BY_METRIC" -v curdir="$got_pwd" '
+  awk -v work_dir="$WORK_DIR" -v average_in="$AVERAGE" -v options="$OPTIONS" -v script="$0.$LINENO.awk" -v job_id="$JOB_ID" -v verbose="$VERBOSE" -v mk_sum_all="$MK_SUM_ALL" -v input_file="$ALST" -v sum_all="$SUM_ALL" -v sum_file="$SUM_FILE" -v sum_all_avg_by_metric="$SUM_ALL_AVG_BY_METRIC" -v curdir="$got_pwd" '
     @include "get_excel_col_letter_from_number.awk"
     BEGIN{
       sum_files=0;
@@ -1988,7 +2030,7 @@ function arr_in_compare_rev(i1, v1, i2, v2,    l, r)
            if (index(line, "mpstat") > 0) {
               ++first_mpstat_line;
               if (first_mpstat_line == 0) {
-                line = "sys_mpstat_sum_" job_id ".tsv";
+                line = work_dir "/" job_id "/" "sys_mpstat_sum_" job_id ".tsv";
               } else {
                 continue;
               }
@@ -1997,7 +2039,7 @@ function arr_in_compare_rev(i1, v1, i2, v2,    l, r)
            if (index(line, "infra_cputime") > 0) {
               ++first_infra_cputime;
               if (first_infra_cputime == 0) {
-                line = "infra_cputime_sum_" job_id ".tsv";
+                line = work_dir "/" job_id "/" "infra_cputime_sum_" job_id ".tsv";
               } else {
                 continue;
               }
@@ -2006,7 +2048,7 @@ function arr_in_compare_rev(i1, v1, i2, v2,    l, r)
            if (index(line, "perf_stat") > 0) {
               ++first_perf_stat;
               if (first_perf_stat == 0) {
-                line = "sys_perf_stat_sum_" job_id ".tsv";
+                line = work_dir "/" job_id "/" "sys_perf_stat_sum_" job_id ".tsv";
               } else {
                 continue;
               }
@@ -2041,7 +2083,7 @@ function arr_in_compare_rev(i1, v1, i2, v2,    l, r)
 
 #abc
   if [ ${#MUTT_ARR[@]} -gt 0 ]; then
-  OFILE2=muttley_host_calls_combined_${JOB_ID}.tsv
+  OFILE2=$WORK_DIR/${JOB_ID}/muttley_host_calls_combined_${JOB_ID}.tsv
   echo $SCR_DIR/combine_muttley_host_calls.sh -S $SUM_ALL -o $OFILE2 -f $ALST  -t "avg muttley host calls by group" -c scatter_straight -s mutt_calls ${MUTT_ARR[@]} | cut -c 1-400
        $SCR_DIR/combine_muttley_host_calls.sh -S $SUM_ALL -o $OFILE2 -f $ALST  -t "avg muttley host calls by group" -c scatter_straight -s mutt_calls ${MUTT_ARR[@]}
   ck_last_rc $? $LINENO
@@ -2060,6 +2102,7 @@ function arr_in_compare_rev(i1, v1, i2, v2,    l, r)
        }
      }' $ALST
   fi
+  echo "$0.$LINENO got to here"
 
   echo "$0.$LINENO ____got BEG_TM_IN=\"$BEG_TM_IN\"" > /dev/stderr
       if [ "$BEG_TM_IN" != "" ]; then
@@ -2180,6 +2223,7 @@ function arr_in_compare_rev(i1, v1, i2, v2,    l, r)
            OPT_M=" -m $ITP_INTRVL "
          fi
       fi
+  echo "$0.$LINENO got to here________________" > /dev/stderr
       echo -e "-p\t\"$RPS\"" >> $ALST
       echo -e "-s\t$CHART_SIZE" >> $ALST
       if [ "$DESC_FILE" != "" ]; then
@@ -2204,9 +2248,10 @@ function arr_in_compare_rev(i1, v1, i2, v2,    l, r)
                echo "$0.$LINENO try muttley log $f" 
              fi
              if [ $VERBOSE -gt 0 ]; then
-                echo $SCR_DIR/resp_2_tsv.sh -b $BEG_TM -e $END_TM -f $f -s $SUM_ALL $OPT_O $OPT_M > /dev/stderr
+                echo $SCR_DIR/resp_2_tsv.sh -w $WORK_DIR/${JOB_ID} -b $BEG_TM -e $END_TM -f $f -s $SUM_ALL $OPT_O $OPT_M > /dev/stderr
              fi
-                  $SCR_DIR/resp_2_tsv.sh -b $BEG_TM -e $END_TM -f $f -s $SUM_ALL $OPT_O $OPT_M
+                echo $SCR_DIR/resp_2_tsv.sh -w $WORK_DIR/${JOB_ID} -b $BEG_TM -e $END_TM -f $f -s $SUM_ALL $OPT_O $OPT_M > /dev/stderr
+                  $SCR_DIR/resp_2_tsv.sh -w $WORK_DIR/${JOB_ID} -b $BEG_TM -e $END_TM -f $f -s $SUM_ALL $OPT_O $OPT_M
                    ck_last_rc $? $LINENO
           fi
           if [ -e $f.tsv ]; then
@@ -2265,7 +2310,7 @@ function arr_in_compare_rev(i1, v1, i2, v2,    l, r)
     echo "$0.$LINENO elap_tm= $TS_DFF"
     echo "$0.$LINENO about to do tsv_2_xls.py" > /dev/stderr
   fi
-  FSTDOUT="tmp_${JOB_ID}.jnk"
+  FSTDOUT="$WORK_DIR/tsv_2_xlsx_stdout_${JOB_ID}.txt"
  if [ -e job_${JOB_ID}.stop ]; then
     RESP=`head -1 job_${JOB_ID}.stop`
     echo "$0: got job_$JOB_ID.stop pid= $RESP and bashpid= $$" > /dev/stderr
