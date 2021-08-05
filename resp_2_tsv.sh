@@ -15,7 +15,7 @@ MATCH_INTRVL=
 OSTYP=$OSTYPE
 VERBOSE=0
 
-while getopts "hvf:b:d:e:m:o:s:S:t:" opt; do
+while getopts "hvf:b:d:e:m:o:s:S:t:w:" opt; do
   case ${opt} in
     f )
       FILE=$OPTARG
@@ -44,12 +44,15 @@ while getopts "hvf:b:d:e:m:o:s:S:t:" opt; do
     t )
       HDR=$OPTARG
       ;;
+    w )
+      WORK_DIR=$OPTARG
+      ;;
     v )
       VERBOSE=$((VERBOSE+1))
       ;;
     h )
       echo "$0 split data files into columns"
-      echo "Usage: $0 [-h] -f json_file -t header [ -b beg_timestamp -e end_timestamp ] -s summary_filename [-v]"
+      echo "Usage: $0 [-h] -f json_file -t header [ -b beg_timestamp -e end_timestamp ] -s summary_filename [-v] -w work_dir_for_output_tsv_file "
       echo "   -v verbose mode"
       exit 1
       ;;
@@ -147,9 +150,9 @@ if [ "$SHEET_NM" != "" ]; then
   OPT_SHEET_NM=" -S $SHEET_NM "
 fi
 if [ $VERBOSE -gt 0 ]; then
-  echo "python $SCR_DIR/json_2_tsv.py -f $FILE $O_OPT -d \"$DESC\" $O_MATCH -s $SUM_FILE $O_BEG $O_END $O_TYP $OPT_SHEET_NM " > /dev/stderr
+  echo "python $SCR_DIR/json_2_tsv.py -w $WORK_DIR -f $FILE $O_OPT -d \"$DESC\" $O_MATCH -s $SUM_FILE $O_BEG $O_END $O_TYP $OPT_SHEET_NM " > /dev/stderr
 fi
-        python $SCR_DIR/json_2_tsv.py -f $FILE $O_OPT -d "$DESC" $O_MATCH -s $SUM_FILE $O_BEG $O_END $O_TYP $OPT_SHEET_NM
+        python $SCR_DIR/json_2_tsv.py -w $WORK_DIR -f $FILE $O_OPT -d "$DESC" $O_MATCH -s $SUM_FILE $O_BEG $O_END $O_TYP $OPT_SHEET_NM
       RC=$?
       exit $RC
 #python ../json_2_tsv.py response_time.json $BEG $END
