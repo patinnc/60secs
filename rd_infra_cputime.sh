@@ -4,7 +4,7 @@
 VERBOSE=0
 export LC_ALL=C
 
-while getopts "hvf:m:n:o:O:S:" opt; do
+while getopts "hvf:m:n:o:O:S:w:" opt; do
   case ${opt} in
     f )
       IN_FL=$OPTARG
@@ -24,6 +24,9 @@ while getopts "hvf:m:n:o:O:S:" opt; do
     S )
       SUM_FILE=$OPTARG
       ;;
+    w )
+      WORK_DIR=$OPTARG
+      ;;
     v )
       VERBOSE=$((VERBOSE+1))
       ;;
@@ -36,6 +39,7 @@ while getopts "hvf:m:n:o:O:S:" opt; do
       echo "   -o out_file    assumed to be input_file with .tsv appended"
       echo "   -n num_cpus    number of cpus on the server"
       echo "   -S sum_file    summary file"
+      echo "   -w work_dir    all tsv output files go in this dir"
       echo "   -v verbose mode"
       exit 1
       ;;
@@ -64,7 +68,7 @@ if [ ! -e "$IN_FL" ]; then
   exit 1
 fi
 if [ "$OUT_FL" == "" ]; then
-  OUT_FL="${IN_FL}.tsv"
+  OUT_FL="${WORK_DIR}/${IN_FL}.tsv"
 fi
 #NUM_CPUS=$2
 #PID RSS    VSZ     TIME COMMAND
@@ -74,9 +78,14 @@ MUTT_FL=
 MUTT_NM="muttley_host_calls.tsv"
 echo "$0.$LINENO: $MUTT_NM"
 pwd
+# I'm now sure where this file gets created. It might get created at collection time in which case it would be the source dir
 if [ -e $MUTT_NM ]; then
   echo "$0.$LINENO: got $MUTT_NM"
   MUTT_FL=$MUTT_NM
+fi
+if [ -e $WORK_DIR/$MUTT_NM ]; then
+  echo "$0.$LINENO: got $MUTT_NM"
+  MUTT_FL=$WORK_DIR/$MUTT_NM
 fi
 
 AWK_BIN=awk  # awk is a link to gawk
