@@ -11,7 +11,7 @@ NUM_SKU=0
 SKU_IN=()
 XLS_IN=()
 
-while getopts "hvb:d:e:i:l:n:o:r:s:S:t:u:x:" opt; do
+while getopts "hvb:d:e:i:l:n:o:r:s:S:t:u:w:x:" opt; do
   case ${opt} in
     i )
       INF="$INF $OPTARG"
@@ -52,6 +52,9 @@ while getopts "hvb:d:e:i:l:n:o:r:s:S:t:u:x:" opt; do
       echo "skuin= $OPTARG"
       NUM_SKU=$(($NUM_SKU+1))
       ;;
+    w )
+      WORK_DIR=$OPTARG
+      ;;
     x )
       XLS_IN+=("$OPTARG")
       echo "xlsin= $OPTARG"
@@ -69,6 +72,7 @@ while getopts "hvb:d:e:i:l:n:o:r:s:S:t:u:x:" opt; do
       echo "   -S separator_char  separator used in the out_file. Default is comma ','"
       echo "   -l look_for_file   file to use in each dir. default is sum.tsv. Could use sum_all.tsv too."
       echo "   -u list of skus    this is to add a sku string to each input file"
+      echo "   -w work_dir     output tsvs"
       exit 1
       ;;
     : )
