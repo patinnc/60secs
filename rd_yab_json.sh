@@ -4,7 +4,7 @@
 VERBOSE=0
 SCR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
-while getopts "hvf:n:o:O:S:" opt; do
+while getopts "hvf:n:o:O:S:w:" opt; do
   case ${opt} in
     f )
       IN_FL=$OPTARG
@@ -21,6 +21,9 @@ while getopts "hvf:n:o:O:S:" opt; do
     S )
       SUM_FILE=$OPTARG
       ;;
+    w )
+      WORK_DIR=$OPTARG
+      ;;
     v )
       VERBOSE=$((VERBOSE+1))
       ;;
@@ -31,6 +34,7 @@ while getopts "hvf:n:o:O:S:" opt; do
       echo "   -o out_file    assumed to be input_file with .tsv appended"
       echo "   -n num_cpus    number of cpus on the server"
       echo "   -S sum_file    summary file"
+      echo "   -w work_dir    tsv file put here"
       echo "   -v verbose mode"
       exit 1
       ;;
@@ -59,7 +63,7 @@ if [ ! -e "$IN_FL" ]; then
   exit 1
 fi
 if [ "$OUT_FL" == "" ]; then
-  OUT_FL="${IN_FL}.tsv"
+  OUT_FL="$WORK_DIR/${IN_FL}.tsv"
 fi
 #NUM_CPUS=$2
 DIRNM=$(dirname $IN_FL)
@@ -73,7 +77,7 @@ if [ "$LSCPU_FL" == "" ]; then
 fi
 INFRA_FL=`find $DIRNM -name infra_cputime.txt.tsv | head -1`
 
-awk -v verbose="$VERBOSE" -v infra_fl="$INFRA_FL" -v lscpu_file="$LSCPU_FL" -v host_num="$HOST_NUM" -v dirnm="$DIRNM" -v sep_in="\t" -v infile="$IN_FL" -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofile="$OUT_FL" -f $SCR_DIR/rd_yab_json.awk
+awk -v work_dir="$WORK_DIR" -v verbose="$VERBOSE" -v infra_fl="$INFRA_FL" -v lscpu_file="$LSCPU_FL" -v host_num="$HOST_NUM" -v dirnm="$DIRNM" -v sep_in="\t" -v infile="$IN_FL" -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofile="$OUT_FL" -f $SCR_DIR/rd_yab_json.awk
 RC=$?
 exit $RC
 
