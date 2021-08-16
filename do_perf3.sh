@@ -11,6 +11,7 @@ fi
 FOREGRND=0
 PID=
 IFS_SV=$IFS
+VERBOSE=0
 
 GOT_QUIT=0
 # function called by trap
@@ -33,7 +34,6 @@ while getopts "hFvb:C:I:P:p:w:W:x:X:" opt; do
       ;;
     I )
       INTRVL_IN=$OPTARG
-      echo "$0.$LINENO intrvl_in= $INTRVL_IN" > /dev/stderr
       ;;
     P )
       PID_IN=$OPTARG
@@ -89,9 +89,12 @@ while getopts "hFvb:C:I:P:p:w:W:x:X:" opt; do
       ;;
   esac
 done
-echo "$0.$LINENO processed args"
-printf " %q" "${@}"
-printf "\n"
+if [ "$VERBOSE" != "0" ]; then
+  echo "$0.$LINENO processed args"
+  echo "$0.$LINENO intrvl_in= $INTRVL_IN" > /dev/stderr
+  printf " %q" "${@}"
+  printf "\n"
+fi
 shift $((OPTIND -1))
 
 if [ "$PERF_BIN_IN" == "" ]; then
