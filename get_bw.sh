@@ -51,11 +51,11 @@ if [ -d  $INFILE ]; then
   fi
   INFILE=${ARR[0]}
   DIR=`dirname $INFILE`
-  if [ "$N" > "1" ]; then
-    echo "$0.$LINENO you entered dirname $DIR0. Found $N sys_*_perf_stat.txt file under that dir."
-    echo "$0.$LINENO sys_*_perf_stat.txt ${ARR[@]}"
-  fi
-  echo "$0.$LINENO using file ${ARR[0]}"
+  #if [ "$N" > "1" ]; then
+  #  echo "$0.$LINENO you entered dirname $DIR0. Found $N sys_*_perf_stat.txt file under that dir."
+  #  echo "$0.$LINENO sys_*_perf_stat.txt ${ARR[@]}"
+  #fi
+  #echo "$0.$LINENO using file ${ARR[0]}"
 else
   DIR=`dirname $INFILE`
 fi
@@ -226,6 +226,8 @@ awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_
     #if (tor_occ != "") { L3cyc = tor_occ; }
     #printf("tor_ins = %s, tor_occ= %s, unc_cha_miss= %s, unc_cha_occ= %s, unc_cha_clk= %s\n", tor_ins, tor_occ, unc_cha_miss, unc_cha_occ, unc_cha_clk);
   }
+  /not counted/{next;}
+  /not supported/{next;}
   {
     j = 0;
 #   some events are alternative ways to get the same count (like msr/aperf/ is same as cycles (but msr/aperf/ doesnt use up an event counter)
@@ -563,7 +565,11 @@ awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_
         v = 100.0 * evt[ret_slots,i] / td_denom;
         td_ret_val = v;
       }
-      if (h[j] == "%frt_end") { v = 100.0*evt[not_deliv,i]/td_denom; td_frt_end_val = v; }
+      if (h[j] == "%frt_end") {
+        v = 100.0*evt[not_deliv,i]/td_denom;
+        td_frt_end_val = v;
+        #printf("%%frt_end:  100.0*evt[not_deliv,%d]= %g td_denom= %g v= %f\n", i, 100.0*evt[not_deliv,i], td_denom, v);
+      }
       if (h[j] == "%bad_spec") { v = 100.0*(evt[uops_issued_any,i]-evt[ret_slots,i] + ((4*evt[recovery_cycles,i])/2))/td_denom; if (v < 0){v=0.0;} td_bad_spec_val = v; }
       if (h[j] == "%be_spec") { v = 100 - td_ret_val - td_frt_end_val; if (v < 0) { v = 0.0; }}
       if (h[j] == "%bck_end") { v = 100 - td_ret_val - td_frt_end_val - td_bad_spec_val; if (v < 0) { v = 0.0; }}
