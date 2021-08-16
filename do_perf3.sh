@@ -407,7 +407,9 @@ echo "# started on $dtc $dte" > $FL
       fi
       SKT_EVT="${IMC}${UPI0}${UPI1}${UPI2}"
       UNC_CHA=
-      for ((i=0; i < 20; i++)); do
+      UNC_CHA_DEVS=`find /sys/devices -name "uncore_cha_*" |wc -l`
+      for ((i=0; i < $UNC_CHA_DEVS; i++)); do
+
         if [ -e /sys/devices/uncore_cha_${i} ]; then
 # icx from https://perfmon-events.intel.com/
 # UNC_CHA_TOR_INSERTS.IA_MISS_DRD
