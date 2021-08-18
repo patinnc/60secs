@@ -169,6 +169,7 @@ awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_
     lkup[++j] = "topdown-retiring";     icx_topd_ret = j;
     lkup[++j] = "topdown-bad-spec";     icx_topd_bs = j;
     lkup[++j] = "topdown-be-bound";     icx_topd_be = j;
+    lkup[++j] = "topdown-fe-bound";     icx_topd_fe = j;
     lkup[++j] = "cpu/slots/";           icx_topd_slots = j;
     lkup[++j] = "int_misc.uop_dropping"; icx_uop_drop = j;
     lkup[++j] = "int_misc.recovery_cycles"; icx_recovery_cycles = j;
@@ -361,10 +362,16 @@ awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_
       icx_td_be = cats;
       got_icx_td_be = 1;
    } 
+   if (evt[icx_topd_slots,1] != "" && evt[icx_topd_fe,1] != "" && evt[icx_uop_drop,1] != "") {
+      h[++cats] = "%td_fe";
+      icx_td_fe = cats;
+      got_icx_td_fe = 2;
+   } else {
    if (evt[icx_topd_slots,1] != "" && evt[not_deliv,1] != "" && evt[icx_uop_drop,1] != "") {
       h[++cats] = "%td_fe";
       icx_td_fe = cats;
       got_icx_td_fe = 1;
+   }
    }
    #printf("\nuops_iss= %s, ret_slots= %s, rec_cy= %s, td_ret = %s\n", evt[uops_issued_any,1], evt[ret_slots,1], evt[recovery_cycles,1], td_ret);
    if (evt[uops_issued_any,1] != "" && evt[ret_slots,1] != "" && evt[recovery_cycles,1] != "" && td_ret > 0) {  # so not icx
@@ -580,23 +587,27 @@ awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_
          if (got_icx_td_sum != i) {
            got_icx_td_sum  = i;
            v_td_fctr = 1.0;
-           v_td_ret = 100.0*evt[icx_topd_ret,i]/evt[icx_topd_slots,i];
-           v_td_bs  = 100.0*evt[icx_topd_bs,i]/evt[icx_topd_slots,i];
-           v_td_be  = 100.0*evt[icx_topd_be,i]/evt[icx_topd_slots,i];
-           v_td_fe  = 100.0*(evt[not_deliv,i]-evt[icx_uop_drop,i])/evt[icx_topd_slots,i];
-           if (got_icx_td_ret == 1 && got_icx_td_bs == 1 && got_icx_td_be == 1 && got_icx_td_fe == 1) {
-              v_td_sum = v_td_ret + v_td_bs + v_td_be + v_td_fe;
-              if (v_td_sum != 0.0) { v_td_fctr = 100.0/v_td_sum; }
-              #printf("\nv_td_sum= %f v_td_fctr= %f i= %d fe= %f fctr*fe= %f\n", v_td_sum, v_td_fctr, i, v_td_fe, v_td_fctr * v_td_fe);
-              #v_td_fctr = 1.0;
+           if (got_icx_td_ret == 1 && got_icx_td_bs == 1 && got_icx_td_be == 1 && got_icx_td_fe >= 1) {
+              if (evt[icx_topd_fe,1] != "") {
+                v_td_sum = (evt[icx_topd_ret,i] + evt[icx_topd_be,i] + evt[icx_topd_bs,i] + evt[icx_topd_fe,i])/evt[icx_topd_slots,i];
+              }
+           }
+           v_td_ret = 100.0*evt[icx_topd_ret,i]/evt[icx_topd_slots,i]/v_td_sum;
+           v_td_be  = 100.0*evt[icx_topd_be,i]/evt[icx_topd_slots,i]/v_td_sum;
+           v_td_bs  = 100.0*evt[icx_topd_bs,i]/evt[icx_topd_slots,i]/v_td_sum;
+           if (evt[icx_topd_fe,1] != "") {
+             v_td_fe  = 100.0*(evt[icx_topd_fe,i])/evt[icx_topd_slots,i]/v_td_sum - 100.0*evt[icx_uop_drop,i]/evt[icx_topd_slots,i];
+           } else {
+             v_td_fe  = 100.0*(evt[not_deliv,i]-evt[icx_uop_drop,i])/evt[icx_topd_slots,i];
            }
          }
       }
-      if (h[j] == "%td_ret") { v = v_td_fctr * v_td_ret; }
-      if (h[j] == "%td_bs")  { v = v_td_fctr * v_td_bs; }
-      if (h[j] == "%td_be")  { v = v_td_fctr * v_td_be; }
-      if (h[j] == "%td_fe")  { v = v_td_fctr * v_td_fe; }
-      #if (h[j] == "%td_fe")  { v = v_td_sum ; }
+      if (h[j] == "%td_fe")  { v = v_td_fe ; }
+      if (h[j] == "%td_be")  { v = v_td_be ; }
+      if (h[j] == "%td_bs")  {
+         v = 100.0 - (v_td_ret + v_td_fe + v_td_be); if (v < 0.0) { v = 0.0;}
+      }
+      if (h[j] == "%td_ret")  { v = v_td_ret ; }
 
       if (h[j] == "bw_rmt") {
         if (evt[qpi0,1] != "" && evt[qpi1,1] != "") {
