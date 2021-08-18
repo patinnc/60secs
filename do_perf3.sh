@@ -320,6 +320,7 @@ echo "# started on $dtc $dte" > $FL
       #  topdown-be-bound OR cpu/topdown-be-bound/
       #  topdown-fe-bound OR cpu/topdown-fe-bound/
       #  topdown-retiring OR cpu/topdown-retiring/ 
+
       DO_ANY="0x01"
       NEED_JUST_CYCLES=0
       if [ "$PID" != "" ]; then
@@ -345,9 +346,19 @@ echo "# started on $dtc $dte" > $FL
       if [ "$CPU_DECODE" == "Ice Lake" ]; then
         # event attr any not defined on ice lake
         THA_EVT=
+# /sys/devices/cpu/events/topdown-bad-spec
+# event=0x00,umask=0x81
+# /sys/devices/cpu/events/topdown-be-bound
+# event=0x00,umask=0x83
+# /sys/devices/cpu/events/topdown-fe-bound
+# event=0x00,umask=0x82
+# /sys/devices/cpu/events/topdown-retiring
+# event=0x00,umask=0x80
         RC=`echo "$PERF_LIST" | grep 'topdown-retiring'`
         if [ "$RC" != "" ]; then
-          TD_EVTS=",cpu/slots/,cpu/name='topdown-bad-spec',event=0xa4,umask=0x8/,cpu/name='topdown-be-bound',event=0xa4,umask=0x02/,cpu/name='topdown-retiring',event=0xc2,umask=0x02/,cpu/name='int_misc.uop_dropping',event=0x0d,umask=0x10/,cpu/name='int_misc.recovery_cycles',event=0x0d,umask=0x01,cmask=0x1,edge=1/"
+          #TD_EVTS=",cpu/slots/,cpu/name='topdown-bad-spec',event=0xa4,umask=0x8/,cpu/name='topdown-be-bound',event=0xa4,umask=0x02/,cpu/name='topdown-retiring',event=0xc2,umask=0x02/,cpu/name='int_misc.uop_dropping',event=0x0d,umask=0x10/,cpu/name='int_misc.recovery_cycles',event=0x0d,umask=0x01,cmask=0x1,edge=1/"
+TD2=",{cpu/slots/,topdown-be-bound,topdown-bad-spec,topdown-fe-bound,topdown-retiring"
+          TD_EVTS="${TD2},cpu/name='int_misc.recovery_cycles',event=0x0d,umask=0x01,cmask=0x1,edge=1/,cpu/name='int_misc.uop_dropping',event=0x0d,umask=0x10/}"
           #TD_EVTS=",cpu/slots/,cpu/name='topdown-bad-spec',event=0xa4,umask=0x8/,cpu/name='topdown-be-bound',event=0xa4,umask=0x02/,cpu/name='topdown-retiring',event=0xc2,umask=0x02/,cpu/name='int_misc.uop_dropping',event=0x0d,umask=0x10/"
         fi
       else
