@@ -79,7 +79,10 @@ if [ -e $LSCPU ]; then
    /^Socket.s.:/{ skt = $2; }
    /^Vendor ID/{ mkr = $3;}
    /^CPU max MHz:/ { if (mkr == "AuthenticAMD") {tsc2= $4; tsc_v2 = 0.001 * tsc;}}
-   /^BogoMIPS/{ if (tsc == "" || mkr == "GenuineIntel") { tsc = $2/tpc ;tsc_v = 0.001 * tsc;}}
+   /^BogoMIPS/{ if (tsc == "" && mkr == "GenuineIntel") { tsc = $2/tpc ;tsc_v = 0.001 * tsc;}}
+   /^Model name:/ {
+     for (i=NF; i > 3; i--) { if (index($i, "GHz") > 0) { gsub("GHz", "", $i); tsc = $i; tsc_v = tsc; break;}}
+   }
    END{
      printf("%s\n", num_cpus);
      printf("%s\n", tsc_v);
