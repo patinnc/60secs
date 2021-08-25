@@ -21,7 +21,7 @@ catch_signal() {
 }
 trap 'catch_signal' SIGINT
 
-while getopts "hFvb:C:I:P:p:w:W:x:X:" opt; do
+while getopts "hFvb:C:I:P:p:s:w:W:x:X:" opt; do
   case ${opt} in
     b )
       PERF_BIN_IN=$OPTARG
@@ -40,6 +40,9 @@ while getopts "hFvb:C:I:P:p:w:W:x:X:" opt; do
       ;;
     p )
       PROJ_IN=$OPTARG
+      ;;
+    s )
+      SYS_IN=$OPTARG
       ;;
     w )
       WAIT_IN=$OPTARG
@@ -62,6 +65,11 @@ while getopts "hFvb:C:I:P:p:w:W:x:X:" opt; do
       echo "Usage: $0 [ -v ] [-F] [-b perf_binary] -I interval_in_secs -p proj_dir [ -w wait_in_secs ] [ -x binary_to_be_run ] [ -X args_to_binary_to_be_run ] "
       echo "   -b perf_binary_path  default is $SCR_DIR/perf"
       echo "   -C cpu_list  default is all cpus. Intended for doing multiple simultaneous perf stat runs"
+      echo "   -s 0|n|1|y   collect system variables if doing '-C cpu_list' or by-cpu (-W -A ) profiling"
+      echo "      This is necessary since the default is to collect system stats and, if 2 perf perfs are"
+      echo "      programming the system stats then the events (such as unc_cha_read_write) can get messed up."
+      echo "      So you could use this option to tell the 1st perf instance to collect the stats and then"
+      echo "      set '-s n' to subsequent perfs don't try to collect the system stats"
       echo "   -F foreground  wait for '-x binary_to_be_run' to finish before exiting" 
       echo "   -I interval_in_secs the perf stat output will be written every this number of secs"
       echo "   -P pid_to_monitor  have perf monitor just this pid"
@@ -95,6 +103,7 @@ if [ "$VERBOSE" != "0" ]; then
   printf " %q" "${@}"
   printf "\n"
 fi
+CMDLN=`printf " %q" "${@}"`
 shift $((OPTIND -1))
 
 if [ "$PERF_BIN_IN" == "" ]; then
@@ -106,6 +115,23 @@ if [ ! -x $PERF_BIN ]; then
   echo "$0.$LINENO didn't find perf binary $PERF_BIN"
   exit 1
 fi
+
+DO_SYS=1
+if [ "$SYS_IN" != "" ]; then
+  if [ "$SYS_IN" == "y" ]; then
+    SYS_IN=1
+  fi
+  if [ "$SYS_IN" == "n" ]; then
+    SYS_IN=0
+  fi
+  if [ "$SYS_IN" == "0" -o "$SYS_IN" == "1" ]; then
+    DO_SYS=$SYS_IN
+  else
+    echo "$0.$LINENO error: got -s $SYS_IN. arg to -s option must be 0 or n or 1 or y. Bye"
+    exit 1
+  fi
+fi
+
 PRFFILE_PID=~/perf.pid
 PRFFILE_STOP=~/perf.stop
 if [ -e $PRFFILE_STOP ]; then
@@ -164,8 +190,17 @@ if [ "$PID_IN" != "" ]; then
   done
 fi
 
+SCR_FLNM=`basename $0`
+echo "$0 $CMDLN" > $ODIR/${SCR_FLNM}.cmdline.txt
+
 LSCPU=`lscpu`
 echo "$LSCPU" > $ODIR/lscpu.txt
+
+LSCPU_E=`lscpu -e`
+echo "$LSCPU_E" > $ODIR/lscpu_e.txt
+
+CPUINFO=`cat /proc/cpuinfo`
+echo "$CPUINFO" > $ODIR/cpuinfo.txt
 
 skts=`echo "$LSCPU"|$AWK_BIN '/Socket.s.:/{ printf("%d", $2); exit;}'`
 
@@ -298,6 +333,9 @@ echo "# started on $dtc $dte" > $FL
         #L3ACC=",amd_l3/name='L3_accesses',event=0x04,umask=0xff/,amd_l3/name='L3_misses',event=0x04,umask=0x01/"
         L3ACC=",amd_l3/name='L3_accesses',event=0x04,umask=0xff/"
         L3LAT=",amd_l3/name='L3_lat_out_cycles',event=0x90,umask=0x00/,amd_l3/name='L3_lat_out_misses',event=0x9a,umask=0x1f/"
+      fi
+      if [ "$DO_SYS" == "0" ]; then
+        MEMBW=
       fi
       MEM_LCL="cpu/name='mem_local',event=0x43,umask=0x08/"
       MEM_LCL="cpu/name='mem_local',event=0x43,umask=0x0b/"
@@ -526,7 +564,10 @@ TD2=",{cpu/slots/,topdown-be-bound,topdown-bad-spec,topdown-fe-bound,topdown-ret
     #if [ "$GOT_UOP_EVT" != "" ]; then
     #  UOP_EVT=",uops_retired.retire_slots"
     #fi
-    SKT_EVT="${SKT_EVT}${PWR_EVT}${EVT}${UNC_CHA}"
+    SKT_EVT="${SKT_EVT}${PWR_EVT}${UNC_CHA}"
+    if [ "$DO_SYS" == "0" ]; then
+      SKT_EVT=
+    fi
     #EVT="cpu-clock,task-clock,instructions,cycles,ref-cycles,idq_uops_not_delivered.core,uops_retired.retire_slots,cpu_clk_unhalted.thread_any,power/energy-pkg/${EVT}${UNC_CHA}${OFFC}"
     EVT="cpu-clock,instructions,msr/aperf/,msr/mperf/${TD_EVTS}${IDQ_EVT}${UOP_EVT}${THA_EVT}${UOPS_ISSUED_ANY}${UOPS_RETIRED_RETIRE_SLOTS}${CYC_ACT_STALLS_TOT}${UOP_EXE_CYC_GE1}${CLK_ONE_THREAD_ACTIVE}${CLK_REF_XCLK}${INT_MISC_RECOVERY}${OFFC}${SKT_EVT}"
     fi
