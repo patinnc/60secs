@@ -81,21 +81,25 @@ if [ -e $LSCPU ]; then
    /^CPU max MHz:/ { if (mkr == "AuthenticAMD") {tsc2= $4; tsc_v2 = 0.001 * tsc;}}
    /^BogoMIPS/{ if (tsc == "" && mkr == "GenuineIntel") { tsc = $2/tpc ;tsc_v = 0.001 * tsc;}}
    /^Model name:/ {
-     for (i=NF; i > 3; i--) { if (index($i, "GHz") > 0) { gsub("GHz", "", $i); tsc = $i; tsc_v = tsc; break;}}
+     for (i=NF; i > 3; i--) { if (index($i, "GHz") > 0) { tsc = $i; gsub("GHz", "", tsc); tsc_v = tsc; break;}}
    }
+#Model name:          Intel(R) Xeon(R) Silver 4214 CPU @ 2.20GHz
    END{
      printf("%s\n", num_cpus);
      printf("%s\n", tsc_v);
      printf("%s\n", mkr);
      printf("%s\n", skt);
+     printf("%s\n", tpc);
    }
   ' $LSCPU`)
   echo "LSCPU_INFO= ${LSCPU_INFO[@]}"
 fi
+
+thr_per_core=${LSCPU_INFO[4]}
 if [ "$THR_PER_CORE_IN" != "" ]; then
   thr_per_core=$THR_PER_CORE_IN
 fi
-  
+
 awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSCPU_INFO[1]}" -v num_cpus="${LSCPU_INFO[0]}" -v dlm=" " '
    function ck_tm(tm) {
    if (!(tm in tm_list)) {
