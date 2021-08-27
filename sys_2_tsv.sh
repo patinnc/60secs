@@ -632,6 +632,7 @@ parse_file_sets() {
          exit(1);
        }'`)
     PC_ARR_MX=${#perf_cpu_arr[@]}
+    echo "$0.$LINENO perf_cpu_groups perf_cpu_arr= ${perf_cpu_arr[@]}"
     for ((jj=0; jj < ${#perf_cpu_arr[@]}; jj++)); do
        v=${perf_cpu_arr[$jj]}
        echo "$0.$LINENO pc_str_arr[$jj]= $v"
@@ -650,7 +651,7 @@ parse_file_sets() {
             printf("%s\n", rem);
             exit(0);
           }'`)
-       echo "$0.$LINENO perf_cpu_groups arr= ${arr[0]} ${arr[1]} ${arr[2]}"
+       echo "$0.$LINENO perf_cpu_groups arr= 0:${arr[0]} 1:${arr[1]} 2:${arr[2]}"
        PC_ARR[$jj,"rgx"]=${arr[0]}
        PC_ARR[$jj,"arg"]=
        echo "$0.$LINENO: PC_ARR[$jj,rgx]= ${PC_ARR[$jj,'rgx']}, arg= ${PC_ARR[$jj,'arg']}"
@@ -751,6 +752,8 @@ ck_perf_cpu_arr() {
           PC_ARR[$jj,"file"]=$pcg_file
           PC_ARR[$jj,"arg"]=""
           echo "$0.$LINENO try PC_ARR[$jj,'arg']= awk -v lkfor=${PC_ARR[$jj,'rgx']} script"
+          echo "$0.$LINENO here is pcg_file $pcg_file"
+          cat $pcg_file
           PC_ARR[$jj,"arg"]=`awk -v lkfor="${PC_ARR[$jj,'rgx']}" '
              BEGIN{
                printf("perf_cpu_groups lkfor= %s\n", lkfor) > "/dev/stderr";
@@ -764,6 +767,10 @@ ck_perf_cpu_arr() {
                }
              }' $pcg_file`
           echo "$0.$LINENO PC_ARR[$jj]= rgx[$jj] match2, cpus= " ${PC_ARR[$jj,"arg"]}
+          if [ "${PC_ARR[$jj,"arg"]}" == "" ]; then
+            echo "$0.$LINENO didnt find lkfor string \"${PC_ARR[$jj,'rgx']}\" in file $pcg_file"
+            exit 1
+          fi
           printf "perf_cpu_groups\tperf_cpu_groups\t\"%s\"\tsubtest\n" "${PC_ARR[$jj,'rgx']}" >> $SUM_FILE;
           printf "perf_cpu_groups\tperf_cpu_groups\t\"%s\"\tcpus_used\n" "${PC_ARR[$jj,'arg']}" >> $SUM_FILE;
           pcg_got_match=1
