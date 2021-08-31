@@ -67,8 +67,9 @@ echo "BACKGROUND= $BACKGROUND  NUM_CPUS= $NUM_CPUS"
 JOB_ID=0
 AVERAGE=0
 CLIPX=
+REDUCE=
 
-while getopts "AhvSa:b:B:c:C:D:d:e:F:g:I:j:m:N:o:P:r:s:w:X:x:" opt; do
+while getopts "AhvSa:b:B:c:C:D:d:e:F:g:I:j:m:N:o:P:R:r:s:w:X:x:" opt; do
   case ${opt} in
     A )
       AVERAGE=1
@@ -134,6 +135,9 @@ while getopts "AhvSa:b:B:c:C:D:d:e:F:g:I:j:m:N:o:P:r:s:w:X:x:" opt; do
     r )
       REGEX+=($OPTARG)
       ;;
+    R )
+      REDUCE=$OPTARG
+      ;;
     w )
       WORK_DIR=$OPTARG
       ;;
@@ -183,6 +187,12 @@ while getopts "AhvSa:b:B:c:C:D:d:e:F:g:I:j:m:N:o:P:r:s:w:X:x:" opt; do
       echo "            to look for cpu2017 perlbench and look for the the 3 subphase workloads in cpu2017.001.log file."
       echo "            Need '-C perlaaaa' or '-C perlbbbb' or '-C perlcccc' and -P phase_file (-P phase_cpu2017.txt)."
       echo "   -P phase_file"
+      echo "   -R x,y     reduce amount of data by dropping x out of y rows from the tsv file."
+      echo "      For example -R 1,2 will drop 1 out of 2 samples."
+      echo "      reduce_tsv.sh reads the *.txt.tsv file and drops the rows from the txt.tsv file."
+      echo "      You can prefix the x,y with str: to apply an x,y to specific file."
+      echo "      For instance: -R infra_cputime:1,2,perf_stat:3,4  drops 1 out of 2 rows from infra_cputime.txt.tsv and 3 out of 4 rows from perf_stats txt.tsv file"
+      echo "      Currently only perf_stats txt.tsv and infra_cputime txt.tsv files call the reduce_tsv.sh script"
       echo "   -r regex   regex expression to select directories"
       echo "   -S    skip creating detail xlsx file, just do the summary all spreadsheet"
       echo "   -s  sku_list  select dirs with sku. have to be able to figure host from path and must have crane list of host info"
@@ -954,14 +964,19 @@ for i in $LST; do
        OPT_P=$RESP
      fi
    fi
+   OPT_REDUCE=
+   if [ "$REDUCE" != "" ]; then
+     OPT_REDUCE=" -R $REDUCE "
+   fi
 
-   echo "$0.$LINENO: $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p \"$OPT_P\" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i \"*.png\" -s $SUM_FILE -x $XLS.xlsx -o \"$OPT_OPT\" $OPT_PH -w $JOB_WORK_DIR -t $DIR" > $SYS_2_TSV_STDOUT_FILE
+
+   echo "$0.$LINENO: $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p \"$OPT_P\" $OPT_DEBUG $OPT_REDUCE $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i \"*.png\" -s $SUM_FILE -x $XLS.xlsx -o \"$OPT_OPT\" $OPT_PH -w $JOB_WORK_DIR -t $DIR" > $SYS_2_TSV_STDOUT_FILE
    if [ "$BACKGROUND" -le "0" ]; then
-          $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$OPT_P" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o "$OPT_OPT" $OPT_PH -w $JOB_WORK_DIR -t $DIR &>> $SYS_2_TSV_STDOUT_FILE
+          $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$OPT_P" $OPT_DEBUG $OPT_REDUCE $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o "$OPT_OPT" $OPT_PH -w $JOB_WORK_DIR -t $DIR &>> $SYS_2_TSV_STDOUT_FILE
           RC=$?
           ck_last_rc $RC $LINENO
    else
-          $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$OPT_P" $OPT_DEBUG $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o "$OPT_OPT" $OPT_PH -w $JOB_WORK_DIR -t $DIR &>> $SYS_2_TSV_STDOUT_FILE &
+          $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$OPT_P" $OPT_DEBUG $OPT_REDUCE $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o "$OPT_OPT" $OPT_PH -w $JOB_WORK_DIR -t $DIR &>> $SYS_2_TSV_STDOUT_FILE &
           LPID=$!
           RC=$?
           BK_DIR[$LPID]=$i
@@ -2321,6 +2336,7 @@ function arr_in_compare_rev(i1, v1, i2, v2,    l, r)
  fi
   #if [ $VERBOSE -gt 0 ]; then
     echo "$0.$LINENO python $SCR_DIR/tsv_2_xlsx.py $OPT_SM $OPT_a $OPT_A $OPT_TM -O "$OPTIONS" $OPT_M -f $ALST $SHEETS" > /dev/stderr
+    #cat $ALST
   #fi
         python $SCR_DIR/tsv_2_xlsx.py -v $OPT_SM $OPT_a $OPT_A $OPT_TM -O "$OPTIONS" $OPT_M -f $ALST $SHEETS &> $FSTDOUT
         PY_RC=$?
