@@ -606,7 +606,7 @@ function prt_rpn_eqn(kmx,   i, str) {
    nwfor[kmx,1,"hdr"]="%not_halted";
    nwfor[kmx,1,"alias"]="metric_CPU utilization %";
 
-   if (cpu_type != "Ice Lake") {
+   if (cpu_type != "Ice Lake" && amd_cpu==0) {
    kmx++;
    kkmx=0;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
@@ -745,10 +745,10 @@ function prt_rpn_eqn(kmx,   i, str) {
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
    got_rpn_eqn[kmx, ++kkmx, "val"]=" / (";
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]= num_cpus * 1.0e6 * tsc_freq;
+   got_rpn_eqn[kmx, ++kkmx, "val"]= num_cpus * 1.0e9 * tsc_freq;
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=")";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="str";
+   got_rpn_eqn[kmx, ++kkmx, "val"]=" )";
+   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
    got_rpn_eqn[kmx,      1,"max"]=kkmx;
    lkfor[kmx,1]=tolower("msr/mperf/");
    nwfor[kmx,1,"hdr"]="%not_halted";
@@ -1152,7 +1152,7 @@ function prt_rpn_eqn(kmx,   i, str) {
    nwfor[kmx,1,"alias"]="topdown_Info_CoreIPC";
 
 
-   if (cpu_type != "Ice Lake") {
+   if (cpu_type != "Ice Lake" && amd_cpu == 0) {
    kmx++;
    kkmx=0;
    got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
@@ -1171,14 +1171,6 @@ function prt_rpn_eqn(kmx,   i, str) {
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
    got_rpn_eqn[kmx, ++kkmx, "val"]="td_denom";
    got_rpn_eqn[kmx,   kkmx, "opr"]="push_glbl_row_arr";
-#   got_rpn_eqn[kmx, ++kkmx, "val"]=" / ( 4.0 * ( ";  
-#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-#   got_rpn_eqn[kmx, ++kkmx, "val"]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");
-#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-#   got_rpn_eqn[kmx, ++kkmx, "val"]=" / ";   # 100 * uop_ret
-#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-#   got_rpn_eqn[kmx, ++kkmx, "val"]=thr_per_core " ) ) ";
-#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
 #abcd
    got_rpn_eqn[kmx,      1,"max"]=kkmx;
    lkfor[kmx,1]=cpu_cycles_str;
