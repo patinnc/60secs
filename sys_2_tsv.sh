@@ -44,7 +44,7 @@ ck_last_rc() {
    fi
 }
 
-while getopts "hvASa:B:b:c:D:d:e:g:i:j:m:o:P:p:s:t:w:x:" opt; do
+while getopts "hvASa:B:b:c:D:d:e:g:i:j:m:o:P:p:R::s:t:w:x:" opt; do
   case ${opt} in
     A )
       AVERAGE=1
@@ -94,6 +94,9 @@ while getopts "hvASa:B:b:c:D:d:e:g:i:j:m:o:P:p:s:t:w:x:" opt; do
     P )
       PHASE_FILE=$OPTARG
       ;;
+    R )
+      REDUCE=$OPTARG
+      ;;
     s )
       SUM_FILE_IN=$OPTARG
       ;;
@@ -142,6 +145,7 @@ while getopts "hvASa:B:b:c:D:d:e:g:i:j:m:o:P:p:s:t:w:x:" opt; do
       echo "   -m max_val  any value in charts > max_val will be replaced with 0.0"
       echo "   -p prefix   string to be prefixed to each sheet name"
       echo "   -P phase_file list of phases for data. fmt is 'phasename beg_time end_time'"
+      echo "   -R x,y  reduce data size by dropping x out of y samples"
       echo "   -s sum_file summary_file"
       echo "   -S   skip creating detail xlsx file. Useful for when we are doing multiple directories"
       echo "   -t top_dir  top directory"
@@ -2991,9 +2995,14 @@ row += trows;
     echo "$0.$LINENO: PS_CPUS= $PS_CPUS"
 
     echo "do perf_stat data $i with BEG= $BEG, end= $END_TM" > /dev/stderr
-    echo  $SCR_DIR/perf_stat_scatter.sh $OPT_MEM $OPT_P $OPT_C $OPT_D -b "$BEG"  $OPT_TME  -o "$OPTIONS" -O $WORK_DIR/$i.tsv -f $i $PS_CPUS -S $SUM_FILE
-          $SCR_DIR/perf_stat_scatter.sh $OPT_MEM $OPT_P $OPT_C $OPT_D -b "$BEG"  $OPT_TME  -o "$OPTIONS" -O $WORK_DIR/$i.tsv -f $i $PS_CPUS -S $SUM_FILE
+    echo  $SCR_DIR/perf_stat_scatter.sh $OPT_MEM $OPT_P $OPT_C $OPT_D -b "$BEG"  $OPT_TME -o "$OPTIONS" -O $WORK_DIR/$i.tsv -f $i $PS_CPUS -S $SUM_FILE
+          $SCR_DIR/perf_stat_scatter.sh $OPT_MEM $OPT_P $OPT_C $OPT_D -b "$BEG"  $OPT_TME -o "$OPTIONS" -O $WORK_DIR/$i.tsv -f $i $PS_CPUS -S $SUM_FILE
           ck_last_rc $? $LINENO
+      if [ "$REDUCE" != "" ]; then
+        echo "$0.$LINENO $SCR_DIR/reduce_tsv.sh -f $WORK_DIR/$i.tsv -R $REDUCE"
+        $SCR_DIR/reduce_tsv.sh -f $WORK_DIR/$i.tsv -R $REDUCE
+        ck_last_rc $? $LINENO
+      fi
     fi
   fi
   if [[ $i == *"infra_cputime.txt" ]]; then
@@ -3009,6 +3018,11 @@ row += trows;
           $SCR_DIR/rd_infra_cputime.sh -w $WORK_DIR -O "$OPTIONS" -f $i -n $INCPUS -S $SUM_FILE -m $WORK_DIR/$MUTTLEY_OUT_FILE
           ck_last_rc $? $LINENO
     if [ -e $WORK_DIR/$i.tsv ]; then
+      if [ "$REDUCE" != "" ]; then
+        echo "$0.$LINENO $SCR_DIR/reduce_tsv.sh -f $WORK_DIR/$i.tsv -R $REDUCE"
+        $SCR_DIR/reduce_tsv.sh -f $WORK_DIR/$i.tsv -R $REDUCE
+        ck_last_rc $? $LINENO
+      fi
       #mv $i.tsv $WORK_DIR
       SHEETS="$SHEETS $i.tsv"
     fi
