@@ -1356,22 +1356,25 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
       mutt_other_str = "__muttley_other__";
       use_mutt_mx = mutt_mx; # cant do the mutt_other stuff here or we wont be able to do the pXX (p99 etc) stuff when we combine hosts
       trow++;
-      printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", "muttley calls RPS", "infra procs") > ofile;
-      trow++;
-      drop_host_calls_nm = "host.calls";
-      printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 2, -1, 2+use_mutt_mx, 1) > ofile;
-      #printf("net_mx= %d\n", net_mx);
-      cols = 3
-      printf("epoch\tts") > ofile
+      hstr = sprintf("epoch\tts");
       for(j=1; j <= mutt_mx; j++) {
           i = mutt_res_i[j];
           if (j == use_mutt_mx && mutt_mx > use_mutt_mx) {
-             printf("\t%s", mutt_other_str) > ofile;
+             hstr = hstr sprintf("\t%s", mutt_other_str);
              break;
           }
-        printf("\t%s", mutt_lkup[i]) > ofile;
+        hstr = hstr sprintf("\t%s", mutt_lkup[i]);
       }
-      printf("\n") > ofile;
+      hstr = hstr sprintf("\n");
+      n_hstr = split(hstr, harr, "\t");
+      printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", "muttley calls RPS", "infra procs") > ofile;
+      trow++;
+      drop_host_calls_nm = "host.calls";
+      printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 2, -1, n_hstr-1, 1) > ofile;
+      #printf("net_mx= %d\n", net_mx);
+      cols = 3
+
+      printf("%s", hstr) > ofile
       trow++;
       mutt_host_calls_max = -1
       for(k=2; k <= muttley_mx; k++) {
@@ -1766,9 +1769,7 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
         str = "cgrps "str1" ms/call";
       }
       printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", str, "infra procs") > ofile;
-      trow++;
-      printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 2, -1, ncg_list_mx+1, 1) > ofile;
-      printf("epoch\tts") > ofile
+      hstr = sprintf("epoch\tts");
       cg_cols=0;
       for(j=1; j <= ncg_list_mx; j++) {
         i = res_i[j];
@@ -1831,15 +1832,18 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
         }
         ++cg_cols;
         #printf("ch hdr[%d] cg= %d, nm= %s title= %s\n", cg_cols, cg, nm, str);
-        printf("\t%s", nm) > ofile;
+        hstr = hstr sprintf("\t%s", nm);
       }
       if ( use_top_pct_cpu == 0) {
         top_fctr = 1.0;
       } else {
         top_fctr = 100.0;
       }
-      printf("\n") > ofile;
+      n_hstr = split(hstr, harr, "\t");
       trow++;
+      printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 2, -1, n_hstr-1, 1) > ofile;
+      trow++;
+      printf("%s\n", hstr) > ofile;
 
       tm_attributable_to_cntr = 0;
       tm_attributable_to_cntr_and_mutt = 0;
@@ -2052,17 +2056,23 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
       str = "infra procs %cpus (100=1cpu_busy)";
     }
     printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", str, "infra procs") > ofile;
-    trow++;
-    printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 2, -1, proc_mx+1, 1) > ofile;
     printf("proc_mx= %d\n", proc_mx);
-    printf("epoch\tts") > ofile
+    hstr = sprintf("epoch\tts");
+    idle_i = -1;
     for(i=1; i <= proc_mx; i++) {
       j = res_i[i];
       if (tot[j] == 0) { continue; }
-      printf("\t%s", proc_lkup[j]) > ofile;
+      if (proc_lkup[j] == "idle") {
+        idle_i = j;
+        continue;
+      }
+      hstr = hstr sprintf("\t%s", proc_lkup[j]);
     }
-    printf("\n") > ofile;
     trow++;
+    n_hstr = split(hstr, harr, "\t");
+    printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 2, -1, n_hstr-1, 1) > ofile;
+    trow++;
+    printf("%s\n", hstr) > ofile;
 
     printf("mutt_file= %s\n", mutt_file);
     if (mutt_file != "") {
@@ -2248,6 +2258,9 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
         if (sv_max[j] < v) {
            #printf("new[%d,%d]= %f infra max %f\n", k, j, tm_off, v) > "/dev/stderr";
            sv_max[j] = v;
+        }
+        if (j == idle_i) {
+          continue;
         }
         printf("\t%.3f", v) > ofile;
       }
@@ -2744,10 +2757,13 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
     trow++;
     printf("title\t%s\tsheet\t%s\ttype\tcolumn\n", str, "infra procs") > ofile;
     trow++;
-    printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 0, -1, proc_mx-1, proc_mx) > ofile;
+    printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 0, -1, proc_mx-2, proc_mx) > ofile;
     for(i=1; i <= proc_mx; i++) {
       j = res_i[i];
       if (tot[j] == 0) { continue; }
+      if (j == idle_i) {
+        continue;
+      }
       printf("%s\t", proc_lkup[j]) > ofile;
     }
     printf("%%cpus\n") > ofile;
@@ -2761,6 +2777,9 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
         fctr = 100.0;
       }
       v = v * fctr;
+      if (j == idle_i) {
+        continue;
+      }
       printf("%.3f\t", v) > ofile;
     }
     trow++;
@@ -2777,10 +2796,13 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
     trow++;
     printf("title\t%s\tsheet\t%s\ttype\tcolumn\n", str, "infra procs") > ofile;
     trow++;
-    printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 0, -1, proc_mx-1, proc_mx) > ofile;
+    printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", trow+1, 0, -1, proc_mx-2, proc_mx) > ofile;
     for(i=1; i <= proc_mx; i++) {
       j = res_i[i];
       if (tot[j] == 0) { continue; }
+      if (j == idle_i) {
+        continue;
+      }
       printf("%s\t", proc_lkup[j]) > ofile;
     }
     printf("%%cpus\n") > ofile;
@@ -2789,6 +2811,9 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
       j = res_i[i];
       if (tot[j] == 0) { continue; }
       v = sv_max[j];
+      if (j == idle_i) {
+        continue;
+      }
       printf("%.3f\t", v) > ofile;
     #  if (sum_file != "") {
     #     if ( use_top_pct_cpu == 0) {
