@@ -111,7 +111,7 @@ function try_calc3( e) {
     f = 1;
     e = expr();
     if (f <= NF) { 
-        printf("bc_eqn.awk: error at %s\n", $f) 
+        printf("bc_eqn.awk: error at %s\n, args= %s\n", $f, $0) 
         bc_err = sprintf("bc_eqn.awk: error at %s\n", $f) 
     }
     #else {printf("\t%.8g\n", e); return e;}
@@ -160,7 +160,7 @@ function factor(  e) {      # number | (expr)
         f++;
         e = expr();
         if ($(f++) != ")") {
-            printf("bc_eqn.awk error: missing ) at %s\n", $f);
+            printf("bc_eqn.awk error: missing ) at %s\nargs= %s\n", $f, $0);
             bc_err = sprintf("bc_eqn.awk error: missing ) at %s\n", $f);
         }
         return e;
