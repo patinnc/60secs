@@ -132,13 +132,13 @@ if [ "$SYS_IN" != "" ]; then
   fi
 fi
 
-PRFFILE_PID=~/perf.pid
-PRFFILE_STOP=~/perf.stop
+PRFFILE_PID=$SCR_DIR/../perf.pid
+PRFFILE_STOP=$SCR_DIR/../perf.stop
 if [ -e $PRFFILE_STOP ]; then
   rm $PRFFILE_STOP
 fi
-DOPERF_PID=~/do_perf.pid
-DOPERF_STOP=~/do_perf.stop
+DOPERF_PID=$SCR_DIR/../do_perf.pid
+DOPERF_STOP=$SCR_DIR/../do_perf.stop
 if [ -e $DOPERF_STOP ]; then
   rm $DOPERF_STOP
 fi
@@ -308,11 +308,12 @@ echo "# started on $dtc $dte" > $FL
       EVT="cpu-clock,instructions,cycles,$STALL_UOPSIC,$STALL_UOPS_C,$STALL_UOPS_I,$STALL_UOPS"
       #EVTF="cpu-clock,msr/aperf/,msr/mperf/,msr/tsc/,msr/irperf/"
       IRPERF=
-      if [ -e /sys/devices/msr/events/irperf ]; then
-        IRPERF=",msr/irperf/"
-      else
+      #if [ -e /sys/devices/msr/events/irperf ]; then
+      #   unreliable
+      #  IRPERF=",msr/irperf/"
+      #else
         IRPERF=",instructions"
-      fi
+      #fi
       if [ "$CPU_DECODE" == "Zen Naples/Whitehaven/Summit Ridge/Snowy Owl" ]; then
         IRPERF=",instructions"
       fi
@@ -617,7 +618,7 @@ TD2=",{cpu/slots/,topdown-be-bound,topdown-bad-spec,topdown-fe-bound,topdown-ret
     fi
       echo "$PRF_PID" > $PRFFILE_PID
       if [ "$FOREGRND" == "0" ]; then
-      echo $PRF_PID > ~/perf.pid
+      echo $PRF_PID > $SCR_DIR/../perf.pid
       TM_BEG=`date "+%s"`
       TM_END=$(($TM_BEG+$WAIT+1))
       TM_CUR=$TM_BEG
