@@ -70,18 +70,25 @@ if [ -e $PCG_FILE -a "$CPU_GROUP" != "" ]; then
     exit 1
   fi
 fi
+TSC=$DIR/tsc_freq.txt
+if [ -e $TSC ]; then
+  TSC_FREQ=`awk '/tsc_freq/ { printf("%s\n", $2); exit; }' $TSC`
+  #echo "$0.$LINENO TSC_FREQ= $TSC_FREQ"
+fi
+
 LSCPU=$DIR/lscpu.txt
 LSCPU_INFO=()
 if [ -e $LSCPU ]; then
-  LSCPU_INFO=(`awk '
+  LSCPU_INFO=(`awk -v tsc="$TSC_FREQ" '
+   BEGIN{ if (tsc != "") { tsc_v = tsc; } }
    /^CPU.s.:/{num_cpus = $2;}
    /^Thread.s. per core:/{ tpc = $4; }
    /^Socket.s.:/{ skt = $2; }
    /^Vendor ID/{ mkr = $3;}
-   /^CPU max MHz:/ { if (mkr == "AuthenticAMD") {tsc2= $4; tsc_v2 = 0.001 * tsc;}}
+   /^CPU max MHz:/ { if (mkr == "AuthenticAMD" && tsc="") {tsc2= $4; tsc_v2 = 0.001 * tsc;}}
    /^BogoMIPS/{ if (tsc == "" && mkr == "GenuineIntel") { tsc = $2/tpc ;tsc_v = 0.001 * tsc;}}
    /^Model name:/ {
-     for (i=NF; i > 3; i--) { if (index($i, "GHz") > 0) { tsc = $i; gsub("GHz", "", tsc); tsc_v = tsc; break;}}
+     if (index($0, "AMD ") == 0) {for (i=NF; i > 3; i--) { if (index($i, "GHz") > 0) { tsc = $i; gsub("GHz", "", tsc); tsc_v = tsc; break;}}}
    }
 #Model name:          Intel(R) Xeon(R) Silver 4214 CPU @ 2.20GHz
    END{
@@ -100,6 +107,7 @@ if [ "$THR_PER_CORE_IN" != "" ]; then
   thr_per_core=$THR_PER_CORE_IN
 fi
 
+#echo awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSCPU_INFO[1]}" -v num_cpus="${LSCPU_INFO[0]}" -v dlm=" " 
 awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSCPU_INFO[1]}" -v num_cpus="${LSCPU_INFO[0]}" -v dlm=" " '
    function ck_tm(tm) {
    if (!(tm in tm_list)) {
