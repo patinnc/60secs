@@ -1201,6 +1201,7 @@ for i in $LST; do
        flnm=${SHEET_FILES[$kk]}
        if [[ $flnm == *"infra_cputime"* ]]; then
          FLS_IC=$SDIR/$flnm
+         echo "$0.$LINENO got infra_cputime file $flnm $FLS_IC"
        fi
        if [[ $flnm == *"perf_stat"* ]]; then
          FLS_PS=$SDIR/$flnm
@@ -2334,6 +2335,9 @@ function arr_in_compare_rev(i1, v1, i2, v2,    l, r)
       exit 1
     fi
  fi
+       TS_CUR=`date +%s`
+       TS_DFF=$(($TS_CUR-$TS_BEG))
+       echo "$0.$LINENO: before python tsv_2_xlsx.py, elap_secs= $TS_DFF"
   #if [ $VERBOSE -gt 0 ]; then
     echo "$0.$LINENO python $SCR_DIR/tsv_2_xlsx.py $OPT_SM $OPT_a $OPT_A $OPT_TM -O "$OPTIONS" $OPT_M -f $ALST $SHEETS" > /dev/stderr
     #cat $ALST
