@@ -3006,7 +3006,7 @@ row += trows;
     fi
   fi
   if [[ $i == *"infra_cputime.txt" ]]; then
-    #echo "$0: got $DIR/infra_cputime.txt at $LINENO" > /dev/stderr
+    echo "$0.$LINENO: got $DIR/infra_cputime.txt" > /dev/stderr
     INCPUS=0
 
     if [ "$LSCPU_FL" != "" ]; then
