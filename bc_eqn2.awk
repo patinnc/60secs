@@ -82,7 +82,7 @@ function bc_eqn_evalArithmeticExp(s, mode, inout_arr, vrb, k4,   v, parr, i, j, 
         return 0;
       }
       if (lp > 0) {
-        psv_str = substr(s, lp+len_lp, rp-(lp+len_lp));
+        psv_str = tolower(substr(s, lp+len_lp, rp-(lp+len_lp)));
         if (!((k,psv_str) in bc_eqn_var_list)) {
           bc_eqn_var_list[k,psv_str] = ++bc_eqn_var_mx[k];
           bc_eqn_var_lkup[k,bc_eqn_var_mx[k]] = psv_str;
