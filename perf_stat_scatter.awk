@@ -444,7 +444,7 @@ function ps_bc_eqn_ck_var_val(grp, var_evt_nm, k4, vrb,       la, lc, val1, val2
         val2 = var_evt_nm;
         if (got_rpn_eqn[k4,la,"lkup_col",val2]=="") {
           for (lc=0; lc <= col_hdr_mx; lc++) {
-            if (col_hdr[lc] == val2) {
+            if (tolower(col_hdr[lc]) == val2) {
              got_rpn_eqn[k4,la,"lkup_col",val2] = lc;
              break;
             }
@@ -505,13 +505,26 @@ function bc_eqn2_get_list_of_variables(kmx_in, kkmx_in, vrb,     arg_arr, mode, 
        if (m > j) {
            lkfor[kmx_in,++j]= bc_eqn_var_lkup[k,i];
            if (vrb > 0) {
-             printf("%s: new_eqn uses vars[%d]= %s\n", script, j, lkfor[kmx_in,j]) > "/dev/stderr";
+             printf("%s: new_eqn uses lkfor[%d,%d]= %s\n", script, kmx_in, j, lkfor[kmx_in,j]) > "/dev/stderr";
            }
        }
      }
    }
    got_lkfor[kmx_in,2]= j; # num of fields to look for
 }
+function got_lkfor_init(kmx, eqn) {
+  kmx++;
+  got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
+  got_lkfor[kmx,2]=0; # num of fields to look for
+  got_lkfor[kmx,3]=1.0;
+  got_lkfor[kmx,4]="bc_eqn2";
+  got_lkfor[kmx,5]=1; # instances
+  got_lkfor[kmx,6]="";
+  got_rpn_eqn[kmx, 1, "val"]= eqn;
+  bc_eqn2_get_list_of_variables(kmx, 1, 0);
+  return kmx;
+}
+
  END{
    if (got_err == 1) {
      printf("%s awk got error. bye\n", script) > "/dev/stderr";
@@ -607,6 +620,9 @@ function bc_eqn2_get_list_of_variables(kmx_in, kkmx_in, vrb,     arg_arr, mode, 
      need_bad_spec_evts = 2;
    }
    printf("perf_stat_scatter.sh: ref_cycles_str= %s, cpu_cycles_str= %s\n", ref_cycles_str, cpu_cycles_str) > "/dev/stderr";
+     for (i=0; i <= evt_idx; i++) {
+       evt_lkup[i] = tolower(evt_lkup[i]);
+     }
    kmx = 0;
    def_inst = num_cpus;
 
@@ -620,17 +636,9 @@ function bc_eqn2_get_list_of_variables(kmx_in, kkmx_in, vrb,     arg_arr, mode, 
    bc_eqn_ck_var_val_fncn = "ps_bc_eqn_ck_var_val";
    arg_arr[1]= "";
    
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,4]="bc_eqn2";
-   got_lkfor[kmx,5]=1; # instances
-   got_lkfor[kmx,6]=""; # instances
-   got_rpn_eqn[kmx,     1, "val"]= "{tsc_freq} * [" cpu_cycles_str "] / [" ref_cycles_str "]"
-   got_rpn_eqn[kmx,     1, "max"]=1;
-   bc_eqn2_get_list_of_variables(kmx, 1, 0);
+   kmx = got_lkfor_init(kmx, "{tsc_freq} * [" cpu_cycles_str "] / [" ref_cycles_str "]"  );
    nwfor[kmx,1,"alias"]="metric_CPU operating frequency (in GHz)";
    nwfor[kmx,1,"hdr"]="avg_freq (GHz)";
-
    got_lkfor[kmx,"tag"]="avg_freq_ghz";
    nwfor[kmx,1,"alias"]="metric_CPU operating frequency (in GHz)";
    nwfor[kmx,1,"save_glbl_row_arr"]=got_lkfor[kmx,"tag"];
@@ -638,79 +646,28 @@ function bc_eqn2_get_list_of_variables(kmx_in, kkmx_in, vrb,     arg_arr, mode, 
 
 
    if (amd_cpu == 0) {
-#   kmx++;
-#   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-#   got_lkfor[kmx,2]=2; # num of fields to look for
-#   got_lkfor[kmx,3]=100.0/(tsc_freq*1.0e9); # a factor
-#   got_lkfor[kmx,4]="div"; # operation x/y
-#   got_lkfor[kmx,5]=1; # instances
-#   got_lkfor[kmx,6]="div_by_interval"; # 
-#   lkfor[kmx,1]=ref_cycles_str;
-#   lkfor[kmx,2]="instances";  # get the instances from the first lkfor event
-#   nwfor[kmx,1,"hdr"]="%not_halted";
-#   nwfor[kmx,1,"alias"]="metric_CPU utilization %";
-
    # bsy = 1.0e-9*(evt[mperf,i])/(num_cpus * tsc_ghz * tm_dff); v = 100.0*bsy;
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,4]="bc_eqn2"; # operation x/y/z
-   got_lkfor[kmx,5]=1; # instances
-   got_rpn_eqn[kmx, 1, "val"]= "100.0e-9 * [" ref_cycles_str "] / ( " num_cpus " * {tsc_freq} * {interval})";
+   kmx = got_lkfor_init(kmx, "100.0e-9 * [" ref_cycles_str "] / ( " num_cpus " * {tsc_freq} * {interval})" );
    nwfor[kmx,1,"hdr"]="%not_halted";
    nwfor[kmx,1,"alias"]="metric_CPU utilization %";
-   bc_eqn2_get_list_of_variables(kmx, 1, 0);
 
 
    if (cpu_type != "Ice Lake" && amd_cpu==0) {
-   kmx++;
-   kkmx=0;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,4]="bc_eqn2"; # operation x/y/z
-   got_lkfor[kmx,5]=1; # instances
-   got_lkfor[kmx,6]=""; # 
-   got_rpn_eqn[kmx,      1, "val"]="4.0 * ( [" tolower("CPU_CLK_UNHALTED.THREAD_ANY") "] / " thr_per_core " )"
-#  got_rpn_eqn[kmx, ++kkmx, "val"]=" ( 4.0 * ( ";  
-#  got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-#  got_rpn_eqn[kmx, ++kkmx, "val"]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");
-#  got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-#  got_rpn_eqn[kmx, ++kkmx, "val"]=" / ";   # 100 * uop_ret
-#  got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-#  got_rpn_eqn[kmx, ++kkmx, "val"]=thr_per_core " ) ) ";
-#  got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-#  got_rpn_eqn[kmx,      1,"max"]=kkmx;
-   #lkfor[kmx,1]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
-   #lkfor[kmx,2]=cpu_cycles_str;
-   nwfor[kmx,1,"hdr"]="td_denom";
-   nwfor[kmx,1,"save_glbl_row_arr"]="td_denom";
-   bc_eqn2_get_list_of_variables(kmx, 1, 0);
+     kmx = got_lkfor_init(kmx, "4.0 * ( [CPU_CLK_UNHALTED.THREAD_ANY] / " thr_per_core " )" );
+     nwfor[kmx,1,"hdr"]="td_denom";
+     nwfor[kmx,1,"save_glbl_row_arr"]="td_denom";
    }
 
    if (cpu_type != "Ice Lake") {
-
 #    return ((EV("CPU_CLK_UNHALTED.THREAD", level) / 2) * (1 + EV("CPU_CLK_UNHALTED.ONE_THREAD_ACTIVE", level) / EV("CPU_CLK_UNHALTED.REF_XCLK", level))) if ebs_mode else(EV("CPU_CLK_UNHALTED.THREAD_ANY", level) / 2) if smt_enabled else CLKS(self, EV, level)
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,4]="bc_eqn2"; # operation x/y/z
-   # td_denom = ((4 * evt[cyc,i] / 2) * (1 + evt[clk_one_thr,i] / evt[clk_ref_xclk,i]));
-   got_rpn_eqn[kmx,      1, "val"]="( 4.0 * [" cpu_cycles_str "] / 2.0 ) * ( 1.0 + [cpu_clk_unhalted.one_thread_active] / [cpu_clk_unhalted.ref_xclk] )";
-   nwfor[kmx,1,"hdr"]="td_denom";
-   nwfor[kmx,1,"save_glbl_row_arr"]="td_denom";
-   bc_eqn2_get_list_of_variables(kmx, 1, 0);
-   prt_rpn_eqn(kmx);
+     kmx = got_lkfor_init(kmx, "( 4.0 * [" cpu_cycles_str "] / 2.0 ) * ( 1.0 + [cpu_clk_unhalted.one_thread_active] / [cpu_clk_unhalted.ref_xclk] )" );
+     nwfor[kmx,1,"hdr"]="td_denom";
+     nwfor[kmx,1,"save_glbl_row_arr"]="td_denom";
+     prt_rpn_eqn(kmx);
    }
 
-
-
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,3]=1.0; # a factor
-   got_lkfor[kmx,4]="bc_eqn2"; # operation x/y/z
-   got_lkfor[kmx,5]=1; # instances
-   got_lkfor[kmx,6]=""; # instances
-   got_rpn_eqn[kmx,      1, "val"]="[" L3_cha_clockticks_str "] / [[" L3_cha_clockticks_str "]]";
-   #got_rpn_eqn[kmx,      1,"max"]=1;
+   kmx = got_lkfor_init(kmx, "[" L3_cha_clockticks_str "] / [[" L3_cha_clockticks_str "]]" );
    got_lkfor[kmx,"tag"]="uncore_freq";
-   bc_eqn2_get_list_of_variables(kmx, 1, 0);
    nwfor[kmx,1,"hdr"]="uncore_freq (GHz)";
 
    }
@@ -718,398 +675,157 @@ function bc_eqn2_get_list_of_variables(kmx_in, kkmx_in, vrb,     arg_arr, mode, 
 #    rpn operations
 #    AMD %unhalted calc. amd doesn't have ref-cycles so use tsc_freq and msr/mperf/
    if (amd_cpu == 1) {
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,4]="bc_eqn2"; # operation x/y/z
-   got_rpn_eqn[kmx,      1, "val"]="100 * [msr/mperf/] / (" num_cpus " * 1.0e9 * {tsc_freq}) / {interval}";
-   nwfor[kmx,1,"hdr"]="%not_halted";
-   nwfor[kmx,1,"alias"]="metric_CPU utilization %";
-   bc_eqn2_get_list_of_variables(kmx, 1, 0);
-
+       kmx = got_lkfor_init(kmx, "100 * [msr/mperf/] / (" num_cpus " * 1.0e9 * {tsc_freq}) / {interval}" );
+       nwfor[kmx,1,"hdr"]="%not_halted";
+       nwfor[kmx,1,"alias"]="metric_CPU utilization %";
+   }
 
 #  L3_lat_out_cycles
 #  L3_lat_out_misses
-
-   }
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,4]="bc_eqn2"; # operation x/y/z
-   got_lkfor[kmx,5]=1; # instances
-   got_rpn_eqn[kmx,      1, "val"]="["L3_cha_misses_str"] / ([" instructions_str "] / 1000.0)";
+   kmx = got_lkfor_init(kmx, "["L3_cha_misses_str"] / ([" instructions_str "] / 1000.0)" );
    nwfor[kmx,1,"hdr"]="LLC-misses PKI";
-   bc_eqn2_get_list_of_variables(kmx, 1, 0);
 
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,4]="bc_eqn2"; # operation x/y/z
-   got_rpn_eqn[kmx,      1, "val"]="64.0e-9 * ["L3_cha_misses_str"] / {interval}";
+   kmx = got_lkfor_init(kmx, "64.0e-9 * ["L3_cha_misses_str"] / {interval}" );
    nwfor[kmx,1,"hdr"]="LLC-miss bw (GB/s)";
-   bc_eqn2_get_list_of_variables(kmx, 1, 0);
 
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,4]="bc_eqn2";
-   got_rpn_eqn[kmx,      1, "val"]=lat_fctr " * ["L3_cha_misses_out_str"] / [" L3_cha_misses_str "]";
+   kmx = got_lkfor_init(kmx, lat_fctr " * ["L3_cha_misses_out_str"] / [" L3_cha_misses_str "]" );
    nwfor[kmx,1,"hdr"]="L3 miss latency (core_clks)";
-   bc_eqn2_get_list_of_variables(kmx, 1, 0);
 
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,4]="bc_eqn2";
-   got_rpn_eqn[kmx,      1, "val"]=lat_fctr " * ["L3_cha_misses_out_str"] / [" L3_cha_misses_str "] / {avg_freq_ghz}";
+   kmx = got_lkfor_init(kmx, lat_fctr " * ["L3_cha_misses_out_str"] / [" L3_cha_misses_str "] / {avg_freq_ghz}" );
    nwfor[kmx,1,"hdr"]="L3 miss latency (ns)";
-   bc_eqn2_get_list_of_variables(kmx, 1, 0);
 
-  printf("%s _____ L3_cha_misses_out_str= %s L3_cha_misses_str= %s L3_cha_clockticks_str= %s inv_num_sockets= %f\n",
-    script, L3_cha_misses_out_str, L3_cha_misses_str, L3_cha_clockticks_str, inv_num_sockets) > "/dev/stderr";
-  prt_rpn_eqn(kmx);
+   printf("%s _____ L3_cha_misses_out_str= %s L3_cha_misses_str= %s L3_cha_clockticks_str= %s inv_num_sockets= %f\n",
+     script, L3_cha_misses_out_str, L3_cha_misses_str, L3_cha_clockticks_str, inv_num_sockets) > "/dev/stderr";
+   prt_rpn_eqn(kmx);
 
 
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=2; # num of fields to look for
-   got_lkfor[kmx,4]="bc_eqn2"; # operation x/y/z
-   got_rpn_eqn[kmx,      1, "val"]="100.0 * [" L3_cha_misses_str "] / [" L3_cha_access_str "]";
+   kmx = got_lkfor_init(kmx, "100.0 * [" L3_cha_misses_str "] / [" L3_cha_access_str "]" );
    nwfor[kmx,1,"hdr"]="%LLC misses";
-   bc_eqn2_get_list_of_variables(kmx, 1, 0);
 
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,4]="bc_eqn2"; # operation x/y/z
-   got_rpn_eqn[kmx,      1, "val"]="100.0 * [" L3_misses_str "] / [" L3_access_str "]";
+   kmx = got_lkfor_init(kmx, "100.0 * [" L3_misses_str "] / [" L3_access_str "]" );
    nwfor[kmx,1,"hdr"]="%LLC misses";
-   bc_eqn2_get_list_of_variables(kmx, 1, 0);
 
 
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,4]="bc_eqn2"; # operation x/y/z
-   got_lkfor[kmx,"typ_match"]="require_any";
-   got_lkfor[kmx,"max"]=1000.0;
    cma = "";
    str = "64.0e-9 * ( "
    for (i=0; i < 8; i++) { str = str cma "[unc" i "_read_write]"; cma = "+"; }
    str = str " ) / {interval}";
-   got_rpn_eqn[kmx,      1, "val"]=str;
+   printf("amd mem_bw eqn= %s\n", str);
+   kmx = got_lkfor_init(kmx, str);
+   got_lkfor[kmx,"typ_match"]="require_any";
+   got_lkfor[kmx,"max"]=1000.0;
    nwfor[kmx,1,"hdr"]="unc_read_write (GB/s)";
    nwfor[kmx,1,"alias"]="metric_memory bandwidth total (MB/sec)";
    nwfor[kmx,1,"alias_factor"]=1000.0;
    nwfor[kmx,1,"alias_oper"]="*";
-   printf("amd mem_bw eqn= %s\n", str);
-   bc_eqn2_get_list_of_variables(kmx, 1, 0);
    mem_bw_kmx = kmx;
 
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,4]="bc_eqn2"; # operation
+   kmx = got_lkfor_init(kmx, "64.0e-9 * [hwprefetch_local] / {interval}" );
    got_lkfor[kmx,"max"]=1000.0;
-   got_rpn_eqn[kmx,      1, "val"]= "64.0e-9 * [hwprefetch_local] / {interval}";
    nwfor[kmx,1,"hdr"]="hw prefetch local bw (GB/s)";
-   bc_eqn2_get_list_of_variables(kmx, 1, 0);
 
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,4]="bc_eqn2"; # operation
+   kmx = got_lkfor_init(kmx, "64.0e-9 * [hwprefetch_remote] / {interval}" );
    got_lkfor[kmx,"max"]=1000.0;
-   got_rpn_eqn[kmx,      1, "val"]= "64.0e-9 * [hwprefetch_remote] / {interval}";
    nwfor[kmx,1,"hdr"]="hw prefetch remote bw (GB/s)";
-   bc_eqn2_get_list_of_variables(kmx, 1, 0);
 
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,4]="bc_eqn2"; # operation
+   kmx = got_lkfor_init(kmx, "64.0e-9 * [mem_remote] / {interval}" );
    got_lkfor[kmx,"max"]=1000.0;
-   got_rpn_eqn[kmx,      1, "val"]= "64.0e-9 * [mem_remote] / {interval}";
    nwfor[kmx,1,"hdr"]="L1_miss_filled_from_remote bw (GB/s)";
-   bc_eqn2_get_list_of_variables(kmx, 1, 0);
 
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,4]="bc_eqn2"; # operation
+   kmx = got_lkfor_init(kmx, "64.0e-9 * [mem_local] / {interval}" );
    got_lkfor[kmx,"max"]=1000.0;
-   got_rpn_eqn[kmx,      1, "val"]= "64.0e-9 * [mem_local] / {interval}";
    nwfor[kmx,1,"hdr"]="L1_miss_filled_from_local bw (GB/s)";
-   bc_eqn2_get_list_of_variables(kmx, 1, 0);
 
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,4]="bc_eqn2"; # operation
-   got_rpn_eqn[kmx,      1, "val"]= "["instructions_str"] / ["cpu_cycles_str"]";
+   kmx = got_lkfor_init(kmx, "["instructions_str"] / ["cpu_cycles_str"]" );
    nwfor[kmx,1,"hdr"]="IPC";
    nwfor[kmx,1,"alias"]="metric_IPC";
-   bc_eqn2_get_list_of_variables(kmx, 1, 0);
 
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,4]="bc_eqn2"; # operation
-   got_rpn_eqn[kmx,      1, "val"]= "["cpu_cycles_str"] / ["instructions_str"]";
+   kmx = got_lkfor_init(kmx, "["cpu_cycles_str"] / ["instructions_str"]" );
    nwfor[kmx,1,"hdr"]="CPI";
    nwfor[kmx,1,"alias"]="metric_CPI";
-   bc_eqn2_get_list_of_variables(kmx, 1, 0);
-
 
    if (amd_cpu == 1) {
      if (use_qpi_bw == 2) {
-       kmx++;
-       got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-       got_lkfor[kmx,4]="bc_eqn2"; # operation x/y/z
-       got_lkfor[kmx,"typ_match"]="require_any"; # 
-       got_lkfor[kmx,"max"]=1000.0;
        cma = "";
        str = "32.0e-9 * ( "
        for (i=0; i < 4; i++) { str = str cma "[qpi_data_bandwidth_tx" i; cma = "+"; }
        str = str " ) / {interval}";
-       got_rpn_eqn[kmx,      1, "val"]=str;
+       kmx = got_lkfor_init(kmx, str);
+       got_lkfor[kmx,"typ_match"]="require_any"; # 
+       got_lkfor[kmx,"max"]=1000.0;
        nwfor[kmx,1,"hdr"]="QPI_BW (GB/sec)";
        nwfor[kmx,1,"alias"]="metric_UPI Data transmit BW (MB/sec) (only data)";
        nwfor[kmx,1,"alias_factor"]=1000.0;
        nwfor[kmx,1,"alias_oper"]="*";
-       bc_eqn2_get_list_of_variables(kmx, 1, 0);
      }
    }
    if (amd_cpu == 0) {
-#abcd
      if (use_qpi_bw == 1) {
-       kmx++;
-       got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-       got_lkfor[kmx,4]="bc_eqn2"; # operation
-       got_rpn_eqn[kmx,      1, "val"]= "1.0e-9 * [qpi_data_bandwidth_tx] / {interval}";
+       kmx = got_lkfor_init(kmx, "1.0e-9 * [qpi_data_bandwidth_tx] / {interval}");
        nwfor[kmx,1,"hdr"]="QPI_BW (GB/sec)";
        nwfor[kmx,1,"alias"]="metric_UPI Data transmit BW (MB/sec) (only data)";
        nwfor[kmx,1,"alias_factor"]=1000.0;
        nwfor[kmx,1,"alias_oper"]="*";
-       bc_eqn2_get_list_of_variables(kmx, 1, 0);
-
      }
 
+#abcd
      if (use_qpi_bw == 2) {
-       kmx++;
-       got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-       got_lkfor[kmx,2]=2; # num of fields to look for
-       got_lkfor[kmx,3]= (64.0/9.0) * 1.0e-9; # a factor
-       got_lkfor[kmx,4]="sum"; # operation
-       got_lkfor[kmx,5]=1; # instances
-       got_lkfor[kmx,6]="div_by_interval"; # 
-       lkfor[kmx,1]="qpi_data_bandwidth_tx0";
-       lkfor[kmx,2]="qpi_data_bandwidth_tx1";
+       kmx = got_lkfor_init(kmx, "(64.0/9.0) * 1.0e-9 * ( [qpi_data_bandwidth_tx0] + [qpi_data_bandwidth_tx1] + [qpi_data_bandwidth_tx2] ) / {interval}" );
+       got_lkfor[kmx,"typ_match"]="require_any"; # 
        nwfor[kmx,1,"hdr"]="QPI_BW (GB/sec)";
        nwfor[kmx,1,"alias"]="metric_UPI Data transmit BW (MB/sec) (only data)";
        nwfor[kmx,1,"alias_factor"]=1000.0;
        nwfor[kmx,1,"alias_oper"]="*";
      }
   
-     kmx++;
-     got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-     got_lkfor[kmx,2]=3; # num of fields to look for
-     got_lkfor[kmx,3]= (64.0/9.0) * 1.0e-9; # a factor
-     got_lkfor[kmx,4]="sum"; # operation
-     got_lkfor[kmx,5]=1; # instances
-     got_lkfor[kmx,6]="div_by_interval"; # 
+     kmx = got_lkfor_init(kmx, "(64.0/9.0) * 1.0e-9 * ( [qpi0_data_bandwidth_tx] + [qpi1_data_bandwidth_tx] + [qpi2_data_bandwidth_tx] ) / {interval}" );
      got_lkfor[kmx,"typ_match"]="require_any"; # 
-     lkfor[kmx,1]="qpi0_data_bandwidth_tx";
-     lkfor[kmx,2]="qpi1_data_bandwidth_tx";
-     lkfor[kmx,3]="qpi2_data_bandwidth_tx";
      nwfor[kmx,1,"hdr"]="QPI_BW (GB/sec)";
      nwfor[kmx,1,"alias"]="metric_UPI Data transmit BW (MB/sec) (only data)";
      nwfor[kmx,1,"alias_factor"]=1000.0;
      nwfor[kmx,1,"alias_oper"]="*";
    }
 
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=1; # num of fields to look for
-   got_lkfor[kmx,3]=1.0; # a factor
-   got_lkfor[kmx,4]="sum"; # operation
-   got_lkfor[kmx,5]=1; # instances
-   got_lkfor[kmx,6]="div_by_interval"; # 
-   lkfor[kmx,1]="power/energy-pkg/";
+   kmx = got_lkfor_init(kmx, "[power/energy-pkg/] / {interval}");
    nwfor[kmx,1,"hdr"]="power_pkg (watts)";
    nwfor[kmx,1,"alias"]="metric_package power (watts)";
 
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=1; # num of fields to look for
-   got_lkfor[kmx,3]=1.0e-9; # a factor
-   got_lkfor[kmx,4]="sum"; # operation
-   got_lkfor[kmx,5]=1; # instances
-   got_lkfor[kmx,6]="div_by_interval"; # 
-   lkfor[kmx,1]=instructions_str;
+   kmx = got_lkfor_init(kmx, "1.0e-9 * ["instructions_str"] / {interval}");
    nwfor[kmx,1,"hdr"]="instructions/sec (1e9 instr/sec)";
 
 
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=1; # num of fields to look for
-   got_lkfor[kmx,3]=1.0e-9; # a factor
-   got_lkfor[kmx,4]="sum"; # operation
-   got_lkfor[kmx,5]=1; # instances
-   got_lkfor[kmx,6]="div_by_interval"; # 
-   lkfor[kmx,1]=cpu_cycles_str;
+   kmx = got_lkfor_init(kmx, "1.0e-9 * ["cpu_cycles_str"] / {interval}");
    nwfor[kmx,1,"hdr"]="cpu-cycles/sec (1e9 cycles/sec)";
 
    if (amd_cpu == 1) {
-#            "name"       : "topdown_Retiring(%)",
-   kmx++;
-   kkmx=0;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=2; # num of fields to look for
-   got_lkfor[kmx,3]="1.0";
-   got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
-   got_lkfor[kmx,5]=1; # instances
-   got_lkfor[kmx,6]=""; # 
-   # 100*${ITP_UOP}/(4*(${ITP_ANY}/${thr_per_core}))
-   got_rpn_eqn[kmx, ++kkmx, "val"]=100;
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=tolower("ret_uops_cycles");
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="*";   # 100 * uop_ret
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=cpu_cycles_str;
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="/";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   got_rpn_eqn[kmx,      1,"max"]=kkmx;
-   lkfor[kmx,1]="ret_uops_cycles";
-   lkfor[kmx,2]=cpu_cycles_str;  # get the instances from the first lkfor event
-   nwfor[kmx,1,"hdr"]="topdown_Retiring(%)";
+     #            "name"       : "topdown_Retiring(%)",
+     kmx = got_lkfor_init(kmx, " 100.0 * [ret_uops_cycles] / ["cpu_cycles_str"]" );
+     nwfor[kmx,1,"hdr"]="topdown_Retiring(%)";
    }
 
    if (amd_cpu == 0) {
-   kmx++;
-   kkmx=0;
-   lkfor[kmx,1]=instructions_str;
-   lkfor[kmx,2]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=2; # num of fields to look for
-   got_lkfor[kmx,3]="1.0";
-   got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
-   got_lkfor[kmx,5]=1; # instances
-   got_lkfor[kmx,6]=""; # 
-   got_rpn_eqn[kmx, ++kkmx, "val"]=lkfor[kmx,1];
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=lkfor[kmx,2];
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=thr_per_core;
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="/";   # clk_unh.thr_any / thr_cou
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="/";   # instr/(clk_unh.thr_any / thr_cou)
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   got_rpn_eqn[kmx,      1,"max"]=kkmx;
-   nwfor[kmx,1,"hdr"]="coreIpc";
-   nwfor[kmx,1,"alias"]="topdown_Info_CoreIPC";
+     kmx = got_lkfor_init(kmx, "["instructions_str"] / ( [CPU_CLK_UNHALTED.THREAD_ANY] / " thr_per_core " )" );
+     nwfor[kmx,1,"hdr"]="coreIpc";
+     nwfor[kmx,1,"alias"]="topdown_Info_CoreIPC";
 
 
    if (cpu_type != "Ice Lake" && amd_cpu == 0) {
-   kmx++;
-   kkmx=0;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=1; # num of fields to look for
-   got_lkfor[kmx,3]="1.0";
-   #got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
-   got_lkfor[kmx,4]="bc_eqn"; # operation x/y/z
-   got_lkfor[kmx,5]=1; # instances
-   got_lkfor[kmx,6]=""; # 
-   # 100*${ITP_UOP}/(4*(${ITP_ANY}/${thr_per_core}))
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" 400.0 * ";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=cpu_cycles_str;
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" / "
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="td_denom";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_glbl_row_arr";
-   got_rpn_eqn[kmx,      1,"max"]=kkmx;
-   lkfor[kmx,1]=cpu_cycles_str;
-   lkfor[kmx,2]="td_denom";  # get the instances from the first lkfor event
-   #lkfor[kmx,3]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
-   nwfor[kmx,1,"hdr"]="pct_cycles(%)";
-   prt_rpn_eqn(kmx);
+     kmx = got_lkfor_init(kmx, " 400.0 * ["cpu_cycles_str"] / {td_denom}" );
+     nwfor[kmx,1,"hdr"]="pct_cycles(%)";
+     prt_rpn_eqn(kmx);
    }
 
    if (cpu_type != "Ice Lake") {
-   kmx++;
-   kkmx=0;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=1; # num of fields to look for
-   got_lkfor[kmx,3]="1.0";
-   #got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
-   got_lkfor[kmx,4]="bc_eqn"; # operation x/y/z
-   got_lkfor[kmx,5]=1; # instances
-   got_lkfor[kmx,6]=""; # 
-   # 100*${ITP_UOP}/(4*(${ITP_ANY}/${thr_per_core}))
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" 100.0 * ";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=tolower("UOPS_RETIRED.RETIRE_SLOTS");
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" / "
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="td_denom";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_glbl_row_arr";
-#   got_rpn_eqn[kmx, ++kkmx, "val"]=" / ( 4.0 * ( ";  
-#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-#   got_rpn_eqn[kmx, ++kkmx, "val"]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");
-#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-#   got_rpn_eqn[kmx, ++kkmx, "val"]=" / ";   # 100 * uop_ret
-#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-#   got_rpn_eqn[kmx, ++kkmx, "val"]=thr_per_core " ) ) ";
-#   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx,      1,"max"]=kkmx;
-   lkfor[kmx,1]=tolower("UOPS_RETIRED.RETIRE_SLOTS");
-   lkfor[kmx,2]="td_denom";  # get the instances from the first lkfor event
-   #lkfor[kmx,3]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
-   nwfor[kmx,1,"hdr"]="topdown_Retiring(%)";
-   prt_rpn_eqn(kmx);
+     kmx = got_lkfor_init(kmx, "100.0 * [UOPS_RETIRED.RETIRE_SLOTS] / {td_denom}" );
+     nwfor[kmx,1,"hdr"]="topdown_Retiring(%)";
+     prt_rpn_eqn(kmx);
    }
 
 #
 #  begin tdicx topdown ice-lake sum
 
-   kmx++;
-   kkmx = 0;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=6; # num of fields to look for
-   got_lkfor[kmx,3]="1.0";
-   got_lkfor[kmx,4]="bc_eqn"; # operation x/y/z
-   got_lkfor[kmx,5]=1; # instances
-   got_lkfor[kmx,6]=""; # 
+   kmx = got_lkfor_init(kmx, "100.0 * ([topdown-retiring]+[idq_uops_not_delivered.core]-[int_misc.uop_dropping]+[topdown-be-bound]+[topdown-bad-spec])/[cpu/slots/]" );
    got_lkfor[kmx,"tag"]="tdicx_sum";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="100.0 * (";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   # td_ret
-   got_rpn_eqn[kmx, ++kkmx, "val"]="topdown-retiring";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" + "
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   # td_fe
-   got_rpn_eqn[kmx, ++kkmx, "val"]="idq_uops_not_delivered.core";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" - "
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="int_misc.uop_dropping";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   # td_be
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" + "
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="topdown-be-bound";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   # td_bs
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" + "
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="topdown-bad-spec";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" ) / "
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="cpu/slots/";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx,      1,"max"]=kkmx;
-   lkfor[kmx,1]="topdown-retiring";
-   lkfor[kmx,2]="cpu/slots/";
-   lkfor[kmx,3]="idq_uops_not_delivered.core";
-   lkfor[kmx,4]="int_misc.uop_dropping";
-   lkfor[kmx,5]="topdown-be-bound";
-   lkfor[kmx,6]="topdown-bad-spec";
    nwfor[kmx,1,"hdr"]="topdown_Sum";
 
 #  end   tdicx topdown ice-lake sum
@@ -1117,341 +833,73 @@ function bc_eqn2_get_list_of_variables(kmx_in, kkmx_in, vrb,     arg_arr, mode, 
 
 
    # self.val = (EV("PERF_METRICS.RETIRING", 1) / EV("TOPDOWN.SLOTS", 1)) / PERF_METRICS_SUM(self, EV, 1) if topdown_use_fixed else EV("UOPS_RETIRED.SLOTS", 1) / SLOTS(self, EV, 1)
-   #topdown-retiring
-   #cpu/slots/
-   kmx++;
-   kkmx = 0;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=2; # num of fields to look for
-   got_lkfor[kmx,3]="1.0";
-   got_lkfor[kmx,4]="bc_eqn"; # operation x/y/z
-   got_lkfor[kmx,5]=1; # instances
-   got_lkfor[kmx,6]=""; # 
+   kmx = got_lkfor_init(kmx, "100.0 * [topdown-retiring] / [cpu/slots/]" );
    got_lkfor[kmx,"tag"]="tdicx_ret";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="100.0 * ";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="topdown-retiring";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" / "
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="cpu/slots/";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx,      1,"max"]=kkmx;
-   lkfor[kmx,1]="topdown-retiring";
-   lkfor[kmx,2]="cpu/slots/";
    nwfor[kmx,1,"hdr"]="topdown_Retiring(%)";
 
    if (cpu_type == "Ice Lake") {
-   #if (evt[tdicx_ret,1] != "" && evt[not_deliv,1] != "" && evt[uop_drop,1] != "") {
-        #td_fe_v = 100.0*(evt[not_deliv,i]-evt[uop_drop,i])/evt[tdicx_slots,i];
-        #td_sum = td_ret_v + td_bs_v + td_fe_v + td_be_v;
-        #td_fe_v = 100.0*td_fe_v / td_sum;
-   kmx++;
-   kkmx = 0;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=3; # num of fields to look for
-   got_lkfor[kmx,3]="1.0";
-   got_lkfor[kmx,4]="bc_eqn"; # operation x/y/z
-   got_lkfor[kmx,5]=1; # instances
-   got_lkfor[kmx,6]=""; # 
-   got_lkfor[kmx,"tag"]="tdicx_fe";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="100.0 * (";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="idq_uops_not_delivered.core";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" - "
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="int_misc.uop_dropping";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" ) / "
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="cpu/slots/";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx,      1,"max"]=kkmx;
-   lkfor[kmx,1]="idq_uops_not_delivered.core";
-   lkfor[kmx,2]="int_misc.uop_dropping";
-   lkfor[kmx,3]="cpu/slots/";
-   nwfor[kmx,1,"hdr"]="topdown_Frontend_Bound(%)";
-   }
+     kmx = got_lkfor_init(kmx, "100.0 * ( [idq_uops_not_delivered.core] - [int_misc.uop_dropping] ) / [cpu/slots/]" );
+     got_lkfor[kmx,"tag"]="tdicx_fe";
+     nwfor[kmx,1,"hdr"]="topdown_Frontend_Bound(%)";
 
 
-    #td_be_v = 100.0*evt[tdicx_be,i]/evt[tdicx_slots,i];
-    #topdown-be-bound"
-   kmx++;
-   kkmx = 0;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=2; # num of fields to look for
-   got_lkfor[kmx,3]="1.0";
-   got_lkfor[kmx,4]="bc_eqn"; # operation x/y/z
-   got_lkfor[kmx,5]=1; # instances
-   got_lkfor[kmx,6]=""; # 
+   #td_be_v = 100.0*evt[tdicx_be,i]/evt[tdicx_slots,i];
+   #topdown-be-bound"
+   kmx = got_lkfor_init(kmx, "100.0 * [topdown-be-bound] / [cpu/slots/]" );
    got_lkfor[kmx,"tag"]="tdicx_be";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="100.0 * ";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="topdown-be-bound";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" / "
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="cpu/slots/";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx,      1,"max"]=kkmx;
-   lkfor[kmx,1]="topdown-be-bound";
-   lkfor[kmx,2]="cpu/slots/";
    nwfor[kmx,1,"hdr"]="topdown_Backend_bound(%)";
 
 
-   #uops_issued.any
-   #uops_retired.retire_slots
-   #int_misc.recovery_cycles_any
-   kmx++;
-   kkmx = 0;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=2; # num of fields to look for
-   got_lkfor[kmx,3]="1.0";
-   got_lkfor[kmx,4]="bc_eqn"; # operation x/y/z
-   got_lkfor[kmx,5]=1; # instances
-   got_lkfor[kmx,6]=""; # 
+   kmx = got_lkfor_init(kmx, "100.0 * [topdown-bad-spec] / [cpu/slots/]" );
    got_lkfor[kmx,"tag"]="tdicx_bs";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="100.0 * ";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="topdown-bad-spec";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" / "
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="cpu/slots/";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx,      1,"max"]=kkmx;
-   lkfor[kmx,1]="topdown-bad-spec";
-   lkfor[kmx,2]="cpu/slots/";
    nwfor[kmx,1,"hdr"]="topdown_Bad_Speculation(%)";
+   }
 
    if (cpu_type != "Ice Lake" && got_bad_spec_evts == need_bad_spec_evts) {
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=4; # num of fields to look for
-   got_lkfor[kmx,3]="1.0";
-   got_lkfor[kmx,4]="bc_eqn"; # operation x/y/z
-   got_lkfor[kmx,5]=1; # instances
-   got_lkfor[kmx,6]=""; # 
-#    bc like operations, space between all operators and values
-   #(EV("UOPS_ISSUED.ANY", 1) - Retired_Slots(self, EV, 1) + Pipeline_Width * Recovery_Cycles(self, EV, 1)) / SLOTS(self, EV, 1)
-   kkmx = 0;
-   got_rpn_eqn[kmx, ++kkmx, "val"]="100.0 * ( ";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="uops_issued.any";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" - "; 
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="uops_retired.retire_slots"; 
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" + 4.0 * ";  
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="int_misc.recovery_cycles_any";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" ) / "
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="td_denom";   # 100 * uop_ret
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_glbl_row_arr";
-   got_rpn_eqn[kmx,      1,"max"]=kkmx;
-
-   lkfor[kmx,1]="uops_issued.any";
-   lkfor[kmx,2]="uops_retired.retire_slots";
-   lkfor[kmx,3]="int_misc.recovery_cycles_any";
-   lkfor[kmx,4]=cpu_cycles_str;  # get the instances from the first lkfor event
-   #lkfor[kmx,5]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
-   nwfor[kmx,1,"hdr"]="topdown_Bad_Speculation(%)";
-   # td from pmu-tools (not smt)
-   # retiring = Retired_Slots(self, EV, 1) / SLOTS(self, EV, 1)
-   # fe bound = EV("IDQ_UOPS_NOT_DELIVERED.CORE", 1) / SLOTS(self, EV, 1)
-   # bs       = (EV("UOPS_ISSUED.ANY", 1) - Retired_Slots(self, EV, 1) + Pipeline_Width * Recovery_Cycles(self, EV, 1)) / SLOTS(self, EV, 1) # recov_cycles no any if per-pid
-   # be bound = 1 - self.Frontend_Bound.compute(EV) - (EV("UOPS_ISSUED.ANY", 1) + Pipeline_Width * Recovery_Cycles(self, EV, 1)) / SLOTS(self, EV, 1)
+     kmx = got_lkfor_init(kmx, "100.0 * ( [uops_issued.any] - [uops_retired.retire_slots] + 4.0 * [int_misc.recovery_cycles_any] ) / {td_denom}" );
+     #(EV("UOPS_ISSUED.ANY", 1) - Retired_Slots(self, EV, 1) + Pipeline_Width * Recovery_Cycles(self, EV, 1)) / SLOTS(self, EV, 1)
+     nwfor[kmx,1,"hdr"]="topdown_Bad_Speculation(%)";
+     # td from pmu-tools (not smt)
+     # retiring = Retired_Slots(self, EV, 1) / SLOTS(self, EV, 1)
+     # fe bound = EV("IDQ_UOPS_NOT_DELIVERED.CORE", 1) / SLOTS(self, EV, 1)
+     # bs       = (EV("UOPS_ISSUED.ANY", 1) - Retired_Slots(self, EV, 1) + Pipeline_Width * Recovery_Cycles(self, EV, 1)) / SLOTS(self, EV, 1) # recov_cycles no any if per-pid
+     # be bound = 1 - self.Frontend_Bound.compute(EV) - (EV("UOPS_ISSUED.ANY", 1) + Pipeline_Width * Recovery_Cycles(self, EV, 1)) / SLOTS(self, EV, 1)
    }
 
    if (cpu_type != "Ice Lake") {
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=1; # num of fields to look for
-   got_lkfor[kmx,3]="1.0";
-   got_lkfor[kmx,4]="bc_eqn"; # operation x/y/z
-   got_lkfor[kmx,5]=1; # instances
-   got_lkfor[kmx,6]=""; # 
-   kkmx = 0;
-   # EV("IDQ_UOPS_NOT_DELIVERED.CORE", 1) / SLOTS(self, EV, 1)
-   got_rpn_eqn[kmx, ++kkmx, "val"]="100 * ";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="idq_uops_not_delivered.core";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" / ";  
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="td_denom";   # 100 * uop_ret
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_glbl_row_arr";
-   got_rpn_eqn[kmx,      1,"max"]=kkmx;
-   lkfor[kmx,1]=tolower("IDQ_UOPS_NOT_DELIVERED.CORE");
-   #lkfor[kmx,2]=cpu_cycles_str;  # get the instances from the first lkfor event
-   #lkfor[kmx,3]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
-   nwfor[kmx,1,"hdr"]="topdown_Frontend_Bound(%)";
+     kmx = got_lkfor_init(kmx, "100.0 * [idq_uops_not_delivered.core] / {td_denom}" );
+     nwfor[kmx,1,"hdr"]="topdown_Frontend_Bound(%)";
    }
 
 #    rpn operations
 #    TBD repeating this stuff for sockets. Right now (if you had per-socket data and -o dont_sum_sockets) you wouldnt match up the column header because youd have " S0" or " S1" socket suffix
    if (cpu_type != "Ice Lake" && got_bad_spec_evts == need_bad_spec_evts) {
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=3; # num of fields to look for
-   got_lkfor[kmx,3]="1.0";
-   got_lkfor[kmx,4]="bc_eqn"; # operation x/y/z
-   got_lkfor[kmx,5]=1; # instances
-   got_lkfor[kmx,6]=""; # 
-   kkmx = 0;
-   # 1 - self.Frontend_Bound.compute(EV) - (EV("UOPS_ISSUED.ANY", 1) + Pipeline_Width * Recovery_Cycles(self, EV, 1)) / SLOTS(self, EV, 1)
-   got_rpn_eqn[kmx, ++kkmx, "val"]="100 - ( ";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="topdown_Retiring(%)"
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" + ";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="topdown_Frontend_Bound(%)"
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" + ";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="topdown_Bad_Speculation(%)"
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" ) ";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx,      1,"max"]=kkmx;
-   lkfor[kmx,1]=tolower("UOPS_RETIRED.RETIRE_SLOTS");
-   #lkfor[kmx,2]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
-   lkfor[kmx,2]=tolower("IDQ_UOPS_NOT_DELIVERED.CORE");
-   lkfor[kmx,3]=cpu_cycles_str;  # get the instances from the first lkfor event
-   nwfor[kmx,1,"hdr"]="topdown_Backend_bound(%)";
+     # 1 - self.Frontend_Bound.compute(EV) - (EV("UOPS_ISSUED.ANY", 1) + Pipeline_Width * Recovery_Cycles(self, EV, 1)) / SLOTS(self, EV, 1)
+     kmx = got_lkfor_init(kmx, "100.0 - ( [topdown_Retiring(%)] + [topdown_Frontend_Bound(%)] + [topdown_Bad_Speculation(%)] )" );
+     nwfor[kmx,1,"hdr"]="topdown_Backend_bound(%)";
    } else {
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=4; # num of fields to look for
-   got_lkfor[kmx,3]="1.0";
-#   got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
-   got_lkfor[kmx,4]="bc_eqn"; # operation x/y/z
-   got_lkfor[kmx,5]=1; # instances
-   got_lkfor[kmx,6]=""; # 
-   kkmx = 0;
-#abc
-   got_rpn_eqn[kmx, ++kkmx, "val"]="100.0 - ( ";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="topdown_Retiring(%)"
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" + ";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="topdown_Frontend_Bound(%)"
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=" ) ";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_str";
-
-   got_rpn_eqn[kmx,      1,"max"]=kkmx;
-   lkfor[kmx,1]=tolower("UOPS_RETIRED.RETIRE_SLOTS");
-   lkfor[kmx,2]=tolower("CPU_CLK_UNHALTED.THREAD_ANY");  # get the instances from the first lkfor event
-   lkfor[kmx,3]=tolower("IDQ_UOPS_NOT_DELIVERED.CORE");
-   lkfor[kmx,4]=cpu_cycles_str;  # get the instances from the first lkfor event
-   nwfor[kmx,1,"hdr"]="topdown_Backend_Bound_BadSpec(%)";
+     kmx = got_lkfor_init(kmx, "100.0 - ( [topdown_Retiring(%)] + [topdown_Frontend_Bound(%)] )" );
+     nwfor[kmx,1,"hdr"]="topdown_Backend_Bound_BadSpec(%)";
    }
    }
 
    if (amd_cpu == 1) {
 #    rpn operations
 #    AMD backend bound
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=2; # num of fields to look for
-   got_lkfor[kmx,3]="1.0";
-   got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
-   got_lkfor[kmx,5]=1; # instances
-   got_lkfor[kmx,6]=""; # 
-   kkmx = 0;
-   got_rpn_eqn[kmx, ++kkmx, "val"]=100;
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="stalled-cycles-backend"
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="*";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=cpu_cycles_str
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="/";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   got_rpn_eqn[kmx,      1,"max"]=kkmx;
-   lkfor[kmx,1]="stalled-cycles-backend";
-   lkfor[kmx,2]=cpu_cycles_str;  # get the instances from the first lkfor event
-   nwfor[kmx,1,"hdr"]="topdown_Backend_Bound_BadSpec(%)";
+     kmx = got_lkfor_init(kmx, "100.0 * [stalled-cycles-backend] / ["cpu_cycles_str"]" );
+     nwfor[kmx,1,"hdr"]="topdown_Backend_Bound_BadSpec(%)";
 
 #    AMD frontend bound
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=2; # num of fields to look for
-   got_lkfor[kmx,3]="1.0";
-   got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
-   got_lkfor[kmx,5]=1; # instances
-   got_lkfor[kmx,6]=""; # 
-   kkmx = 0;
-   got_rpn_eqn[kmx, ++kkmx, "val"]=100;
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="stalled-cycles-frontend"
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="*";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=cpu_cycles_str
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="/";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   got_rpn_eqn[kmx,      1,"max"]=kkmx;
-   lkfor[kmx,1]="stalled-cycles-frontend";
-   lkfor[kmx,2]=cpu_cycles_str;  # get the instances from the first lkfor event
-   nwfor[kmx,1,"hdr"]="topdown_Frontend_Bound(%)";
+     kmx = got_lkfor_init(kmx, "100.0 * [stalled-cycles-frontend] / ["cpu_cycles_str"]" );
+     nwfor[kmx,1,"hdr"]="topdown_Frontend_Bound(%)";
 
 #    AMD %dispatch_stalls_0
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=2; # num of fields to look for
-   got_lkfor[kmx,3]="1.0";
-   got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
-   got_lkfor[kmx,5]=1; # instances
-   got_lkfor[kmx,6]=""; # 
-   kkmx = 0;
-   got_rpn_eqn[kmx, ++kkmx, "val"]=100;
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="disp_stall_cycles_0";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="*";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=cpu_cycles_str
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="/";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   got_rpn_eqn[kmx,      1,"max"]=kkmx;
-   lkfor[kmx,1]="disp_stall_cycles_0";
-   lkfor[kmx,2]=cpu_cycles_str;  # get the instances from the first lkfor event
-   nwfor[kmx,1,"hdr"]="%dispatch_stalls_0";
+     kmx = got_lkfor_init(kmx, "100.0 * [disp_stall_cycles_0] / ["cpu_cycles_str"]" );
+     nwfor[kmx,1,"hdr"]="%dispatch_stalls_0";
 
 #    AMD %dispatch_stalls_1
-   kmx++;
-   got_lkfor[kmx,1]=0; # 0 if no fields found or 1 if 1 or more of these fields found
-   got_lkfor[kmx,2]=2; # num of fields to look for
-   got_lkfor[kmx,3]="1.0";
-   got_lkfor[kmx,4]="rpn_eqn"; # operation x/y/z
-   got_lkfor[kmx,5]=1; # instances
-   got_lkfor[kmx,6]=""; # 
-   kkmx = 0;
-   got_rpn_eqn[kmx, ++kkmx, "val"]=100;
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="disp_stall_cycles_1";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="*";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   got_rpn_eqn[kmx, ++kkmx, "val"]=cpu_cycles_str
-   got_rpn_eqn[kmx,   kkmx, "opr"]="push_row_val";
-   got_rpn_eqn[kmx, ++kkmx, "val"]="/";
-   got_rpn_eqn[kmx,   kkmx, "opr"]="oper";
-   got_rpn_eqn[kmx,      1,"max"]=kkmx;
-   lkfor[kmx,1]="disp_stall_cycles_1";
-   lkfor[kmx,2]=cpu_cycles_str;  # get the instances from the first lkfor event
-   nwfor[kmx,1,"hdr"]="%dispatch_stalls_1";
+     kmx = got_lkfor_init(kmx, "100.0 * [disp_stall_cycles_1] / ["cpu_cycles_str"]" );
+     nwfor[kmx,1,"hdr"]="%dispatch_stalls_1";
    }
 
    printf("perf_stat awk options= %s, skt_idx= %s\n", options, skt_idx) > "/dev/stderr";
@@ -1504,38 +952,34 @@ function bc_eqn2_get_list_of_variables(kmx_in, kkmx_in, vrb,     arg_arr, mode, 
      kmx = kmx_nw;
    }
 
+   if (1==2) {
    NO_MATCH = -1000;
    for (k=1; k <= kmx; k++) { 
        for (j=1; j <= got_lkfor[k,2]; j++) { 
            lkup[k,j] = NO_MATCH;
        }
    }
-   for(i=0; i <= evt_idx; i++) {
-     for (k=1; k <= kmx; k++) { 
-       for (j=1; j <= got_lkfor[k,2]; j++) { 
+   }
+   for (k=1; k <= kmx; k++) { 
+     for (j=1; j <= got_lkfor[k,2]; j++) { 
+       for(i=0; i <= evt_idx; i++) {
+         str2 = tolower(evt_lkup[i]);
          #printf("i= %d, evt_idx= %d, k= %d, kmx= %d, j= %d, got_lkfor[%d,2]= %d, evt_lkup[i]= %s, lkfor[k,j]= %s\n",
          #   i, evt_idx, k, kmx, j, k, got_lkfor[k,2], evt_lkup[i], lkfor[k,j]) > "/dev/stderr";
-         if (evt_lkup[i] == lkfor[k,j]) {
-           lkup[k,j] = i
+         if (str2 == tolower(lkfor[k,j])) {
+           #lkup[k,j] = i
            got_lkfor[k,1]++;
+           printf("eqn uses avail event: lkfor[%d,%d]= %s tot_used %d of needed %d\n", k,j,lkfor[k,j], got_lkfor[k,1], got_lkfor[k,2]);
          }
        }
      }
    }
 
-# delow is try at checking for glbl_row_arr
-    if (1==2) {
-   for (k=1; k <= kmx; k++) { 
-     for (j=1; j <= got_lkfor[k,2]; j++) { 
-       if (nwfor[k,1,"hdr"] == lkfor[k,j]) {
-         nwfor[kmx,1,"save_glbl_row_arr"]="td_denom";
-       }
-     }
-   }
-   }
+# below is try at checking for glbl_row_arr
    extra_cols=0;
    for (k=1; k <= kmx; k++) { 
      for (j=1; j <= got_lkfor[k,2]; j++) { 
+         if (1==2) {
        if ("interval" == lkfor[k,j]) {
            lkup[k,j] = -1
            got_lkfor[k,1]++;
@@ -1544,20 +988,46 @@ function bc_eqn2_get_list_of_variables(kmx_in, kkmx_in, vrb,     arg_arr, mode, 
            lkup[k,j] = -2
            got_lkfor[k,1]++;
        }
+         }
+       # allow references to other equations provided the equations already have been found to have all their dependencies satisfied
+       for (kk=1; kk < k; kk++) { 
+         if (got_lkfor[kk,"used"] == 1 && tolower(lkfor[k,j]) == tolower(nwfor[kk,1,"hdr"])) {
+           got_lkfor[k,1]++;
+         }
+       }
        #if (nwfor[k,1,"hdr"] == lkfor[k,j]) {
        #    lkup[k,j] = -100-k
        #    got_lkfor[k,1]++;
        #}
      }
+     got_lkfor[k,"used"] = 0;
      if (got_lkfor[k,1] == got_lkfor[k,2] || (got_lkfor[k,"typ_match"] == "require_any" && got_lkfor[k,1] > 0)) {
-        printf("use nwfor[%d,1,hdr]=%s, extra_cols= %d\n", k, nwfor[k,1,"hdr"], extra_cols) > "/dev/stderr";
+        printf("going to be used eqn: nwfor[%d,1,hdr]=%s, extra_cols= %d\n", k, nwfor[k,1,"hdr"], extra_cols) > "/dev/stderr";
         extra_cols++;
+        got_lkfor[k,"used"] = 1;
+        for (kk=1; kk <= got_lkfor[k,2]; kk++) { 
+           str = tolower(lkfor[k,kk]);
+           #printf("ck eqn[%d], lkfor[%d,%d]= %s\n", k, k, kk, lkfor[k,kk]);
+           if (!(str in glbl_used_event_list)) {
+             glbl_used_event_list[str] = ++glbl_used_event_mx;
+             glbl_used_event_lkup[glbl_used_event_mx] = str;
+             printf("%s: event[%d] %s used in equations\n", script, glbl_used_event_mx, str);
+           }
+        }
      }
      if (nwfor[k,1,"hdr"] == "td_denom") {
        printf("nwfor[%d,1, hdr]== %s, got_lkfor1= %d got_lkfor2= %d\n", k, nwfor[k,1, "hdr"], got_lkfor[k,1], got_lkfor[k,2]) > "/dev/stderr";
      }
    }
    printf("perf_stat_scatter.awk: extra_cols= %d\n", extra_cols) > "/dev/stderr";
+# xyz
+   printf("\n");
+   for(i=0; i <= evt_idx; i++) {
+      str = tolower(evt_lkup[i]);
+      if (!(str in glbl_used_event_list)) {
+          printf("%s: event[%d]= %s not used in any equations\n", script, i, str);
+      }
+   }
 
    rows=1;
    if (options != "" && index(options, "chart_sheet") == 0) {
@@ -1765,6 +1235,7 @@ function bc_eqn2_get_list_of_variables(kmx_in, kkmx_in, vrb,     arg_arr, mode, 
            do_summary(cols, sv[i,3+j]+0.0, use_epoch+0.0, interval, k);
            cols++;
          }
+         if (1==2) {
          if (got_lkfor[k,4] == "sum") {
            for (kk=1; kk <= got_lkfor[k,2]; kk++) { 
              if (lkup[k,kk] == NO_MATCH) { continue; }
@@ -1787,6 +1258,7 @@ function bc_eqn2_get_list_of_variables(kmx_in, kkmx_in, vrb,     arg_arr, mode, 
            if (lkup[k,2] == -1) { denom[k] = interval; }
            if (lkup[k,1] == -2) { numer[k] = evt_inst[lkup[k,1]]; }
            if (lkup[k,2] == -2) { denom[k] = evt_inst[lkup[k,1]]; }
+         }
          }
        }
      }
@@ -1828,7 +1300,7 @@ function bc_eqn2_get_list_of_variables(kmx_in, kkmx_in, vrb,     arg_arr, mode, 
        if (got_lkfor[k,1] == 0) {
          continue;
        }
-       if (got_lkfor[k,4] == "div" && got_lkfor[k,1] == got_lkfor[k,2]) {
+       if (1==2 && got_lkfor[k,4] == "div" && got_lkfor[k,1] == got_lkfor[k,2]) {
          if (denom[k] == 0 && lkup[k,2] == -2) {
           denom[k] = def_inst;  # this is for input data on a per process basis where instance is 0
           printf("got zero for %s k= %s, numer= %f, lkup[%d,2]= %s, lkup[k,1]= %s evt_inst[lkup[k,1]]= %s, use num_cpus= %s\n",
@@ -1842,15 +1314,15 @@ function bc_eqn2_get_list_of_variables(kmx_in, kkmx_in, vrb,     arg_arr, mode, 
          prt_it=1;
        }
 
-       if (got_lkfor[k,4] == "sum" && got_lkfor[k,1] > 0) {
+       if (1==2 && got_lkfor[k,4] == "sum" && got_lkfor[k,1] > 0) {
          val = sum[k] * got_lkfor[k,3];
          prt_it=1;
        }
-       if (got_lkfor[k,4] == "formula" && got_lkfor[k,1] == got_lkfor[k,2]) {
+       if (1==2 && got_lkfor[k,4] == "formula" && got_lkfor[k,1] == got_lkfor[k,2]) {
          val =  got_lkfor[k,3];
          prt_it=1;
        }
-       if (got_lkfor[k,4] == "rpn_eqn" && got_lkfor[k,1] == got_lkfor[k,2]) {
+       if (1==2 && got_lkfor[k,4] == "rpn_eqn" && got_lkfor[k,1] == got_lkfor[k,2]) {
          val =  0.0;
          prt_it=1;
          rpn_err = "";
