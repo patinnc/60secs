@@ -327,7 +327,23 @@ if [ "$UHOSTNM" != "" ]; then
 fi
 }
 
-get_grail_info_for_hostname $HOSTNM $SUM_FILE
+LZC_FL=$WORK_DIR/lzc_info.txt
+if [ -e $LZC_FL ]; then
+  STR=`awk -F";" '/^ptyp/ { printf("%s\n", $2);exit;}' $LZC_FL`
+  printf "host\tlzc_ptype\t\"%s\"\tptype\n"  "$STR" >> $SUM_FILE;
+  STR=`awk -F";" '/^typ/ { printf("%s\n", $2);exit;}' $LZC_FL`
+  printf "host\tlzc_type\t\"%s\"\ttype\n"  "$STR" >> $SUM_FILE;
+  STR=`awk -F";" '/^cpu_long/ { $1=""; printf("%s\n", $0);exit;}' $LZC_FL`
+  printf "host\tcpu_long\t\"%s\"\tcpu_long\n"  "$STR" >> $SUM_FILE;
+  STR=`awk -F";" '/^cpu_shrt/ { $1=""; printf("%s\n", $0);exit;}' $LZC_FL`
+  printf "host\tcpu_long\t\"%s\"\tcpu_shrt\n"  "$STR" >> $SUM_FILE;
+  STR=`awk -F";" '/^services/ { $1=""; printf("%s\n", $0);exit;}' $LZC_FL`
+  printf "host\tservices\t\"%s\"\tservices\n"  "$STR" >> $SUM_FILE;
+  STR=`awk -F";" '/^sku/ { $1=""; printf("%s\n", $0);exit;}' $LZC_FL`
+  printf "host\tsku\t\"%s\"\tsku\n"  "$STR" >> $SUM_FILE;
+else
+  get_grail_info_for_hostname $HOSTNM $SUM_FILE
+fi
 
 LSCPU_FL=lscpu.txt
 if [ ! -e $LSCPU_FL ]; then
