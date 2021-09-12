@@ -195,7 +195,15 @@ while getopts "AhvSa:b:B:c:C:D:d:e:F:g:I:j:m:N:o:P:R:r:s:w:X:x:" opt; do
       echo "      Currently only perf_stats txt.tsv and infra_cputime txt.tsv files call the reduce_tsv.sh script"
       echo "   -r regex   regex expression to select directories"
       echo "   -S    skip creating detail xlsx file, just do the summary all spreadsheet"
-      echo "   -s  sku_list  select dirs with sku. have to be able to figure host from path and must have crane list of host info"
+      echo "   -s  sku_list  have to be able to figure host from path (or hostname.txt file) and must have lzc_info.txt info"
+      echo "       sku_list  doesn't select dirs with sku at the moment."
+      echo "       supports creating a 'sku' field by substituting:"
+      echo "             %cpu_shrt% with short cpu name (ie if cpu name is Broadwell then replace %cpu_shrt% with bdw)"
+      echo "             %cpu_long% with short cpu name (ie if cpu name is Broadwell then replace %cpu_long% with broadwell)"
+      echo "             %host% with hostname"
+      echo "             %sku% with sku string from lzc (ie 1T or B19a)"
+      echo "           so if for '-s %sku%_%cpu_shrt%' you would get a string '1T_bdw' if the info for the host in that dir is 1T broadwell server"
+      echo "           A 'sku' line (with the 'sku' for each server) gets added to the summary sheet"
       echo "   -w  work_dir  output tsv files will be put in this dir. Default is $WORK_DIR. Will be created if doesn't exist"
       echo "   -x xlsx_filename  This is passed to tsv_2_xlsx.py as the name of the xlsx. (you need to add the .xlsx)"
       echo "      The default is chart_line.xlsx"
@@ -273,10 +281,31 @@ if [ "$NUM_DIR_IN" != "" ]; then
   if [ "$NUM_DIR_END" == "" ]; then
     # only 1 value entered. Treat it as a 'read this many files' 
     NUM_DIR=$NUM_DIR_BEG
-    NUM_DIR_BEG=
+    NUM_DIR_BEG=0
+    NUM_DIR_END=${NUM_DIR_ARR[0]}
   fi
   echo "NUM_DIR_ARR= ${NUM_DIR_ARR[@]}, ND0= ${NUM_DIR_ARR[0]}, ND1=${NUM_DIR_ARR[1]} NUM_DIR_BEG= $NUM_DIR_BEG NUM_DIR_END= $NUM_DIR_END" > /dev/stderr
 fi
+
+ck_skip_dir_due_to_num_dir () {
+  #echo "$0.$LINENO dir_num= $1 NUM_DIR_IN= $NUM_DIR_IN ck beg $NUM_DIR_BEG end= $NUM_DIR_END" > /dev/stderr
+  if [ "$1" != "" ]; then
+    local j=$1
+      if [ "$NUM_DIR_BEG" != "" ]; then
+         if [ "$j" -lt "$NUM_DIR_BEG" ]; then
+         echo "$0.$LINENO  job_id= $JOB_ID skip dir $j due to -N $NUM_DIR_IN option" > /dev/stderr
+         return 1
+         fi
+      fi
+      if [ "$NUM_DIR_END" != "" ]; then
+         if [ "$j" -gt "$NUM_DIR_END" ]; then
+         echo "$0.$LINENO  job_id= $JOB_ID skip dir $j due to -N $NUM_DIR_IN option" > /dev/stderr
+         return 1
+         fi
+      fi
+  fi
+  return 0
+}
 
 REGEX_LEN=${#REGEX[@]}
 SKU_LEN=${#SKU[@]}
@@ -423,7 +452,7 @@ get_dir_list() {
    fi
    echo "$0.$LINENO get_dir_list: found $CKF file in dir $DIR:"
    local STR=
-   local j=0
+   local j=-1
    for ii in $RESP; do
       NM=$(dirname $ii)
       j=$((j+1))
@@ -431,17 +460,9 @@ get_dir_list() {
          echo "$0.$LINENO  job_id= $JOB_ID limit number of dirs with $CKF due to -N $NUM_DIR option"
          break
       fi
-      if [ "$NUM_DIR_BEG" != "" ]; then
-         if [ "$j" -lt "$NUM_DIR_BEG" ]; then
-         echo "$0.$LINENO  job_id= $JOB_ID skip dir $j due to -N $NUM_DIR_IN option" > /dev/stderr
-         continue
-         fi
-      fi
-      if [ "$NUM_DIR_END" != "" ]; then
-         if [ "$j" -gt "$NUM_DIR_END" ]; then
-         echo "$0.$LINENO  job_id= $JOB_ID skip dir $j due to -N $NUM_DIR_IN option" > /dev/stderr
-         continue
-         fi
+      ck_skip_dir_due_to_num_dir $j
+      if [ "$?" == "1" ]; then
+        continue
       fi
       STR="$STR $NM"
    done
@@ -622,19 +643,9 @@ else
              echo "$0.$LINENO first sys_*_perf_stat.txt TS_INIT= $TS_INIT"
             fi
            fi
-      if [ "$NUM_DIR_BEG" != "" ]; then
-         if [ "$j" -lt "$NUM_DIR_BEG" ]; then
-         #echo "$0.$LINENO  job_id= $JOB_ID skip dir $j due to -N $NUM_DIR_IN option" > /dev/stderr
-         j=$((j+1))
-         continue
-         fi
-      fi
-      if [ "$NUM_DIR_END" != "" ]; then 
-         if [ "$j" -gt "$NUM_DIR_END" ]; then
-           #echo "$0.$LINENO  job_id= $JOB_ID skip dir $j due to -N $NUM_DIR_IN option" > /dev/stderr
-           j=$((j+1))
-           continue
-         fi
+      ck_skip_dir_due_to_num_dir $j
+      if [ "$?" == "1" ]; then
+        continue
       fi
       j=$((j+1))
       STR="$STR $NM"
@@ -682,15 +693,19 @@ for i in $LST; do
   if [ $VERBOSE -gt 0 ]; then
     echo "$0.$LINENO dir $i"
   fi
-    for j in 2 1; do
-      echo "$0.$LINENO try phase_cpu2017.txt find $i -name CPU2017.00$j.log"
-      ARR=(`find $i -name CPU2017.00$j.log`)
-      for ((k=0; k < ${#ARR[@]}; k++)); do
-        v=`dirname ${ARR[$k]}`
+      ck_skip_dir_due_to_num_dir $j
+      if [ $? == 1 ]; then
+        continue
+      fi
+    for k in 2 1; do
+      echo "$0.$LINENO try phase_cpu2017.txt find $i -name CPU2017.00$k.log"
+      ARR=(`find $i -name CPU2017.00$k.log`)
+      for ((kk=0; kk < ${#ARR[@]}; kk++)); do
+        v=`dirname ${ARR[$kk]}`
         if [ $VERBOSE -gt 0 ]; then
-           echo "$0.$LINENO: $SCR_DIR/cpu2017_2_phasefile.sh -i ${ARR[$k]} -o $v/phase_cpu2017.txt  -O $OPTIONS"
+           echo "$0.$LINENO: $SCR_DIR/cpu2017_2_phasefile.sh -i ${ARR[$kk]} -o $v/phase_cpu2017.txt  -O $OPTIONS"
         fi
-                             $SCR_DIR/cpu2017_2_phasefile.sh -i ${ARR[$k]} -o $v/phase_cpu2017.txt  -O "$OPTIONS"
+                             $SCR_DIR/cpu2017_2_phasefile.sh -i ${ARR[$kk]} -o $v/phase_cpu2017.txt  -O "$OPTIONS"
       done
       if [ "${#ARR[@]}" != "0" ]; then
         break
@@ -716,11 +731,14 @@ done
 echo "$0.$LINENO PHS_ARR= ${PHS_ARR[@]}"
 #echo "$0.$LINENO PHS_DIR_LKUP= ${PHS_DIR_LKUP[@]}"
 #exit 1
+declare -A LZC_ARR_BY_HOST
+declare -A LZC_ARR_BY_DIR
+declare -A LZC_ARR_BY_DIR_NUM
 
 if [ "$SKU_LEN" != "0" ]; then
   echo "$0.$LINENO SKU= ${SKU[@]}"
    if [ "$SKU_LEN" != "0" ]; then
-      itot=0
+      itot=-1
       ii=0
       RESP=
       for idir in $DIR; do
@@ -728,6 +746,137 @@ if [ "$SKU_LEN" != "0" ]; then
         if [ $VERBOSE -gt 1 ]; then
           echo "__________sku try dir= $idir"
         fi
+        echo "$0.$LINENO DIRs= $DIR. bye"
+        IFS='/' read -r -a PATH_ARR <<< "$idir"
+        IFS=$IFS_SV
+        CK_HST_NM=`find $idir -name hostname.txt`
+        if [ "$CK_HST_NM" == "" ]; then
+          CK_HST_NM=`find $idir/.. -name hostname.txt`
+          if [ "$CK_HST_NM" == "" ]; then
+            CK_HST_NM=`find $idir/../../ -name hostname.txt`
+          fi
+        fi
+        echo "ck_hst_nm ${CK_HST_NM}"
+        if [ "$CK_HST_NM" != "" ]; then
+          CK_LNS=`echo "$CK_HST_NM" | wc -l`
+          if [ "$CK_LNS" -ne "1" ]; then
+            CK_HST_NM=
+          fi
+        fi 
+        echo "path_arr= ${PATH_ARR[@]}"
+        echo "ck_hst_nm ${CK_HST_NM}"
+        LZC="lzc_info.txt"
+        STR=$idir
+        for ((jj=${#PATH_ARR[@]}-1; jj >= 0; jj--)); do
+          LZC_FL=`find $STR  -maxdepth 1 -name $LZC`
+          STR=`dirname $STR`
+          if [ "$LZC_FL" != "" ]; then
+            break
+          fi
+          if [ "$STR" == "" ]; then
+            break
+          fi
+        done
+        CK_HST_NM=`find $idir -name hostname.txt`
+        CK_LSC_NM=`find $idir -name lscpu.txt`
+        echo "LZC_FL= $LZC_FL"
+        if [ "$CK_HST_NM" == "" ]; then
+          CK_HST_NM=`find $idir/.. -name hostname.txt`
+          CK_LSC_NM=`find $idir/.. -name lscpu.txt`
+          if [ "$CK_HST_NM" == "" ]; then
+            CK_HST_NM=`find $idir/../../ -name hostname.txt`
+            CK_LSC_NM=`find $idir/../../ -name lscpu.txt`
+          fi
+        fi
+        echo "ck_hst_nm ${CK_HST_NM}"
+        if [ "$CK_HST_NM" != "" ]; then
+          CK_LNS=`echo "$CK_HST_NM" | wc -l`
+          if [ "$CK_LNS" -ne "1" ]; then
+            CK_HST_NM=
+          fi
+        fi 
+        if [ "$CK_HST_NM" != "" ]; then
+          GOT_HST=`cat $CK_HST_NM`
+        fi
+        if [ "$CK_LSC_NM" != "" ]; then
+          GOT_CPU=`$SCR_DIR/decode_cpu_fam_mod.sh $CK_LSC_NM`
+        fi
+#xyz
+        LZC_OUT=`awk -v host="$GOT_HST" -v sku_in="${SKU[@]}" -v cpu_fam="$GOT_CPU" '
+          BEGIN{
+            #printf("host= %s, sku= %s, cpu_fam= %s\n", host, sku_in, cpu_fam);
+            str = tolower(cpu_fam);
+            if (index(str, "sky") > 0) { cpu = "skx"; }
+            if (index(str, "cascade") > 0) { cpu = "csx"; }
+            if (index(str, "broad") > 0) { cpu = "bdw"; }
+            if (index(str, "milan") > 0) { cpu = "mln"; }
+            if (index(str, "haswell") > 0) { cpu = "hsw"; }
+
+            got_match=0;
+          }
+          /^Hostname/ {
+            if (NF == 2 && $2 == host) {
+              #printf("______got lzc host= %s\n", host);
+              host_list[host] = ++host_mx;
+              host_lkup[host_mx] = host;
+              host_i = host_list[host];
+              got_match=1;
+            }
+          }
+          got_match == 1 {
+            #printf("lzc line= %s\n", $0);
+            if ($1 == "Provider" && $2 == "Type") {
+              prov_typ = $3;
+            }
+            if ($1 == "Is" && $2 == "Crane") {
+              is_crane = $3;
+            }
+            if ($1 == "Type") {
+              typ = $2;
+            }
+            if ($1 == "Services") {
+              sv[host_i,"ptyp"] = prov_typ;
+              sv[host_i,"typ"] = typ;
+              sv[host_i,"is_crane"] = is_crane;
+              $1="";
+              sv[host_i,"services"] = $0;
+              got_match = 0;
+              #exit(0);
+            }
+          }
+          END{
+            for (i=1; i <= host_mx; i++) {
+              printf("host;%s\n", host_lkup[i]);
+              printf("ptyp;%s\n", sv[i,"ptyp"]);
+              printf("typ;%s\n", sv[i,"typ"]);
+              printf("crane;%s\n", sv[i,"is_crane"]);
+              printf("cpu_long;%s\n", cpu_fam);
+              printf("cpu_shrt;%s\n", cpu);
+              printf("services;%s\n", sv[i,"services"]);
+              gsub("%cpu_shrt%", cpu, sku_in);
+              gsub("%host%", host, sku_in);
+              sku = sv[i,"ptyp"];
+              if (sv[i,"is_crane"] == "yes") {
+                sku = sv[i,"typ"];
+              }
+              gsub("%sku%", sku, sku_in);
+              gsub("%cpu_long%", cpu, sku_in);
+              printf("sku;%s\n", sku_in);
+            }
+            exit(0);
+          } ' $LZC_FL`
+          RC=$?
+          ck_last_rc $RC $LINENO
+        echo "LZC_out= $LZC_OUT"
+        if [ "$LZC_OUT" != "" ]; then
+          LZC_ARR_BY_DIR[$idir]="$LZC_OUT"
+          LZC_ARR_BY_DIR_NUM[$itot]="$LZC_OUT"
+          LZC_ARR_BY_HOST[$GOT_HST]="$LZC_OUT"
+          echo "$0.$LINENO LZC_ARR_BY_DIR_NUM[$itot]= ${LZC_ARR_BY_DIR_NUM[$itot]}"
+          echo "$0.$LINENO LZC_ARR_BY_DIR[$idir]= ${LZC_ARR_BY_DIR[$idir]}"
+        fi
+        RESP="$RESP $idir"
+        if [ "1" == "2" ]; then
         get_hostname_from_path $idir
         if [ "$HOSTNM" != "" ]; then
           get_grail_info_for_hostname $HOSTNM
@@ -747,6 +896,7 @@ if [ "$SKU_LEN" != "0" ]; then
                fi
              done
           fi
+        fi
         fi
       done
       DIR=$RESP
@@ -969,6 +1119,9 @@ for i in $LST; do
      OPT_REDUCE=" -R $REDUCE "
    fi
 
+   if [ "${LZC_ARR_BY_DIR[$i]}" != "" ]; then
+     echo "${LZC_ARR_BY_DIR[$i]}" > $JOB_WORK_DIR/lzc_info.txt
+   fi
 
    echo "$0.$LINENO: $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p \"$OPT_P\" $OPT_DEBUG $OPT_REDUCE $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i \"*.png\" -s $SUM_FILE -x $XLS.xlsx -o \"$OPT_OPT\" $OPT_PH -w $JOB_WORK_DIR -t $DIR" > $SYS_2_TSV_STDOUT_FILE
    if [ "$BACKGROUND" -le "0" ]; then
