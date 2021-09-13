@@ -699,7 +699,9 @@ for i in $LST; do
         continue
       fi
     for k in 2 1; do
-      echo "$0.$LINENO try phase_cpu2017.txt find $i -name CPU2017.00$k.log"
+      if [ $VERBOSE -gt 0 ]; then
+        echo "$0.$LINENO try phase_cpu2017.txt find $i -name CPU2017.00$k.log"
+      fi
       ARR=(`find $i -name CPU2017.00$k.log`)
       for ((kk=0; kk < ${#ARR[@]}; kk++)); do
         v=`dirname ${ARR[$kk]}`
@@ -747,7 +749,7 @@ if [ "$SKU_LEN" != "0" ]; then
         if [ $VERBOSE -gt 1 ]; then
           echo "__________sku try dir= $idir"
         fi
-        echo "$0.$LINENO DIRs= $DIR. bye"
+        #echo "$0.$LINENO DIRs= $DIR. bye"
         IFS='/' read -r -a PATH_ARR <<< "$idir"
         IFS=$IFS_SV
         CK_HST_NM=`find $idir -name hostname.txt`
@@ -757,15 +759,19 @@ if [ "$SKU_LEN" != "0" ]; then
             CK_HST_NM=`find $idir/../../ -name hostname.txt`
           fi
         fi
-        echo "$0.$LINENO ck_hst_nm ${CK_HST_NM}"
+        if [ $VERBOSE -gt 1 ]; then
+          echo "$0.$LINENO ck_hst_nm ${CK_HST_NM}"
+        fi
         if [ "$CK_HST_NM" != "" ]; then
           CK_LNS=`echo "$CK_HST_NM" | wc -l`
           if [ "$CK_LNS" -ne "1" ]; then
             CK_HST_NM=
           fi
         fi 
-        echo "$0.$LINENO path_arr= ${PATH_ARR[@]}"
-        echo "ck_hst_nm ${CK_HST_NM}"
+        if [ $VERBOSE -gt 1 ]; then
+          echo "$0.$LINENO path_arr= ${PATH_ARR[@]}"
+          echo "ck_hst_nm ${CK_HST_NM}"
+        fi
         LZC="lzc_info.txt"
         CLS="clusto_info.lst"
         STR=$idir
@@ -779,7 +785,9 @@ if [ "$SKU_LEN" != "0" ]; then
             break
           fi
         done
-        echo "$0.$LINENO LZC_FL= $LZC_FL"
+        if [ $VERBOSE -gt 1 ]; then
+          echo "$0.$LINENO LZC_FL= $LZC_FL"
+        fi
         CK_HST_NM=`find $idir -name hostname.txt`
         CK_LSC_NM=`find $idir -name lscpu.txt`
         if [ "$CK_HST_NM" == "" ]; then
@@ -790,7 +798,9 @@ if [ "$SKU_LEN" != "0" ]; then
             CK_LSC_NM=`find $idir/../../ -name lscpu.txt`
           fi
         fi
-        echo "ck_hst_nm ${CK_HST_NM}"
+        if [ $VERBOSE -gt 1 ]; then
+          echo "ck_hst_nm ${CK_HST_NM}"
+        fi
         if [ "$CK_HST_NM" != "" ]; then
           CK_LNS=`echo "$CK_HST_NM" | wc -l`
           if [ "$CK_LNS" -ne "1" ]; then
@@ -804,15 +814,21 @@ if [ "$SKU_LEN" != "0" ]; then
           GOT_CPU=`$SCR_DIR/decode_cpu_fam_mod.sh $CK_LSC_NM`
         fi
         CK_PCG_NM=`find $idir -name perf_cpu_groups.txt`
-        echo "$0.$LINENO got PK_PCG_NM= $CK_PCG_NM"
+        if [ $VERBOSE -gt 1 ]; then
+          echo "$0.$LINENO got PK_PCG_NM= $CK_PCG_NM"
+        fi
         if [ "$CK_PCG_NM" != "" ]; then
           if [ -e $CK_PCG_NM ]; then
             CPU2017_THRDS=`awk '/^all.all/{n=split($0, arr, "\t"); if (n==3) { n=split(arr[3], brr, ","); printf("%s\n", n); exit(0);}}' $CK_PCG_NM`
-            echo "$0.$LINENO got CPU2017_THRDS= $CPU2017_THRDS"
+            if [ $VERBOSE -gt 1 ]; then
+              echo "$0.$LINENO got CPU2017_THRDS= $CPU2017_THRDS"
+            fi
           fi
         fi
 #xyz
-        echo "$0.$LINENO got LZC_FL= $LZC_FL"
+        if [ $VERBOSE -gt 1 ]; then
+          echo "$0.$LINENO got LZC_FL= $LZC_FL"
+        fi
         LZC_OUT=`awk -v infile="$LZC_FL" -v host="$GOT_HST" -v sku_in="${SKU[@]}" -v cpu_fam="$GOT_CPU" -v cpu2017_thrds="$CPU2017_THRDS" '
           BEGIN{
             #printf("host= %s, sku= %s, cpu_fam= %s\n", host, sku_in, cpu_fam) > "/dev/stderr";
@@ -901,13 +917,17 @@ if [ "$SKU_LEN" != "0" ]; then
           } ' $LZC_FL`
           RC=$?
           ck_last_rc $RC $LINENO
-        echo "LZC_out= $LZC_OUT"
+        if [ $VERBOSE -gt 1 ]; then
+           echo "LZC_out= $LZC_OUT"
+        fi
         if [ "$LZC_OUT" != "" ]; then
           LZC_ARR_BY_DIR[$idir]="$LZC_OUT"
           LZC_ARR_BY_DIR_NUM[$itot]="$LZC_OUT"
           LZC_ARR_BY_HOST[$GOT_HST]="$LZC_OUT"
-          echo "$0.$LINENO LZC_ARR_BY_DIR_NUM[$itot]= ${LZC_ARR_BY_DIR_NUM[$itot]}"
-          echo "$0.$LINENO LZC_ARR_BY_DIR[$idir]= ${LZC_ARR_BY_DIR[$idir]}"
+          if [ $VERBOSE -gt 1 ]; then
+            echo "$0.$LINENO LZC_ARR_BY_DIR_NUM[$itot]= ${LZC_ARR_BY_DIR_NUM[$itot]}"
+            echo "$0.$LINENO LZC_ARR_BY_DIR[$idir]= ${LZC_ARR_BY_DIR[$idir]}"
+          fi
         fi
         RESP="$RESP $idir"
         if [ "1" == "2" ]; then
@@ -935,7 +955,9 @@ if [ "$SKU_LEN" != "0" ]; then
       done
       DIR=$RESP
       LST=$DIR
-      echo "+__________$0.$LINENO input dirs= $itot. got matches= $ii for skus= ${SKU[@]}" > /dev/stderr
+      if [ $VERBOSE -gt 1 ]; then
+        echo "+__________$0.$LINENO input dirs= $itot. got matches= $ii for skus= ${SKU[@]}" > /dev/stderr
+      fi
    fi
 fi
 #echo "$0.$LINENO bye"
@@ -1076,7 +1098,9 @@ for i in $LST; do
  fi
  #DIRN=${PHS_DIR_LIST[$i]}
  DIRN=${PHS_DIR_NAME[$i,$CLIPX]}
- echo "$0.$LINENO phs_arr dirn= $DIRN"
+ if [ $VERBOSE -gt 0 ]; then
+   echo "$0.$LINENO phs_arr dirn= $DIRN"
+ fi
  if [ "$DIRN" != "" ]; then
    OPT_BEG_TM=" -b ${PHS_ARR[$DIRN,0]} "
    OPT_END_TM=" -e ${PHS_ARR[$DIRN,1]} "
@@ -1177,7 +1201,9 @@ for i in $LST; do
           fi
    fi
      LST_DIR_2_WORK_DIR[$DIR_NUM]=$JOB_WORK_DIR
-     echo "$0.$LINENO LST_DIR_2_WORK_DIR[$DIR_NUM]= ${LST_DIR_2_WORK_DIR[$DIR_NUM]}"
+     if [ $VERBOSE -gt 0 ]; then
+       echo "$0.$LINENO LST_DIR_2_WORK_DIR[$DIR_NUM]= ${LST_DIR_2_WORK_DIR[$DIR_NUM]}"
+     fi
      LOAD=`uptime | awk '{printf("%.0f\n", $(NF-2)+0.5);}'`
      jbs=0
      for job in `jobs -p`
@@ -1309,8 +1335,10 @@ for i in $LST; do
  fi
  if [ "${LZC_ARR_BY_DIR[$i]}" != "" ]; then
      GOT_SKU=`echo "${LZC_ARR_BY_DIR[$i]}" | grep '^sku;' | sed 's/^sku;//'`
-     echo "$0.$LINENO ____________ got sku= $GOT_SKU"
      echo -e "--sku\t$GOT_SKU" >> $ALST
+     if [ $VERBOSE -gt 0 ]; then
+       echo "$0.$LINENO ____________ got sku= $GOT_SKU"
+     fi
  fi
  if [ "$DESC_FILE" != "" ]; then
    echo -e "-d\t\"$DESC_FILE\"" >> $ALST
@@ -1378,7 +1406,9 @@ for i in $LST; do
    #CKDIR=$i
    #RESP=`grep "$CKDIR" ${SHEETS_OUT[$k]}`
    RESP=${SHEETS_OUT[$k]}
-   echo "$0.$LINENO ckdir[$k] dir= $i resp= $RESP" > /dev/stderr
+   if [ $VERBOSE -gt 0 ]; then
+     echo "$0.$LINENO ckdir[$k] dir= $i resp= $RESP" > /dev/stderr
+   fi
    if [ "$RESP" != "" ]; then
      if [ $VERBOSE -gt 0 ]; then
        echo "got SHEETS_OUT[$k]= $RESP, i= $i"
