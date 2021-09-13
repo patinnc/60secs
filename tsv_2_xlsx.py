@@ -45,6 +45,7 @@ all_charts_one_row = []
 all_charts_one_row_hash = {}
 all_charts_one_row_max = -1
 desc = None
+options_sku = None
 set_col_arr = []
 got_sum_all = 0
 sum_all_file = ""
@@ -70,6 +71,7 @@ options, remainder = getopt.getopt(sys.argv[1:], 'Aa:b:c:d:e:f:i:m:o:O:P:p:s:S:v
                                                          'size=',
                                                          'sum_all=',
                                                          'verbose'
+                                                         'sku=',
                                                          ])
 sv_remainder = remainder
 do_avg = False
@@ -100,7 +102,8 @@ for opt, arg in options:
         options_filename = arg
     elif opt in ('-o', '--output'):
         output_filename = arg
-        #print("output_filename= ", output_filename, file=sys.stderr)
+    elif opt in ('--sku'):
+        options_sku = arg
     elif opt in ('-O', '--options'):
         options_str = arg
         options_str_top = arg
@@ -314,6 +317,7 @@ for fo2 in range(len(fl_options)):
                                                             'size=',
                                                             'sum_all=',
                                                             'verbose',
+                                                            'sku=',
                                                             ])
    for opt, arg in options:
        if opt in ('-A', '--average'):
@@ -389,6 +393,7 @@ for bmi in range(base_mx+1):
                                                             'size=',
                                                             'sum_all=',
                                                             'verbose',
+                                                            'sku=',
                                                             ])
 
    image_files=[]
@@ -433,6 +438,8 @@ for bmi in range(base_mx+1):
            max_val = float(arg)
        elif opt in ('-A', '--average'):
            do_avg = True
+       elif opt in ('--sku'):
+           options_sku = arg
        elif opt in ('-P', '--phase'):
            phase = arg
            print("tsv_2_xls.ph: phase file= %s" % (phase), file=sys.stderr)
@@ -1224,7 +1231,10 @@ for bmi in range(base_mx+1):
                    desc_str = None
                    if options_all_charts_one_row == True:
                       if desc == None:
-                        desc_str = str(fo)
+                        if options_sku != None:
+                           desc_str = options_sku
+                        else:
+                           desc_str = str(fo)
                         all_charts_one_row[fo2][3] = desc_str
                       else:
                         desc_str = desc
@@ -1277,6 +1287,8 @@ for bmi in range(base_mx+1):
              rc = -1
              if worksheet_charts != None:
                 worksheet_charts.write(ch_top_at_row -1, ch_left_at_col+1, title);
+                if options_sku != None:
+                   worksheet_charts.write(ch_top_at_row-2, ch_left_at_col+1, options_sku);
                 if num_series == 0:
                    print("error: got num_series = 0 for chart1 title= %s file= %s" % (title, x), file=sys.stderr)
                 else:
