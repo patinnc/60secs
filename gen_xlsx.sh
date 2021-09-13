@@ -202,6 +202,7 @@ while getopts "AhvSa:b:B:c:C:D:d:e:F:g:I:j:m:N:o:P:R:r:s:w:X:x:" opt; do
       echo "             %cpu_long% with short cpu name (ie if cpu name is Broadwell then replace %cpu_long% with broadwell)"
       echo "             %host% with hostname"
       echo "             %sku% with sku string from lzc (ie 1T or B19a)"
+      echo "             %cpu2017_threads% with the total number of threads of cpu2017 (assuming it is a cpu2017 run and the file perf_cpu_groups.txt exists"
       echo "           so if for '-s %sku%_%cpu_shrt%' you would get a string '1T_bdw' if the info for the host in that dir is 1T broadwell server"
       echo "           A 'sku' line (with the 'sku' for each server) gets added to the summary sheet"
       echo "   -w  work_dir  output tsv files will be put in this dir. Default is $WORK_DIR. Will be created if doesn't exist"
@@ -756,19 +757,20 @@ if [ "$SKU_LEN" != "0" ]; then
             CK_HST_NM=`find $idir/../../ -name hostname.txt`
           fi
         fi
-        echo "ck_hst_nm ${CK_HST_NM}"
+        echo "$0.$LINENO ck_hst_nm ${CK_HST_NM}"
         if [ "$CK_HST_NM" != "" ]; then
           CK_LNS=`echo "$CK_HST_NM" | wc -l`
           if [ "$CK_LNS" -ne "1" ]; then
             CK_HST_NM=
           fi
         fi 
-        echo "path_arr= ${PATH_ARR[@]}"
+        echo "$0.$LINENO path_arr= ${PATH_ARR[@]}"
         echo "ck_hst_nm ${CK_HST_NM}"
         LZC="lzc_info.txt"
+        CLS="clusto_info.lst"
         STR=$idir
         for ((jj=${#PATH_ARR[@]}-1; jj >= 0; jj--)); do
-          LZC_FL=`find $STR  -maxdepth 1 -name $LZC`
+          LZC_FL=`find $STR  -maxdepth 1 \( -name "$LZC" -o -name "$CLS" \)`
           STR=`dirname $STR`
           if [ "$LZC_FL" != "" ]; then
             break
@@ -777,9 +779,9 @@ if [ "$SKU_LEN" != "0" ]; then
             break
           fi
         done
+        echo "$0.$LINENO LZC_FL= $LZC_FL"
         CK_HST_NM=`find $idir -name hostname.txt`
         CK_LSC_NM=`find $idir -name lscpu.txt`
-        echo "LZC_FL= $LZC_FL"
         if [ "$CK_HST_NM" == "" ]; then
           CK_HST_NM=`find $idir/.. -name hostname.txt`
           CK_LSC_NM=`find $idir/.. -name lscpu.txt`
@@ -801,20 +803,34 @@ if [ "$SKU_LEN" != "0" ]; then
         if [ "$CK_LSC_NM" != "" ]; then
           GOT_CPU=`$SCR_DIR/decode_cpu_fam_mod.sh $CK_LSC_NM`
         fi
+        CK_PCG_NM=`find $idir -name perf_cpu_groups.txt`
+        echo "$0.$LINENO got PK_PCG_NM= $CK_PCG_NM"
+        if [ "$CK_PCG_NM" != "" ]; then
+          if [ -e $CK_PCG_NM ]; then
+            CPU2017_THRDS=`awk '/^all.all/{n=split($0, arr, "\t"); if (n==3) { n=split(arr[3], brr, ","); printf("%s\n", n); exit(0);}}' $CK_PCG_NM`
+            echo "$0.$LINENO got CPU2017_THRDS= $CPU2017_THRDS"
+          fi
+        fi
 #xyz
-        LZC_OUT=`awk -v host="$GOT_HST" -v sku_in="${SKU[@]}" -v cpu_fam="$GOT_CPU" '
+        echo "$0.$LINENO got LZC_FL= $LZC_FL"
+        LZC_OUT=`awk -v infile="$LZC_FL" -v host="$GOT_HST" -v sku_in="${SKU[@]}" -v cpu_fam="$GOT_CPU" -v cpu2017_thrds="$CPU2017_THRDS" '
           BEGIN{
-            #printf("host= %s, sku= %s, cpu_fam= %s\n", host, sku_in, cpu_fam);
+            #printf("host= %s, sku= %s, cpu_fam= %s\n", host, sku_in, cpu_fam) > "/dev/stderr";
             str = tolower(cpu_fam);
             if (index(str, "sky") > 0) { cpu = "skx"; }
             if (index(str, "cascade") > 0) { cpu = "csx"; }
             if (index(str, "broad") > 0) { cpu = "bdw"; }
             if (index(str, "milan") > 0) { cpu = "mln"; }
             if (index(str, "haswell") > 0) { cpu = "hsw"; }
+            if (index(infile, "lzc_info.txt") > 0) {
+              mode="lzc";
+            } else {
+              mode="clusto"
+            }
 
             got_match=0;
           }
-          /^Hostname/ {
+          $1 == "Hostname" || $1 == "Name:" {
             if (NF == 2 && $2 == host) {
               #printf("______got lzc host= %s\n", host);
               host_list[host] = ++host_mx;
@@ -825,23 +841,39 @@ if [ "$SKU_LEN" != "0" ]; then
           }
           got_match == 1 {
             #printf("lzc line= %s\n", $0);
-            if ($1 == "Provider" && $2 == "Type") {
-              prov_typ = $3;
-            }
-            if ($1 == "Is" && $2 == "Crane") {
-              is_crane = $3;
-            }
-            if ($1 == "Type") {
-              typ = $2;
-            }
-            if ($1 == "Services") {
-              sv[host_i,"ptyp"] = prov_typ;
-              sv[host_i,"typ"] = typ;
-              sv[host_i,"is_crane"] = is_crane;
-              $1="";
-              sv[host_i,"services"] = $0;
-              got_match = 0;
-              #exit(0);
+            if (mode == "lzc") {
+              #printf("++++++++got_lzc line= %s\n", $0) > "/dev/stderr";
+              if ($1 == "Provider" && $2 == "Type") {
+                prov_typ = $3;
+              }
+              if ($1 == "Is" && $2 == "Crane") {
+                is_crane = $3;
+              }
+              if ($1 == "Type") {
+                typ = $2;
+              }
+              if ($1 == "Services") {
+                sv[host_i,"ptyp"] = prov_typ;
+                sv[host_i,"typ"] = typ;
+                sv[host_i,"is_crane"] = is_crane;
+                $1="";
+                sv[host_i,"services"] = $0;
+                got_match = 0;
+                #exit(0);
+              }
+            } else {
+              #printf("++++++++got_clusto line= %s\n", $0) > "/dev/stderr";
+              if (index($0, "Sku:") == 1) {
+               sv[host_i,"is_crane"] = "no";
+               sv[host_i,"services"] = "n/a";
+               sv[host_i,"sku"] = $2;
+               sv[host_i,"ptyp"] = $2;
+               #printf("++++++++got_clusto sku= %s\n", $2) > "/dev/stderr";
+               got_match = 0;
+              }
+              if (index("$0", "----------") == 1) {
+               got_match = 0;
+              }
             }
           }
           END{
@@ -853,6 +885,7 @@ if [ "$SKU_LEN" != "0" ]; then
               printf("cpu_long;%s\n", cpu_fam);
               printf("cpu_shrt;%s\n", cpu);
               printf("services;%s\n", sv[i,"services"]);
+              printf("cpu2017_threads;%s\n", cpu2017_thrds);
               gsub("%cpu_shrt%", cpu, sku_in);
               gsub("%host%", host, sku_in);
               sku = sv[i,"ptyp"];
@@ -861,6 +894,7 @@ if [ "$SKU_LEN" != "0" ]; then
               }
               gsub("%sku%", sku, sku_in);
               gsub("%cpu_long%", cpu, sku_in);
+              gsub("%cpu2017_threads%", cpu2017_thrds, sku_in);
               printf("sku;%s\n", sku_in);
             }
             exit(0);
@@ -904,6 +938,8 @@ if [ "$SKU_LEN" != "0" ]; then
       echo "+__________$0.$LINENO input dirs= $itot. got matches= $ii for skus= ${SKU[@]}" > /dev/stderr
    fi
 fi
+#echo "$0.$LINENO bye"
+#exit 1
 
 CDIR=`pwd`
 ALST=$WORK_DIR/$JOB_ID/tsv_2_xlsx_${JOB_ID}.inp
@@ -1270,6 +1306,11 @@ for i in $LST; do
  fi
  if [ "$CLIP" != "" ]; then
     echo -e "-c\t$CLIP" >> $ALST
+ fi
+ if [ "${LZC_ARR_BY_DIR[$i]}" != "" ]; then
+     GOT_SKU=`echo "${LZC_ARR_BY_DIR[$i]}" | grep '^sku;' | sed 's/^sku;//'`
+     echo "$0.$LINENO ____________ got sku= $GOT_SKU"
+     echo -e "--sku\t$GOT_SKU" >> $ALST
  fi
  if [ "$DESC_FILE" != "" ]; then
    echo -e "-d\t\"$DESC_FILE\"" >> $ALST
