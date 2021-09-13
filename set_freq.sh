@@ -284,6 +284,7 @@ function show_MSRs() {
   echo CORES_PER_SKT="lscpu | $AWK '/Core.s. per socket:/{cps = $4; print cps;}'"
   CORES_PER_SKT=`lscpu | $AWK '/Core.s. per socket:/{cps = $4; print cps;}'`
   echo "=========== $1 ================="
+  k=0
   for j in $MSR_LIST; do
     MSR=$j
     REGS=`rdmsr --all $MSR`
@@ -292,6 +293,10 @@ function show_MSRs() {
     for i in $REGS; do
       if [ "$first_val" == "" ]; then
         first_val=$i
+        if [ "$k" == "0" ]; then
+          MSR_FRQ=$i
+        fi
+	k=$((k+1))
       fi
       if [ "$i" != "$first_val" ]; then
         echo "diff $MSR $i and $first_val"
@@ -301,7 +306,6 @@ function show_MSRs() {
     if [ $ALL_SAME -eq 1 ]; then
       echo "all cpus have MSR $MSR == $first_val"
     fi
-    MSR_FRQ=$first_val
   done
   for j in $XMSR_LIST; do
     MSR=$j
@@ -323,15 +327,20 @@ function show_MSRs() {
     MSR_XTR=$first_val
   done
   echo "cps $CORES_PER_SKT msr_xtr= $MSR_XTR msr_frq= $MSR_FRQ"
-  if [ "$CORES_PER_SKT" != "" -a "$MSR_XTR" != "" -a "$MSR_FRQ" != "" ]; then
-    $AWK -v cps="$CORES_PER_SKT" -v msr_frq="$MSR_FRQ" -v msr_xtr="$MSR_XTR" '
+  if [ "$CORES_PER_SKT" != "" -a "$CPU_NAME" != "" -a "$MSR_FRQ" != "" ]; then
+    $AWK -v cps="$CORES_PER_SKT" -v cpu_name="$CPU_NAME" -v msr_frq="$MSR_FRQ" -v msr_xtr="$MSR_XTR" '
      BEGIN{
        cps += 0;
        for (i=0; i < 8; i++) {
           str1 = "0x" substr(msr_frq, 2*(i)+1, 2);
-          str2 = "0x" substr(msr_xtr, 2*(i)+1, 2);
+	  #printf("str1[%d]= %s\n", i, str1);
           frq[i] = strtonum(str1);
-          lmt[i] = strtonum(str2);
+	  if (cpu_name == "Broadwell" || cpu_name == "Haswell") {
+            lmt[i]=8-i;
+	  } else {
+            str2 = "0x" substr(msr_xtr, 2*(i)+1, 2);
+            lmt[i] = strtonum(str2);
+	  }
           if (cps >= lmt[i]) {
             printf("freq[%d]= %.1f, cores %d\n", i, .1*frq[i], lmt[i]);
           }
