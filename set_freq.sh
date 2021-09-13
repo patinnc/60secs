@@ -145,13 +145,18 @@ if [ "$RC" != "0" ]; then
   apt-get install msr-tools
 fi
 
-export AWKPATH=$SCR_DIR
 
 # cascade lake 2nd gen stuff from https://www.intel.com/content/www/us/en/products/docs/processors/xeon/2nd-gen-xeon-scalable-spec-update.html
 # 2nd gen xeon scalable cpus: cascade lake sku is 82xx, 62xx, 52xx, 42xx 32xx W-32xx  from https://www.intel.com/content/www/us/en/products/docs/processors/xeon/2nd-gen-xeon-scalable-spec-update.html
 # skylake 1st gen stuff from https://www.intel.com/content/www/us/en/processors/xeon/scalable/xeon-scalable-spec-update.html
 # 1st gen xeon scalable cpus: 81xx, 61xx, 51xx, 81xxT, 61xxT 81xxF, 61xxF, 51xx, 41xx, 31xx, 51xxT 41xxT, 51xx7, 
-CPU_NAME=`cat /proc/cpuinfo | awk '
+if [ "1" == "2" ]; then
+export AWKPATH=$SCR_DIR
+AWK=awk
+if [ -e $SCR_DIR/bin/gawk ]; then
+ AWK=$SCR_DIR/bin/gawk
+fi
+CPU_NAME=`cat /proc/cpuinfo | $AWK '
    @include "decode_cpu_fam_mod.awk"
   /^vendor_id/ {
     vndr=$(NF);
@@ -174,6 +179,9 @@ CPU_NAME=`cat /proc/cpuinfo | awk '
     exit;
   }
   '`
+else
+    CPU_NAME=`$SCR_DIR/decode_cpu_fam_mod.sh`
+fi
 
 CPU_VENDOR=`awk '/^vendor_id/ { printf("%s\n", $(NF));exit;}' /proc/cpuinfo`
 CPU_MODEL=`awk '/^model/ { if ($2 == ":") {printf("%s\n", $(NF));exit;}}' /proc/cpuinfo`
@@ -230,9 +238,11 @@ if [[ $CPU_NAME == *"Ice Lake"* ]]; then
 fi
 if [ "$GOT_CSX_ICX" == "1" ]; then
   MSR_LIST="0x1ad"
+  XMSR_LIST="0x1ae" # the mapping
 else 
   if [[ $CPU_NAME == *"Skylake"* ]]; then
     MSR_LIST="0x1ad"
+    XMSR_LIST="0x1ae" # the mapping
   else
     if [[ $CPU_NAME == *"Broadwell"* ]]; then
       MSR_LIST="0x1ad 0x1ae 0x1af"
@@ -271,6 +281,24 @@ fi
 function show_MSRs() {
   echo "=========== $1 ================="
   for j in $MSR_LIST; do
+    MSR=$j
+    REGS=`rdmsr --all $MSR`
+    ALL_SAME=1
+    first_val=
+    for i in $REGS; do
+      if [ "$first_val" == "" ]; then
+        first_val=$i
+      fi
+      if [ "$i" != "$first_val" ]; then
+        echo "diff $MSR $i and $first_val"
+        ALL_SAME=0
+      fi
+    done
+    if [ $ALL_SAME -eq 1 ]; then
+      echo "all cpus have MSR $MSR == $first_val"
+    fi
+  done
+  for j in $XMSR_LIST; do
     MSR=$j
     REGS=`rdmsr --all $MSR`
     ALL_SAME=1
