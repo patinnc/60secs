@@ -31,6 +31,12 @@ SCR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 GOV_IN=
 FREQ_IN=
 DID_GOV=0
+export AWKPATH=$SCR_DIR
+AWK=awk
+if [ -e $SCR_DIR/bin/gawk ]; then
+ AWK=$SCR_DIR/bin/gawk
+fi
+echo "AWK= $AWK"
 
 while getopts "hg:f:" opt; do
   case ${opt} in
@@ -151,11 +157,6 @@ fi
 # skylake 1st gen stuff from https://www.intel.com/content/www/us/en/processors/xeon/scalable/xeon-scalable-spec-update.html
 # 1st gen xeon scalable cpus: 81xx, 61xx, 51xx, 81xxT, 61xxT 81xxF, 61xxF, 51xx, 41xx, 31xx, 51xxT 41xxT, 51xx7, 
 if [ "1" == "2" ]; then
-export AWKPATH=$SCR_DIR
-AWK=awk
-if [ -e $SCR_DIR/bin/gawk ]; then
- AWK=$SCR_DIR/bin/gawk
-fi
 CPU_NAME=`cat /proc/cpuinfo | $AWK '
    @include "decode_cpu_fam_mod.awk"
   /^vendor_id/ {
@@ -279,6 +280,9 @@ fi
 fi
 
 function show_MSRs() {
+  LSCPU_LINES=`lscpu`
+  echo CORES_PER_SKT="lscpu | $AWK '/Core.s. per socket:/{cps = $4; print cps;}'"
+  CORES_PER_SKT=`lscpu | $AWK '/Core.s. per socket:/{cps = $4; print cps;}'`
   echo "=========== $1 ================="
   for j in $MSR_LIST; do
     MSR=$j
@@ -297,6 +301,7 @@ function show_MSRs() {
     if [ $ALL_SAME -eq 1 ]; then
       echo "all cpus have MSR $MSR == $first_val"
     fi
+    MSR_FRQ=$first_val
   done
   for j in $XMSR_LIST; do
     MSR=$j
@@ -315,7 +320,25 @@ function show_MSRs() {
     if [ $ALL_SAME -eq 1 ]; then
       echo "all cpus have MSR $MSR == $first_val"
     fi
+    MSR_XTR=$first_val
   done
+  echo "cps $CORES_PER_SKT msr_xtr= $MSR_XTR msr_frq= $MSR_FRQ"
+  if [ "$CORES_PER_SKT" != "" -a "$MSR_XTR" != "" -a "$MSR_FRQ" != "" ]; then
+    $AWK -v cps="$CORES_PER_SKT" -v msr_frq="$MSR_FRQ" -v msr_xtr="$MSR_XTR" '
+     BEGIN{
+       cps += 0;
+       for (i=0; i < 8; i++) {
+          str1 = "0x" substr(msr_frq, 2*(i)+1, 2);
+          str2 = "0x" substr(msr_xtr, 2*(i)+1, 2);
+          frq[i] = strtonum(str1);
+          lmt[i] = strtonum(str2);
+          if (cps >= lmt[i]) {
+            printf("freq[%d]= %.1f, cores %d\n", i, .1*frq[i], lmt[i]);
+          }
+       }
+       exit(0);
+     }'
+  fi
 }
 
 if [ "$ACTION" == "reset" ]; then
