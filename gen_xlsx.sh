@@ -337,12 +337,11 @@ get_abs_dir() {
 export AWKPATH=$SCR_DIR
 
 get_hostname_from_path() {
-  if [ "$1" != "" ]; then
-    USEDIR=$1
-  else
+  local USEDIR=$1
+  if [ "$1" == "" ]; then
    USEDIR=`pwd`
   fi
-  HOSTNM=`awk -v script="$0" -v lineno="$LINENO" -v usedir="$USEDIR" '
+  awk -v script="$0" -v lineno="$LINENO" -v usedir="$USEDIR" '
   BEGIN{
     n = split(usedir, arr, "/");
     for (i=n; i > 2; i--) {
@@ -353,7 +352,7 @@ get_hostname_from_path() {
     }
     printf("%s.%s: missed_hostnm in %s\n", script, lineno, usedir) > "/dev/stderr";
     exit 1;
-  }'`
+  }'
    ck_last_rc $? $LINENO
 }
 
@@ -776,7 +775,7 @@ if [ "$SKU_LEN" != "0" ]; then
         CLS="clusto_info.lst"
         STR=$idir
         for ((jj=${#PATH_ARR[@]}-1; jj >= 0; jj--)); do
-          LZC_FL=`find $STR  -maxdepth 1 \( -name "$LZC" -o -name "$CLS" \)`
+          LZC_FL=`find $STR  -maxdepth 1 \( -name "$LZC" -o -name "$CLS" -o -name "lzc_info.lst" -o -name "clusto_info.txt" \)`
           STR=`dirname $STR`
           if [ "$LZC_FL" != "" ]; then
             break
@@ -810,6 +809,11 @@ if [ "$SKU_LEN" != "0" ]; then
         if [ "$CK_HST_NM" != "" ]; then
           GOT_HST=`cat $CK_HST_NM`
         fi
+        HOSTNM=`get_hostname_from_path $idir`
+        if [ "$HOSTNM" != "" ]; then
+          #echo "$0.$LINENO got hostname file= $GOT_HST, hostname from path= $HOSTNM"
+          GOT_HST=$HOSTNM
+        fi
         if [ "$CK_LSC_NM" != "" ]; then
           GOT_CPU=`$SCR_DIR/decode_cpu_fam_mod.sh $CK_LSC_NM`
         fi
@@ -829,6 +833,7 @@ if [ "$SKU_LEN" != "0" ]; then
         if [ $VERBOSE -gt 1 ]; then
           echo "$0.$LINENO got LZC_FL= $LZC_FL"
         fi
+        echo "$0.$LINENO awk -v infile=$LZC_FL -v host=$GOT_HST -v sku_in=${SKU[@]} -v cpu_fam=$GOT_CPU -v cpu2017_thrds=$CPU2017_THRDS"
         LZC_OUT=`awk -v infile="$LZC_FL" -v host="$GOT_HST" -v sku_in="${SKU[@]}" -v cpu_fam="$GOT_CPU" -v cpu2017_thrds="$CPU2017_THRDS" '
           BEGIN{
             #printf("host= %s, sku= %s, cpu_fam= %s\n", host, sku_in, cpu_fam) > "/dev/stderr";
@@ -838,7 +843,7 @@ if [ "$SKU_LEN" != "0" ]; then
             if (index(str, "broad") > 0) { cpu = "bdw"; }
             if (index(str, "milan") > 0) { cpu = "mln"; }
             if (index(str, "haswell") > 0) { cpu = "hsw"; }
-            if (index(infile, "lzc_info.txt") > 0) {
+            if (index(infile, "lzc_info") > 0) {
               mode="lzc";
             } else {
               mode="clusto"
@@ -847,8 +852,10 @@ if [ "$SKU_LEN" != "0" ]; then
             got_match=0;
           }
           $1 == "Hostname" || $1 == "Name:" {
+            got_match = 0;
+            #  printf("______got lzc host= %s, lkfor host= %s\n", $2, host) > "/dev/stderr";
             if (NF == 2 && $2 == host) {
-              #printf("______got lzc host= %s\n", host);
+              printf("______got lzc host= %s\n", host);
               host_list[host] = ++host_mx;
               host_lkup[host_mx] = host;
               host_i = host_list[host];
