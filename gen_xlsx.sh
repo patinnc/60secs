@@ -345,7 +345,8 @@ get_hostname_from_path() {
   BEGIN{
     n = split(usedir, arr, "/");
     for (i=n; i > 2; i--) {
-       if (arr[i] == arr[i-2] && index(arr[i-1], "-") > 0) {
+       #if (arr[i] == arr[i-2] && index(arr[i-1], "-") > 0) {
+       if (arr[i] == arr[i-2]) {
           printf("%s\n", arr[i-1]);
           exit;
        }
@@ -736,6 +737,7 @@ echo "$0.$LINENO PHS_ARR= ${PHS_ARR[@]}"
 declare -A LZC_ARR_BY_HOST
 declare -A LZC_ARR_BY_DIR
 declare -A LZC_ARR_BY_DIR_NUM
+declare -A LSS_ARR_BY_HOST
 
 if [ "$SKU_LEN" != "0" ]; then
   echo "$0.$LINENO SKU= ${SKU[@]}"
@@ -773,9 +775,10 @@ if [ "$SKU_LEN" != "0" ]; then
         fi
         LZC="lzc_info.txt"
         CLS="clusto_info.lst"
+        LLS="lab_info.lst"
         STR=$idir
         for ((jj=${#PATH_ARR[@]}-1; jj >= 0; jj--)); do
-          LZC_FL=`find $STR  -maxdepth 1 \( -name "$LZC" -o -name "$CLS" -o -name "lzc_info.lst" -o -name "clusto_info.txt" \)`
+          LZC_FL=`find $STR  -maxdepth 1 \( -name "$LZC" -o -name "$CLS" -o -name "lzc_info.lst" -o -name "clusto_info.txt" -o -name "$LLS" \)`
           STR=`dirname $STR`
           if [ "$LZC_FL" != "" ]; then
             break
@@ -784,9 +787,11 @@ if [ "$SKU_LEN" != "0" ]; then
             break
           fi
         done
-        if [ $VERBOSE -gt 1 ]; then
+        #if [ $VERBOSE -gt 1 ]; then
+          echo "$0.$LINENO PATH_ARR0= ${PATH_ARR[0]}"
           echo "$0.$LINENO LZC_FL= $LZC_FL"
-        fi
+        #fi
+
         CK_HST_NM=`find $idir -name hostname.txt`
         CK_LSC_NM=`find $idir -name lscpu.txt`
         if [ "$CK_HST_NM" == "" ]; then
@@ -811,8 +816,23 @@ if [ "$SKU_LEN" != "0" ]; then
         fi
         HOSTNM=`get_hostname_from_path $idir`
         if [ "$HOSTNM" != "" ]; then
-          #echo "$0.$LINENO got hostname file= $GOT_HST, hostname from path= $HOSTNM"
+          echo "$0.$LINENO got hostname file= $GOT_HST, hostname from path= $HOSTNM"
           GOT_HST=$HOSTNM
+        fi
+        if [ "$LZC_FL" == "" ]; then
+          LZC_FL=$LLS
+        fi
+        if [[ $LZC_FL = *$LLS* ]]; then
+          LZC_FL="${PATH_ARR[0]}/$LLS"
+          if [ "${LSS_ARR_BY_HOST[$HOSTNM]}" == "" ]; then
+            if [ "$itot" == "0" ]; then
+              echo "Name: $HOSTNM" > $LZC_FL
+            else
+              echo "Name: $HOSTNM" >> $LZC_FL
+            fi
+            # so we don't add this hostname multiple times to the file
+            LSS_ARR_BY_HOST[$HOSTNM]=1
+          fi
         fi
         if [ "$CK_LSC_NM" != "" ]; then
           GOT_CPU=`$SCR_DIR/decode_cpu_fam_mod.sh $CK_LSC_NM`
