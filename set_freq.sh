@@ -25,6 +25,15 @@
 # Cascade Lake and SkyLake fam_mod=06_55 MSR info from SDM v4
 #   MSR_TURBO_RATIO_LIMIT       0x1ad  Table 2-45
 #   MSR_TURBO_RATIO_LIMIT_CORES 0x1ae  Table 2-45
+#
+# milan  ppr_B1_pub_1.pdf  Preliminary Processor Programming Reference (PPR) for AMD Family 19h Model 01h, Revision B1 Processors Volume 1 of 2
+#    55898 Rev 0.50 - May 27, 2021 PPR Vol 1 for AMD Family 19h Model 01h B1
+# MSRC001_0015 [Hardware Configuration] (Core::X86::Msr::HWCR)
+#  bit 25  CpbDis: core performance boost disable. Read-write. Reset: 0. 
+#     0=CPB is requested to be enabled. 
+#     1=CPB is disabled. Specifies whether core performance boost is requested to be enabled or disabled.
+#       If core performance boost is disabled while a core is in a boosted P-state, the core automatically
+#       transitions to the highest performance non-boosted P-state.
 
 export LC_ALL=C
 SCR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
