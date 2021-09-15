@@ -34,6 +34,8 @@
 #     1=CPB is disabled. Specifies whether core performance boost is requested to be enabled or disabled.
 #       If core performance boost is disabled while a core is in a boosted P-state, the core automatically
 #       transitions to the highest performance non-boosted P-state.
+# MSRC001_006[4...B] [P-state [7:0]] (Core::X86::Msr::PStateDef)
+#   CpuFid[7:0]: core frequency ID. Read-write. Reset: XXh. Specifies the core frequency multiplier. The core COF is a function of CpuFid and CpuDid, and defined by CoreCOF.
 
 export LC_ALL=C
 SCR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
@@ -60,6 +62,10 @@ while getopts "hg:f:" opt; do
       echo "Usage: $0 [-h] [ -g performance|powersave|ondemand|show ] [ -f freq_in_hex|allcore|reset ]"
       echo "   -g performance|powersave|ondemand|show  ondemand is for AMD"
       echo "   -f freq_in_hex|allcore|reset"
+      echo "      on AMD Milan only allcore and reset are supported."
+      echo "         AMD Milan: allcore disables CPB (core performance boost) which sets the freq to max 2.3 GHz (on the 96cpu box I checked)."
+      echo "         AMD Milan: allcore on milan is not setting the freq to the all-core-turbo freq. It just disables turbo mode (and turbo frequencies)."
+      echo "         AMD Milan: reset enables CPB (core performance boost) which allows boost freq up to 3.6 GHz (on the 96cpu box I checked)."
       exit
       ;;
     : )
@@ -153,10 +159,10 @@ if [ ! -e $DEV_CPU_MSR ]; then
   fi
 fi
 echo "msr kernel module loaded. $DEV_CPU_MSR exists"
-MSR_0x1ad=`rdmsr -p 0 0x1ad`
+MSR_0x1ad=`rdmsr -p 0 0x10`
 RC=$?
 if [ "$RC" != "0" ]; then
-  echo "MSR 0x1ad= $MSR_0x1ad, rc= $RC"
+  echo "$0.$LINENO MSR 0x1ad= $MSR_0x1ad, rc= $RC"
   apt-get install msr-tools
 fi
 
@@ -237,7 +243,32 @@ fi
 # see Table 2-38, section 2.16.2 of Intel SDM v4 MSRs (full SDM reference at top of script)
 MSR_SEMA=
 echo "CPU_NAME= $CPU_NAME"
+MODE="Intel"
 
+case $CPU_NAME in
+  *"Cascade"*|*"Ice Lake"*|*"Skylake"*)
+    MSR_LIST="0x1ad"
+    XMSR_LIST="0x1ae" # the mapping
+    ;;
+  *"Broadwell"*|*"Haswell"*)
+    MSR_LIST="0x1ad 0x1ae 0x1af"
+    MSR_SEMA="0x1ac"
+    ;;
+  *"Milan"*|*"Rome"*)
+    # MSRC001_0015 [Hardware Configuration] (Core::X86::Msr::HWCR)
+    MSR_LIST="0xc0010015"
+    #XMSR_LIST="0xc0010064 0xC0010065 0xC0010066 0xC0010067 0xC0010068 0xC0010069 0xC001006a 0xC001006b"
+    MODE="AMD"
+    echo "milan"
+    ;;
+  *)
+    echo "$0.$LINENO unknown cpu $CPU_NAME"
+    exit 1
+    ;;
+esac
+#echo "$0.$LINENO bye"
+#exit 1
+if [ 1 == 2 ]; then
 GOT_CSX_ICX=0
 if [[ $CPU_NAME == *"Cascade"* ]]; then
  GOT_CSX_ICX=1
@@ -279,6 +310,7 @@ else
     fi
   fi
 fi
+fi
 
 if [ "$GOV_IN" == "" ]; then
 if [ "$ACTION" != "show" -a "$ACTION" != "set" -a "$ACTION" != "reset" -a "$ACTION" != "allcore" -a "$ACTION" != "performance" -a "$ACTION" != "powersave" ]; then
@@ -290,9 +322,9 @@ fi
 
 function show_MSRs() {
   LSCPU_LINES=`lscpu`
-  echo CORES_PER_SKT="lscpu | $AWK '/Core.s. per socket:/{cps = $4; print cps;}'"
+  #echo CORES_PER_SKT="lscpu | $AWK '/Core.s. per socket:/{cps = $4; print cps;}'"
   CORES_PER_SKT=`lscpu | $AWK '/Core.s. per socket:/{cps = $4; print cps;}'`
-  echo "=========== $1 ================="
+  echo "=========== $1 ================= MSR_LIST= $MSR_LIST"
   k=0
   for j in $MSR_LIST; do
     MSR=$j
@@ -314,6 +346,7 @@ function show_MSRs() {
     done
     if [ $ALL_SAME -eq 1 ]; then
       echo "all cpus have MSR $MSR == $first_val"
+      MSR_LIST_0_ALL_SAME=$first_val
     fi
   done
   for j in $XMSR_LIST; do
@@ -335,7 +368,8 @@ function show_MSRs() {
     fi
     MSR_XTR=$first_val
   done
-  echo "cps $CORES_PER_SKT msr_xtr= $MSR_XTR msr_frq= $MSR_FRQ"
+  if [ "$MODE" == "Intel" ]; then
+  #echo "cps $CORES_PER_SKT msr_xtr= $MSR_XTR msr_frq= $MSR_FRQ"
   if [ "$CORES_PER_SKT" != "" -a "$CPU_NAME" != "" -a "$MSR_FRQ" != "" ]; then
     $AWK -v cps="$CORES_PER_SKT" -v cpu_name="$CPU_NAME" -v msr_frq="$MSR_FRQ" -v msr_xtr="$MSR_XTR" '
      BEGIN{
@@ -356,6 +390,34 @@ function show_MSRs() {
        }
        exit(0);
      }'
+  fi
+  fi
+  if [ "$MODE" == "AMD" ]; then
+#   if [ -e /sys/devices/system/cpu/cpufreq/policy0/cpb ]; then
+#   uniq[0]=0
+#   uniq[1]=0
+#   for ((i=0; i < $NUM_CPUS; i++)); do
+#     VAL=`cat /sys/devices/system/cpu/cpufreq/policy$i/cpb`
+#     uniq[$VAL]=$((${uniq[$VAL]}+1))
+#   done
+#   printf "Core Performance Boost (CBP) enabled on %d cpus, disabled on %d cpus\n" ${uniq[1]} ${uniq[0]}
+#   else
+    CBP_STATE=`$AWK -v cps="$CORES_PER_SKT" -v cpu_name="$CPU_NAME" -v msr_frq="$MSR_FRQ" -v msr_xtr="$MSR_XTR" '
+     BEGIN{
+       cps += 0;
+       bit25 = lshift(1, 25);
+       v = strtonum("0x"msr_frq);
+       b25set = and(v, bit25);
+       #printf("bit25set= %s, bit25= 0x%x, msr_frq= 0x%x msr_f= %s\n", b25set, bit25, v, v);
+       if (b25set == 0) {
+         printf("enabled\n"); 
+       } else {
+         printf("disabled\n"); 
+       }
+       exit(0);
+     }'`
+     printf "Core Performance Boost (CBP) %s\n" $CBP_STATE
+#    fi
   fi
 }
 
@@ -406,12 +468,49 @@ if [ "$ACTION" == "reset" ]; then
     wrmsr --all 0x1af 0x1717171717171717
     fi
     wrmsr --all 0x1ac 0x8000000000000000
+  elif [[ $CPU_NAME == *"Milan"* ]]; then
+    if [ -e /sys/devices/system/cpu/cpufreq/policy0/cpb ]; then
+    for ((i=0; i < $NUM_CPUS; i++)); do
+      echo 1 > /sys/devices/system/cpu/cpufreq/policy$i/cpb
+    done
+    printf "Core Performance Boost (CBP) now enabled\n"
+    else
+    if [ "$MSR_LIST_0_ALL_SAME" != "" ]; then
+      #MSR_LIST_0_ALL_SAME=$first_val
+      useuse=1
+    fi
+    if [ "$CBP_STATE" == "enabled" ]; then
+      echo "AMD CBP already enabled, nothing to be done"
+      else
+      echo "cbp_state= disabled, num_cpus= $NUM_CPUS"
+      
+      for ((i=0; i < $NUM_CPUS; i++)); do
+       OVAL=`rdmsr -0 -p $i $MSR_LIST`
+       NVAL=`echo $OVAL | awk '
+     {
+      bit25 = lshift(1, 25);
+      v = strtonum("0x"$0);
+      b25set = and(v, bit25);
+      if(b25set!=0) {
+       v = xor(v, bit25);
+      }
+      printf("0x%x\n", v);
+     }'`
+      #printf "oval[%d]= %s nval= %s\n" $i $OVAL $NVAL
+      wrmsr -p $i $MSR_LIST $NVAL
+      done
+    fi
+    fi
   fi
   show_MSRs "after  reset " 
 fi
 
 if [ "$ACTION" == "allcore" ]; then
-  CKVAL=`rdmsr -0 -p 0 0x1ad | awk '{v=substr($0, 1, 2);str="";for(i=1;i<=8;i++){str=str""v;}printf("0x%s", str);}'`
+  if [ "$MODE" == "Intel" ]; then
+    CKVAL=`rdmsr -0 -p 0 0x1ad | awk '{v=substr($0, 1, 2);str="";for(i=1;i<=8;i++){str=str""v;}printf("0x%s", str);}'`
+  else
+    CKVAL=`rdmsr -0 -p 0 $MSR_LIST | awk '{v=substr($0, 1, 2);str="";for(i=1;i<=8;i++){str=str""v;}printf("0x%s", str);}'`
+  fi
   show_MSRs "before allcore " 
   #CPU_VENDOR= GenuineIntel CPU_MODEL= 85 CPU_FAMILY= 6
   if [[ $CPU_NAME == *"Skylake"* ]]; then
@@ -436,6 +535,35 @@ if [ "$ACTION" == "allcore" ]; then
     wrmsr --all 0x1ae $CKVAL
     wrmsr --all 0x1af $CKVAL
     wrmsr --all 0x1ac 0x8000000000000000
+  elif [[ $CPU_NAME == *"Milan"* ]]; then
+    if [ -e /sys/devices/system/cpu/cpufreq/policy0/cpb ]; then
+    for ((i=0; i < $NUM_CPUS; i++)); do
+      echo 0 > /sys/devices/system/cpu/cpufreq/policy$i/cpb
+    done
+    printf "Core Performance Boost (CBP) now disabled\n"
+    else
+    if [ "$CBP_STATE" == "disabled" ]; then
+      echo "AMD CBP already disabled, nothing to be done"
+    else
+      #echo "cbp_state= disabled"
+      
+      for ((i=0; i < $NUM_CPUS; i++)); do
+       OVAL=`rdmsr -0 -p $i $MSR_LIST`
+       NVAL=`echo $OVAL | awk '
+     {
+      bit25 = lshift(1, 25);
+      v = strtonum("0x"$0);
+      v = or(v, bit25);
+      #if(b25set!=0) {
+      # v = xor(v, bit25);
+      #}
+      printf("0x%x\n", v);
+     }'`
+      #printf "oval[%d]= %s nval= %s\n" $i $OVAL $NVAL
+      wrmsr -p $i $MSR_LIST $NVAL
+      done
+    fi
+    fi
   fi
   show_MSRs "after  allcore" 
 fi
