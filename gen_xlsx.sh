@@ -294,13 +294,13 @@ ck_skip_dir_due_to_num_dir () {
     local j=$1
       if [ "$NUM_DIR_BEG" != "" ]; then
          if [ "$j" -lt "$NUM_DIR_BEG" ]; then
-         echo "$0.$LINENO  job_id= $JOB_ID skip dir $j due to -N $NUM_DIR_IN option" > /dev/stderr
+         echo "$0.$LINENO  job_id= $JOB_ID skip dir $j due to -N $NUM_DIR_IN option called by line $2" > /dev/stderr
          return 1
          fi
       fi
       if [ "$NUM_DIR_END" != "" ]; then
          if [ "$j" -gt "$NUM_DIR_END" ]; then
-         echo "$0.$LINENO  job_id= $JOB_ID skip dir $j due to -N $NUM_DIR_IN option" > /dev/stderr
+         echo "$0.$LINENO  job_id= $JOB_ID skip dir $j due to -N $NUM_DIR_IN option called by line $2" > /dev/stderr
          return 1
          fi
       fi
@@ -461,7 +461,7 @@ get_dir_list() {
          echo "$0.$LINENO  job_id= $JOB_ID limit number of dirs with $CKF due to -N $NUM_DIR option"
          break
       fi
-      ck_skip_dir_due_to_num_dir $j
+      ck_skip_dir_due_to_num_dir $j $LINENO
       if [ "$?" == "1" ]; then
         continue
       fi
@@ -644,7 +644,7 @@ else
              echo "$0.$LINENO first sys_*_perf_stat.txt TS_INIT= $TS_INIT"
             fi
            fi
-      ck_skip_dir_due_to_num_dir $j
+      ck_skip_dir_due_to_num_dir $j $LINENO
       if [ "$?" == "1" ]; then
         continue
       fi
@@ -694,7 +694,7 @@ for i in $LST; do
   if [ $VERBOSE -gt 0 ]; then
     echo "$0.$LINENO dir $i"
   fi
-      ck_skip_dir_due_to_num_dir $j
+      ck_skip_dir_due_to_num_dir $j $LINENO
       if [ $? == 1 ]; then
         continue
       fi
@@ -787,10 +787,10 @@ if [ "$SKU_LEN" != "0" ]; then
             break
           fi
         done
-        #if [ $VERBOSE -gt 1 ]; then
+        if [ $VERBOSE -gt 1 ]; then
           echo "$0.$LINENO PATH_ARR0= ${PATH_ARR[0]}"
           echo "$0.$LINENO LZC_FL= $LZC_FL"
-        #fi
+        fi
 
         CK_HST_NM=`find $idir -name hostname.txt`
         CK_LSC_NM=`find $idir -name lscpu.txt`
@@ -816,7 +816,7 @@ if [ "$SKU_LEN" != "0" ]; then
         fi
         HOSTNM=`get_hostname_from_path $idir`
         if [ "$HOSTNM" != "" ]; then
-          echo "$0.$LINENO got hostname file= $GOT_HST, hostname from path= $HOSTNM"
+          echo "$0.$LINENO got hostname file= $GOT_HST, hostname from path= $HOSTNM dir_num= $itot"
           GOT_HST=$HOSTNM
         fi
         if [ "$LZC_FL" == "" ]; then
@@ -852,8 +852,8 @@ if [ "$SKU_LEN" != "0" ]; then
 #xyz
         if [ $VERBOSE -gt 1 ]; then
           echo "$0.$LINENO got LZC_FL= $LZC_FL"
+          echo "$0.$LINENO awk -v infile=$LZC_FL -v host=$GOT_HST -v sku_in=${SKU[@]} -v cpu_fam=$GOT_CPU -v cpu2017_thrds=$CPU2017_THRDS"
         fi
-        echo "$0.$LINENO awk -v infile=$LZC_FL -v host=$GOT_HST -v sku_in=${SKU[@]} -v cpu_fam=$GOT_CPU -v cpu2017_thrds=$CPU2017_THRDS"
         LZC_OUT=`awk -v infile="$LZC_FL" -v host="$GOT_HST" -v sku_in="${SKU[@]}" -v cpu_fam="$GOT_CPU" -v cpu2017_thrds="$CPU2017_THRDS" '
           BEGIN{
             #printf("host= %s, sku= %s, cpu_fam= %s\n", host, sku_in, cpu_fam) > "/dev/stderr";
@@ -892,6 +892,9 @@ if [ "$SKU_LEN" != "0" ]; then
               if ($1 == "Is" && $2 == "Crane") {
                 is_crane = $3;
               }
+              if ($1 == "SKU:") {
+                sv[host_i,"sku"] = $2;
+              }
               if ($1 == "Type") {
                 typ = $2;
               }
@@ -901,7 +904,7 @@ if [ "$SKU_LEN" != "0" ]; then
                 sv[host_i,"is_crane"] = is_crane;
                 $1="";
                 sv[host_i,"services"] = $0;
-                got_match = 0;
+                #got_match = 0;
                 #exit(0);
               }
             } else {
@@ -931,9 +934,13 @@ if [ "$SKU_LEN" != "0" ]; then
               printf("cpu2017_threads;%s\n", cpu2017_thrds);
               gsub("%cpu_shrt%", cpu, sku_in);
               gsub("%host%", host, sku_in);
-              sku = sv[i,"ptyp"];
-              if (sv[i,"is_crane"] == "yes") {
-                sku = sv[i,"typ"];
+              if ((i,"sku") in sv) {
+                sku = sv[i,"sku"];
+              } else {
+                sku = sv[i,"ptyp"];
+                if (sv[i,"is_crane"] == "yes") {
+                  sku = sv[i,"typ"];
+                }
               }
               gsub("%sku%", sku, sku_in);
               gsub("%cpu_long%", cpu, sku_in);
