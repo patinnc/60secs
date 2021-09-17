@@ -679,7 +679,7 @@ for bmi in range(base_mx+1):
          if sheet_nm != "sum_all":
             # make sure worksheet name is unique (allow 100 versions of base name)
             if wrksh_nm in wksheet_nms:
-             for i in range(200):
+             for i in range(5000):
                suffix = "_" + str(i)
                tnm = wrksh_nm + suffix
                #print("ck if worksheet name %s exists" % (tnm), file=sys.stderr)
@@ -833,7 +833,12 @@ for bmi in range(base_mx+1):
                                fn_bs_sum[fn_bs_i][ij][use_idx] = data[ij][h]
                                fn_bs_n[fn_bs_i][ij][use_idx] = 1
                          else:
-                            try:
+                            if not do_avg:
+                               data[ij][h] = float(data[ij][h])
+                               fn_bs_sum[fn_bs_i][ij][use_idx] = data[ij][h]
+                               fn_bs_n[fn_bs_i][ij][use_idx] = 1
+                            else:
+                             try:
                                if fn_bs_sum[fn_bs_i][ij][use_idx] == '':
                                   fn_bs_sum[fn_bs_i][ij][use_idx] = 0.0
                                   fn_bs_n[fn_bs_i][ij][use_idx] = 0
@@ -848,7 +853,7 @@ for bmi in range(base_mx+1):
                                #   don't do anything for this case
                                #   fn_bs_sum[fn_bs_i][ij][use_idx] += data[ij][h]
                                #   fn_bs_n[fn_bs_i][ij][use_idx] += 1
-                            except Exception as e:
+                             except Exception as e:
                                print(e, file=sys.stderr)
                                print("---- error on += of fn_bs_sum  data[%d][%d] filenm= %s, field= " % (ij, h, x), data[ij][h], "type of new val= ", type(data[ij][h]), "is spc= ",data[ij][j]=='', ", base_val= ", fn_bs_sum[fn_bs_i][ij][use_idx], ", line= ", data[ij], file=sys.stderr)
                                print("---- type of old val: ", type(fn_bs_sum[fn_bs_i][ij][use_idx]), " val of old val: '", fn_bs_sum[fn_bs_i][ij][use_idx], "', is spc= ",fn_bs_sum[fn_bs_i][ij][use_idx]=='',file=sys.stderr)
