@@ -8,6 +8,9 @@ BEGIN{
    evt_idx=-1;
    num_cpus += 0;
    got_err = 0;
+   if (cpu_mkr == 0) { cpu_mkr = "intel" }
+   else if (cpu_mkr == 1) { cpu_mkr = "amd" }
+   else if (cpu_mkr == 2) { cpu_mkr = "arm" }
 
    use_cpu_got_list = 0;
    if (use_cpus != "") {
@@ -645,14 +648,14 @@ function got_lkfor_init(kmx, eqn) {
 
 
 
-   if (amd_cpu == 0) {
+   if (cpu_mkr == "intel") {
    # bsy = 1.0e-9*(evt[mperf,i])/(num_cpus * tsc_ghz * tm_dff); v = 100.0*bsy;
    kmx = got_lkfor_init(kmx, "100.0e-9 * [" ref_cycles_str "] / ( " num_cpus " * {tsc_freq} * {interval})" );
    nwfor[kmx,1,"hdr"]="%not_halted";
    nwfor[kmx,1,"alias"]="metric_CPU utilization %";
 
 
-   if (cpu_type != "Ice Lake" && amd_cpu==0) {
+   if (cpu_type != "Ice Lake" && cpu_mkr == "intel") {
      kmx = got_lkfor_init(kmx, "4.0 * ( [CPU_CLK_UNHALTED.THREAD_ANY] / " thr_per_core " )" );
      nwfor[kmx,1,"hdr"]="td_denom";
      nwfor[kmx,1,"save_glbl_row_arr"]="td_denom";
@@ -671,10 +674,46 @@ function got_lkfor_init(kmx, eqn) {
    nwfor[kmx,1,"hdr"]="uncore_freq (GHz)";
 
    }
+   if (cpu_mkr == "arm") {
+
+     kmx = got_lkfor_init(kmx, "100.0 * [armv8_pmuv3_0/stall_frontend/] / ["cpu_cycles_str"]" );
+     nwfor[kmx,1,"hdr"]="topdown_Frontend_Bound(%)";
+     got_lkfor[kmx,"tag"]="td_fe_stall";
+     nwfor[kmx,1,"save_glbl_row_arr"]=got_lkfor[kmx,"tag"];
+
+
+     kmx = got_lkfor_init(kmx, "100.0 * [armv8_pmuv3_0/stall_backend/] / ["cpu_cycles_str"]" );
+     nwfor[kmx,1,"hdr"]="topdown_Backend_Bound(%)";
+     got_lkfor[kmx,"tag"]="td_be_stall";
+     nwfor[kmx,1,"save_glbl_row_arr"]=got_lkfor[kmx,"tag"];
+
+     #kmx = got_lkfor_init(kmx, "100.0 * ( 1.0 - ([armv8_pmuv3_0/stall_backend/] + [armv8_pmuv3_0/stall_frontend/]) / ["cpu_cycles_str"])" );
+     #nwfor[kmx,1,"hdr"]="topdown_Retiring_BadSpec(%)";
+     #got_lkfor[kmx,"tag"]="td_ret_bs";
+     #nwfor[kmx,1,"save_glbl_row_arr"]=got_lkfor[kmx,"tag"];
+
+     kmx = got_lkfor_init(kmx, "100.0 * (([armv8_pmuv3_0/inst_spec/]-[instructions])/[armv8_pmuv3_0/inst_spec/])*( 1.0 - ([armv8_pmuv3_0/stall_backend/] + [armv8_pmuv3_0/stall_frontend/]) / ["cpu_cycles_str"])" );
+     nwfor[kmx,1,"hdr"]="topdown_Bad_Speculation(%)";
+     got_lkfor[kmx,"tag"]="td_bs";
+     nwfor[kmx,1,"save_glbl_row_arr"]=got_lkfor[kmx,"tag"];
+
+     kmx = got_lkfor_init(kmx, "100.0 * ([instructions]/[armv8_pmuv3_0/inst_spec/])*( 1.0 - ([armv8_pmuv3_0/stall_backend/] + [armv8_pmuv3_0/stall_frontend/]) / ["cpu_cycles_str"])" );
+     nwfor[kmx,1,"hdr"]="topdown_Retiring(%)";
+     got_lkfor[kmx,"tag"]="td_ret";
+     nwfor[kmx,1,"save_glbl_row_arr"]=got_lkfor[kmx,"tag"];
+
+     kmx = got_lkfor_init(kmx, "64.0e-9 * [armv8_pmuv3_0/mem_access/]/{interval}" );
+     nwfor[kmx,1,"hdr"]="load_store_bw (GB/s)";
+
+     kmx = got_lkfor_init(kmx, "100.0 * [instructions]/[armv8_pmuv3_0/inst_spec/]/" );
+     nwfor[kmx,1,"hdr"]="%inst/inst_spec";
+
+   }
+
 
 #    rpn operations
 #    AMD %unhalted calc. amd doesn't have ref-cycles so use tsc_freq and msr/mperf/
-   if (amd_cpu == 1) {
+   if (cpu_mkr == "amd") {
        kmx = got_lkfor_init(kmx, "100 * [msr/mperf/] / (" num_cpus " * 1.0e9 * {tsc_freq}) / {interval}" );
        nwfor[kmx,1,"hdr"]="%not_halted";
        nwfor[kmx,1,"alias"]="metric_CPU utilization %";
@@ -744,7 +783,7 @@ function got_lkfor_init(kmx, eqn) {
    nwfor[kmx,1,"hdr"]="CPI";
    nwfor[kmx,1,"alias"]="metric_CPI";
 
-   if (amd_cpu == 1) {
+   if (cpu_mkr == "amd") {
      if (use_qpi_bw == 2) {
        cma = "";
        str = "32.0e-9 * ( "
@@ -759,7 +798,7 @@ function got_lkfor_init(kmx, eqn) {
        nwfor[kmx,1,"alias_oper"]="*";
      }
    }
-   if (amd_cpu == 0) {
+   if (cpu_mkr == "intel") {
      if (use_qpi_bw == 1) {
        kmx = got_lkfor_init(kmx, "1.0e-9 * [qpi_data_bandwidth_tx] / {interval}");
        nwfor[kmx,1,"hdr"]="QPI_BW (GB/sec)";
@@ -797,19 +836,19 @@ function got_lkfor_init(kmx, eqn) {
    kmx = got_lkfor_init(kmx, "1.0e-9 * ["cpu_cycles_str"] / {interval}");
    nwfor[kmx,1,"hdr"]="cpu-cycles/sec (1e9 cycles/sec)";
 
-   if (amd_cpu == 1) {
+   if (cpu_mkr == "amd") {
      #            "name"       : "topdown_Retiring(%)",
      kmx = got_lkfor_init(kmx, " 100.0 * [ret_uops_cycles] / ["cpu_cycles_str"]" );
      nwfor[kmx,1,"hdr"]="topdown_Retiring(%)";
    }
 
-   if (amd_cpu == 0) {
+   if (cpu_mkr == "intel") {
      kmx = got_lkfor_init(kmx, "["instructions_str"] / ( [CPU_CLK_UNHALTED.THREAD_ANY] / " thr_per_core " )" );
      nwfor[kmx,1,"hdr"]="coreIpc";
      nwfor[kmx,1,"alias"]="topdown_Info_CoreIPC";
 
 
-   if (cpu_type != "Ice Lake" && amd_cpu == 0) {
+   if (cpu_type != "Ice Lake" && cpu_mkr == "intel") {
      kmx = got_lkfor_init(kmx, " 400.0 * ["cpu_cycles_str"] / {td_denom}" );
      nwfor[kmx,1,"hdr"]="pct_cycles(%)";
      prt_rpn_eqn(kmx);
@@ -883,7 +922,7 @@ function got_lkfor_init(kmx, eqn) {
    }
    }
 
-   if (amd_cpu == 1) {
+   if (cpu_mkr == "amd") {
 #    rpn operations
 #    AMD backend bound
      kmx = got_lkfor_init(kmx, "100.0 * [stalled-cycles-backend] / ["cpu_cycles_str"]" );
@@ -1134,6 +1173,12 @@ function got_lkfor_init(kmx, eqn) {
           ITP_lvl[got_mini_ITP,1] = cols;
           ITP_lvl[got_mini_ITP,2] = "bs";
         }
+        }
+        if (cpu_mkr == "arm") {
+          if( got_lkfor[k,"tag"] == "td_bs" || got_lkfor[k,"tag"] == "td_ret" || got_lkfor[k,"tag"] == "td_ret_bs" || got_lkfor[k,"tag"] == "td_be_stall" ||  got_lkfor[k,"tag"] == "td_fe_stall" ) {
+             td_arm[++td_arm_mx,"col"] = cols;
+             td_arm[  td_arm_mx,"tag"] = got_lkfor[k,"tag"];
+          }
         }
 
         if (index(nwfor[k,1,"hdr"], "topdown_Frontend_Bound") > 0) {
@@ -1496,6 +1541,23 @@ function got_lkfor_init(kmx, eqn) {
                (got_mini_ITP  > 3 && (i == 4 && ITP_lvl[j,2] == "ret")) ||
                (i == 4 && ITP_lvl[j,2] == "disp_0") || (i == 5 && ITP_lvl[j,2] == "disp_1")) {
            printf("\t%d\t%d", ITP_lvl[j,1], ITP_lvl[j,1]) > out_file;
+           }
+       }
+       }
+       printf("\n") > out_file;
+   }
+   if (cpu_mkr == "arm" && td_arm_mx >= 3) {
+            # td_arm[++td_arm_mx,"col"] = cols;
+            # td_arm[  td_arm_mx,"tag"] = got_lkfor[k,"tag"];
+       printf("title\t%s TopLev Level 1 Percentages\tsheet\t%s\ttype\tline_stacked\n", chrt, sheet) > out_file;
+       printf("hdrs\t%d\t%d\t%d\t%d\t1", rows+1, bcol, -1, evt_idx+extra_cols+td_arm_mx, ts_col) > out_file;
+       for (i=1; i <= td_arm_mx; i++) {
+       for (j=1; j <= td_arm_mx; j++) {
+           if ((i == 1 && td_arm[j,"tag"] == "td_fe_stall") ||
+               (i == 2 && td_arm[j,"tag"] == "td_be_stall") ||
+               (i == 3 && td_arm[j,"tag"] == "td_ret_bs") || (i == 3 && td_arm[j,"tag"] == "td_bs") ||
+               (i == 4 && td_arm[j,"tag"] == "td_ret")) {
+           printf("\t%d\t%d", td_arm[j,"col"],td_arm[j,"col"]) > out_file;
            }
        }
        }
