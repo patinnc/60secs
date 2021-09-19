@@ -64,6 +64,8 @@ echo "$RESP" | $AWK_BIN -v vrb=0 '
       arr[1]=trim(arr[1]);
       arr[2]=trim(arr[2]);
       if (vrb==1) {printf("1=_%s_, a1=_%s_ a2= %s\n", $1, arr[1], arr[2]);}
+      if (arr[1]=="Architecture" && arr[2] == "aarch64") { printf("arm64\n"); exit 0; }
+      if (arr[1]=="CPU implementer" && arr[2] == "0x41") { printf("arm64\n"); exit 0; }
       if (arr[1]=="CPU family" || arr[1]=="cpu family") {cpu_fam=arr[2];if(vrb==1){printf("cpu_fam= %s\n", cpu_fam)};next;}
       if (arr[1]=="Vendor ID"  || arr[1]=="vendor_id") {cpu_vnd=arr[2];if(vrb==1){printf("cpu_vnd= %s\n", cpu_vnd)};next;}
       if (arr[1]=="Model"      || arr[1]=="model") { cpu_mod=arr[2];if(vrb==1){printf("cpu_mod= %s\n", cpu_mod);}next; }
@@ -82,7 +84,6 @@ echo "$RESP" | $AWK_BIN -v vrb=0 '
    }
 '
 exit
-
 
 # /proc/cpuinfo output
 #processor	: 0
