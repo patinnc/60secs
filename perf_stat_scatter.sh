@@ -175,8 +175,13 @@ for i in $LSCPU_FL; do
 #CPU MHz:               1496.962
 #CPU max MHz:           2000.0000
 #Socket(s):             2
-AMD_CPU=0;
+AMD_CPU=-1;
+ARM_CPU=-1;
     echo "$0.$LINENO TSC_FREQ= $TSC_FREQ"
+    ARM_CPU=`cat $i |awk 'BEGIN{arm=-1;} /^Architecture:/{if ($2 == "aarch64"){arm=1; exit;}} END{printf("%d\n", arm) ;}'`
+    if [ "$ARM_CPU" == "1" ]; then
+      TSC_FREQ=`cat $i |awk -v '/BogoMIPS:/{bogo=$2;}END{ v = 0.001*0.5*bogo; printf("%.3f\n", v);}}'`
+      else
     AMD_CPU=`cat $i |awk 'BEGIN{amd=0;} /^Vendor ID:/{if ($3 == "AuthenticAMD"){amd=1; exit;}} END{printf("%d\n", amd) ;}'`
     TSC_FREQ_AMD=`cat $i |awk -v tsc="$TSC_FREQ" '/^Vendor ID:/{if ($3 == "AuthenticAMD"){amd=1;}}
       /BogoMIPS:/{bogo=$2;}
@@ -184,6 +189,7 @@ AMD_CPU=0;
 
     if [ "$TSC_FREQ" == "" ]; then
     TSC_FREQ=`cat $i |awk '/^Model name/{for (i=1;i<=NF;i++){pos=index($i, "GHz");if (pos > 0){print substr($i,1,pos-1);}}}'`
+    fi
     fi
     NUM_CPUS=`cat $i |awk '/^CPU.s.:/{printf("%s\n",$2);}'`
     SOCKETS=`cat $i |awk '/^Socket.s.:/{printf("%s\n",$2);}'`
@@ -193,10 +199,12 @@ AMD_CPU=0;
     #CPU(s):                32
   fi
 done
+if [ "$ARM_CPU" == "-1" ]; then
 if [ "$TSC_FREQ" == "" -a "$TSC_FREQ_AMD" != "" ]; then
   TSC_FREQ=$TSC_FREQ_AMD
   AMD_CPU=1;
   echo "$0.$LINENO got AMD cpu" > /dev/stderr
+fi
 fi
 echo "TSC_FREQ= $TSC_FREQ NUM_CPUS= $NUM_CPUS" > /dev/stderr
 CPU2017LOG=()
@@ -219,9 +227,12 @@ fi
 export AWKPATH=$SCR_DIR
 
 echo "$0.$LINENO file_sets use_cpus= $USE_CPUS" > /dev/stderr
+if [ "$ARM_CPU" == "1" ]; then
+  AMD_CPU=2
+fi
 
-echo $0.$LINENO awk -v use_cpus="$USE_CPUS" -v cpu_type="$CPU_TYPE" -v phase_file="$PHASE_FILE" -v phase_clip="$CLIP_IN" -v tm_beg_run_log="$TM_BEG_RUN_LOG"  -v out_file="$OUT_FILE" -v script="$0.$LINENO" -v amd_cpu="$AMD_CPU" -v num_sockets="$SOCKETS" -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s|memory},LLC-misses PKI{|memory},%not_halted{|CPU},avg_freq{avg_freq GHz|CPU},QPI_BW{QPI_BW GB/s|memory interconnect},power_pkg {power pkg (watts)|power}" -f $SCR_DIR/perf_stat_scatter.awk $FILES $CPU2017files > /dev/stderr
-awk -v use_cpus="$USE_CPUS" -v cpu_type="$CPU_TYPE"  -v mem_speed_mhz="$MEM_SPEED_MHz" -v phase_file="$PHASE_FILE" -v phase_clip="$CLIP_IN"  -v tm_beg_run_log="$TM_BEG_RUN_LOG" -v out_file="$OUT_FILE" -v script="$0.$LINENO"  -v amd_cpu="$AMD_CPU" -v num_sockets="$SOCKETS" -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s|memory},LLC-misses PKI{|memory},%not_halted{|CPU},avg_freq{avg_freq GHz|CPU},QPI_BW{QPI_BW GB/s|memory interconnect},power_pkg {power pkg (watts)|power}" -f $SCR_DIR/perf_stat_scatter.awk $FILES $CPU2017files
+echo $0.$LINENO awk -v use_cpus="$USE_CPUS" -v cpu_type="$CPU_TYPE" -v phase_file="$PHASE_FILE" -v phase_clip="$CLIP_IN" -v tm_beg_run_log="$TM_BEG_RUN_LOG"  -v out_file="$OUT_FILE" -v script="$0.$LINENO" -v cpu_mkr="$AMD_CPU" -v num_sockets="$SOCKETS" -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s|memory},LLC-misses PKI{|memory},%not_halted{|CPU},avg_freq{avg_freq GHz|CPU},QPI_BW{QPI_BW GB/s|memory interconnect},power_pkg {power pkg (watts)|power}" -f $SCR_DIR/perf_stat_scatter.awk $FILES $CPU2017files > /dev/stderr
+awk -v use_cpus="$USE_CPUS" -v cpu_type="$CPU_TYPE"  -v mem_speed_mhz="$MEM_SPEED_MHz" -v phase_file="$PHASE_FILE" -v phase_clip="$CLIP_IN"  -v tm_beg_run_log="$TM_BEG_RUN_LOG" -v out_file="$OUT_FILE" -v script="$0.$LINENO"  -v cpu_mkr="$AMD_CPU" -v num_sockets="$SOCKETS" -v thr_per_core="$THR_PER_CORE" -v num_cpus="$NUM_CPUS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v tsc_freq="$TSC_FREQ" -v pfx="$PFX_IN" -v options="$OPTIONS" -v chrt="$CHART" -v sheet="$SHEET" -v sum_file="$SUM_FILE" -v sum_flds="unc_read_write{Mem BW GB/s|memory},LLC-misses PKI{|memory},%not_halted{|CPU},avg_freq{avg_freq GHz|CPU},QPI_BW{QPI_BW GB/s|memory interconnect},power_pkg {power pkg (watts)|power}" -f $SCR_DIR/perf_stat_scatter.awk $FILES $CPU2017files
           RC=$?
           if [ $RC -gt 0 ]; then
             RESP=`pwd`
