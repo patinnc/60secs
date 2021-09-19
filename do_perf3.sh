@@ -233,7 +233,13 @@ echo "# started on $dtc $dte" > $FL
     ms=$(($INTRVL*1000))
     EVT=
     echo "$0.$LINENO do perf stat for $WAIT secs, CPU+decode= $CPU_DECODE"
-    if [ "$CPU_DECODE" == "Zen2 Castle Peak" -o "$CPU_DECODE" == "Zen3 Milan" -o  "$CPU_DECODE" == "Zen Naples/Whitehaven/Summit Ridge/Snowy Owl" ]; then
+    if [ "$CPU_DECODE" == "arm64" ]; then
+       MEM_ACCESS=",armv8_pmuv3_0/mem_access/"
+       BE_STALL=",armv8_pmuv3_0/stall_backend/"
+       FE_STALL=",armv8_pmuv3_0/stall_frontend/"
+       INST_SPEC=",armv8_pmuv3_0/inst_spec/"
+       EVT="cpu-clock,${INST_SPEC},instructions,cycles${BE_STALL}${FE_STALL}${MEM_ACCESS}"
+    elif [ "$CPU_DECODE" == "Zen2 Castle Peak" -o "$CPU_DECODE" == "Zen3 Milan" -o  "$CPU_DECODE" == "Zen Naples/Whitehaven/Summit Ridge/Snowy Owl" ]; then
       #libpfm: { .name   = "UOPS_QUEUE_EMPTY", .desc   = "Cycles where the uops queue is empty", .code    = 0xa9,
       # uprof -l output
       #PMCx0AE      Dispatch Resource Stall Cycles 1
