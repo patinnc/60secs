@@ -492,8 +492,8 @@ function ps_bc_eqn_ck_var_val(grp, var_evt_nm, k4, vrb,       la, lc, val1, val2
 function bc_eqn2_get_list_of_variables(kmx_in, kkmx_in, vrb,     arg_arr, mode, i, j, k, m) {
    arg_arr[1]= "";
    mode = 0;
-   v = bc_eqn_evalArithmeticExp(got_rpn_eqn[kmx_in, kkmx_in, "val"], mode, arg_arr, verbose);
-   if (verbose > 0) {
+   v = bc_eqn_evalArithmeticExp(got_rpn_eqn[kmx_in, kkmx_in, "val"], mode, arg_arr, vrb);
+   if (vrb > 0) {
      printf("%s: new_eqn var_mx= %s eqn= %s\n", script, bc_eqn_var_mx[2], got_rpn_eqn[kmx_in, kkmx_in, "val"]) > "/dev/stderr";
    }
    j = 0;
@@ -524,7 +524,7 @@ function got_lkfor_init(kmx, eqn) {
   got_lkfor[kmx,5]=1; # instances
   got_lkfor[kmx,6]="";
   got_rpn_eqn[kmx, 1, "val"]= eqn;
-  bc_eqn2_get_list_of_variables(kmx, 1, 0);
+  bc_eqn2_get_list_of_variables(kmx, 1, verbose);
   return kmx;
 }
 
@@ -639,7 +639,14 @@ function got_lkfor_init(kmx, eqn) {
    bc_eqn_ck_var_val_fncn = "ps_bc_eqn_ck_var_val";
    arg_arr[1]= "";
    
-   kmx = got_lkfor_init(kmx, "{tsc_freq} * [" cpu_cycles_str "] / [" ref_cycles_str "]"  );
+   if (cpu_mkr == "arm" && arm_cpu_freq != "") {
+     glbl_row_arr["arm_cpu_freq"] = arm_cpu_freq + 0.0; # GHz
+     glbl_row_arr["avg_freq_ghz"] = arm_cpu_freq + 0.0; # GHz
+     kmx = got_lkfor_init(kmx, "{arm_cpu_freq}"  );
+     got_lkfor[kmx,"typ_match"]="always";
+   } else {
+     kmx = got_lkfor_init(kmx, "{tsc_freq} * [" cpu_cycles_str "] / [" ref_cycles_str "]"  );
+   }
    nwfor[kmx,1,"alias"]="metric_CPU operating frequency (in GHz)";
    nwfor[kmx,1,"hdr"]="avg_freq (GHz)";
    got_lkfor[kmx,"tag"]="avg_freq_ghz";
@@ -649,32 +656,37 @@ function got_lkfor_init(kmx, eqn) {
 
 
    if (cpu_mkr == "intel") {
-   # bsy = 1.0e-9*(evt[mperf,i])/(num_cpus * tsc_ghz * tm_dff); v = 100.0*bsy;
-   kmx = got_lkfor_init(kmx, "100.0e-9 * [" ref_cycles_str "] / ( " num_cpus " * {tsc_freq} * {interval})" );
-   nwfor[kmx,1,"hdr"]="%not_halted";
-   nwfor[kmx,1,"alias"]="metric_CPU utilization %";
+     # bsy = 1.0e-9*(evt[mperf,i])/(num_cpus * tsc_ghz * tm_dff); v = 100.0*bsy;
+     kmx = got_lkfor_init(kmx, "100.0e-9 * [" ref_cycles_str "] / ( " num_cpus " * {tsc_freq} * {interval})" );
+     nwfor[kmx,1,"hdr"]="%not_halted";
+     nwfor[kmx,1,"alias"]="metric_CPU utilization %";
 
+     if (cpu_type != "Ice Lake" && cpu_mkr == "intel") {
+       kmx = got_lkfor_init(kmx, "4.0 * ( [CPU_CLK_UNHALTED.THREAD_ANY] / " thr_per_core " )" );
+       nwfor[kmx,1,"hdr"]="td_denom";
+       nwfor[kmx,1,"save_glbl_row_arr"]="td_denom";
+     }
 
-   if (cpu_type != "Ice Lake" && cpu_mkr == "intel") {
-     kmx = got_lkfor_init(kmx, "4.0 * ( [CPU_CLK_UNHALTED.THREAD_ANY] / " thr_per_core " )" );
-     nwfor[kmx,1,"hdr"]="td_denom";
-     nwfor[kmx,1,"save_glbl_row_arr"]="td_denom";
-   }
-
-   if (cpu_type != "Ice Lake") {
-#    return ((EV("CPU_CLK_UNHALTED.THREAD", level) / 2) * (1 + EV("CPU_CLK_UNHALTED.ONE_THREAD_ACTIVE", level) / EV("CPU_CLK_UNHALTED.REF_XCLK", level))) if ebs_mode else(EV("CPU_CLK_UNHALTED.THREAD_ANY", level) / 2) if smt_enabled else CLKS(self, EV, level)
-     kmx = got_lkfor_init(kmx, "( 4.0 * [" cpu_cycles_str "] / 2.0 ) * ( 1.0 + [cpu_clk_unhalted.one_thread_active] / [cpu_clk_unhalted.ref_xclk] )" );
-     nwfor[kmx,1,"hdr"]="td_denom";
-     nwfor[kmx,1,"save_glbl_row_arr"]="td_denom";
-     prt_rpn_eqn(kmx);
-   }
-
-   kmx = got_lkfor_init(kmx, "[" L3_cha_clockticks_str "] / [[" L3_cha_clockticks_str "]]" );
-   got_lkfor[kmx,"tag"]="uncore_freq";
-   nwfor[kmx,1,"hdr"]="uncore_freq (GHz)";
+     if (cpu_type != "Ice Lake") {
+  #    return ((EV("CPU_CLK_UNHALTED.THREAD", level) / 2) * (1 + EV("CPU_CLK_UNHALTED.ONE_THREAD_ACTIVE", level) / EV("CPU_CLK_UNHALTED.REF_XCLK", level))) if ebs_mode else(EV("CPU_CLK_UNHALTED.THREAD_ANY", level) / 2) if smt_enabled else CLKS(self, EV, level)
+       kmx = got_lkfor_init(kmx, "( 4.0 * [" cpu_cycles_str "] / 2.0 ) * ( 1.0 + [cpu_clk_unhalted.one_thread_active] / [cpu_clk_unhalted.ref_xclk] )" );
+       nwfor[kmx,1,"hdr"]="td_denom";
+       nwfor[kmx,1,"save_glbl_row_arr"]="td_denom";
+       prt_rpn_eqn(kmx);
+     }
+  
+     kmx = got_lkfor_init(kmx, "[" L3_cha_clockticks_str "] / [[" L3_cha_clockticks_str "]]" );
+     got_lkfor[kmx,"tag"]="uncore_freq";
+     nwfor[kmx,1,"hdr"]="uncore_freq (GHz)";
 
    }
    if (cpu_mkr == "arm") {
+
+     if (arm_cpu_freq != "") {
+        kmx = got_lkfor_init(kmx, "100.0e-9 * [" cpu_cycles_str "] / ( " num_cpus " * {arm_cpu_freq} * {interval})" );
+        nwfor[kmx,1,"hdr"]="%not_halted";
+        nwfor[kmx,1,"alias"]="metric_CPU utilization %";
+     }
 
      kmx = got_lkfor_init(kmx, "100.0 * [armv8_pmuv3_0/stall_frontend/] / ["cpu_cycles_str"]" );
      nwfor[kmx,1,"hdr"]="topdown_Frontend_Bound(%)";
@@ -686,11 +698,6 @@ function got_lkfor_init(kmx, eqn) {
      nwfor[kmx,1,"hdr"]="topdown_Backend_Bound(%)";
      got_lkfor[kmx,"tag"]="td_be_stall";
      nwfor[kmx,1,"save_glbl_row_arr"]=got_lkfor[kmx,"tag"];
-
-     #kmx = got_lkfor_init(kmx, "100.0 * ( 1.0 - ([armv8_pmuv3_0/stall_backend/] + [armv8_pmuv3_0/stall_frontend/]) / ["cpu_cycles_str"])" );
-     #nwfor[kmx,1,"hdr"]="topdown_Retiring_BadSpec(%)";
-     #got_lkfor[kmx,"tag"]="td_ret_bs";
-     #nwfor[kmx,1,"save_glbl_row_arr"]=got_lkfor[kmx,"tag"];
 
      kmx = got_lkfor_init(kmx, "100.0 * (([armv8_pmuv3_0/inst_spec/]-[instructions])/[armv8_pmuv3_0/inst_spec/])*( 1.0 - ([armv8_pmuv3_0/stall_backend/] + [armv8_pmuv3_0/stall_frontend/]) / ["cpu_cycles_str"])" );
      nwfor[kmx,1,"hdr"]="topdown_Bad_Speculation(%)";
@@ -1018,7 +1025,7 @@ function got_lkfor_init(kmx, eqn) {
    extra_cols=0;
    for (k=1; k <= kmx; k++) { 
      for (j=1; j <= got_lkfor[k,2]; j++) { 
-         if (1==2) {
+       if (1==2) {
        if ("interval" == lkfor[k,j]) {
            lkup[k,j] = -1
            got_lkfor[k,1]++;
@@ -1027,7 +1034,7 @@ function got_lkfor_init(kmx, eqn) {
            lkup[k,j] = -2
            got_lkfor[k,1]++;
        }
-         }
+       }
        # allow references to other equations provided the equations already have been found to have all their dependencies satisfied
        for (kk=1; kk < k; kk++) { 
          if (got_lkfor[kk,"used"] == 1 && tolower(lkfor[k,j]) == tolower(nwfor[kk,1,"hdr"])) {
@@ -1040,7 +1047,7 @@ function got_lkfor_init(kmx, eqn) {
        #}
      }
      got_lkfor[k,"used"] = 0;
-     if (got_lkfor[k,1] == got_lkfor[k,2] || (got_lkfor[k,"typ_match"] == "require_any" && got_lkfor[k,1] > 0)) {
+     if (got_lkfor[k,1] == got_lkfor[k,2] || (got_lkfor[k,"typ_match"] == "require_any" && got_lkfor[k,1] > 0) || got_lkfor[k,"typ_match"] == "always") {
         printf("going to be used eqn: nwfor[%d,1,hdr]=%s, extra_cols= %d\n", k, nwfor[k,1,"hdr"], extra_cols) > "/dev/stderr";
         extra_cols++;
         got_lkfor[k,"used"] = 1;
@@ -1059,7 +1066,6 @@ function got_lkfor_init(kmx, eqn) {
      }
    }
    printf("perf_stat_scatter.awk: extra_cols= %d\n", extra_cols) > "/dev/stderr";
-# xyz
    printf("\n");
    for(i=0; i <= evt_idx; i++) {
       str = tolower(evt_lkup[i]);
@@ -1081,7 +1087,7 @@ function got_lkfor_init(kmx, eqn) {
      printf("\t%s", evt_inst[i]) > out_file;
    }
    for (k=1; k <= kmx; k++) { 
-     if (got_lkfor[k,1] == got_lkfor[k,2] || (got_lkfor[k,"typ_match"] == "require_any" && got_lkfor[k,1] > 0)) {
+     if (got_lkfor[k,1] == got_lkfor[k,2] || (got_lkfor[k,"typ_match"] == "require_any" && got_lkfor[k,1] > 0) || got_lkfor[k,"typ_match"] == "always") {
         printf("\t%s", got_lkfor[k,5]) > out_file;
      }
    }
@@ -1095,8 +1101,6 @@ function got_lkfor_init(kmx, eqn) {
    }
    ts_col = 1;
    printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", rows+1, bcol, -1, evt_idx+extra_cols+4, ts_col) > out_file;
-#title	sar network IFACE dev eth0	sheet	sar network IFACE	type	line
-#hdrs	8	0	68	8
    bw_cols_mx = 0;
    ipc_cols_mx = 0;
    unhalted_cols_mx = 0;
@@ -1117,7 +1121,7 @@ function got_lkfor_init(kmx, eqn) {
    got_LLC_pct_misses = -1;
    for (k=1; k <= kmx; k++) { 
      #printf("ck nwfor[%d,1]= %s, got_lkfor1= %d, got_lkfor2= %d\n", k, nwfor[k,1,"hdr"], got_lkfor[k,1], got_lkfor[k,2]) > "/dev/stderr";
-     if (got_lkfor[k,1] == got_lkfor[k,2] || (got_lkfor[k,"typ_match"] == "require_any" && got_lkfor[k,1] > 0)) {
+     if (got_lkfor[k,1] == got_lkfor[k,2] || (got_lkfor[k,"typ_match"] == "require_any" && got_lkfor[k,1] > 0) || got_lkfor[k,"typ_match"] == "always") {
         my_hdr = my_hdr "" sprintf("\t%s", nwfor[k,1,"hdr"]);
         col_hdr[cols] = nwfor[k,1,"hdr"];
         #printf("got nwfor[%d,1]= %s\n", k, nwfor[k,1,"hdr"]) > "/dev/stderr";
@@ -1175,7 +1179,7 @@ function got_lkfor_init(kmx, eqn) {
         }
         }
         if (cpu_mkr == "arm") {
-          if( got_lkfor[k,"tag"] == "td_bs" || got_lkfor[k,"tag"] == "td_ret" || got_lkfor[k,"tag"] == "td_ret_bs" || got_lkfor[k,"tag"] == "td_be_stall" ||  got_lkfor[k,"tag"] == "td_fe_stall" ) {
+          if( got_lkfor[k,"tag"] == "td_bs" || got_lkfor[k,"tag"] == "td_ret" || got_lkfor[k,"tag"] == "td_be_stall" ||  got_lkfor[k,"tag"] == "td_fe_stall" ) {
              td_arm[++td_arm_mx,"col"] = cols;
              td_arm[  td_arm_mx,"tag"] = got_lkfor[k,"tag"];
           }
@@ -1280,92 +1284,13 @@ function got_lkfor_init(kmx, eqn) {
            do_summary(cols, sv[i,3+j]+0.0, use_epoch+0.0, interval, k);
            cols++;
          }
-         if (1==2) {
-         if (got_lkfor[k,4] == "sum") {
-           for (kk=1; kk <= got_lkfor[k,2]; kk++) { 
-             if (lkup[k,kk] == NO_MATCH) { continue; }
-             if (lkup[k,kk] == j) {
-               sum[k] += sv[i,3+j];
-             }
-             if (lkup[k,kk] == -1) {
-               sum[k] += interval;
-             }
-             if (lkup[k,kk] == -2) {
-               aaa = lkup[k,1];
-               sum[k] += evt_inst[aaa]; # instances
-             }
-           }
-         }
-         if (got_lkfor[k,4] == "div") {
-           if (lkup[k,1] == j) { numer[k] = sv[i,3+j]; }
-           if (lkup[k,2] == j) { denom[k] = sv[i,3+j]; }
-           if (lkup[k,1] == -1) { numer[k] = interval; }
-           if (lkup[k,2] == -1) { denom[k] = interval; }
-           if (lkup[k,1] == -2) { numer[k] = evt_inst[lkup[k,1]]; }
-           if (lkup[k,2] == -2) { denom[k] = evt_inst[lkup[k,1]]; }
-         }
-         }
        }
      }
      for (sk=1; sk <= skt_idx; sk++) { not_halted_fctr[sk] = 0.0; }
-     sv_avg_freq_ghz = 0.0;
      for (k=1; k <= kmx; k++) { 
        prt_it=0;
-       if ((got_lkfor[k,4] == "div" || got_lkfor[k,4] == "div_and_by_interval") && got_lkfor[k,1] == got_lkfor[k,2]) {
-         if (denom[k] <= 0.0) {
-           val = 0.0;
-         } else {
-           val = (numer[k]/denom[k]) * got_lkfor[k,3];
-         }
-         if (got_lkfor[k,4] == "div_and_by_interval") {
-           val /= interval;
-         }
-         prt_it=1;
-       }
-
-       if (got_lkfor[k,4] == "sum" && got_lkfor[k,1] > 0) {
-         val = sum[k] * got_lkfor[k,3];
-         prt_it=1;
-       }
-       if (prt_it == 1) {
-         if (got_lkfor[k,6] == "div_by_interval") {
-            val = val / interval;
-         }
-         if (index(nwfor[k,1,"hdr"], "%not_halted") == 1) {
-           #printf("%not_halted 03: prt_it= %s got_lkfor[%d,%s]= %s\n", prt_it, k, 7, got_lkfor[k,7]) > "/dev/stderr";
-           sk = got_lkfor[k,7];
-           if (sk == "") { sk= 1; }
-           not_halted_fctr[sk] = val/100.0;
-           #printf("b sk= %d, nhf= %f\n", sk, not_halted_fctr[sk]) > "/dev/stderr";
-         }
-       }
-     }
-     for (k=1; k <= kmx; k++) { 
-       prt_it=0;
-       if (got_lkfor[k,1] == 0) {
+       if (got_lkfor[k,1] == 0 && got_lkfor[k,"typ_match"] != "always") {
          continue;
-       }
-       if (1==2 && got_lkfor[k,4] == "div" && got_lkfor[k,1] == got_lkfor[k,2]) {
-         if (denom[k] == 0 && lkup[k,2] == -2) {
-          denom[k] = def_inst;  # this is for input data on a per process basis where instance is 0
-          printf("got zero for %s k= %s, numer= %f, lkup[%d,2]= %s, lkup[k,1]= %s evt_inst[lkup[k,1]]= %s, use num_cpus= %s\n",
-            nwfor[k,1,"hdr"], k, numer[k], k, lkup[k,2], lkup[k,1], evt_inst[lkup[k,1]], num_cpus) > "/dev/stderr";
-         } else if (denom[k] == 0) {
-          denom[k] = def_inst;  # this is for input data on a per process basis where instance is 0
-          printf("got zero2 for %s k= %s, numer= %f, lkup[%d,2]= %s, lkup[k,1]= %s evt_inst[lkup[k,1]]= %s, use num_cpus= %s\n",
-            nwfor[k,1,"hdr"], k, numer[k], k, lkup[k,2], lkup[k,1], evt_inst[lkup[k,1]], num_cpus) > "/dev/stderr";
-         }
-         val = (numer[k]/denom[k]) * got_lkfor[k,3];
-         prt_it=1;
-       }
-
-       if (1==2 && got_lkfor[k,4] == "sum" && got_lkfor[k,1] > 0) {
-         val = sum[k] * got_lkfor[k,3];
-         prt_it=1;
-       }
-       if (1==2 && got_lkfor[k,4] == "formula" && got_lkfor[k,1] == got_lkfor[k,2]) {
-         val =  got_lkfor[k,3];
-         prt_it=1;
        }
        if (1==2 && got_lkfor[k,4] == "rpn_eqn" && got_lkfor[k,1] == got_lkfor[k,2]) {
          val =  0.0;
@@ -1381,7 +1306,8 @@ function got_lkfor_init(kmx, eqn) {
            exit(1);
          }
        }
-       if (got_lkfor[k,4] == "bc_eqn2" && (got_lkfor[k,1] == got_lkfor[k,2] || (got_lkfor[k,"typ_match"] == "require_any" && got_lkfor[k,1] > 0))) {
+       if (got_lkfor[k,4] == "bc_eqn2" && (got_lkfor[k,1] == got_lkfor[k,2] || 
+         (got_lkfor[k,"typ_match"] == "require_any" && got_lkfor[k,1] > 0) || (got_lkfor[k,"typ_match"] == "always"))) {
          val =  0.0;
          prt_it=1;
          bc_eqn_err_num = 0;
@@ -1393,6 +1319,8 @@ function got_lkfor_init(kmx, eqn) {
          arg_arr[1] = 1;
          val = bc_eqn_evalArithmeticExp(got_rpn_eqn[k, 1, "val"], 3, arg_arr, verbose, k) + 0.0;
          #if (k == mem_bw_kmx2) {
+         #if (got_lkfor[k,"tag"]=="avg_freq_ghz") {
+#xyz
          #printf("\n%s: got bc_eqn2= %s val= %s, bc_eqn_err_num= %s, err_msg= %s err= %s\n", script, got_rpn_eqn[k, 1, "val"], val, bc_eqn_err_num, bc_eqn_err_msgs[bc_eqn_err_num], bc_err);
          #val = bc_eqn_evalArithmeticExp(got_rpn_eqn[k, 1, "val"], 3, arg_arr, 1);
          #}
@@ -1466,9 +1394,6 @@ function got_lkfor_init(kmx, eqn) {
          }
        }
        if (prt_it == 1) {
-         if (got_lkfor[k,6] == "div_by_interval") {
-            val = val / interval;
-         }
          if (index(nwfor[k,1,"hdr"],"%not_halted") == 1) {
            sk = got_lkfor[k,7];
            if (sk == "") { sk= 1; }
@@ -1476,25 +1401,7 @@ function got_lkfor_init(kmx, eqn) {
            #printf("b sk= %d, nhf= %f\n", sk, not_halted_fctr[sk]) > "/dev/stderr";
          }
             
-         if (got_lkfor[k,6] == "div_by_non_halted_interval") {
-            sk = got_lkfor[k,7];
-            if (sk == "") { sk= 1; }
-           #not_halted_fctr[sk] = val/100.0;
-            nhf = not_halted_fctr[sk];
-            dnm = interval * nhf;
-            if (not_halted_fctr[sk] == 0.0) {
-              # you can get a ref-cycles value of 0
-              val = 0.0;
-            if (dnm <= 0.0) {
-              printf("got denom= 0.0 for sk= %s, nhf= %f, skt_idx= %s interval= %f eqn[%d]=%s\n",
-               sk, not_halted_fctr[sk], skt_idx, interval, k, nwfor[k,1,"hdr"]) > "/dev/stderr";
-            }
-            } else {
-            val = val / (dnm);
-            }
-         }
          if (got_lkfor[k,"tag"] == "avg_freq_ghz") {
-           sv_avg_freq_ghz = val;
            glbl_row_arr[got_lkfor[k,"tag"]] = val;
          }
          if (got_lkfor[k,"max"] != "") {
@@ -1554,8 +1461,8 @@ function got_lkfor_init(kmx, eqn) {
        for (i=1; i <= td_arm_mx; i++) {
        for (j=1; j <= td_arm_mx; j++) {
            if ((i == 1 && td_arm[j,"tag"] == "td_fe_stall") ||
-               (i == 2 && td_arm[j,"tag"] == "td_be_stall") ||
-               (i == 3 && td_arm[j,"tag"] == "td_ret_bs") || (i == 3 && td_arm[j,"tag"] == "td_bs") ||
+               (i == 2 && td_arm[j,"tag"] == "td_bs") ||
+               (i == 3 && td_arm[j,"tag"] == "td_be_stall") ||
                (i == 4 && td_arm[j,"tag"] == "td_ret")) {
            printf("\t%d\t%d", td_arm[j,"col"],td_arm[j,"col"]) > out_file;
            }
