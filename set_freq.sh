@@ -42,7 +42,7 @@ GOV_IN=
 FREQ_IN=
 FORCE_IN=
 DID_GOV=0
-AWK=awk
+AWK=mawk
 
 while getopts "hg:f:F:" opt; do
   case ${opt} in
@@ -81,9 +81,9 @@ done
 
 HST=`hostname`
 if [ -e /proc/cpuinfo ]; then
-  CPU_VENDOR=`awk '/^vendor_id/ { printf("%s\n", $(NF));exit;}' /proc/cpuinfo`
-  CPU_MODEL=`awk '/^model/ { if ($2 == ":") {printf("%s\n", $(NF));exit;}}' /proc/cpuinfo`
-  CPU_FAMILY=`awk '/^cpu family/ { printf("%s\n", $(NF));exit;}' /proc/cpuinfo`
+  CPU_VENDOR=`$AWK '/^vendor_id/ { printf("%s\n", $(NF));exit;}' /proc/cpuinfo`
+  CPU_MODEL=`$AWK '/^model/ { if ($2 == ":") {printf("%s\n", $(NF));exit;}}' /proc/cpuinfo`
+  CPU_FAMILY=`$AWK '/^cpu family/ { printf("%s\n", $(NF));exit;}' /proc/cpuinfo`
 fi
 NUM_CPUS=`grep processor /proc/cpuinfo | wc -l`
 echo "CPU_VENDOR= $CPU_VENDOR CPU_MODEL= $CPU_MODEL CPU_FAMILY= $CPU_FAMILY"
@@ -215,7 +215,7 @@ fi
 if [ "$ACTION" == "set" ]; then
   if [[ $FREQ_IN != "0x"* ]]; then
     # assume freq in ghz like 2.7 or 3.0
-    FRQ=`awk -v frq="$FREQ_IN" 'BEGIN{val=frq*10.0; printf("0x%x\n", val);exit;}'`
+    FRQ=`$AWK -v frq="$FREQ_IN" 'BEGIN{val=frq*10.0; printf("0x%x\n", val);exit;}'`
     if [ "$FRQ" == "0x0" ]; then
       echo "$0.$LINENO problems converting -f $FREQ_IN to hex string. got 0x0. Expect a string like -f 2.7. Bye".
       exit 1
@@ -329,17 +329,18 @@ function show_MSRs() {
     #echo "cps $CORES_PER_SKT msr_xtr= $MSR_XTR msr_frq= $MSR_FRQ"
     if [ "$CORES_PER_SKT" != "" -a "$CPU_NAME" != "" -a "$MSR_FRQ" != "" ]; then
       $AWK -v cps="$CORES_PER_SKT" -v cpu_name="$CPU_NAME" -v msr_frq="$MSR_FRQ" -v msr_xtr="$MSR_XTR" '
+       function hex2dec(str) { return sprintf("%d", str)+0; }
        BEGIN{
          cps += 0;
          for (i=0; i < 8; i++) {
             str1 = "0x" substr(msr_frq, 2*(i)+1, 2);
-            #printf("str1[%d]= %s\n", i, str1);
-            frq[i] = sprintf("%d", str1)+0;
+            frq[i] = hex2dec(str1);
+            #printf("str1[%d]= %s, frq= %s\n", i, str1, frq[i]);
             if (cpu_name == "Broadwell" || cpu_name == "Haswell") {
               lmt[i]=8-i;
             } else {
               str2 = "0x" substr(msr_xtr, 2*(i)+1, 2);
-              lmt[i] = sprintf("%d", str2)+0;
+              lmt[i] = hex2dec(str2);
             }
             if (cps >= lmt[i]) {
               printf("freq[%d]= %.1f, cores %d\n", i, .1*frq[i], lmt[i]);
@@ -351,10 +352,11 @@ function show_MSRs() {
   fi
   if [ "$MODE" == "AMD" ]; then
     CBP_STATE=`$AWK -v cps="$CORES_PER_SKT" -v cpu_name="$CPU_NAME" -v msr_frq="$MSR_FRQ" -v msr_xtr="$MSR_XTR" '
+     function hex2dec(str) { return sprintf("%d", str)+0; }
      BEGIN{
        cps += 0;
        bit25 = lshift(1, 25);
-       v = sprintf("%d", "0x"msr_frq)+0;
+       v = hex2dec("0x"msr_frq);
        b25set = and(v, bit25);
        #printf("bit25set= %s, bit25= 0x%x, msr_frq= 0x%x msr_f= %s\n", b25set, bit25, v, v);
        if (b25set == 0) {
@@ -403,7 +405,7 @@ if [ "$ACTION" == "reset" -a "$DO_MSRS" == "1" ]; then
     # Stepping:                        6
     wrmsr --all 0x1ad 0x1a1a1a1a1b1e2022
   elif [[ $CPU_NAME == *"Broadwell"* ]]; then
-    CKVAL=`rdmsr -0 -p 0 0x1af | awk '{v=substr($0, 1, 2);str="";for(i=1;i<=8;i++){str=str""v;}printf("0x%s", str);}'`
+    CKVAL=`rdmsr -0 -p 0 0x1af | $AWK '{v=substr($0, 1, 2);str="";for(i=1;i<=8;i++){str=str""v;}printf("0x%s", str);}'`
     #if [ "$CKVAL" == "0x1a1a1a1a1a1a1a1a" ]; then
     if [ "$NUM_CPUS" == "40" ]; then
     wrmsr --all 0x1ad 0x1b1c1d1e1f202222
@@ -433,10 +435,11 @@ if [ "$ACTION" == "reset" -a "$DO_MSRS" == "1" ]; then
       
       for ((i=0; i < $NUM_CPUS; i++)); do
        OVAL=`rdmsr -0 -p $i $MSR_LIST`
-       NVAL=`echo $OVAL | awk '
+       NVAL=`echo $OVAL | $AWK '
+     function hex2dec(str) { return sprintf("%d", str)+0; }
      {
       bit25 = lshift(1, 25);
-      v = sprintf("%d", "0x"$0)+0;
+      v = hex2dec("0x"$0);
       b25set = and(v, bit25);
       if(b25set!=0) {
        v = xor(v, bit25);
@@ -454,9 +457,9 @@ fi
 
 if [ "$ACTION" == "allcore" -a "$DO_MSRS" == "1" ]; then
   if [ "$MODE" == "Intel" ]; then
-    CKVAL=`rdmsr -0 -p 0 0x1ad | awk '{v=substr($0, 1, 2);str="";for(i=1;i<=8;i++){str=str""v;}printf("0x%s", str);}'`
+    CKVAL=`rdmsr -0 -p 0 0x1ad | $AWK '{v=substr($0, 1, 2);str="";for(i=1;i<=8;i++){str=str""v;}printf("0x%s", str);}'`
   else
-    CKVAL=`rdmsr -0 -p 0 $MSR_LIST | awk '{v=substr($0, 1, 2);str="";for(i=1;i<=8;i++){str=str""v;}printf("0x%s", str);}'`
+    CKVAL=`rdmsr -0 -p 0 $MSR_LIST | $AWK '{v=substr($0, 1, 2);str="";for(i=1;i<=8;i++){str=str""v;}printf("0x%s", str);}'`
   fi
   show_MSRs "before allcore " 
   #CPU_VENDOR= GenuineIntel CPU_MODEL= 85 CPU_FAMILY= 6
@@ -476,7 +479,7 @@ if [ "$ACTION" == "allcore" -a "$DO_MSRS" == "1" ]; then
   elif [[ $CPU_NAME == *"Ice Lake"* ]]; then
     wrmsr --all 0x1ad $CKVAL
   elif [[ $CPU_NAME == *"Broadwell"* ]]; then
-    CKVAL=`rdmsr -0 -p 0 0x1af | awk '{v=substr($0, 1, 2);str="";for(i=1;i<=8;i++){str=str""v;}printf("0x%s", str);}'`
+    CKVAL=`rdmsr -0 -p 0 0x1af | $AWK '{v=substr($0, 1, 2);str="";for(i=1;i<=8;i++){str=str""v;}printf("0x%s", str);}'`
     echo "CKVAL for msr 0x1af= $CKVAL"
     wrmsr --all 0x1ad $CKVAL
     wrmsr --all 0x1ae $CKVAL
@@ -496,10 +499,11 @@ if [ "$ACTION" == "allcore" -a "$DO_MSRS" == "1" ]; then
       
       for ((i=0; i < $NUM_CPUS; i++)); do
        OVAL=`rdmsr -0 -p $i $MSR_LIST`
-       NVAL=`echo $OVAL | awk '
+       NVAL=`echo $OVAL | $AWK '
+       function hex2dec(str) { return sprintf("%d", str)+0; }
      {
       bit25 = lshift(1, 25);
-      v = sprintf("%d", "0x"$0)+0;
+      v = hex2dec("0x"$0);
       v = or(v, bit25);
       #if(b25set!=0) {
       # v = xor(v, bit25);
@@ -517,7 +521,7 @@ fi
 
 if [ "$ACTION" == "show" ]; then
   show_MSRs "show " 
-  cat /sys/devices/system/cpu/cpufreq/policy*/scaling_governor | awk '
+  cat /sys/devices/system/cpu/cpufreq/policy*/scaling_governor | $AWK '
     {
        val=$1;
        if (!(val in lst)) {
