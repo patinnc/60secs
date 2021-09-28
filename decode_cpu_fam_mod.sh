@@ -1,22 +1,108 @@
 #!/usr/bin/env bash
 
+SCR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+AWK_BIN=awk
+
+ARCH=
+FAMILY=
+MODEL=
+NAME=
+VENDOR=
+INFILE=
+VERBOSE=0
+
+while getopts "ha:f:i:m:n:v:V:" opt; do
+  case ${opt} in
+    a )
+      ARCH=$OPTARG
+      if [ "$ARCH" == "aarch64" ]; then
+        echo "arm64"
+        exit 0
+      fi
+      ;;
+    f )
+      FAMILY=$OPTARG
+      ;;
+    i )
+      INFILE=$OPTARG
+      ;;
+    m )
+      MODEL=$OPTARG
+      ;;
+    n )
+      NAME=$OPTARG
+      ;;
+    v )
+      VENDOR=$OPTARG
+      if [ "$VENDOR" == "ARM" -o "$VENDOR" == "arm" ]; then
+        echo "arm64"
+        exit 0
+      fi
+      ;;
+    V )
+      VERBOSE=$OPTARG
+      ;;
+    h )
+      echo "$0 [ [ -a architecture | -f family -m model -n name -v vendor ] | filename"
+      echo " Get the cpu code name from lscpu or /proc/cpuinfo"
+      echo " Either pass in the -f/-m/-n/-v options or the name of the lscpu file or /proc/cpuinfo."
+      echo "   -i input_filename  must be either a lscpu output file or a /proc/cpuinfo file"
+      echo "   -V verbose 0 (not verbose, the default) or 1 verbose"
+      echo " If nothing is entered then the script looks for /proc/cpuinfo (on linux) or gets the info from sysctl machdep.cpu on macbook"
+      echo "   -a architecture (aarch64 for ARM, or x86_64 for Intel/AMD)"
+      echo "      if you enter -a aarch64 then the script returns 'arm64'... I don't yet know how to get an ARM chip codename"
+      echo "   -f cpu_family (like 6 for Intel)"
+      echo "   -m cpu_model  (like 158 (not hex))"
+      echo "   -n cpu_model_name  the model name must be enclosed in dbl quotes since it has spaces"
+      echo "   -v cpuvendor_id  (GenuineIntel or AuthenticAMD or ARM)"
+      echo "      if you enter -v ARM then the script returns 'arm64'... I don't yet know how to get an ARM chip codename"
+      echo "   for example: "
+      echo "     ./decode_cpu_fam_mod.sh -f 6 -m 158 -n \"Intel(R) Core(TM) i7-8850H CPU @ 2.60GHz\" -v GenuineIntel"
+      echo "   returns:"
+      echo "   Coffee Lake"
+      exit 1
+      ;;
+    : )
+      echo "$0.$LINENO Invalid option: $OPTARG requires an argument" 1>&2
+      exit 1
+      ;;
+    \? )
+      echo "$0.$LINENO Invalid option: $OPTARG" 1>&2
+      exit 1
+      ;;
+  esac
+done
+shift $((OPTIND -1))
+
 INF=/proc/cpuinfo
 if [ "$1" != "" ]; then
   INF=$1
+  if [ ! -e "$INF" ]; then
+    echo "$0.$LINENO you entered arg $INF but didn't find the file $INF. Bye"
+    exit 0
+  fi
 fi
-export LC_ALL=C
+if  [ "$INFILE" != "" ]; then
+  if [ ! -e "$INFILE" ]; then
+    echo "$0.$LINENO you entered -i $INFILE but didn't find the file $INFILE. Bye"
+    exit 0
+  fi
+  INF=$INFILE
+fi
 
+if [ "$FAMILY" != "" -a "$MODEL" != "" -a "$NAME" != "" -a "VENDOR" != "" ]; then
+  INF=
+  if [ "$ARCH" != "" ]; then
+    ASTR="Architecture  : $ARCH"
+  fi
+  RESP="vendor_id	: $VENDOR
+cpu family	: $FAMILY
+model		: $MODEL
+model name	: $NAME
+$ASTR
+"
+fi
 
-SCR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
-AWK_BIN=awk
-if [ -e $SCR_DIR/bin/gawk ]; then
-if [[ "$OSTYPE" == "linux-gnu"* ]]; then
-  AWK_BIN=$SCR_DIR/bin/gawk
-elif [[ "$OSTYPE" == "darwin"* ]]; then
-   # Mac OSX
-   AWK_BIN=gawk
-fi
-fi
 if [[ "$OSTYPE" == "darwin"* ]]; then
   if [ "$1" == "" ]; then
    #machdep.cpu.vendor:
@@ -31,25 +117,91 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
    BRAND=`sysctl machdep.cpu|grep cpu.brand_str|awk '{$1="";printf("Model name: %s\n", $0);exit 0;}'`
    RESP=`echo $VENDR; echo $FAM; echo $MOD; echo $BRAND`
    #echo "RESP= $RESP"
-  else
+  fi
+fi
+if [ "$RESP" == "" ]; then
   if [ ! -e $INF ]; then
     echo "didn't find input file $INF"
     exit 1
   fi
-   RESP=`cat $INF`
-  fi
- else
-  if [ ! -e $INF ]; then
-    echo "didn't find input file $INF"
-    exit 1
-  fi
-   RESP=`cat $INF`
+  RESP=`cat $INF`
 fi
 
-export AWKPATH=$SCR_DIR
-
-echo "$RESP" | $AWK_BIN -v vrb=0 '
-   @include "decode_cpu_fam_mod.awk"
+echo "$RESP" | $AWK_BIN -v vrb="$VERBOSE" '
+   function decode_fam_mod(vndor, fam, mod, cpu_model_name,    i, k, res, csx_i, dcd) {
+      if (vndor == "GenuineIntel") {
+        # cascade lake 2nd gen stuff from https://www.intel.com/content/www/us/en/products/docs/processors/xeon/2nd-gen-xeon-scalable-spec-update.html
+        # 2nd gen xeon scalable cpus: cascade lake sku is 82xx, 62xx, 52xx, 42xx 32xx W-32xx  from https://www.intel.com/content/www/us/en/products/docs/processors/xeon/2nd-gen-xeon-scalable-spec-update.html
+        # skylake 1st gen stuff from https://www.intel.com/content/www/us/en/processors/xeon/scalable/xeon-scalable-spec-update.html
+        # 1st gen xeon scalable cpus: 81xx, 61xx, 51xx, 81xxT, 61xxT 81xxF, 61xxF, 51xx, 41xx, 31xx, 51xxT 41xxT, 51xx7, k
+        
+        # cpuid tables from https://en.wikichip.org/wiki/intel/cpuid
+        i=0;
+        dcd[++i,1]="Ice Lake";     dcd[i,2]="Family 6 Model 108";
+        dcd[++i,1]="Ice Lake";     dcd[i,2]="Family 6 Model 106";
+        dcd[++i,1]="Coffee Lake";  dcd[i,2]="Family 6 Model 158";
+        dcd[++i,1]="Cooper Lake/Cascade Lake/Skylake";  dcd[i,2]="Family 6 Model 85"; csx_i=i;
+        dcd[++i,1]="Broadwell";    dcd[i,2]="Family 6 Model 79";
+        dcd[++i,1]="Broadwell";    dcd[i,2]="Family 6 Model 86";
+        dcd[++i,1]="Haswell";      dcd[i,2]="Family 6 Model 63";
+        dcd[++i,1]="Ivy Bridge";   dcd[i,2]="Family 6 Model 62";
+        dcd[++i,1]="Sandy Bridge"; dcd[i,2]="Family 6 Model 45";
+        dcd[++i,1]="Westmere";     dcd[i,2]="Family 6 Model 44";
+        dcd[++i,1]="EX";           dcd[i,2]="Family 6 Model 47";
+        dcd[++i,1]="Nehalem";      dcd[i,2]="Family 6 Model 46";
+        dcd[++i,1]="Lynnfield";    dcd[i,2]="Family 6 Model 30";
+        dcd[++i,1]="Bloomfield, EP, WS";  dcd[i,2]="Family 6 Model 26";
+        dcd[++i,1]="Penryn";       dcd[i,2]="Family 6 Model 29";
+        dcd[++i,1]="Harpertown, QC, Wolfdale, Yorkfield";  dcd[i,2]="Family 6 Model 23";
+        str = "Family " fam " Model " mod;
+        res=" ";
+        for(k=1; k <= i; k++) {
+           if (dcd[k,2] == str) {
+              res=dcd[k,1];break;
+           }
+        }
+        if (k==csx_i) { # so cooper/cascade/sky
+           if (match(cpu_model_name, / [86543]2[0-9][0-9]/) > 0) { res="Cascade Lake"}
+           else if (match(cpu_model_name, / [86543]1[0-9][0-9]/) > 0) { res="Skylake"}
+        }
+        if (res == " ") { res = ""; }
+        return res;
+      }
+      if (vndor == "AuthenticAMD") {
+       # cpuid tables from https://en.wikichip.org/wiki/amd/cpuid
+       #Zen 2  Rome    0x8     0xF     0x2     0x?     Family 23 Model [32-47]
+       #Matisse        0x8     0xF     0x7     0x1     Family 23 Model 113
+       #Castle Peak    0x8     0xF     0x3     0x1     Family 23 Model 49
+       #Zen+   Picasso 0x8     0xF     0x1     0x8     Family 23 Model 24
+       #Pinnacle Ridge 0x8     0xF     0x0     0x8     Family 23 Model 8
+       #Zen    Raven Ridge     0x8     0xF     0x1     0x1     Family 23 Model 17
+       #Naples, Whitehaven, Summit Ridge, Snowy Owl    0x8     0xF     0x0     0x1     Family 23 Model 1
+#Vendor ID:           AuthenticAMD
+#CPU family:          25
+#Model:               1
+#Model name:          AMD EPYC 7543 32-Core Processor
+       
+       i=0;
+       dcd[++i,1]="Zen2 Rome";           dcd[i,2]="Family 23 Model 32-47"; dcd[i,3]=23; dcd[i,4]=32;  dcd[i,5]=47;
+       dcd[++i,1]="Zen2 Matisse";        dcd[i,2]="Family 23 Model 113";   dcd[i,3]=23; dcd[i,4]=113; dcd[i,5]=113;
+       dcd[++i,1]="Zen2 Castle Peak";    dcd[i,2]="Family 23 Model 49";    dcd[i,3]=23; dcd[i,4]=49;  dcd[i,5]=49;
+       dcd[++i,1]="Zen+ Picasso";        dcd[i,2]="Family 23 Model 24";    dcd[i,3]=23; dcd[i,4]=24;  dcd[i,5]=24;
+       dcd[++i,1]="Zen+ Pinnacle Ridge"; dcd[i,2]="Family 23 Model 8";     dcd[i,3]=23; dcd[i,4]=8;   dcd[i,5]=8;
+       dcd[++i,1]="Zen Raven Ridge";     dcd[i,2]="Family 23 Model 17";    dcd[i,3]=23; dcd[i,4]=17;  dcd[i,5]=17;
+       dcd[++i,1]="Zen Naples/Whitehaven/Summit Ridge/Snowy Owl";
+         dcd[i,2]="Family 23 Model 1";    dcd[i,3]=23; dcd[i,4]=1;  dcd[i,5]=1;
+       dcd[++i,1]="Zen3 Milan";          dcd[i,2]="Family 25 Model 1";    dcd[i,3]=25; dcd[i,4]=1;  dcd[i,5]=1;
+       str = "Family " fam " Model " mod;
+       res=" ";
+       for(k=1; k <= i; k++) {
+         if (dcd[k,3] == fam && dcd[k,4] <= mod && mod <= dcd[k,5] ) {
+           res=dcd[k,1];break;
+         }
+       }
+       if (res == " ") { res = ""; }
+       return res;
+     }
+   }
    BEGIN{
      rc = 1; # indicates error
    }
@@ -73,13 +225,16 @@ echo "$RESP" | $AWK_BIN -v vrb=0 '
 #model		: 1
 #model name	: AMD EPYC 7543 32-Core Pro
          cpu_model_name = arr[2]; 
-         if(vrb==1){printf("cpu_model_name= %s\n", cpu_model_name);}
+         #if(vrb==1){printf("cpu_model_name= %s\n", cpu_model_name);}
          if(vrb==1){printf("decode_fam_mod(%s, %s, %s, %s)\n", cpu_vnd, cpu_fam, cpu_mod, cpu_model_name) > "/dev/stderr";}
          res=decode_fam_mod(cpu_vnd, cpu_fam, cpu_mod, cpu_model_name);
          printf("%s\n", res);
          if (res != "") { rc = 0; }
+         exit rc;
       }
-      exit rc;
+   }
+   END{
+    exit rc;
    }
 '
 RC=$?
