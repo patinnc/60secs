@@ -352,8 +352,8 @@ for ((dirs_i=${#dirs[@]}-1; dirs_i>=0; dirs_i--)); do
        file2=
     fi
     if [ -e $file1 ]; then
-      barg=`$AWK_BIN -v host_in="$HOST" '
-            @include "decode_cpu_fam_mod.awk"
+      barg=`$AWK_BIN -v scr_dir="$SCR_DIR" -v host_in="$HOST" '
+            #@include "decode_cpu_fam_mod.awk"
             BEGIN{i=0;dsks=0;got_os=0;disk_keys=0;disk_val="";}
                  function ltrim(s) { sub(/^[ \t\r\n]+/, "", s); return s }
                  function rtrim(s) { sub(/[ \t\r\n,]+$/, "", s); return s }
@@ -524,6 +524,7 @@ printf("============== %s\n", $0) > "/dev/stderr";
                     if (arr[1]=="Core(s) per socket") {i++;key[i]="cores/skt"; val[i]=arr[2];continue;}
                     if (arr[1]=="Socket(s)")  {i++;key[i]="skts"; val[i]=arr[2];continue;}
                     if (arr[1]=="CPU family") {cpu_fam=arr[2];i++;key[i]="cpu family"; val[i]=arr[2];continue;}
+                    if (arr[1]=="Architecture") {cpu_arch=arr[2];}
                     if (arr[1]=="Vendor ID") {cpu_vnd=arr[2];continue;}
                     if (arr[1]=="Model") {
                               cpu_mod=arr[2];
@@ -532,7 +533,11 @@ printf("============== %s\n", $0) > "/dev/stderr";
                     if (arr[1]=="Model name") {
                               cpu_model_name = arr[2];
                               i++;key[i]="model name"; val[i]=arr[2];
-                              res=decode_fam_mod(cpu_vnd, cpu_fam, cpu_mod, cpu_model_name);
+                              cmd_decode = scr_dir "/decode_cpu_fam_mod.sh -f " cpu_fam " -m " cpu_mod " -n \""cpu_model_name "\" -v GenuineIntel -V 0" ;
+                              cmd_decode | getline cpu_codename;
+                              close(cmd_decode);
+                              res = cpu_codename;
+                              #res=decode_fam_mod(cpu_vnd, cpu_fam, cpu_mod, cpu_model_name);
                               ++i;key[i]="cpu_decoder"; val[i]=res;
                               continue;}
                     if (arr[1]=="CPU MHz")    {i++;key[i]="CPU MHz"; val[i]=arr[2];continue;}
