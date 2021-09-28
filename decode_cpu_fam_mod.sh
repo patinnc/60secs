@@ -10,8 +10,9 @@ NAME=
 VENDOR=
 INFILE=
 VERBOSE=0
+UNKNOWN="n/a"
 
-while getopts "ha:f:i:m:n:v:V:" opt; do
+while getopts "ha:f:i:m:n:u:v:V:" opt; do
   case ${opt} in
     a )
       ARCH=$OPTARG
@@ -32,6 +33,9 @@ while getopts "ha:f:i:m:n:v:V:" opt; do
     n )
       NAME=$OPTARG
       ;;
+    u )
+      UNKNOWN=$OPTARG
+      ;;
     v )
       VENDOR=$OPTARG
       if [ "$VENDOR" == "ARM" -o "$VENDOR" == "arm" ]; then
@@ -48,6 +52,7 @@ while getopts "ha:f:i:m:n:v:V:" opt; do
       echo " Either pass in the -f/-m/-n/-v options or the name of the lscpu file or /proc/cpuinfo."
       echo "   -i input_filename  must be either a lscpu output file or a /proc/cpuinfo file"
       echo "   -V verbose 0 (not verbose, the default) or 1 verbose"
+      echo "   -u unknown_string   if the cpu is not found, this string is returned. Default is \"n/a\""
       echo " If nothing is entered then the script looks for /proc/cpuinfo (on linux) or gets the info from sysctl machdep.cpu on macbook"
       echo "   -a architecture (aarch64 for ARM, or x86_64 for Intel/AMD)"
       echo "      if you enter -a aarch64 then the script returns 'arm64'... I don't yet know how to get an ARM chip codename"
@@ -104,7 +109,7 @@ $ASTR
 fi
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
-  if [ "$1" == "" ]; then
+  if [ "$1" == "" -a "$INFILE" == "" -a "$RESP" == "" ]; then
    #machdep.cpu.vendor:
    #machdep.cpu.brand_string
    #machdep.cpu.family: 6
@@ -127,8 +132,8 @@ if [ "$RESP" == "" ]; then
   RESP=`cat $INF`
 fi
 
-echo "$RESP" | $AWK_BIN -v vrb="$VERBOSE" '
-   function decode_fam_mod(vndor, fam, mod, cpu_model_name,    i, k, res, csx_i, dcd) {
+echo "$RESP" | $AWK_BIN -v unknown="$UNKNOWN" -v vrb="$VERBOSE" '
+   function decode_fam_mod(vndor, fam, mod, cpu_model_name,     i, k, res, csx_i, dcd) {
       if (vndor == "GenuineIntel") {
         # cascade lake 2nd gen stuff from https://www.intel.com/content/www/us/en/products/docs/processors/xeon/2nd-gen-xeon-scalable-spec-update.html
         # 2nd gen xeon scalable cpus: cascade lake sku is 82xx, 62xx, 52xx, 42xx 32xx W-32xx  from https://www.intel.com/content/www/us/en/products/docs/processors/xeon/2nd-gen-xeon-scalable-spec-update.html
@@ -164,7 +169,7 @@ echo "$RESP" | $AWK_BIN -v vrb="$VERBOSE" '
            if (match(cpu_model_name, / [86543]2[0-9][0-9]/) > 0) { res="Cascade Lake"}
            else if (match(cpu_model_name, / [86543]1[0-9][0-9]/) > 0) { res="Skylake"}
         }
-        if (res == " ") { res = ""; }
+        if (res == " ") { res = unknown; }
         return res;
       }
       if (vndor == "AuthenticAMD") {
@@ -198,9 +203,10 @@ echo "$RESP" | $AWK_BIN -v vrb="$VERBOSE" '
            res=dcd[k,1];break;
          }
        }
-       if (res == " ") { res = ""; }
+       if (res == " ") { res = unknown; }
        return res;
      }
+     return unknown;
    }
    BEGIN{
      rc = 1; # indicates error
@@ -229,7 +235,7 @@ echo "$RESP" | $AWK_BIN -v vrb="$VERBOSE" '
          if(vrb==1){printf("decode_fam_mod(%s, %s, %s, %s)\n", cpu_vnd, cpu_fam, cpu_mod, cpu_model_name) > "/dev/stderr";}
          res=decode_fam_mod(cpu_vnd, cpu_fam, cpu_mod, cpu_model_name);
          printf("%s\n", res);
-         if (res != "") { rc = 0; }
+         if (res != "" && res != unknown) { rc = 0; }
          exit rc;
       }
    }
