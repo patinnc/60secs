@@ -37,17 +37,11 @@
 # MSRC001_006[4...B] [P-state [7:0]] (Core::X86::Msr::PStateDef)
 #   CpuFid[7:0]: core frequency ID. Read-write. Reset: XXh. Specifies the core frequency multiplier. The core COF is a function of CpuFid and CpuDid, and defined by CoreCOF.
 
-export LC_ALL=C
 SCR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 GOV_IN=
 FREQ_IN=
 DID_GOV=0
-export AWKPATH=$SCR_DIR
 AWK=awk
-if [ -e $SCR_DIR/bin/gawk ]; then
- AWK=$SCR_DIR/bin/gawk
-fi
-echo "AWK= $AWK"
 
 while getopts "hg:f:" opt; do
   case ${opt} in
@@ -356,12 +350,12 @@ function show_MSRs() {
        for (i=0; i < 8; i++) {
           str1 = "0x" substr(msr_frq, 2*(i)+1, 2);
 	  #printf("str1[%d]= %s\n", i, str1);
-          frq[i] = strtonum(str1);
+          frq[i] = sprintf("%d", str1)+0;
 	  if (cpu_name == "Broadwell" || cpu_name == "Haswell") {
             lmt[i]=8-i;
 	  } else {
             str2 = "0x" substr(msr_xtr, 2*(i)+1, 2);
-            lmt[i] = strtonum(str2);
+            lmt[i] = sprintf("%d", str2)+0;
 	  }
           if (cps >= lmt[i]) {
             printf("freq[%d]= %.1f, cores %d\n", i, .1*frq[i], lmt[i]);
@@ -385,7 +379,7 @@ function show_MSRs() {
      BEGIN{
        cps += 0;
        bit25 = lshift(1, 25);
-       v = strtonum("0x"msr_frq);
+       v = sprintf("%d", "0x"msr_frq)+0;
        b25set = and(v, bit25);
        #printf("bit25set= %s, bit25= 0x%x, msr_frq= 0x%x msr_f= %s\n", b25set, bit25, v, v);
        if (b25set == 0) {
@@ -468,7 +462,7 @@ if [ "$ACTION" == "reset" ]; then
        NVAL=`echo $OVAL | awk '
      {
       bit25 = lshift(1, 25);
-      v = strtonum("0x"$0);
+      v = sprintf("%d", "0x"$0)+0;
       b25set = and(v, bit25);
       if(b25set!=0) {
        v = xor(v, bit25);
@@ -531,7 +525,7 @@ if [ "$ACTION" == "allcore" ]; then
        NVAL=`echo $OVAL | awk '
      {
       bit25 = lshift(1, 25);
-      v = strtonum("0x"$0);
+      v = sprintf("%d", "0x"$0)+0;
       v = or(v, bit25);
       #if(b25set!=0) {
       # v = xor(v, bit25);
