@@ -353,7 +353,6 @@ for ((dirs_i=${#dirs[@]}-1; dirs_i>=0; dirs_i--)); do
     fi
     if [ -e $file1 ]; then
       barg=`$AWK_BIN -v scr_dir="$SCR_DIR" -v host_in="$HOST" '
-            #@include "decode_cpu_fam_mod.awk"
             BEGIN{i=0;dsks=0;got_os=0;disk_keys=0;disk_val="";}
                  function ltrim(s) { sub(/^[ \t\r\n]+/, "", s); return s }
                  function rtrim(s) { sub(/[ \t\r\n,]+$/, "", s); return s }
