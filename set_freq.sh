@@ -40,10 +40,11 @@
 SCR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 GOV_IN=
 FREQ_IN=
+FORCE_IN=
 DID_GOV=0
 AWK=awk
 
-while getopts "hg:f:" opt; do
+while getopts "hg:f:F:" opt; do
   case ${opt} in
     g )
       GOV_IN=$OPTARG
@@ -51,15 +52,20 @@ while getopts "hg:f:" opt; do
     f )
       FREQ_IN=$OPTARG
       ;;
+    F )
+      FORCE_IN=$OPTARG
+      ;;
     h )
       echo "$0 run compute and disk benchmarks using config files in cfg_dir and put results in results dir"
       echo "Usage: $0 [-h] [ -g performance|powersave|ondemand|show ] [ -f freq_in_hex|allcore|reset ]"
       echo "   -g performance|powersave|ondemand|show  ondemand is for AMD"
       echo "   -f freq_in_hex|allcore|reset"
-      echo "      on AMD Milan only allcore and reset are supported."
+      echo "      on AMD Milan only allcore and reset are supported but you have to add the -F 1 option to force it."
       echo "         AMD Milan: allcore disables CPB (core performance boost) which sets the freq to max 2.3 GHz (on the 96cpu box I checked)."
       echo "         AMD Milan: allcore on milan is not setting the freq to the all-core-turbo freq. It just disables turbo mode (and turbo frequencies)."
       echo "         AMD Milan: reset enables CPB (core performance boost) which allows boost freq up to 3.6 GHz (on the 96cpu box I checked)."
+      echo "   -F 0|1  if 1 then do the reset or allcore on AMD"
+      echo "         the default is 0: don't try to change frequencies on AMD"
       exit 1
       ;;
     : )
@@ -72,6 +78,29 @@ while getopts "hg:f:" opt; do
       ;;
   esac
 done
+
+HST=`hostname`
+if [ -e /proc/cpuinfo ]; then
+  CPU_VENDOR=`awk '/^vendor_id/ { printf("%s\n", $(NF));exit;}' /proc/cpuinfo`
+  CPU_MODEL=`awk '/^model/ { if ($2 == ":") {printf("%s\n", $(NF));exit;}}' /proc/cpuinfo`
+  CPU_FAMILY=`awk '/^cpu family/ { printf("%s\n", $(NF));exit;}' /proc/cpuinfo`
+fi
+NUM_CPUS=`grep processor /proc/cpuinfo | wc -l`
+echo "CPU_VENDOR= $CPU_VENDOR CPU_MODEL= $CPU_MODEL CPU_FAMILY= $CPU_FAMILY"
+CPU_NAME=`$SCR_DIR/decode_cpu_fam_mod.sh`
+if [ "$?" != "0" ]; then
+  echo "$0.$LINENO decode_cpu_fam_mod.sh returned error. CPU_NAME= \"$CPU_NAME\". Bye"
+  exit 1
+fi
+
+DO_MSRS=0
+if [ "$CPU_VENDOR" == "GenuineIntel" ]; then
+  DO_MSRS=1
+else
+  if [ "$CPU_VENDOR" == "AuthenticAMD" -a "$FORCE_IN" == "1" ]; then
+    DO_MSRS=1
+  fi
+fi
 
 
 function show_gov() {
@@ -110,8 +139,6 @@ function set_gov() {
 }
 
 
-HST=`hostname`
-NUM_CPUS=`grep processor /proc/cpuinfo | wc -l`
 IPSTATE=/sys/devices/system/cpu/intel_pstate/status
 if [ -e $IPSTATE ]; then
   PSTATE=`cat $IPSTATE`
@@ -120,6 +147,7 @@ if [ -e $IPSTATE ]; then
 else
   echo "intel_pstate driver seems to not be loaded"
 fi
+
 CPUFRQ_DIR=/sys/devices/system/cpu/cpufreq/
 if [ -d $CPUFRQ_DIR ]; then
   RESP=`ls -l $CPUFRQ_DIR`
@@ -137,28 +165,33 @@ fi
 # cat /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq 
 
 
-DEV_CPU_MSR=/dev/cpu/0/msr
-if [ ! -e $DEV_CPU_MSR ]; then
-  modprobe msr
+if [ "$DO_MSRS" == "1" ]; then
+  DEV_CPU_MSR=/dev/cpu/0/msr
   if [ ! -e $DEV_CPU_MSR ]; then
-    # probably need to do 'modprobe msr'
-    echo "$0.$LINENO didn't find $DEV_CPU_MSR file. Probably need to do 'modprobe msr' as root"
-    MSR_MODULE_LOADED=`lsmod | grep msr | wc -l`
-    if [ "$MSR_MODULE_LOADED" == "0" ]; then
-      echo "$0.$LINENO msr module not loaded. It is required by this script (for rdmsr and wrmsr to work)"
-      echo "$0.$LINENO please run (as root) 'modprobe msr'"
+    modprobe msr
+    if [ ! -e $DEV_CPU_MSR ]; then
+      # probably need to do 'modprobe msr'
+      echo "$0.$LINENO didn't find $DEV_CPU_MSR file. Probably need to do 'modprobe msr' as root"
+      MSR_MODULE_LOADED=`lsmod | grep msr | wc -l`
+      if [ "$MSR_MODULE_LOADED" == "0" ]; then
+        echo "$0.$LINENO msr module not loaded. It is required by this script (for rdmsr and wrmsr to work)"
+        echo "$0.$LINENO please run (as root) 'modprobe msr'"
+        exit 1
+      fi
+      echo "$0.$LINENO didn't find $DEV_CPU_MSR file. Not sure if rdmsr/wrmsr will work"
       exit 1
     fi
-    echo "$0.$LINENO didn't find $DEV_CPU_MSR file. Not sure if rdmsr/wrmsr will work"
-    exit 1
   fi
 fi
-echo "msr kernel module loaded. $DEV_CPU_MSR exists"
-MSR_0x1ad=`rdmsr -p 0 0x10`
-RC=$?
-if [ "$RC" != "0" ]; then
-  echo "$0.$LINENO MSR 0x1ad= $MSR_0x1ad, rc= $RC"
-  apt-get install msr-tools
+
+if [ "$DO_MSRS" == "1" ]; then
+  echo "msr kernel module loaded. $DEV_CPU_MSR exists"
+  MSR_0x1ad=`rdmsr -p 0 0x10`
+  RC=$?
+  if [ "$RC" != "0" ]; then
+    echo "$0.$LINENO MSR 0x1ad= $MSR_0x1ad, rc= $RC"
+    apt-get install msr-tools
+  fi
 fi
 
 
@@ -166,16 +199,7 @@ fi
 # 2nd gen xeon scalable cpus: cascade lake sku is 82xx, 62xx, 52xx, 42xx 32xx W-32xx  from https://www.intel.com/content/www/us/en/products/docs/processors/xeon/2nd-gen-xeon-scalable-spec-update.html
 # skylake 1st gen stuff from https://www.intel.com/content/www/us/en/processors/xeon/scalable/xeon-scalable-spec-update.html
 # 1st gen xeon scalable cpus: 81xx, 61xx, 51xx, 81xxT, 61xxT 81xxF, 61xxF, 51xx, 41xx, 31xx, 51xxT 41xxT, 51xx7, 
-CPU_NAME=`$SCR_DIR/decode_cpu_fam_mod.sh`
-if [ "$?" != "0" ]; then
-  echo "$0.$LINENO decode_cpu_fam_mod.sh returned error. CPU_NAME= \"$CPU_NAME\". Bye"
-  exit 1
-fi
 
-CPU_VENDOR=`awk '/^vendor_id/ { printf("%s\n", $(NF));exit;}' /proc/cpuinfo`
-CPU_MODEL=`awk '/^model/ { if ($2 == ":") {printf("%s\n", $(NF));exit;}}' /proc/cpuinfo`
-CPU_FAMILY=`awk '/^cpu family/ { printf("%s\n", $(NF));exit;}' /proc/cpuinfo`
-echo "CPU_VENDOR= $CPU_VENDOR CPU_MODEL= $CPU_MODEL CPU_FAMILY= $CPU_FAMILY"
 if [ "$GOV_IN" == "" -a "$FREQ_IN" == "" ]; then
   ACTION=show
 fi
@@ -235,55 +259,12 @@ case $CPU_NAME in
     echo "milan"
     ;;
   *)
-    echo "$0.$LINENO unknown cpu $CPU_NAME"
+    echo "$0.$LINENO unsupported cpu $CPU_NAME"
     exit 1
     ;;
 esac
 #echo "$0.$LINENO bye"
 #exit 1
-if [ 1 == 2 ]; then
-GOT_CSX_ICX=0
-if [[ $CPU_NAME == *"Cascade"* ]]; then
- GOT_CSX_ICX=1
-fi
-if [[ $CPU_NAME == *"Ice Lake"* ]]; then
- # i don't know that it is correct to assume ICX is the same as CSX but I haven't seen th emanual yet.
- GOT_CSX_ICX=1
-fi
-if [ "$GOT_CSX_ICX" == "1" ]; then
-  MSR_LIST="0x1ad"
-  XMSR_LIST="0x1ae" # the mapping
-else 
-  if [[ $CPU_NAME == *"Skylake"* ]]; then
-    MSR_LIST="0x1ad"
-    XMSR_LIST="0x1ae" # the mapping
-  else
-    if [[ $CPU_NAME == *"Broadwell"* ]]; then
-      MSR_LIST="0x1ad 0x1ae 0x1af"
-      MSR_SEMA="0x1ac"
-    else
-      if [[ $CPU_NAME == *"Haswell"* ]]; then
-        MSR_LIST="0x1ad 0x1ae 0x1af"
-        MSR_SEMA="0x1ac"
-        if [ "$ACTION" != "show" ]; then
-          echo "$0.$LINENO only support Broadwell, Skylake and Cascade Lake for ACTION= $ACTION so far. Bye."
-          exit
-        fi
-      else
-        echo "$0.$LINENO only support Broadwell, Skylake and Cascade Lake so far. Bye."
-        if [ -e /sys/devices/system/cpu/cpufreq/policy0/scaling_governor ]; then
-          if [ "$GOV_IN" != "" ]; then
-            set_gov $GOV_IN
-          else
-            show_gov
-          fi
-        fi
-        exit
-      fi
-    fi
-  fi
-fi
-fi
 
 if [ "$GOV_IN" == "" ]; then
 if [ "$ACTION" != "show" -a "$ACTION" != "set" -a "$ACTION" != "reset" -a "$ACTION" != "allcore" -a "$ACTION" != "performance" -a "$ACTION" != "powersave" ]; then
@@ -294,7 +275,10 @@ fi
 fi
 
 function show_MSRs() {
-  LSCPU_LINES=`lscpu`
+  if [ "$DO_MSRS" != "1" ]; then
+    echo "$0.$LINENO skipping show_MSRS"
+    return
+  fi
   #echo CORES_PER_SKT="lscpu | $AWK '/Core.s. per socket:/{cps = $4; print cps;}'"
   CORES_PER_SKT=`lscpu | $AWK '/Core.s. per socket:/{cps = $4; print cps;}'`
   echo "=========== $1 ================= MSR_LIST= $MSR_LIST"
@@ -342,39 +326,30 @@ function show_MSRs() {
     MSR_XTR=$first_val
   done
   if [ "$MODE" == "Intel" ]; then
-  #echo "cps $CORES_PER_SKT msr_xtr= $MSR_XTR msr_frq= $MSR_FRQ"
-  if [ "$CORES_PER_SKT" != "" -a "$CPU_NAME" != "" -a "$MSR_FRQ" != "" ]; then
-    $AWK -v cps="$CORES_PER_SKT" -v cpu_name="$CPU_NAME" -v msr_frq="$MSR_FRQ" -v msr_xtr="$MSR_XTR" '
-     BEGIN{
-       cps += 0;
-       for (i=0; i < 8; i++) {
-          str1 = "0x" substr(msr_frq, 2*(i)+1, 2);
-	  #printf("str1[%d]= %s\n", i, str1);
-          frq[i] = sprintf("%d", str1)+0;
-	  if (cpu_name == "Broadwell" || cpu_name == "Haswell") {
-            lmt[i]=8-i;
-	  } else {
-            str2 = "0x" substr(msr_xtr, 2*(i)+1, 2);
-            lmt[i] = sprintf("%d", str2)+0;
-	  }
-          if (cps >= lmt[i]) {
-            printf("freq[%d]= %.1f, cores %d\n", i, .1*frq[i], lmt[i]);
-          }
-       }
-       exit(0);
-     }'
-  fi
+    #echo "cps $CORES_PER_SKT msr_xtr= $MSR_XTR msr_frq= $MSR_FRQ"
+    if [ "$CORES_PER_SKT" != "" -a "$CPU_NAME" != "" -a "$MSR_FRQ" != "" ]; then
+      $AWK -v cps="$CORES_PER_SKT" -v cpu_name="$CPU_NAME" -v msr_frq="$MSR_FRQ" -v msr_xtr="$MSR_XTR" '
+       BEGIN{
+         cps += 0;
+         for (i=0; i < 8; i++) {
+            str1 = "0x" substr(msr_frq, 2*(i)+1, 2);
+            #printf("str1[%d]= %s\n", i, str1);
+            frq[i] = sprintf("%d", str1)+0;
+            if (cpu_name == "Broadwell" || cpu_name == "Haswell") {
+              lmt[i]=8-i;
+            } else {
+              str2 = "0x" substr(msr_xtr, 2*(i)+1, 2);
+              lmt[i] = sprintf("%d", str2)+0;
+            }
+            if (cps >= lmt[i]) {
+              printf("freq[%d]= %.1f, cores %d\n", i, .1*frq[i], lmt[i]);
+            }
+         }
+         exit(0);
+       }'
+    fi
   fi
   if [ "$MODE" == "AMD" ]; then
-#   if [ -e /sys/devices/system/cpu/cpufreq/policy0/cpb ]; then
-#   uniq[0]=0
-#   uniq[1]=0
-#   for ((i=0; i < $NUM_CPUS; i++)); do
-#     VAL=`cat /sys/devices/system/cpu/cpufreq/policy$i/cpb`
-#     uniq[$VAL]=$((${uniq[$VAL]}+1))
-#   done
-#   printf "Core Performance Boost (CBP) enabled on %d cpus, disabled on %d cpus\n" ${uniq[1]} ${uniq[0]}
-#   else
     CBP_STATE=`$AWK -v cps="$CORES_PER_SKT" -v cpu_name="$CPU_NAME" -v msr_frq="$MSR_FRQ" -v msr_xtr="$MSR_XTR" '
      BEGIN{
        cps += 0;
@@ -390,11 +365,10 @@ function show_MSRs() {
        exit(0);
      }'`
      printf "Core Performance Boost (CBP) %s\n" $CBP_STATE
-#    fi
   fi
 }
 
-if [ "$ACTION" == "reset" ]; then
+if [ "$ACTION" == "reset" -a "$DO_MSRS" == "1" ]; then
   show_MSRs "before reset " 
   if [[ $CPU_NAME == *"Skylake"* ]]; then
     # from pfay1testing1td-phx3, a 1TD Dell C6420
@@ -478,7 +452,7 @@ if [ "$ACTION" == "reset" ]; then
   show_MSRs "after  reset " 
 fi
 
-if [ "$ACTION" == "allcore" ]; then
+if [ "$ACTION" == "allcore" -a "$DO_MSRS" == "1" ]; then
   if [ "$MODE" == "Intel" ]; then
     CKVAL=`rdmsr -0 -p 0 0x1ad | awk '{v=substr($0, 1, 2);str="";for(i=1;i<=8;i++){str=str""v;}printf("0x%s", str);}'`
   else
@@ -567,7 +541,7 @@ fi
 # root@pfay1testing1t01-phx3:~# cat /sys/devices/system/cpu/cpufreq/policy0/scaling_min_freq 
 # 1200000
 
-if [ "$ACTION" == "set" ]; then
+if [ "$ACTION" == "set" -a "$DO_MSRS" == "1" ]; then
   if [ "$FREQ_IN" == "" ]; then
     echo 'you wanted to do a set freq you have to do -f hex_freq (in hex like 0x15) is missing'
     exit
@@ -610,4 +584,4 @@ if [ "$GOV_IN" != "show" -a "$GOV_IN" != "" ]; then
   set_gov $GOV_IN
 fi
 
-exit
+exit 0
