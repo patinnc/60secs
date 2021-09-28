@@ -66,15 +66,15 @@ while getopts "hg:f:" opt; do
       echo "         AMD Milan: allcore disables CPB (core performance boost) which sets the freq to max 2.3 GHz (on the 96cpu box I checked)."
       echo "         AMD Milan: allcore on milan is not setting the freq to the all-core-turbo freq. It just disables turbo mode (and turbo frequencies)."
       echo "         AMD Milan: reset enables CPB (core performance boost) which allows boost freq up to 3.6 GHz (on the 96cpu box I checked)."
-      exit
+      exit 1
       ;;
     : )
-      echo "Invalid option: $OPTARG requires an argument" 1>&2
-      exit
+      echo "$0.$LINENO Invalid option: $OPTARG requires an argument" 1>&2
+      exit 1
       ;;
     \? )
-      echo "Invalid option: $OPTARG" 1>&2
-      exit
+      echo "$0.$LINENO Invalid option: $OPTARG" 1>&2
+      exit 1
       ;;
   esac
 done
@@ -110,7 +110,7 @@ function set_gov() {
   show_gov $GOV_IN
   #echo "set cpus 0..$NUM_CPUS_M1 /sys/devices/system/cpu/cpufreq/policy*/scaling_governor to $1"
   if [ "$GOV_IN" != "" ]; then
-    exit
+    exit 0
   fi
  fi
 }
@@ -148,14 +148,15 @@ if [ ! -e $DEV_CPU_MSR ]; then
   modprobe msr
   if [ ! -e $DEV_CPU_MSR ]; then
     # probably need to do 'modprobe msr'
-    echo "didn't find $DEV_CPU_MSR file. Probably need to do 'modprobe msr' as root"
+    echo "$0.$LINENO didn't find $DEV_CPU_MSR file. Probably need to do 'modprobe msr' as root"
     MSR_MODULE_LOADED=`lsmod | grep msr | wc -l`
     if [ "$MSR_MODULE_LOADED" == "0" ]; then
-      echo "msr module not loaded. It is required by this script (for rdmsr and wrmsr to work)"
-      echo "please run (as root) 'modprobe msr'"
-      exit
+      echo "$0.$LINENO msr module not loaded. It is required by this script (for rdmsr and wrmsr to work)"
+      echo "$0.$LINENO please run (as root) 'modprobe msr'"
+      exit 1
     fi
-    echo "didn't find $DEV_CPU_MSR file. Not sure if rdmsr/wrmsr will work"
+    echo "$0.$LINENO didn't find $DEV_CPU_MSR file. Not sure if rdmsr/wrmsr will work"
+    exit 1
   fi
 fi
 echo "msr kernel module loaded. $DEV_CPU_MSR exists"
@@ -171,32 +172,10 @@ fi
 # 2nd gen xeon scalable cpus: cascade lake sku is 82xx, 62xx, 52xx, 42xx 32xx W-32xx  from https://www.intel.com/content/www/us/en/products/docs/processors/xeon/2nd-gen-xeon-scalable-spec-update.html
 # skylake 1st gen stuff from https://www.intel.com/content/www/us/en/processors/xeon/scalable/xeon-scalable-spec-update.html
 # 1st gen xeon scalable cpus: 81xx, 61xx, 51xx, 81xxT, 61xxT 81xxF, 61xxF, 51xx, 41xx, 31xx, 51xxT 41xxT, 51xx7, 
-if [ "1" == "2" ]; then
-CPU_NAME=`cat /proc/cpuinfo | $AWK '
-   @include "decode_cpu_fam_mod.awk"
-  /^vendor_id/ {
-    vndr=$(NF);
-  }
-  /^cpu family/ {
-    fam=$(NF);
-  }
-  /^model/ {
-    if ($2 == ":") {
-      mod=$(NF);
-    }
-  }
-  /^model name/ {
-#model name	: Intel(R) Xeon(R) CPU E5-2620 v4 @ 2.10GHz
-    n=split($0, arr, ":");
-    mod_nm = arr[2];
-    #printf("vndr= %s, fam= %s, mod= %s, mod_nm= %s\n", vndr, fam, mod, mod_nm);
-    cpu_name=decode_fam_mod(vndr, fam, mod, mod_nm);
-    printf("%s\n", cpu_name);
-    exit;
-  }
-  '`
-else
-    CPU_NAME=`$SCR_DIR/decode_cpu_fam_mod.sh`
+CPU_NAME=`$SCR_DIR/decode_cpu_fam_mod.sh`
+if [ "$?" != "0" ]; then
+  echo "$0.$LINENO decode_cpu_fam_mod.sh returned error. CPU_NAME= \"$CPU_NAME\". Bye"
+  exit 1
 fi
 
 CPU_VENDOR=`awk '/^vendor_id/ { printf("%s\n", $(NF));exit;}' /proc/cpuinfo`
@@ -220,15 +199,15 @@ if [ "$ACTION" == "set" ]; then
     # assume freq in ghz like 2.7 or 3.0
     FRQ=`awk -v frq="$FREQ_IN" 'BEGIN{val=frq*10.0; printf("0x%x\n", val);exit;}'`
     if [ "$FRQ" == "0x0" ]; then
-      echo "problems converting -f $FREQ_IN to hex string. got 0x0. Expect a string like -f 2.7. Bye".
-      exit
+      echo "$0.$LINENO problems converting -f $FREQ_IN to hex string. got 0x0. Expect a string like -f 2.7. Bye".
+      exit 1
     fi
   fi
 fi
 if [ "$GOV_IN" != "" ]; then
  if [ "$GOV_IN" != "performance" -a "$GOV_IN" != "powersave" -a "$GOV_IN" != "show" -a "$GOV_IN" != "ondemand" ]; then
   echo "$0.$LINENO arg -g arg must be performance or powersave or show. got -g $GOV_IN. bye"
-  exit
+  exit 1
  fi
 fi
 #if [ "$ACTION" != "show" -a "$ACTION" != "set" -a "$ACTION" != "reset" -a "$ACTION" != "allcore" -a "$ACTION" != "performance" -a "$ACTION" != "powersave" ]; then
