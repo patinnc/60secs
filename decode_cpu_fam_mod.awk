@@ -34,6 +34,7 @@
            if (match(cpu_model_name, / [86543]2[0-9][0-9]/) > 0) { res="Cascade Lake"}
            else if (match(cpu_model_name, / [86543]1[0-9][0-9]/) > 0) { res="Skylake"}
         }
+        if (res == " ") { res = ""; }
         return res;
       }
       if (vndor == "AuthenticAMD") {
@@ -67,6 +68,7 @@
            res=dcd[k,1];break;
          }
        }
+       if (res == " ") { res = ""; }
        return res;
      }
    }

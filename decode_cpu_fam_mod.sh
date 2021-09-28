@@ -1,14 +1,9 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
-export LC_ALL=C
 INF=/proc/cpuinfo
 if [ "$1" != "" ]; then
   INF=$1
 fi
-export LANGUAGE=C.UTF-8
-export LC_ALL=C.UTF-8
-export LANG=C.UTF-8
-export LC_CTYPE=C.UTF-8
 export LC_ALL=C
 
 
@@ -30,22 +25,23 @@ if [[ "$OSTYPE" == "darwin"* ]]; then
    #machdep.cpu.model: 158
    #sysctl machdep.cpu
    #echo "$RESP"
-   VENDR=`sysctl machdep.cpu.vendor|awk '{$1="";printf("Vendor ID: %s\n", $0);exit;}'`
-   FAM=`sysctl machdep.cpu|grep family| awk '{$1=""; printf("CPU family: %s\n", $0);exit;}'`
-   MOD=`sysctl machdep.cpu|grep cpu.model| awk '{$1="";printf("Model: %s\n", $0);exit}'`
-   BRAND=`sysctl machdep.cpu|grep cpu.brand_str|awk '{$1="";printf("Model name: %s\n", $0);exit;}'`
+   VENDR=`sysctl machdep.cpu.vendor|awk '{$1="";printf("Vendor ID: %s\n", $0);exit 0;}'`
+   FAM=`sysctl machdep.cpu|grep cpu.family| awk '{$1=""; printf("CPU family: %s\n", $0);exit 0;}'`
+   MOD=`sysctl machdep.cpu|grep cpu.model| awk '{$1="";printf("Model: %s\n", $0);exit 0;}'`
+   BRAND=`sysctl machdep.cpu|grep cpu.brand_str|awk '{$1="";printf("Model name: %s\n", $0);exit 0;}'`
    RESP=`echo $VENDR; echo $FAM; echo $MOD; echo $BRAND`
+   #echo "RESP= $RESP"
   else
   if [ ! -e $INF ]; then
     echo "didn't find input file $INF"
-    exit
+    exit 1
   fi
    RESP=`cat $INF`
   fi
  else
   if [ ! -e $INF ]; then
     echo "didn't find input file $INF"
-    exit
+    exit 1
   fi
    RESP=`cat $INF`
 fi
@@ -54,7 +50,9 @@ export AWKPATH=$SCR_DIR
 
 echo "$RESP" | $AWK_BIN -v vrb=0 '
    @include "decode_cpu_fam_mod.awk"
-   BEGIN{;}
+   BEGIN{
+     rc = 1; # indicates error
+   }
    function ltrim(s) { sub(/^[ \t\r\n]+/, "", s); return s }
    function rtrim(s) { sub(/[ \t\r\n,]+$/, "", s); return s }
    function trim(s) { return rtrim(ltrim(s)); }
@@ -79,11 +77,13 @@ echo "$RESP" | $AWK_BIN -v vrb=0 '
          if(vrb==1){printf("decode_fam_mod(%s, %s, %s, %s)\n", cpu_vnd, cpu_fam, cpu_mod, cpu_model_name) > "/dev/stderr";}
          res=decode_fam_mod(cpu_vnd, cpu_fam, cpu_mod, cpu_model_name);
          printf("%s\n", res);
-         exit;
+         if (res != "") { rc = 0; }
       }
+      exit rc;
    }
 '
-exit
+RC=$?
+exit $RC
 
 # /proc/cpuinfo output
 #processor	: 0
