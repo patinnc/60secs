@@ -60,6 +60,7 @@ while getopts "hg:f:F:" opt; do
       echo "Usage: $0 [-h] [ -g performance|powersave|ondemand|show ] [ -f freq_in_hex|allcore|reset ]"
       echo "   -g performance|powersave|ondemand|show  ondemand is for AMD"
       echo "   -f freq_in_hex|allcore|reset"
+      echo "      on Intel, if the cpu chip (like cascade lake) and cpu_model_name is not in the list of supported chips then MSRs will not be changed."
       echo "      on AMD Milan only allcore and reset are supported but you have to add the -F 1 option to force it."
       echo "         AMD Milan: allcore disables CPB (core performance boost) which sets the freq to max 2.3 GHz (on the 96cpu box I checked)."
       echo "         AMD Milan: allcore on milan is not setting the freq to the all-core-turbo freq. It just disables turbo mode (and turbo frequencies)."
@@ -83,13 +84,15 @@ HST=`hostname`
 if [ -e /proc/cpuinfo ]; then
   CPU_VENDOR=`$AWK '/^vendor_id/ { printf("%s\n", $(NF));exit;}' /proc/cpuinfo`
   CPU_MODEL=`$AWK '/^model/ { if ($2 == ":") {printf("%s\n", $(NF));exit;}}' /proc/cpuinfo`
+  CPU_MOD_NM=`$AWK '/^model name/ { pos=index($0, ":"); printf("%s\n", substr($0, pos+2, length($0)));exit;}' /proc/cpuinfo`
   CPU_FAMILY=`$AWK '/^cpu family/ { printf("%s\n", $(NF));exit;}' /proc/cpuinfo`
 fi
 NUM_CPUS=`grep processor /proc/cpuinfo | wc -l`
-echo "CPU_VENDOR= $CPU_VENDOR CPU_MODEL= $CPU_MODEL CPU_FAMILY= $CPU_FAMILY"
+echo "CPU_VENDOR= $CPU_VENDOR CPU_MODEL= $CPU_MODEL CPU_FAMILY= $CPU_FAMILY, model_name= $CPU_MOD_NM"
 CPU_NAME=`$SCR_DIR/decode_cpu_fam_mod.sh`
 if [ "$?" != "0" ]; then
   echo "$0.$LINENO decode_cpu_fam_mod.sh returned error. CPU_NAME= \"$CPU_NAME\". Bye"
+  echo "$0.$LINENO probably need to add a new cpu to decode_cpu_fam_mod.sh\". Bye"
   exit 1
 fi
 
@@ -370,122 +373,183 @@ function show_MSRs() {
   fi
 }
 
-if [ "$ACTION" == "reset" -a "$DO_MSRS" == "1" ]; then
-  show_MSRs "before reset " 
+function get_expected_val() {
+  EXP_VAL1=
+  EXP_VAL2=
   if [[ $CPU_NAME == *"Skylake"* ]]; then
     # from pfay1testing1td-phx3, a 1TD Dell C6420
-    wrmsr --all 0x1ad 0x1818181818181c1e
-  elif [[ $CPU_NAME == *"Cascade Lake Gold Refresh"* ]]; then
-    # default from odm-lab
-    # which is 
-    # CPU family:            6
-    # Model:                 85
-    # Model name:            Intel(R) Xeon(R) Gold 5218R CPU @ 2.10GHz
-    wrmsr --all 0x1ad 0x1d1d1d1f23252628
-  elif [[ $CPU_NAME == *"Cascade Lake Refresh"* ]]; then
-    # default from odm-lab
-    # which is 
-    #  CPU family:            6
-    #  Model:                 85
-    #  Model name:            Intel(R) Xeon(R) Silver 4214R CPU @ 2.40GHz
-    wrmsr --all 0x1ad 0x1e1e1e1e1e202123
-  elif [[ $CPU_NAME == *"Cascade"* ]]; then
-    # default from u154681-phx4
-    # which is 
-    #  CPU family:            6
-    #  Model:                 85
-    #  Model name:            Intel(R) Xeon(R) Silver 4214 CPU @ 2.20GHz
-    wrmsr --all 0x1ad 0x1b1b1b1b1b1d1e20
+    EXP_VAL1=1818181818181c1e
+    ACT_VAL=18
+  elif [[ $CPU_NAME == *"Cascade Lake*"* ]]; then
+    if [[ $CPU_MOD_NM == *"Gold 5218 CPU"* ]]; then
+      # Intel(R) Xeon(R) Gold 5218 CPU @ 2.30GHz
+      EXP_VAL1=1c1c1c1c1f242527
+      ACT_VAL=1c
+    elif [[ $CPU_MOD_NM == *"Gold 5218R CPU"* ]]; then
+      # Model name:            Intel(R) Xeon(R) Gold 5218R CPU @ 2.10GHz
+      EXP_VAL1=1d1d1d1f23252628
+      ACT_VAL=1d
+    elif [[ $CPU_MOD_NM == *"Silver 4214R CPU"* ]]; then
+      #  Model name:            Intel(R) Xeon(R) Silver 4214R CPU @ 2.40GHz
+      EXP_VAL1=1e1e1e1e1e202123
+      ACT_VAL=1e
+    elif [[ $CPU_MOD_NM == *"Silver 4214 CPU"* ]]; then
+      #  Model name:            Intel(R) Xeon(R) Silver 4214 CPU @ 2.20GHz
+      EXP_VAL1=1b1b1b1b1b1d1e20
+      ACT_VAL=1b
+    else
+      echo "$0.$LINENO unhandled cpu model name for $CPU_NAME. Got mod_nm= $CPU_MOD_NM. fix script. Bye"
+      exit 1
+    fi
   elif [[ $CPU_NAME == *"Ice Lake"* ]]; then
-    # default from ice lake config=base
-    # which is 
-    # CPU family:                      6
-    # Model:                           106
-    # Model name:                      Intel(R) Xeon(R) Gold 5318Y CPU @ 2.10GHz
-    # Stepping:                        6
-    wrmsr --all 0x1ad 0x1a1a1a1a1b1e2022
+    #wrmsr --all 0x1ad 0x1a1a1a1a1b1e2022
+    # Intel(R) Xeon(R) Gold 6336Y CPU @ 2.40GHz
+    if [[ $CPU_MOD_NM == *"Gold 5318Y CPU"* ]]; then
+      # Model name:                      Intel(R) Xeon(R) Gold 5318Y CPU @ 2.10GHz
+      EXP_VAL1=1e1f212324242424
+      ACT_VAL=1e
+      #EXP_VAL1=1a1a1a1a1b1e2022 # from 4113?
+      #ACT_VAL=1a
+    elif [[ $CPU_MOD_NM == *"Gold 6336Y CPU"* ]]; then
+      # Model name:                      Intel(R) Xeon(R) Gold 5318Y CPU @ 2.10GHz
+      EXP_VAL1=1e1f212324242424
+      ACT_VAL=1e
+      #EXP_VAL1=1a1a1a1a1b1e2022 # from 4113?
+      #ACT_VAL=1a
+    else
+      echo "$0.$LINENO unhandled cpu model name for $CPU_NAME. Got mod_nm= $CPU_MOD_NM. fix script. Bye"
+      exit 1
+    fi
   elif [[ $CPU_NAME == *"Broadwell"* ]]; then
-    CKVAL=`rdmsr -0 -p 0 0x1af | $AWK '{v=substr($0, 1, 2);str="";for(i=1;i<=8;i++){str=str""v;}printf("0x%s", str);}'`
-    #if [ "$CKVAL" == "0x1a1a1a1a1a1a1a1a" ]; then
-    if [ "$NUM_CPUS" == "40" ]; then
-    wrmsr --all 0x1ad 0x1b1c1d1e1f202222
-    wrmsr --all 0x1ae 0x1a1a1a1a1a1a1a1a
-    wrmsr --all 0x1af 0x1a1a1a1a1a1a1a1a
+    if [[ $CPU_MOD_NM == *"CPU E5-2650 v4"* ]]; then # 48 cpus
+      EXP_VAL1=191919191a1b1d1d
+      EXP_VAL2=1919191919191919
+      ACT_VAL=1a
+    elif [[ $CPU_MOD_NM == *"CPU E5-2640 v4"* ]]; then # 40 cpus
+      EXP_VAL1=1b1c1d1e1f202222
+      EXP_VAL2=1a1a1a1a1a1a1a1a
+      ACT_VAL=1a
+    elif [[ $CPU_MOD_NM == *"CPU E5-2620 v4"* ]]; then # 32 cpus
+      EXP_VAL1=1718191a1b1c1e1e
+      EXP_VAL2=1717171717171717
+      ACT_VAL=17
     else
-    wrmsr --all 0x1ad 0x1718191a1b1c1e1e
-    wrmsr --all 0x1ae 0x1717171717171717
-    wrmsr --all 0x1af 0x1717171717171717
+      echo "$0.$LINENO unhandled cpu model name for $CPU_NAME. Got mod_nm= $CPU_MOD_NM. fix script. Bye"
+      exit 1
     fi
-    wrmsr --all 0x1ac 0x8000000000000000
-  elif [[ $CPU_NAME == *"Milan"* ]]; then
+  elif [[ $CPU_NAME == *"Haswell"* ]]; then
+    if [[ $CPU_MOD_NM == *"CPU E5-2620 v3"* ]]; then # 48 cpus
+      EXP_VAL1=1a1a1a1b1c1d2020
+      EXP_VAL2=1a1a1a1a1a1a1a1a
+      ACT_VAL=1a
+    else
+      echo "$0.$LINENO unhandled cpu model name for $CPU_NAME. Got mod_nm= $CPU_MOD_NM. fix script. Bye"
+      exit 1
+    fi
+  fi
+}
+
+if [ "$ACTION" == "reset" -a "$DO_MSRS" == "1" ]; then
+  show_MSRs "before reset " 
+  get_expected_val
+  case $CPU_NAME in
+    *"Cascade"*|*"Ice Lake"*|*"Skylake"*)
+      wrmsr --all 0x1ad 0x${EXP_VAL1}
+      ;;
+    *"Broadwell"*|*"Haswell"*)
+      wrmsr --all 0x1ad 0x${EXP_VAL1}
+      wrmsr --all 0x1ae 0x${EXP_VAL2}
+      wrmsr --all 0x1af 0x${EXP_VAL2}
+      wrmsr --all 0x1ac 0x8000000000000000
+      ;;
+    *"Milan"*|*"Rome"*)
+      ;;
+    *)
+      echo "$0.$LINENO unsupported cpu $CPU_NAME"
+      exit 1
+      ;;
+  esac
+  if [[ $CPU_NAME == *"Milan"* ]]; then
     if [ -e /sys/devices/system/cpu/cpufreq/policy0/cpb ]; then
-    for ((i=0; i < $NUM_CPUS; i++)); do
-      echo 1 > /sys/devices/system/cpu/cpufreq/policy$i/cpb
-    done
-    printf "Core Performance Boost (CBP) now enabled\n"
-    else
-    if [ "$MSR_LIST_0_ALL_SAME" != "" ]; then
-      #MSR_LIST_0_ALL_SAME=$first_val
-      useuse=1
-    fi
-    if [ "$CBP_STATE" == "enabled" ]; then
-      echo "AMD CBP already enabled, nothing to be done"
-      else
-      echo "cbp_state= disabled, num_cpus= $NUM_CPUS"
-      
       for ((i=0; i < $NUM_CPUS; i++)); do
-       OVAL=`rdmsr -0 -p $i $MSR_LIST`
-       NVAL=`echo $OVAL | $AWK '
-     function hex2dec(str) { return sprintf("%d", str)+0; }
-     {
-      bit25 = lshift(1, 25);
-      v = hex2dec("0x"$0);
-      b25set = and(v, bit25);
-      if(b25set!=0) {
-       v = xor(v, bit25);
-      }
-      printf("0x%x\n", v);
-     }'`
-      #printf "oval[%d]= %s nval= %s\n" $i $OVAL $NVAL
-      wrmsr -p $i $MSR_LIST $NVAL
+        echo 1 > /sys/devices/system/cpu/cpufreq/policy$i/cpb
       done
-    fi
+      printf "Core Performance Boost (CBP) now enabled\n"
+      else
+      if [ "$MSR_LIST_0_ALL_SAME" != "" ]; then
+        #MSR_LIST_0_ALL_SAME=$first_val
+        useuse=1
+      fi
+      if [ "$CBP_STATE" == "enabled" ]; then
+        echo "AMD CBP already enabled, nothing to be done"
+        else
+        echo "cbp_state= disabled, num_cpus= $NUM_CPUS"
+        
+        for ((i=0; i < $NUM_CPUS; i++)); do
+         OVAL=`rdmsr -0 -p $i $MSR_LIST`
+         NVAL=`echo $OVAL | $AWK '
+       function hex2dec(str) { return sprintf("%d", str)+0; }
+       {
+        bit25 = lshift(1, 25);
+        v = hex2dec("0x"$0);
+        b25set = and(v, bit25);
+        if(b25set!=0) {
+         v = xor(v, bit25);
+        }
+        printf("0x%x\n", v);
+       }'`
+        #printf "oval[%d]= %s nval= %s\n" $i $OVAL $NVAL
+        wrmsr -p $i $MSR_LIST $NVAL
+        done
+      fi
     fi
   fi
   show_MSRs "after  reset " 
 fi
 
 if [ "$ACTION" == "allcore" -a "$DO_MSRS" == "1" ]; then
+  get_expected_val
   if [ "$MODE" == "Intel" ]; then
-    CKVAL=`rdmsr -0 -p 0 0x1ad | $AWK '{v=substr($0, 1, 2);str="";for(i=1;i<=8;i++){str=str""v;}printf("0x%s", str);}'`
+    #CKVAL=`rdmsr -0 -p 0 0x1ad | $AWK '{v=substr($0, 1, 2);str="";for(i=1;i<=8;i++){str=str""v;}printf("0x%s", str);}'`
+    RDVAL=`rdmsr -0 -p 0 0x1ad`
+    ALLSAME=`echo $RDVAL | $AWK '{rc=1;v0=substr($0,1,2);for(i=2;i<=8;i++){v=substr($0, i*2-1, 2);if (v!=v0){rc=0;break;}};printf("%d\n",rc);}'`
+    CKVAL=`$AWK -v act_val="$ACT_VAL" 'BEGIN{v=act_val;str="";for(i=1;i<=8;i++){str=str""v;}printf("0x%s", str); exit(0);}'`
+    echo "rdval= $RDVAL allsame= $ALLSAME  ckval= $CKVAL"
   else
     CKVAL=`rdmsr -0 -p 0 $MSR_LIST | $AWK '{v=substr($0, 1, 2);str="";for(i=1;i<=8;i++){str=str""v;}printf("0x%s", str);}'`
   fi
   show_MSRs "before allcore " 
-  #CPU_VENDOR= GenuineIntel CPU_MODEL= 85 CPU_FAMILY= 6
-  if [[ $CPU_NAME == *"Skylake"* ]]; then
-    wrmsr --all 0x1ad $CKVAL
-  elif [[ $CPU_NAME == *"Cascade Lake Gold Refresh"* ]]; then
-    wrmsr --all 0x1ad $CKVAL
-  elif [[ $CPU_NAME == *"Cascade Lake Refresh"* ]]; then
-    wrmsr --all 0x1ad $CKVAL
-  elif [[ $CPU_NAME == *"Cascade"* ]]; then
-    # default from u154681-phx4
-    # which is 
-    #  CPU family:            6
-    #  Model:                 85
-    #  Model name:            Intel(R) Xeon(R) Silver 4214 CPU @ 2.20GHz
-    wrmsr --all 0x1ad $CKVAL
-  elif [[ $CPU_NAME == *"Ice Lake"* ]]; then
-    wrmsr --all 0x1ad $CKVAL
-  elif [[ $CPU_NAME == *"Broadwell"* ]]; then
-    CKVAL=`rdmsr -0 -p 0 0x1af | $AWK '{v=substr($0, 1, 2);str="";for(i=1;i<=8;i++){str=str""v;}printf("0x%s", str);}'`
-    echo "CKVAL for msr 0x1af= $CKVAL"
-    wrmsr --all 0x1ad $CKVAL
-    wrmsr --all 0x1ae $CKVAL
-    wrmsr --all 0x1af $CKVAL
-    wrmsr --all 0x1ac 0x8000000000000000
-  elif [[ $CPU_NAME == *"Milan"* ]]; then
+  if [ "$MODE" == "Intel" ]; then
+    if [ "$RDVAL" != "$EXP_VAL1" -a "$ALLSAME" != "1" ]; then
+      echo "$0.$LINENO Error on $CPU_NAME. expected MSR_TURBO_RATIO (0x1ad) to be $EXP_VAL1 but got $RDVAL"
+      echo "$0.$LINENO This script doesn't know what is the 'right' value for when it does the 'set_freq.sh -f reset"
+      echo "$0.$LINENO Probably this is a new (or old) cpu not handled by this script."
+      if [ "$FORCE_IN" == "1" ]; then
+        echo "$0.$LINENO allowing write due to '-F 1' force option"
+      else
+        echo "$0.$LINENO bye"
+        exit 1
+      fi
+    fi
+  fi
+  case $CPU_NAME in
+    *"Cascade"*|*"Ice Lake"*|*"Skylake"*)
+      wrmsr --all 0x1ad $CKVAL
+      ;;
+    *"Broadwell"*|*"Haswell"*)
+      wrmsr --all 0x1ad 0x${CKVAL}
+      wrmsr --all 0x1ae 0x${CKVAL}
+      wrmsr --all 0x1af 0x${CKVAL}
+      wrmsr --all 0x1ac 0x8000000000000000
+      ;;
+    *"Milan"*|*"Rome"*)
+      ;;
+    *)
+      echo "$0.$LINENO unsupported cpu $CPU_NAME"
+      exit 1
+      ;;
+  esac
+  if [[ $CPU_NAME == *"Milan"* ]]; then
     if [ -e /sys/devices/system/cpu/cpufreq/policy0/cpb ]; then
     for ((i=0; i < $NUM_CPUS; i++)); do
       echo 0 > /sys/devices/system/cpu/cpufreq/policy$i/cpb
