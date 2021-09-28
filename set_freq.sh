@@ -380,7 +380,7 @@ function get_expected_val() {
     # from pfay1testing1td-phx3, a 1TD Dell C6420
     EXP_VAL1=1818181818181c1e
     ACT_VAL=18
-  elif [[ $CPU_NAME == *"Cascade Lake*"* ]]; then
+  elif [[ $CPU_NAME == *"Cascade Lake"* ]]; then
     if [[ $CPU_MOD_NM == *"Gold 5218 CPU"* ]]; then
       # Intel(R) Xeon(R) Gold 5218 CPU @ 2.30GHz
       EXP_VAL1=1c1c1c1c1f242527
@@ -406,16 +406,12 @@ function get_expected_val() {
     # Intel(R) Xeon(R) Gold 6336Y CPU @ 2.40GHz
     if [[ $CPU_MOD_NM == *"Gold 5318Y CPU"* ]]; then
       # Model name:                      Intel(R) Xeon(R) Gold 5318Y CPU @ 2.10GHz
-      EXP_VAL1=1e1f212324242424
-      ACT_VAL=1e
-      #EXP_VAL1=1a1a1a1a1b1e2022 # from 4113?
-      #ACT_VAL=1a
+      EXP_VAL1=1a1a1a1a1b1e2022 # from 4113?
+      ACT_VAL=1a
     elif [[ $CPU_MOD_NM == *"Gold 6336Y CPU"* ]]; then
       # Model name:                      Intel(R) Xeon(R) Gold 5318Y CPU @ 2.10GHz
       EXP_VAL1=1e1f212324242424
       ACT_VAL=1e
-      #EXP_VAL1=1a1a1a1a1b1e2022 # from 4113?
-      #ACT_VAL=1a
     else
       echo "$0.$LINENO unhandled cpu model name for $CPU_NAME. Got mod_nm= $CPU_MOD_NM. fix script. Bye"
       exit 1
@@ -446,6 +442,10 @@ function get_expected_val() {
       echo "$0.$LINENO unhandled cpu model name for $CPU_NAME. Got mod_nm= $CPU_MOD_NM. fix script. Bye"
       exit 1
     fi
+  fi
+  if [ "$EXP_VAL1" == "" ]; then
+      echo "$0.$LINENO unhandled cpu model name for $CPU_NAME. Got mod_nm= $CPU_MOD_NM. fix script. Bye"
+      exit 1
   fi
 }
 
@@ -514,7 +514,7 @@ if [ "$ACTION" == "allcore" -a "$DO_MSRS" == "1" ]; then
     RDVAL=`rdmsr -0 -p 0 0x1ad`
     ALLSAME=`echo $RDVAL | $AWK '{rc=1;v0=substr($0,1,2);for(i=2;i<=8;i++){v=substr($0, i*2-1, 2);if (v!=v0){rc=0;break;}};printf("%d\n",rc);}'`
     CKVAL=`$AWK -v act_val="$ACT_VAL" 'BEGIN{v=act_val;str="";for(i=1;i<=8;i++){str=str""v;}printf("0x%s", str); exit(0);}'`
-    echo "rdval= $RDVAL allsame= $ALLSAME  ckval= $CKVAL"
+    echo "rdval= $RDVAL allsame= $ALLSAME  ckval= $CKVAL act_val= $ACT_VAL"
   else
     CKVAL=`rdmsr -0 -p 0 $MSR_LIST | $AWK '{v=substr($0, 1, 2);str="";for(i=1;i<=8;i++){str=str""v;}printf("0x%s", str);}'`
   fi
