@@ -537,9 +537,9 @@ if [ "$ACTION" == "allcore" -a "$DO_MSRS" == "1" ]; then
       wrmsr --all 0x1ad $CKVAL
       ;;
     *"Broadwell"*|*"Haswell"*)
-      wrmsr --all 0x1ad 0x${CKVAL}
-      wrmsr --all 0x1ae 0x${CKVAL}
-      wrmsr --all 0x1af 0x${CKVAL}
+      wrmsr --all 0x1ad ${CKVAL}
+      wrmsr --all 0x1ae ${CKVAL}
+      wrmsr --all 0x1af ${CKVAL}
       wrmsr --all 0x1ac 0x8000000000000000
       ;;
     *"Milan"*|*"Rome"*)
