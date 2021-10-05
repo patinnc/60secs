@@ -62,24 +62,16 @@ double dclock(void)
 }
 
 #ifndef _WIN32 
-//#define D1 " ror $2, %%eax;"
-//#define D1 " movl $2, %%eax;"
 #ifdef __x86_64__
 #define D1 " rorl $2, %%eax;"
 #elif __aarch64__
 #define D1 "add     x0, x0, 1;"
 #endif
-//#define D1 " lea (%%eax),%%eax;"
-//#define D1 " nop;"
-//#define D1 " andl $1, %%eax;"
-//#define D1 " rcll $1, %%eax;"
 #define D10 D1 D1 D1 D1 D1  D1 D1 D1 D1 D1
 #define D100 D10 D10 D10 D10 D10  D10 D10 D10 D10 D10
 #define D1000 D100 D100 D100 D100 D100  D100 D100 D100 D100 D100
 #define D10000 D1000 D1000 D1000 D1000 D1000  D1000 D1000 D1000 D1000 D1000
 #define D100000 D10000 D10000 D10000 D10000 D10000  D10000 D10000 D10000 D10000 D10000
-//#define D40000 D10000 D10000 D10000 D10000
-//#define D1000000 D100000 D100000 D100000 D100000 D100000  D100000 D100000 D100000 D100000 D100000
 #endif
    
 
@@ -97,40 +89,41 @@ int main(int argc, char **argv)
    cpu = 0;
    cpu0 = 1;
    while(cpu != cpu0 && tries < 100) {
-   cpu = my_getcpu();
-   tm_beg = tm_end = dclock();
-   t0 = get_tsc_and_cpu(&cpu);
-   ops=0;
-   loops=0;
-   while(tm_end - tm_beg < 0.05) {
-     for (i=0; i < loops_inner; i++) {
+     cpu = my_getcpu();
+     tm_beg = tm_end = dclock();
+     t0 = get_tsc_and_cpu(&cpu);
+     ops=0;
+     loops=0;
+     while(tm_end - tm_beg < 0.05) {
+       for (i=0; i < loops_inner; i++) {
 #ifdef _WIN32
-           b = win_rorl(b); // 10000 inst
+         b = win_rorl(b); // 10000 inst
 #else
 #ifdef __x86_64__
-           asm ( "movl %1, %%eax;"
-              ".align 4;"
-              D100000
-              /*D100000*/
-              " movl %%eax, %0;"
-              :"=r"(b) /* output */
-              :"r"(a)  /* input */
-              :"%eax"  /* clobbered reg */
-            );
+         asm ( "movl %1, %%eax;"
+                ".align 4;"
+                D100000
+                /*D100000*/
+                " movl %%eax, %0;"
+                :"=r"(b) /* output */
+                :"r"(a)  /* input */
+                :"%eax"  /* clobbered reg */
+         );
 #elif __aarch64__
-            asm ( D100000 : : : "x0");
-            //a += b;
+         asm ( D100000 : : : "x0");
 #endif
 #endif
-            a |= b;
-       ops += 100000;
-       loops += 1;
-     }
+         a |= b;
+         ops += 100000;
+         loops += 1;
+       }
        tm_end = dclock();
-   }
-    t1 = get_tsc_and_cpu(&cpu0);
-    if (cpu == cpu0) {break;}
-    tries++;
+     }
+     t1 = get_tsc_and_cpu(&cpu0);
+     if (cpu == cpu0) {break;}
+     tm_beg = tm_end;
+     t0 = t1;
+     tries++;
    }
    frq = (double)(t1-t0)/(tm_end - tm_beg);
    ifrq = 1.0/frq;
@@ -141,4 +134,3 @@ int main(int argc, char **argv)
 
    return 0;
 }
-
