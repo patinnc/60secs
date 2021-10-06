@@ -155,12 +155,12 @@ if [ "$EXE_IN" != "" ]; then
   fi
 else
   if [ "$WAIT_IN" == "" ]; then
-    echo "$0: must enter -w interval_in_secs. Bye"
+    echo "$0.$LINENO: must enter -w wait_interval_in_secs if you don't do -x some_exe. Bye"
     exit 1
   fi
 fi
 if [ "$PROJ_IN" == "" ]; then
-  echo "$0: must enter -p proj_dir. Bye"
+  echo "$0.$LINENO: must enter -p proj_dir. Bye"
   exit 1
 fi
 if [ ! -d $PROJ_IN ]; then
@@ -580,10 +580,6 @@ TD2=",{cpu/slots/,topdown-be-bound,topdown-bad-spec,topdown-fe-bound,topdown-ret
     fi
     #echo "do: $PERF_BIN stat -x \";\"  --per-socket -a -I $ms -o $FL -e $EVT" > /dev/stderr
     #echo "do: $PERF_BIN stat -x \";\"  --per-socket -a -I $ms -o $FL -e $EVT"
-    OPT_PID=
-    if [ "$PID" != "" ]; then
-        OPT_PID=" --pid $PID "
-    fi
       if [ "$EXE_IN" == "" ]; then
         DO_CMD="$SCR_DIR/pfay1_sleep.sh"
         OPT_A=" -a "
@@ -591,6 +587,11 @@ TD2=",{cpu/slots/,topdown-be-bound,topdown-bad-spec,topdown-fe-bound,topdown-ret
         DO_CMD="$EXE_IN"
         OPT_A=" -a "
       fi
+    OPT_PID=
+    if [ "$PID" != "" ]; then
+        OPT_PID=" --pid $PID "
+        OPT_A=
+    fi
     if [ "$CPU_LIST_IN" != "" ]; then
       #OPT_A=" $OPT_A -C $CPU_LIST_IN "
       OPT_A=" -C $CPU_LIST_IN "
