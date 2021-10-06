@@ -241,10 +241,50 @@ awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_
     #if (tor_ins != "") { L3m = tor_ins; }
     #if (tor_occ != "") { L3cyc = tor_occ; }
     #printf("tor_ins = %s, tor_occ= %s, unc_cha_miss= %s, unc_cha_occ= %s, unc_cha_clk= %s\n", tor_ins, tor_occ, unc_cha_miss, unc_cha_occ, unc_cha_clk);
+    fmt_mode = "csv";
+    per_what = 0;
+    per_pid = 1;
+    per_sys = 2;
+    typ_interval = 0
+    typ_interval_just_1 = 1;
+    typ_interval_over_tm= 2;
+    per_what = per_sys;
+    rec_num=0;
+    tm_col = 0;
+    tm_tot = 0;
   }
   /not counted/{next;}
   /not supported/{next;}
-  {
+  / Performance counter stats / { # for process id 40516:
+    fmt_mode = "human"; # human formatted (not -x ";")
+    if (index($0, "for process") > 0) {
+      per_what = per_pid;
+    } else {
+      # doing whole system
+      per_what = per_sys;
+    }
+  }
+
+
+  /;/{
+    if (++rec_num == 1) {
+      # dont handle if 1st field is CPUxx field
+#4999.99;msec;cpu-clock;4999995441;100.00;1.000;CPUs utilized
+#15909855795;;msr/aperf/;4999996839;100.00;3181.976;M/sec
+#10987308158;;msr/mperf/;5000008876;100.00;2197.465;M/sec
+      # see if this is just a total for the whole run (no timestamp as 1st field)
+      n=split($1, arr, ";");
+      v0 = arr[1]+0.0;
+      v1 = arr[2]+0.0;
+      printf("1st rec, v0= %s, v1= %s\n", v0, v1);
+      if (v1 == 0 && (arr[2] == "" || arr[2] ~ /^[a-z]/)) { # no time field
+        printf("got here: 1st rec, v0= %s, v1= %s\n", v0, v1);
+        if (n >= 4) {
+          tm_tot = 1.0e-9 * arr[4];
+        }
+        tm_col = -1;
+      }
+    }
     j = 0;
 #   some events are alternative ways to get the same count (like msr/aperf/ is same as cycles (but msr/aperf/ doesnt use up an event counter)
     if (index($0, "msr/aperf/") > 0) { j=cyc; }
@@ -252,20 +292,19 @@ awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_
     else if (index($0, "msr/irperf/") > 0) { j=instr; }
     else if (index($0, "instructions") > 0) { j=instr; }
     else if (index($0, "ret_uops_cycles") > 0) { j=ret_cycles; }
-      n=split($1, arr, ";");
-      cpu_col=0;
-      if (n > 2 && index(arr[2], "CPU") == 1) {
-        cpu_col=1;
-        cpu_num= substr(arr[2], 4, length(arr[2])) + 0;
-        got_cpu[cpu_num] = 1;
-        if (pcg_list != "" && cpu_list[cpu_num] == "") {
-          skp_cpu[cpu_num] = 1;
-          next;
-        }
-        #if (thr_per_core == 2) { thr_per_core = 1; }
+    n=split($1, arr, ";");
+    cpu_col=0;
+    if (n > 2 && index(arr[2+tm_col], "CPU") == 1) {
+      cpu_col=1;
+      cpu_num= substr(arr[2+tm_col], 4, length(arr[2+tm_col])) + 0;
+      got_cpu[cpu_num] = 1;
+      if (pcg_list != "" && cpu_list[cpu_num] == "") {
+        skp_cpu[cpu_num] = 1;
+        next;
       }
+    }
     if (j == 0) {
-      e = tolower(arr[4+cpu_col]);
+      e = tolower(arr[4+cpu_col+tm_col]);
       if (e == "") { next; }
       if (e in evt_list) {
         #printf("got e= %s\n", e);
@@ -284,36 +323,44 @@ awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_
     if (j != 0) {
       n=split($1, arr, ";");
       cpu_col=0;
-      if (index(arr[2], "CPU") == 1) {
+      if (index(arr[2+tm_col], "CPU") == 1) {
         cpu_col=1;
       }
-      tm_i = ck_tm(arr[1]);
-      evt[j,tm_i] += arr[2+cpu_col];
+      if (tm_tot > 0) {
+        tm_i = ck_tm(tm_tot);
+      } else {
+        tm_i = ck_tm(arr[1]);
+      }
+      evt[j,tm_i] += arr[2+cpu_col + tm_col];
       evt[j,tm_i,"inst"]++;
-      evt[j,tm_i,"ns"] += arr[5+cpu_col];
-      evt[j,tm_i,"multi"] = arr[6+cpu_col];
-      evt[j,"tot"] += arr[2+cpu_col];
+      evt[j,tm_i,"ns"] += arr[5+cpu_col + tm_col];
+      evt[j,tm_i,"multi"] = arr[6+cpu_col + tm_col];
+      evt[j,"tot"] += arr[2+cpu_col + tm_col];
       evt[j,"tot","inst"]++;
-      evt[j,"tot","ns"] += arr[5+cpu_col];
-      evt[j,"tot","multi"] = arr[6+cpu_col];
+      evt[j,"tot","ns"] += arr[5+cpu_col + tm_col];
+      evt[j,"tot","multi"] = arr[6+cpu_col + tm_col];
       #1.002152878;5415357486;;UNC_C_CLOCKTICKS;2005707182;100.00;168.823;M/sec
       next;
     }
   }
   /unc._read_write/{
    n=split($1, arr, ";");
-      cpu_col=0;
-      if (index(arr[2], "CPU") == 1) {
-        cpu_col=1;
+      cpu_col =0;
+      if (index(arr[2+tm_col], "CPU") == 1) {
+        cpu_col =1;
       }
-   tm_i = ck_tm(arr[1]);
+   if (tm_tot > 0) {
+     tm_i = ck_tm(tm_tot);
+   } else {
+     tm_i = ck_tm(arr[1]);
+   }
    j = unc_rdwr;
-   evt[j,tm_i] += arr[2+cpu_col]+0;
-   evt[j,"tot"] += arr[2+cpu_col]+0;
+   evt[j,tm_i] += arr[2+cpu_col + tm_col]+0;
+   evt[j,"tot"] += arr[2+cpu_col + tm_col]+0;
    #evt[j,tm_i,"inst"]++;
-   #evt[j,tm_i,"ns"] += arr[5+cpu_col];
-   #evt[j,tm_i,"multi"] = arr[6+cpu_col];
-   #printf("unc_rd_wr %s, v= %s bw= %f\n", arr[4+cpu_col], arr[2+cpu_col], 64.0e-9*evt[unc_rdwr,tm_i]) > "/dev/stderr";
+   #evt[j,tm_i,"ns"] += arr[5+cpu_col + tm_col];
+   #evt[j,tm_i,"multi"] = arr[6+cpu_col + tm_col];
+   #printf("unc_rd_wr %s, v= %s bw= %f\n", arr[4+cpu_col + tm_col], arr[2+cpu_col + tm_col], 64.0e-9*evt[unc_rdwr,tm_i]) > "/dev/stderr";
    #exit;
       next;
  }
@@ -592,7 +639,11 @@ awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_
         td_frt_end_val = v;
         #printf("%%frt_end:  100.0*evt[not_deliv,%d]= %g td_denom= %g v= %f\n", i, 100.0*evt[not_deliv,i], td_denom, v);
       }
-      if (h[j] == "%bad_spec") { v = 100.0*(evt[uops_issued_any,i]-evt[ret_slots,i] + ((4*evt[recovery_cycles,i])/2))/td_denom; if (v < 0){v=0.0;} td_bad_spec_val = v; }
+      if (evt[clk_one_thr,1] != "") {
+        if (h[j] == "%bad_spec") { v = 100.0*(evt[uops_issued_any,i]-evt[ret_slots,i] + ((4*evt[recovery_cycles,i])))/td_denom; if (v < 0){v=0.0;} td_bad_spec_val = v; }
+      } else {
+        if (h[j] == "%bad_spec") { v = 100.0*(evt[uops_issued_any,i]-evt[ret_slots,i] + ((4*evt[recovery_cycles,i])/2))/td_denom; if (v < 0){v=0.0;} td_bad_spec_val = v; }
+      }
       if (h[j] == "%be_spec") { v = 100 - td_ret_val - td_frt_end_val; if (v < 0) { v = 0.0; }}
       if (h[j] == "%bck_end") { v = 100 - td_ret_val - td_frt_end_val - td_bad_spec_val; if (v < 0) { v = 0.0; }}
       if (h[j] == "%ret_cyc") { v = 100.0*evt[ret_cycles,i]/evt[cyc,i]; }
