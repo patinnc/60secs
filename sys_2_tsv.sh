@@ -443,7 +443,7 @@ fi
 if [ -e $DIR/../run.log ]; then
   TST_END_TM=`cat $DIR/../run.log | awk '/ end /{printf("%d\n", $2);exit;}'`
 fi
-BEG=`cat $DIR/60secs.log | awk '{n=split($0, arr);printf("%s\n", arr[n]);exit;}'`
+BEG=`cat $DIR/60secs.log | awk '{printf("%s\n", $(NF));exit;}'`
 BEG_ADJ=`cat $DIR/60secs.log | awk -v script="$0.$LINENO.awk" '
    function dt_to_epoch(date_str, offset) {
    # started on Tue Dec 10 23:23:30 2019
@@ -457,7 +457,7 @@ BEG_ADJ=`cat $DIR/60secs.log | awk -v script="$0.$LINENO.awk" '
      mnth_num = sprintf("%d", index(months, darr[1])/3);
      printf("mnth_num= %d\n", mnth_num) > "/dev/stderr";
      dt_str = darr[6] " " mnth_num " " darr[2] " " darr[3] " " darr[4] " " darr[5];
-     printf("dt_str= %s\n", dt_str) > "/dev/stderr";
+     #printf("dt_str= %s\n", dt_str) > "/dev/stderr";
      epoch = mktime(dt_str);
      printf("%s epoch= %s offset= %s\n", script, epoch, offset) > "/dev/stderr";
      return epoch + offset;
@@ -802,7 +802,6 @@ ck_perf_cpu_arr() {
   #echo "$0.$LINENO bye ck_perf_cpu_arr()"
   #exit 1
 }
-#abcd
 
 ck_file_sets_arr 
 ck_perf_cpu_arr 
@@ -1596,16 +1595,16 @@ trows++; printf("\t\n") > NFL;
             dt_tm["hh"] += 12;
          }
          dt_str = dt_beg["yy"] " " dt_beg["mm"] " " dt_beg["dd"] " " dt_tm["hh"] " " dt_tm["mm"] " " dt_tm["ss"];
-         printf("%s dt_str= %s\n", script, dt_str) > "/dev/stderr";
+         #printf("%s dt_str= %s\n", script, dt_str) > "/dev/stderr";
          epoch = mktime(dt_str);
-         printf("%s epoch= %s offset= %s, ts_beg= %s\n", script, epoch, offset, ts_beg) > "/dev/stderr";
+         #printf("%s epoch= %s offset= %s, ts_beg= %s\n", script, epoch, offset, ts_beg) > "/dev/stderr";
          if (epoch_init == 0) {
              epoch_init = epoch;
          }
          epoch = ts_beg + (epoch - epoch_init);
          if ((epoch-ts_beg) < 0.0) {
             printf("%s epoch= %f, hhmmss= %s, dt_str= %s ts_beg= %f. epoch-ts_beg= %f ampm= %s bye\n", script, epoch, hhmmss, dt_str, ts_beg, epoch-ts_beg, ampm) > "/dev/stderr";
-            exit;
+            exit(1);
          }
          return epoch;
       }
@@ -1864,7 +1863,10 @@ trows++; printf("\n") > NFL;
 #Average:      112     43282      17      80  muttley-active
 #Average:    100001     51570      18     776  m3collector
 #aaaa
-    awk -v work_dir="$WORK_DIR" -v max_cpus=100 -v sum_file="$SUM_FILE" -v options="$OPTIONS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" -v typ="pidstat" '
+    if [ "$LSCPU_FL" != "" ]; then
+     NCPUS=`awk '/^CPU.s.:/ { printf("%s\n", $2);exit;}' $LSCPU_FL`
+    fi
+    awk -v num_cpus="$NCPUS" -v work_dir="$WORK_DIR" -v max_cpus=100 -v sum_file="$SUM_FILE" -v options="$OPTIONS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" -v typ="pidstat" '
      BEGIN{
         beg=1;
         grp_mx=0;
@@ -1875,13 +1877,27 @@ trows++; printf("\n") > NFL;
         tm_beg += 0;
         tm_end += 0;
         epoch_init = 0;
-        num_cpus = 0;
-        num_cpus_pct = 0;
+        if (num_cpus == "") {
+          num_cpus = 0;
+          num_cpus_pct = 0;
+        } else {
+          num_cpus += 0;
+          num_cpus_pct = num_cpus * 100;
+        }
         tot_first=1;
         pidstat_dont_add_pid = 0;
         if (index(options, "pidstat_dont_add_pid") > 0) {
            pidstat_dont_add_pid = 1;
         }
+        use_top_n_procs = 20;
+        lkfor = "pidstat_use_top_n_procs{"
+        i = index(options, lkfor);
+        if (i > 0) {
+          use_top_n_procs = substr(options, i+length(lkfor))+0;
+          printf("pidstat use_top_n_procs= %d\n", use_top_n_procs);
+        }
+        nmtot_str = "__tot__";
+        nm_idx = 0;
       }
       function dt_to_epoch(hhmmss, ampm) {
          # the epoch seconds from the date time info in the file is local time,not UTC.
@@ -1913,8 +1929,8 @@ trows++; printf("\n") > NFL;
            srt_lst=srt_lst "" arr_in[i] "\n";
        }
        cmd = "printf \"" srt_lst "\" | sort -t '\t' -r -n -k 1";
-       #printf("cmd= %s\n", cmd);
-       #printf("======== end cmd=========\n");
+       printf("cmd= %s\n", cmd);
+       printf("======== end sort_data cmd=========\n");
        nf_mx=0;
        while ( ( cmd | getline result ) > 0 ) {
          n = split(result, marr, "\t");
@@ -1927,43 +1943,58 @@ trows++; printf("\n") > NFL;
        close(cmd)
        return nf_mx;
       }
-      function bar_data(row, arr_in, arr_mx, title, hdr, mx_lines) {
-       srt_lst="";
-       for (i=2; i <= arr_mx; i++) {
-           srt_lst=srt_lst "" arr_in[i] "\n";
-       }
-       #printf("======== beg %s =========\n%s\n======== end %s =========\n", title, srt_lst, title);
-       cmd = "printf \"" srt_lst "\" | sort -t '\t' -r -n -k 1";
-       #printf("cmd= %s\n", cmd);
-       #printf("======== end cmd=========\n");
-       nf_mx=0;
-       while ( ( cmd | getline result ) > 0 ) {
-         sv_nf[++nf_mx] = result;
-         printf("sv_nf[%d]= %s\n", nf_mx, result);
-         if (nf_mx > mx_lines) {
-           break;
-         }
-       } 
-       close(cmd)
-       ++row;
-       printf("title\t%s\tsheet\t%s\ttype\tcolumn\n", title, chart) > NFL;
-       ++row;
-       n = split(hdr, arr, "\t");
-       printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", row+1, 0, row+1+nf_mx, n-1, 0) > NFL;
-       ++row;
-       printf("%s\n", hdr) > NFL;
-       for (i=1; i <= nf_mx; i++) {
-         ++row;
-         n = split(sv_nf[i], arr, "\t");
-         printf("%s", arr[n]) > NFL;
-         for (j=1; j < n; j++) {
-           printf("\t%s", arr[j]) > NFL;
-         }
-         printf("\n") > NFL;
-       }
-       return row;
+function yarr_compare(i1, v1, i2, v2,    l, r, m1, m2)
+{
+    m1 = yarr[i1];
+    m2 = yarr[i2];
+    if (m1 < m2)
+        return 1
+    else if (m1 == m2) {
+        if (nm_lkup[i1] < nm_lkup[i2]) {
+          return -1;
+        } else if (nm_lkup[i1] == nm_lkup[i2]) {
+          return 0;
+        } else {
+          return 0
+        }
+    }else
+        return -1
+}
+      function bar_data(row, yarr, ymx, title, hdr, mx_lines,    idx, res_i, i, j, k, ylim, dlm, str) {
+        delete idx;
+        delete res_i;
+        for (i=1; i <= ymx; i++) {
+          idx[i] = i;
+        }
+        asorti(idx, res_i, "yarr_compare")
+        ++row;
+        printf("title\t%s\tsheet\t%s\ttype\tcolumn\n", title, chart) > NFL;
+        ++row;
+        if (mx_lines < ymx) {
+          ylim = mx_lines;
+        } else {
+          ylim = ymx;
+        }
+        #n = split(hdr, arr, "\t");
+        printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", row+1, 0, row+2, ylim, 0) > NFL;
+        #++row;
+        #printf("%s\n", hdr) > NFL;
+        ++row;
+        dlm = "";
+        str1 = "";
+        str2 = "";
+        for (i=1; i <= ylim; i++) {
+          j = res_i[i];
+          str1 = str1 sprintf("%s%s", dlm, xlkup[j]);
+          str2 = str2 sprintf("%s%f", dlm, yarr[j]);
+          dlm = "\t";
+        }
+        ++row;
+        printf("%s\n", str1) > NFL;
+        printf("%s\n", str2) > NFL;
+        return row;
      }
-     {
+     $1 != "Average:" {
 	FNM=ARGV[ARGIND];
         NFL=work_dir "/" FNM ".tsv";
         NFLA=work_dir "/" FNM ".all.tsv";
@@ -1976,14 +2007,18 @@ trows++; printf("\n") > NFL;
         sv[++sv_mx] = str;
         if (NR == 1) {
           for (i=1; i <= NF; i++) {
-             if (match($i, /^[0-9][0-9]\/[0-9][0-9]\/[0-9][0-9][0-9][0-9]/)) {
-                dt_beg["yy"] = substr($i, 7);
-                dt_beg["mm"] = substr($i, 1, 2);
-                dt_beg["dd"] = substr($i, 4, 2);
-                printf("beg_date= mm.dd.yyyy %s.%s.%s\n", dt_beg["mm"], dt_beg["dd"], dt_beg["yy"]) > "/dev/stderr";
-                #break;
+             if (match($i, /^[0-9][0-9]\/[0-9][0-9]\/[0-9][0-9][0-9][0-9]/) || match($i, /^[0-9][0-9]\/[0-9][0-9]\/[0-9][0-9]/)) {
+               if (length($i) == 8) {
+                  dt_beg["yy"] = "20" substr($i, 7, 2);
+               } else {
+                  dt_beg["yy"] = substr($i, 7, 4);
+               }
+               dt_beg["mm"] = substr($i, 1, 2);
+               dt_beg["dd"] = substr($i, 4, 2);
+               printf("beg_date= mm.dd.yyyy %s.%s.%s\n", dt_beg["mm"], dt_beg["dd"], dt_beg["yy"]) > "/dev/stderr";
+               #break;
              }
-             if (i == NF && $i == "CPU)") {
+             if (num_cpus == 0 && i == NF && $i == "CPU)") {
                 num_cpus = substr(fld_prv, 2)+0;
                 num_cpus_pct = num_cpus * 100.0;
              }
@@ -1992,130 +2027,160 @@ trows++; printf("\n") > NFL;
           next;
         }
         if (NF == 0) {
-           area="cpu";
+           area="";
            next;
         }
-        if ($2 == "AM" || $2 == "PM") {
-           if (index($0, "%CPU") > 1) {
+        if ($1 != "Average:" && ($2 == "AM" || $2 == "PM" || index($0, " %CPU ") > 0 || index($0, " kB_rd/s ") > 0)) {
+           if ($2 != "AM" && $2 != "PM") {
+             ampm_col = -1;
+             ampm_str = "";
+           }else {
+             ampm_col = 0;
+             ampm_str = $2;
+           }
+           if (index($0, " %CPU ") > 1) {
+              for(i=2; i <= NF; i++) {
+                cpu_hdr_list[$i] = i
+                cpu_hdr_lkup[i] = $i
+              }
               area="cpu";
-              epoch = dt_to_epoch($1, $2);
+              epoch = dt_to_epoch($1, ampm_str);
               tm_rw = tm_rw+1;
               tm_arr[tm_rw] = epoch;
               next;
            }
            if (index($0, " kB_rd/s ") > 1) {
               area="io";
+              for(i=2; i <= NF; i++) {
+                io_hdr_list[$i] = i
+                io_hdr_lkup[i] = $i
+              }
               epoch = dt_to_epoch($1, $2);
-              tm_rw_io = tm_rw_io+1;
+              ++tm_rw_io;
               tm_arr_io[tm_rw_io] = epoch;
               next;
            }
            if (ts_end > 0.0 && epoch > ts_end) {
               next;
            }
+        } else {
            if ( area == "cpu" && $1 != "Average:") {
+             cmd_i = cpu_hdr_list["Command"];
+             pid_i = cpu_hdr_list["PID"];
              if (pidstat_dont_add_pid == 0) {
-               nm  = $10 " " $4; # process_name + pid
+               nm  = $(cmd_i) " " $(pid_i); # process_name + pid
              } else {
-               nm  = $10; # process_name 
+               nm  = $(cmd_i); # process_name 
              }
              i = index(nm, "/");
-             if (i > 0) {
+             if (i > 1) {
                nm = substr(nm, 1, i-1);
              }
-             if (!(nm in nm_arr)) {
-               if (tot_first == 1) {
-                 tot_first = 0;
-                 nmt = "__tot__";
-                 nm_idx++
-                 nm_arr[nmt] = nm_idx;
-                 nm_lkup[nm_idx] = nmt;
+             if (!(nm in nm_list)) {
+               if (nm_idx == 0) {
+                 nm_list[nmtot_str] = ++nm_idx;
+                 nm_lkup[nm_idx] = nmtot_str;
                  nm_tot[nm_idx] = 0;
                  nm_tot_io[nm_idx] = 0;
                }
-               nm_idx++
-               nm_arr[nm] = nm_idx;
+               nm_list[nm] = ++nm_idx;
                nm_lkup[nm_idx] = nm;
                nm_tot[nm_idx] = 0;
+               nm_tot_io[nm_idx] = 0;
+               #printf("added pidstat cpu nm[%d]= %s\n", nm_idx, nm);
+               if (nm == "") { printf("nm empty, line[%d]= %s\n", FNR, $0);}
              }
-             nmi = nm_arr[nm];
-             pct = $8+0; # %cpu
+             nm_i = nm_list[nm];
+             pct_i = cpu_hdr_list["%CPU"];
+             pct = $(pct_i)+0; # %cpu
              if (pct > num_cpus_pct) {
                pct = 0.0; # just set it zero
                ## it is misleading to set it to 0 as it makes me think the process is blocked and not running in this interval.
                ## The numbers "look like" they could be 1000x too big...this is a real hack
-               #npct = pct * 0.001;
-               #if (npct > num_cpus_pct) { npct = 0.0; }
-               #printf("pidstat: trying to fixup too high %CPU: pct= %f num_cpus_pct= %f, npct= %f, tm_rw= %d, i= %d, pid[%d,%s]= %s, nm= %s\n", pct, num_cpus_pct, npct, tm_rw, i, i,nmi, pid[i,nmi], nm) > "/dev/stderr";
-               #pct = npct;
              }
-             pid[tm_rw,nmi] = pct;
-             nm_tot[nmi] += pct;
+             pid[tm_rw,nm_i] += pct;
+             nm_tot[nm_i] += pct;
+             nm_i = nm_list[nmtot_str];
+             pid[tm_rw,nm_i] += pct;
+             nm_tot[nm_i] += pct;
            }
            if ( area == "io" && $1 != "Average:") {
              #nm  = $9 " " $4; # process_name + pid
+             #printf("pidstat io_line[%d]= %s\n", FNR, $0);
+             cmd_i = io_hdr_list["Command"];
+             pid_i = io_hdr_list["PID"];
              if (pidstat_dont_add_pid == 0) {
-               nm  = $9 " " $4; # process_name + pid
+               nm  = $(cmd_i) " " $(pid_i); # process_name + pid
              } else {
-               nm  = $9; # process_name 
+               nm  = $(cmd_i); # process_name 
              }
              i = index(nm, "/");
              if (i > 0) {
                nm = substr(nm, 1, i-1);
              }
-             if (!(nm in nm_arr)) {
-               if (tot_first == 1) {
-                 tot_first = 0;
-                 nmt = "__tot__";
-                 nm_idx++
-                 nm_arr[nmt] = nm_idx;
-                 nm_lkup[nm_idx] = nmt;
+             if (!(nm in nm_list)) {
+               if (nm_idx == 0) {
+                 nm_list[nmtot_str] = ++nm_idx;
+                 nm_lkup[nm_idx] = nmtot_str;
                  nm_tot[nm_idx] = 0;
                  nm_tot_io[nm_idx] = 0;
                }
-               nm_idx++
-               nm_arr[nm] = nm_idx;
+               nm_list[nm] = ++nm_idx;
                nm_lkup[nm_idx] = nm;
+               nm_tot[nm_idx] = 0;
                nm_tot_io[nm_idx] = 0;
              }
-             nmi = nm_arr[nm];
-             kbr = $5+0; # kBread/s
-             kbw = $6+0; # kBwrite/s
-             if ((kbr + kbw) < 20.0e6) { # pidstat has some bogus numbers at times
-             pid_io[tm_rw_io,nmi,"rd"] = kbr;
-             pid_io[tm_rw_io,nmi,"wr"] = kbw;
-             nm_tot_io[nmi] += kbr+kbw;
-             nmi = nm_arr[nmt];
-             pid_io[tm_rw_io,nmi,"rd"] += kbr;
-             pid_io[tm_rw_io,nmi,"wr"] += kbw;
-             nm_tot_io[nmi] += kbr+kbw;
+             nm_i = nm_list[nm];
+             kbr_i = io_hdr_list["kB_rd/s"];
+             kbw_i = io_hdr_list["kB_wr/s"];
+             if (kbr_i == "") {
+               kbr_i = io_hdr_list["kBread/s"];
+               kbw_i = io_hdr_list["kBwrite/s"];
+             }
+             kbr = $(kbr_i)+0; # kBread/s
+             kbw = $(kbw_i)+0; # kBwrite/s
+             if ((kbr + kbw) < 20.0e9) { # pidstat has some bogus numbers at times
+             pid_io[tm_rw_io,nm_i,"rd"] += kbr;
+             pid_io[tm_rw_io,nm_i,"wr"] += kbw;
+             nm_tot_io[nm_i] += kbr+kbw;
+             nm_i = nm_list[nmtot_str];
+             pid_io[tm_rw_io,nm_i,"rd"] += kbr;
+             pid_io[tm_rw_io,nm_i,"wr"] += kbw;
+             nm_tot_io[nm_i] += kbr+kbw;
              }
            }
         }
      }
      /^Average:/{
-        if (index($0, "%CPU") > 1) {
+        if ($NF == "Command" && index($0, " %CPU ") > 2) {
           area="cpu"; 
+          for(i=2; i <= NF; i++) {
+            cpu_hdr_list[$i] = i
+            cpu_hdr_lkup[i] = $i
+          }
           mx_cpu=1;
-          sv_cpu[mx_cpu]=sprintf("%CPU\tProcess");
+          #sv_cpu[mx_cpu]=sprintf("%CPU\tProcess");
           next;
         }
-        if (index($0, "nvcswch") > 1) {
+        if ($NF == "Command" && index($0, " nvcswch ") > 1) {
           area="cs";
           mx_cs=1;
-          sv_cs[mx_cs]=sprintf("cswch/s\tnvcswch/s\tProcess");
+          #sv_cs[mx_cs]=sprintf("cswch/s\tnvcswch/s\tProcess");
           next;
         }
-        if (index($0, "threads") > 1) {
+        if ($NF == "Command" && index($0, " threads ") > 1) {
           area="threads";
           mx_threads=1;
-          sv_threads[mx_threads]=sprintf("threads\tfd-nr\tProcess");
+          #sv_threads[mx_threads]=sprintf("threads\tfd-nr\tProcess");
           next;
         }
         if (area == "cpu") {
-          proc = $9;
+          cmd_i = cpu_hdr_list["Command"];
+          pid_i = cpu_hdr_list["PID"];
+          pct_i = cpu_hdr_list["%CPU"];
+          proc = $(cmd_i);
           i = index(proc, "/");
-          if (i > 0) {
+          if (i > 1) {
              proc = substr(proc, 1, i-1);
           }
           if (!(proc in proc_list)) {
@@ -2123,20 +2188,21 @@ trows++; printf("\n") > NFL;
              proc_lkup[proc_mx] = proc;
              proc_tot[proc_mx] = 0.0;
           }
-          pct = $7+0.0;
+          pct = $(pct_i)+0.0;
           if (pct > num_cpus_pct) {
              pct = 0.0; # just set it zero
           }
-          if (pidstat_dont_add_pid == 0) {
-            sv_cpu[++mx_cpu]=sprintf("%s\t%s", pct, $9 " " $3);
-          } else {
-            proc_idx = proc_list[proc];
-            proc_tot[proc_idx] += pct;
-            sv_cpu[proc_idx]=sprintf("%s\t%s", proc_tot[proc_idx], proc);
-            if (mx_cpu < proc_idx) {
-               mx_cpu = proc_idx;
-            }
-          }
+          #printf("pidstat avg %s %s\n", proc, pct) > "/dev/stderr";
+          #if (pidstat_dont_add_pid == 0) {
+          #  sv_cpu[++mx_cpu]=sprintf("%s\t%s", pct, $(cmd_i) " " $(pid_i));
+          #} else {
+            proc_i = proc_list[proc];
+            proc_tot[proc_i] += pct;
+            #sv_cpu[proc_i]=sprintf("%s\t%s", proc_tot[proc_i], proc);
+            #if (mx_cpu < proc_i) {
+            #   mx_cpu = proc_i;
+            #}
+          #}
         }
         if (area == "cs") {
           if (pidstat_dont_add_pid == 0) {
@@ -2154,6 +2220,40 @@ trows++; printf("\n") > NFL;
         }
         next;
      }
+function tot_compare(i1, v1, i2, v2,    l, r, m1, m2)
+{
+    m1 = nm_tot[i1];
+    m2 = nm_tot[i2];
+    if (m1 < m2)
+        return 1
+    else if (m1 == m2) {
+        if (nm_lkup[i1] < nm_lkup[i2]) {
+          return -1;
+        } else if (nm_lkup[i1] == nm_lkup[i2]) {
+          return 0;
+        } else {
+          return 0
+        }
+    }else
+        return -1
+}
+function tot_compare_io(i1, v1, i2, v2,    l, r, m1, m2)
+{
+    m1 = nm_tot_io[i1];
+    m2 = nm_tot_io[i2];
+    if (m1 < m2)
+        return 1
+    else if (m1 == m2) {
+        if (nm_lkup[i1] < nm_lkup[i2]) {
+          return -1;
+        } else if (nm_lkup[i1] == nm_lkup[i2]) {
+          return 0;
+        } else {
+          return 0
+        }
+    }else
+        return -1
+}
      END{
        row = -1;
 
@@ -2164,29 +2264,33 @@ trows++; printf("\tThe above example identifies two java processes as responsibl
 trows++; printf("\tthe total across all CPUs; 1591%% shows that that java processes is consuming almost 16 CPUs.\n") > NFL;
 
        row += trows;
+       delete idx;
+       delete res_i;
        for (k=1; k <= nm_idx; k++) {
-          my_cpu[k]=sprintf("%d\t%s", nm_tot[k], nm_lkup[k]);
+         idx[k] = k;
        }
-       my_nms = sort_data(my_cpu, nm_idx, 20);
-       for (k=1; k <= my_nms; k++) {
-         my_order[k] = sv_nf[k];
+       asorti(idx, res_i, "tot_compare")
+       #my_nms = sort_data(my_cpu, nm_idx, 20);
+       #for (k=1; k <= my_nms; k++) {
+       for (k=1; k <= nm_idx; k++) {
+         my_order[k] = res_i[k];
        }
        ++row;
        printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", "pid_stat %CPU by proc", "pat") > NFL;
        ++row;
        #n = split(hdr, arr, "\t");
-       printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", row+1, 2, -1, my_nms+1, 1) > NFL;
+       printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", row+1, 2, -1, nm_idx+1, 1) > NFL;
        ++row;
        printf("TS\trel_t") > NFL;
-       for (k=1; k <= my_nms; k++) {
-          printf("\t%s", my_order[k]) > NFL;
+       for (k=1; k <= nm_idx; k++) {
+          printf("\t%s", nm_lkup[my_order[k]]) > NFL;
        }
        printf("\n") > NFL;
        for (j=1; j <= tm_rw; j++) {
           printf("%d\t%d", tm_arr[j], tm_arr[j]-ts_beg) > NFL;
-          for (k=1; k <= my_nms; k++) {
-             nmi = nm_arr[my_order[k]];
-             printf("\t%d", pid[j,nmi]) > NFL;
+          for (k=1; k <= nm_idx; k++) {
+             nm_i = my_order[k];
+             printf("\t%d", pid[j,nm_i]) > NFL;
           }
           ++row;
          printf("\n") > NFL;
@@ -2195,30 +2299,35 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
        printf("\n") > NFL;
 
        # IO segment
+#abcd
+       delete idx;
+       delete res_i;
        for (k=1; k <= nm_idx; k++) {
-          my_cpu[k]=sprintf("%f\t%s", nm_tot_io[k], nm_lkup[k]);
-          #printf("my_cpu[%d]= %s\n", k, my_cpu[k]) > "/dev/stderr";
+          #my_cpu[k]=sprintf("%f\t%s", nm_tot_io[k], nm_lkup[k]);
+          idx[k] = k;
+          #printf("pidstat tot_io[%d].pid %s, tot= %f\n", k, nm_lkup[k], nm_tot_io[k]);
        }
-       my_nms = sort_data(my_cpu, nm_idx, 20);
-       for (k=1; k <= my_nms; k++) {
-         my_order[k] = sv_nf[k];
+       asorti(idx, res_i, "tot_compare_io")
+       #nm_nms = sort_data(my_cpu, nm_idx, 20);
+       for (k=1; k <= nm_idx; k++) {
+         my_order_io[k] = res_i[k];
        }
        ++row;
        printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", "pid_stat IO (MB/s) by proc. Proc IO might not get to disk", "pat") > NFL;
        ++row;
        #n = split(hdr, arr, "\t");
-       printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", row+1, 2, -1, my_nms+1, 1) > NFL;
+       printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", row+1, 2, -1, nm_idx+1, 1) > NFL;
        ++row;
        printf("TS\trel_t") > NFL;
-       for (k=1; k <= my_nms; k++) {
-          printf("\t%s", my_order[k]) > NFL;
+       for (k=1; k <= nm_idx; k++) {
+          printf("\t%s", nm_lkup[my_order_io[k]]) > NFL;
        }
        printf("\n") > NFL;
        for (j=1; j <= tm_rw_io; j++) {
           printf("%d\t%d", tm_arr_io[j], tm_arr_io[j]-ts_beg) > NFL;
-          for (k=1; k <= my_nms; k++) {
-             nmi = nm_arr[my_order[k]];
-             printf("\t%f", (pid_io[j,nmi,"rd"]+pid_io[j,nmi,"wr"])/1024.0) > NFL;
+          for (k=1; k <= nm_idx; k++) {
+             nm_i = my_order_io[k];
+             printf("\t%f", (pid_io[j,nm_i,"rd"]+pid_io[j,nm_i,"wr"])/1024.0) > NFL;
           }
           ++row;
          printf("\n") > NFL;
@@ -2226,21 +2335,33 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
        ++row;
        printf("\n") > NFL;
 
-       row = bar_data(row, sv_cpu, mx_cpu, chart " average %CPU", "process\tavg.%CPUS", 40);
+       delete yarr;
+       delete xlist;
+       delete xlkup;
+       for (i=1; i <= proc_mx; i++) {
+         yarr[i]  = proc_tot[i];
+         xlkup[i] = proc_lkup[i];
+         xlist[proc_lkup[i]] = i;
+       }
+
+       printf("pidstat ckck proc_mx= %d\n", proc_mx);
+       mx_cpu = nm_idx;
+       row = bar_data(row, yarr, proc_mx, chart " average %CPU", "process\tavg.%CPUS", 40);
        for (i=1; i <= nf_mx; i++) {
          n = split(sv_nf[i], arr, "\t");
          printf("pidstat\tavg %%cpu\t%s\t%%cpu %s\n", arr[1], arr[2]) >> sum_file;
        }
        close(sum_file);
        ++row;
+       printf("pidstat ckck last row= %d\n", row);
        printf("\n") > NFL;
        if (mx_cs > 0) {
-         row = bar_data(row, sv_cs, mx_cs, chart " CSWTCH", sv_cs[1], 40);
+         row = bar_data(row, sv_cs, mx_cs, my_order, chart " CSWTCH", sv_cs[1], 40);
          ++row;
          printf("\n") > NFL;
        }
        if (mx_threads > 0) {
-         row = bar_data(row, sv_threads, mx_threads, chart " threads, fd", sv_threads[1], 40);
+         row = bar_data(row, sv_threads, mx_threads, my_order, chart " threads, fd", sv_threads[1], 40);
          ++row;
          printf("\n") > NFL;
        }
@@ -2268,7 +2389,25 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
 
 #rkB/s	wkB/s	avgrq-sz	avgqu-sz	await	r_await	w_await	svctm	%util
 
-    echo "do iostat"
+#10/16/21 05:13:21
+#avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+#           0.68    0.22    0.26    0.06    0.00   98.78
+#
+#Device            r/s     w/s     rkB/s     wkB/s   rrqm/s   wrqm/s  %rrqm  %wrqm r_await w_await aqu-sz rareq-sz wareq-sz  svctm  %util
+#nvme0n1        316.97   17.50   5072.35   1808.12     0.00    12.58   0.00  41.83    0.48    1.62   0.18    16.00   103.33   0.06   1.91
+#nvme1n1          0.00    0.04      0.00      6.44     0.00     0.02   0.00  29.79    0.09    0.20   0.00    11.40   162.69   2.51   0.01
+#nvme2n1          0.00    0.04      0.00      6.44     0.00     0.02   0.00  30.59    0.10    0.19   0.00    10.20   169.16   1.32   0.01
+#nvme3n1          0.00    0.04      0.00      6.43     0.00     0.02   0.00  29.80    0.10    0.13   0.00    11.34   169.26   2.61   0.01
+#nvme4n1          0.00    0.04      0.00      6.43     0.00     0.02   0.00  29.77    0.09    0.19   0.00    12.49   169.17   1.32   0.01
+#md127            0.00    0.17      0.00     25.74     0.00     0.00   0.00   0.00    0.07    0.10   0.00     5.70   152.46   0.59   0.01
+#
+#10/16/21 05:14:21
+#avg-cpu:  %user   %nice %system %iowait  %steal   %idle
+#           0.53    0.22    0.18    0.00    0.00   99.07
+
+
+
+    echo "do iostat ts_beg= $BEG ts_end= $END_TM"
     awk -v work_dir="$WORK_DIR" -v ts_beg="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" -v typ="iostat"  -v sum_file="$SUM_FILE" -v sum_flds="rkB/s{io RdkB/s|disk},wkB/s{io wrkB/s|disk},avgrq-sz{io avg Req_sz|disk},avgqu-sz{io avg que_sz|disk},%util{io %util|disk}" '
      BEGIN{
         beg=1;
@@ -2314,7 +2453,7 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
          }
        }
       }
-      function dt_to_epoch(hhmmss, ampm) {
+      function dt_to_epoch(hhmmss, ampm,    dt_str, epoch) {
          # the epoch seconds from the date time info in the file is local time,not UTC.
          # so just use the calc"d epoch seconds to calc the elapsed seconds since the start.
          # THe real timestamp is the input ts_beg + elapsed_seconds.
@@ -2322,16 +2461,16 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
          if (dt_beg["yy"] == "") {
             return 0.0;
          }
-         dt_tm["hh"] = substr(hhmmss,1,2) + 0;
-         dt_tm["mm"] = substr(hhmmss,4,2) + 0;
-         dt_tm["ss"] = substr(hhmmss,7,2) + 0;
+         dt_tm["hh"] = substr(hhmmss,1,2);
+         dt_tm["mm"] = substr(hhmmss,4,2);
+         dt_tm["ss"] = substr(hhmmss,7,2);
          if (ampm == "PM" && dt_tm["hh"] < 12) {
             dt_tm["hh"] += 12;
          }
          dt_str = dt_beg["yy"] " " dt_beg["mm"] " " dt_beg["dd"] " " dt_tm["hh"] " " dt_tm["mm"] " " dt_tm["ss"];
          #printf("dt_str= %s\n", dt_str) > "/dev/stderr";
          epoch = mktime(dt_str);
-         #printf("epoch= %s offset= %s\n", epoch, offset);
+         #printf("epoch= %s offset= %s\n", epoch, offset) > "/dev/stderr";
          if (epoch_init == 0) {
              epoch_init = epoch;
          }
@@ -2358,8 +2497,12 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
         NFLA=work_dir "/" FNM ".all.tsv";
      }
      #02/28/2020 10:34:37 PM
-     / AM$| PM$/{
+     / AM$| PM$|^[0-9][0-9]\/[0-9][0-9]\/[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9]/{
+         if (length($1) == 8) {
+         dt_beg["yy"] = "20" substr($1, 7, 2);
+         } else {
          dt_beg["yy"] = substr($1, 7, 4);
+         }
          dt_beg["mm"] = substr($1, 1, 2);
          dt_beg["dd"] = substr($1, 4, 2);
          epoch = dt_to_epoch($2, $3);
@@ -2369,7 +2512,7 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
          if (tm_beg == 0) {
            tm_beg = epoch;
          }
-         #  printf("iostat beg_date= mm.dd.yyyy %s.%s.%s, epoch= %f\n", dt_beg["mm"], dt_beg["dd"], dt_beg["yy"], epoch) > "/dev/stderr";
+         printf("iostat beg_date= mm.dd.yyyy %s.%s.%s, tm= %s epoch= %f\n", dt_beg["mm"], dt_beg["dd"], dt_beg["yy"], $2, epoch) > "/dev/stderr";
      }
 
      /^avg-cpu:/{
@@ -2860,8 +3003,12 @@ row+= trows;
         NFLA=work_dir "/" FNM ".all.tsv";
         if (NR == 1) {
           for (i=1; i <= NF; i++) {
-             if (match($i, /^[0-9][0-9]\/[0-9][0-9]\/[0-9][0-9][0-9][0-9]/)) {
+             if (match($i, /^[0-9][0-9]\/[0-9][0-9]\/[0-9][0-9][0-9][0-9]/) || match($i, /^[0-9][0-9]\/[0-9][0-9]\/[0-9][0-9]/)) {
+                if (length($i) == 8) {
+                dt_beg["yy"] = "20" substr($i, 7);
+                } else {
                 dt_beg["yy"] = substr($i, 7);
+                }
                 dt_beg["mm"] = substr($i, 1, 2);
                 dt_beg["dd"] = substr($i, 4, 2);
                 #printf("beg_date= mm.dd.yyyy %s.%s.%s\n", dt_beg["mm"], dt_beg["dd"], dt_beg["yy"]) > "/dev/stderr";
@@ -3002,12 +3149,14 @@ row += trows;
           PS_CPUS="$PS_CPUS -u $V "
         fi
     done
+    if [ "$PC_ARR_MX" != "" ]; then
     for ((jj=0; jj < $PC_ARR_MX; jj++)); do
         V=${PC_ARR[$jj,"arg"]}
         if [ "$V" != "" ]; then
           PS_CPUS="$PS_CPUS -u $V "
         fi
     done
+    fi
     echo "$0.$LINENO: PS_CPUS= $PS_CPUS"
 
     echo "do perf_stat data $i with BEG= $BEG, end= $END_TM" > /dev/stderr
@@ -3533,7 +3682,9 @@ row += trows;
      /^==beg /{
        FNM=ARGV[ARGIND];
        NFL=work_dir "/" FNM ".tsv";
-       row = $2;
+       ++row;
+       tm_elap[row] = $2;
+       tm_epoch[row] = $4;
        tm = $4;
        getline;
        hdr_line = $0;
@@ -3563,11 +3714,33 @@ row += trows;
           sv_col[row,inum] = hdr_cols+1;
         }
      }
+function yarr_compare(i1, v1, i2, v2,    l, r, m1, m2, n1, n2)
+{
+    m1 = tot_interrupts[i1];
+    m2 = tot_interrupts[i2];
+    if (m1 < m2)
+        return 1
+    else if (m1 == m2) {
+        n1 = intr_arr_nms[i1];
+        n2 = intr_arr_nms[i2];
+        if (n1 < n2) {
+          return -1;
+        } else if (n1 == n2) {
+          return 0;
+        } else {
+          return 1
+        }
+    } else {
+        return -1
+    }
+}
      END{
        for (i=1; i <= intr_num; i++) {
          ck_no_chg[i] = 0;
+         tot_interrupts[i] = 0;
        }
        for (r=1; r <= row; r++) {
+         tot_by_row[r] = 0;
          for (i=1; i <= intr_num; i++) {
             jmx = sv_col[r,i];
             sum = 0;
@@ -3575,11 +3748,22 @@ row += trows;
                sum += sv[r,i,j];
             }
             sum_arr[r,i] = sum;
+            tot_interrupts[i] += sum;
+            tot_by_row[r] += sum;
          }
        }
+       for (r=row; r >= 2; r--) {
+          tot_by_row[r] -= tot_by_row[r-1];
+       }
+       tot_by_row[1] = 0;
+       for (i=1; i <= intr_num; i++) {
+          idx[i] = i;
+       }
+       asorti(idx, res_i, "yarr_compare")
        
        for (r=1; r <= row; r++) {
-          for (i=1; i <= intr_num; i++) {
+          for (j=1; j <= intr_num; j++) {
+            i = res_i[j];
              val = sum_arr[r,i];
              if (r == 1) {
                 val = 0;
@@ -3590,16 +3774,19 @@ row += trows;
           }
        }
        drop_cols = 0;
-       for (i=1; i <= intr_num; i++) {
+       for (j=1; j <= intr_num; j++) {
+            i = res_i[j];
          if (ck_no_chg[i] == 0) {
             drop_cols++;
          }
        }
        trows=0;
        printf("title\tinterrupts\tsheet\tinterrupts\ttype\tline\n") > NFL;
-       printf("hdrs\t%d\t0\t%d\t%d\t-1\n", 2+trows, -1, intr_num-drop_cols) > NFL;
-       tab="";
-       for (i=1; i <= intr_num; i++) {
+       printf("hdrs\t%d\t2\t%d\t%d\t1\n", 2+trows, -1, intr_num-drop_cols+2) > NFL;
+       tab="\t";
+       printf("%s\t%s\ttotal", "ts_epoch", "elap_secs") > NFL;
+       for (j=1; j <= intr_num; j++) {
+            i = res_i[j];
           if (ck_no_chg[i] == 0) {
             continue;
           }
@@ -3610,12 +3797,15 @@ row += trows;
           tab="\t";
        }
        trows=2;
-       printf("\ttotal\n") > NFL;
+       printf("\n") > NFL;
        
        for (r=1; r <= row; r++) {
           tab="";
           total=0;
-          for (i=1; i <= intr_num; i++) {
+          printf("%f\t%.2f\t%d", tm_epoch[r], tm_elap[r], tot_by_row[r]) > NFL;
+          tab="\t";
+          for (j=1; j <= intr_num; j++) {
+             i = res_i[j];
              if (ck_no_chg[i] == 0) {
                continue;
              }
@@ -3627,10 +3817,9 @@ row += trows;
              }
              printf("%s%d", tab, val) > NFL;
              tab="\t";
-             total += val;
           }
           trows++;
-          printf("\t%d\n", total) > NFL;
+          printf("\n") > NFL;
        }
        close(NFL);
    }
@@ -3697,14 +3886,14 @@ row += trows;
             }
             next;
           } else {
-            idx = ++hdr_typs;
-            hdr_typ[idx] = $1
-            hdr_str[$1] = idx;
-            hdr[idx,1] = $1;
-            hdr_mx[idx] = NF;
-            hdr_row[idx] = 0;
+            iidx = ++hdr_typs;
+            hdr_typ[iidx] = $1
+            hdr_str[$1] = iidx;
+            hdr[iidx,1] = $1;
+            hdr_mx[iidx] = NF;
+            hdr_row[iidx] = 0;
             for (j=2; j <= NF; j++) {
-               hdr[idx,j] = cols[j];
+               hdr[iidx,j] = cols[j];
             }
           }
         } else {
@@ -3712,11 +3901,11 @@ row += trows;
           n   = split($0, arr, ":");
           ts  = arr[1];
           typ = arr[2];
-          idx = hdr_str[typ];
-          rw = ++hdr_row[idx];
-          ts_row[idx,rw] = ts;
+          iidx = hdr_str[typ];
+          rw = ++hdr_row[iidx];
+          ts_row[iidx,rw] = ts;
           for (j=3; j <= n; j++) {
-            data[idx,rw,j-2] = arr[j];
+            data[iidx,rw,j-2] = arr[j];
           }
        }
      }
