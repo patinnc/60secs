@@ -905,6 +905,13 @@ DO_W=0
 if [ "$PID_LST_NC" != "" -o "$FL_PWR" != "" -o "$FL_WATCH" != "" ]; then
  DO_W=1
 fi
+FL_STATS=sys_20_proc_stats.txt
+if [ -e "$FL_STATS" ]; then
+  rm $FL_STATS
+fi
+
+ts_cur=`date "+%s"`
+ts_end=$((ts_cur+$WAIT))
 echo "$0.$LINENO WAIT_AT_END= $WAIT_AT_END DO_W= $DO_W"
 if [ "$WAIT_AT_END" == "1" -a "$DO_W" == "1" ]; then
   echo "$0.$LINENO waiting for $WAIT seconds"
@@ -915,6 +922,7 @@ if [ "$WAIT_AT_END" == "1" -a "$DO_W" == "1" ]; then
   CK_STOP=~/60secs.stop
   for i in `seq 1 $WAIT`; do
     #echo "i= $i of $WAIT"
+    ts_cur=`date "+%s"`
     printf "i= %d of %d\n" $i $WAIT
     if [ "$FL_UPTM" != "" ]; then
        uptime >> $FL_UPTM
@@ -924,6 +932,16 @@ if [ "$WAIT_AT_END" == "1" -a "$DO_W" == "1" ]; then
       echo "==beg $j date $DT" >> $FL_INT
       cat /proc/interrupts >> $FL_INT
     fi
+    echo "__diskstats__ $ts_cur $ts_end"      >> $FL_STATS
+    cat /proc/diskstats                       >> $FL_STATS
+    echo ""                                   >> $FL_STATS
+    echo "__net_snmp_udp__ $ts_cur $ts_end"   >> $FL_STATS
+    egrep "Tcp:|Udp:" /proc/net/snmp          >> $FL_STATS
+    echo ""                                   >> $FL_STATS
+    echo "__net_dev__ $ts_cur $ts_end"        >> $FL_STATS
+    cat /proc/net/dev                         >> $FL_STATS
+    echo ""                                   >> $FL_STATS
+
     if [ "$FL_PWR" != "" ]; then
       DT=`date +%s.%N`
       echo "==beg $j date $DT" >> $FL_PWR
