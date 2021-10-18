@@ -12,10 +12,11 @@ catch_signal() {
 
 trap 'catch_signal' SIGINT
 
-MYBASHPID=$BASHPID
-echo "$BASHPID" > ~/60secs.pid
-
 SCR_DIR=`dirname "$(readlink -f "$0")"`
+STOP_DIR=$SCR_DIR/..
+MYBASHPID=$BASHPID
+echo "$BASHPID" > $STOP_DIR/60secs.pid
+
 IFS_SV=$IFS
 WAIT=60
 # renamed task 'top' to 'do_top' to avoid conflict with toplev
@@ -898,7 +899,7 @@ if [ "$BKGRND" == "1" ]; then
   echo "PIDS_NC= $PID_LST_NC" >> watch.log
   echo "PIDS_BSH= $BASHPID" >> watch.log
   if [ "$PID_LST_NC" != "" ]; then
-    echo "$PID_LST_NC" >> ~/60secs.pid
+    echo "$PID_LST_NC" >> $STOP_DIR/60secs.pid
   fi
 fi
 DO_W=0
@@ -919,7 +920,7 @@ if [ "$WAIT_AT_END" == "1" -a "$DO_W" == "1" ]; then
   j=0
     BDT=`date +%s`
     EDT=$((BDT+$WAIT))
-  CK_STOP=~/60secs.stop
+  CK_STOP=$STOP_DIR/60secs.stop
   for i in `seq 1 $WAIT`; do
     #echo "i= $i of $WAIT"
     ts_cur=`date "+%s"`
