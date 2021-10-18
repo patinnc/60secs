@@ -987,11 +987,13 @@ if [ "$WAIT_AT_END" == "1" -a "$DO_W" == "1" ]; then
        echo "quitting loop due signal" > /dev/stderr
        echo "PID_LST_NC= b${PID_LST_NC}b" > /dev/stderr
        if [ "$PID_LST_NC" != "" ]; then
+       if [ "$PID_LST_NC" -gt "10" ]; then
        echo "kill -2 $PID_LST_NC"
-             kill -2 $PID_LST_NC
+             #kill -2 $PID_LST_NC
        sleep 2
        echo "kill -9 $PID_LST_NC"
-             kill -9 $PID_LST_NC
+             #kill -9 $PID_LST_NC
+       fi
        fi
        break
     fi
