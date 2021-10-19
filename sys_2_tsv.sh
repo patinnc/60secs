@@ -1603,8 +1603,12 @@ trows++; printf("\t\n") > NFL;
          }
          epoch = ts_beg + (epoch - epoch_init);
          if ((epoch-ts_beg) < 0.0) {
+           if ((ts_beg-epoch) > (24*3600)) {  # try to handle the change of day
             printf("%s epoch= %f, hhmmss= %s, dt_str= %s ts_beg= %f. epoch-ts_beg= %f ampm= %s bye\n", script, epoch, hhmmss, dt_str, ts_beg, epoch-ts_beg, ampm) > "/dev/stderr";
             exit(1);
+           } else {
+             epoch += (24*3600);
+           }
          }
          return epoch;
       }
@@ -2299,7 +2303,6 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
        printf("\n") > NFL;
 
        # IO segment
-#abcd
        delete idx;
        delete res_i;
        for (k=1; k <= nm_idx; k++) {
@@ -2421,6 +2424,8 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
         ts_beg += 0;
         ts_end += 0;
         epoch_init = 0;
+        got_am_pm = 1;
+        col_off = 0;
         n_sum = 0;
        if (sum_file != "" && sum_flds != "") {
          n_sum = split(sum_flds, sum_arr, ",");
@@ -2453,6 +2458,7 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
          }
        }
       }
+#abcd
       function dt_to_epoch(hhmmss, ampm,    dt_str, epoch) {
          # the epoch seconds from the date time info in the file is local time,not UTC.
          # so just use the calc"d epoch seconds to calc the elapsed seconds since the start.
@@ -2496,12 +2502,16 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
         NFL=work_dir "/" FNM ".tsv";
         NFLA=work_dir "/" FNM ".all.tsv";
      }
+       # if ($2 != "AM" && $2 != "PM") {
+       #   got_am_pm = 0;
+       #   col_off = 1;
+       # }
      #02/28/2020 10:34:37 PM
      / AM$| PM$|^[0-9][0-9]\/[0-9][0-9]\/[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9]/{
          if (length($1) == 8) {
-         dt_beg["yy"] = "20" substr($1, 7, 2);
+           dt_beg["yy"] = "20" substr($1, 7, 2);
          } else {
-         dt_beg["yy"] = substr($1, 7, 4);
+           dt_beg["yy"] = substr($1, 7, 4);
          }
          dt_beg["mm"] = substr($1, 1, 2);
          dt_beg["dd"] = substr($1, 4, 2);
@@ -2530,7 +2540,7 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
         hdr_NR=NR;
         next;
      }
-     /^Device:/{
+     /^Device/{
         if (mx_io == 0) {
           mx_io=1;
           sv_io[mx_io]="";
@@ -2573,8 +2583,7 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
         if (area == "cpu") {
            sv_cpu[++mx_cpu] = str;
            sv_cpu_tm[mx_cpu] = epoch;
-        }
-        if (area == "io") {
+        } else if (area == "io") {
            if (!($1 in sv_dev)) {
              ++mx_dev;
              dev_lst[mx_dev]=$1;
@@ -2628,6 +2637,7 @@ row += trows;
            }
          }
        }
+       printf("iostat ckck mx_dev= %d, mx_io= %d\n", mx_dev, mx_io);
        for (ii=1; ii <= mx_dev; ii++) {
           ttl=chart " dev " dev_lst[ii];
           delete narr;
@@ -2706,6 +2716,8 @@ row += trows;
         mx_dev=0;
         epoch_init = 0;
         n_sum = 0;
+        got_am_pm = 1;
+        col_off = 0;
        if (sum_file != "" && sum_flds != "") {
          n_sum = split(sum_flds, sum_arr, ",");
          for (i_sum=1; i_sum <= n_sum; i_sum++) {
@@ -2762,7 +2774,7 @@ row += trows;
          return epoch;
       }
 
-      function line_data(row, arr_in, arr_mx, title, hdr, tmarr_in, dev_str) {
+    function line_data(row, arr_in, arr_mx, title, hdr, tmarr_in, dev_str) {
        ++row;
        printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", title, chart) > NFL;
        ++row;
@@ -2822,15 +2834,18 @@ row += trows;
           }
        }
        return row;
-     }
+   }
      {
         FNM=ARGV[ARGIND];
         NFL=work_dir "/" FNM ".tsv";
         NFLA=work_dir "/" FNM ".all.tsv";
         if (NR == 1) {
           for (i=1; i <= NF; i++) {
-             if (match($i, /^[0-9][0-9]\/[0-9][0-9]\/[0-9][0-9][0-9][0-9]/)) {
+             if (match($i, /^[0-9][0-9]\/[0-9][0-9]\/[0-9][0-9][0-9][0-9]/) || match($i, /^[0-9][0-9]\/[0-9][0-9]\/[0-9][0-9]/)) {
                 dt_beg["yy"] = substr($i, 7);
+                if (length($i) == 8) { 
+                  dt_beg["yy"] = "20" dt_beg["yy"];
+                }
                 dt_beg["mm"] = substr($i, 1, 2);
                 dt_beg["dd"] = substr($i, 4, 2);
                 printf("beg_date= mm.dd.yyyy %s.%s.%s\n", dt_beg["mm"], dt_beg["dd"], dt_beg["yy"]) > "/dev/stderr";
@@ -2847,12 +2862,16 @@ row += trows;
      / rxpck\/s /{
         # 01:08:50 AM
         #printf("epoch= %d\n", epoch) > "/dev/stderr";
+        if ($2 != "AM" && $2 != "PM") {
+          got_am_pm = 0;
+          col_off = 1;
+        }
         if (mx_io == 0) {
           mx_io=1;
           sv_io[mx_io]="";
           sv_io_cols = NF-2;
           tab = "";
-          for (i=3; i <= NF; i++) {
+          for (i=3-col_off; i <= NF; i++) {
             sv_io[mx_io]=sv_io[mx_io] "" tab "" $i;
             tab="\t"
           }
@@ -2874,7 +2893,7 @@ row += trows;
           exit;
         }
         got_nonzero = 0;
-        for (i=3; i <= NF; i++) {
+        for (i=3-col_off; i <= NF; i++) {
           str = str "" sprintf("%s%s", tab, $i);
           if (($i+0.0) > 0.0) {
              got_nonzero = 1;
@@ -2882,21 +2901,21 @@ row += trows;
           tab = "\t";
         }
         if (area == "io") {
-           if (!($3 in sv_dev)) {
+           if (!($(3-col_off) in sv_dev)) {
              ++mx_dev;
-             dev_lst[mx_dev]=$3;
-             sv_dev[$3]=mx_dev;
-             printf("dev_lst[%d]= %s\n", mx_dev, $3);
+             dev_lst[mx_dev]=$(3-col_off);
+             sv_dev[$(3-col_off)]=mx_dev;
+             printf("dev_lst[%d]= %s\n", mx_dev, $(3-col_off));
              io_nonzero[mx_dev] = 0;
            }
-           dev_id = sv_dev[$3];
+           dev_id = sv_dev[$(3-col_off)];
            got_dev[dev_id] = 1;
            if (io_nonzero[dev_id] == 0 && got_nonzero == 1) {
               io_nonzero[dev_id] = 1;
            }
            sv_io[++mx_io] = str;
            sv_tm[mx_io] = epoch;
-           sv_io_dev_ids[mx_io] = $3;
+           sv_io_dev_ids[mx_io] = $(3-col_off);
         }
         sv[++sv_mx] = str;
         next;
