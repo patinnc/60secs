@@ -23,7 +23,6 @@ AVERAGE_END=
 MAX_VAL=
 TS_INIT=
 VERBOSE=0
-CLIP=
 G_SUM=()
 OPTIONS=
 INPUT_FILE_LIST=
@@ -66,7 +65,7 @@ echo "$0 ${@}"
 echo "BACKGROUND= $BACKGROUND  NUM_CPUS= $NUM_CPUS"
 JOB_ID=0
 AVERAGE=0
-CLIPX=
+CLIPX=()
 REDUCE=
 
 while getopts "AhvSa:b:B:c:C:D:d:e:F:g:I:j:m:N:o:P:R:r:s:w:X:x:" opt; do
@@ -89,18 +88,18 @@ while getopts "AhvSa:b:B:c:C:D:d:e:F:g:I:j:m:N:o:P:R:r:s:w:X:x:" opt; do
     B )
       BACKGROUND_IN=$OPTARG
       ;;
-    c )
-      CLIP=$OPTARG
-      ;;
+#    c )
+#      COMBINE=$OPTARG
+#      ;;
     C )
-      CLIPX=$OPTARG
+      CLIPX+=($OPTARG)
       ;;
     D )
       DEBUG_OPT=$OPTARG
       ;;
     d )
-      DIR=$OPTARG
-      echo "$0.$LINENO input DIR= $DIR"
+      DIR_IN=$OPTARG
+      echo "$0.$LINENO input DIR_IN= $DIR_IN"
       ;;
     e )
       END_TM_IN=$OPTARG
@@ -155,7 +154,11 @@ while getopts "AhvSa:b:B:c:C:D:d:e:F:g:I:j:m:N:o:P:R:r:s:w:X:x:" opt; do
       echo "          The default is to not average all the files (get 1 sheet per dir"
       echo "   -b begin_timestamp  exclude data until this timestamp (UTC epoch timestamp)"
       echo "   -B background_processs_allowed  max background processes allowed. if 0 then no background processes. default is $BACKGROUND"
-      echo "   -d dir containing sys_XX_* files created by 60secs.sh"
+#      echo "   -c combine_dirs_into_1_file  use this option if you've entered multiple dirs but want them all in 1 xlsx file. Currently you have to use an arg but it is ignored"
+      echo "   -C clip_to_phase you can enter 1 per file/dir. Say you are doing 2 dirs and you want to select phase0 for dir 0 and phase1 of dir1:"
+      echo "      '-C phase0 -C phase1' "
+      echo "   -d dir containing sys_XX_* files created by 60secs.sh. If the dir haa multiple subdirs with sys_*.txt files then each dir will be used."
+      echo "      You can enter multiple dirs explicitly by separating each dir with ':'"
       echo "   -D debug_opt_strings    used for debugging"
       echo "   -F desc_file  file containing 1 line of text describing the results dir. Currently this is just the gen_xls.sh cmdline."
       echo "      this file can be used to identify breaks in the chart_sheet rows of charts. All charts with the same desc_file will be put be put on the same line"
@@ -168,7 +171,7 @@ while getopts "AhvSa:b:B:c:C:D:d:e:F:g:I:j:m:N:o:P:R:r:s:w:X:x:" opt; do
       echo "   -o options       comma separated options."
       echo "         'do_sum_sockets' if the perf stat data is per-socket then sum per-socket data to the system level"
       echo "         'dont_sum_sockets' if the perf stat data is per-socket then don't sum per-socket data to the system level"
-      echo "         'line_for_scatter' substitute line charts for the scatter plots"
+      echo "         'line_for_scatter' substitute line charts for the scatter plots. If you want your xlsx to eventually be a google sheet, then use this option."
       echo "         'drop_summary' don't add a sheet for each summary sheet (if you are doing more than 1 dir). Just do the sum_all sheet"
       echo "         'chart_sheet' put all the charts on a separate sheet"
       echo "         'all_charts_one_row' put all the charts for a workbook on one row"
@@ -187,6 +190,9 @@ while getopts "AhvSa:b:B:c:C:D:d:e:F:g:I:j:m:N:o:P:R:r:s:w:X:x:" opt; do
       echo "            to look for cpu2017 perlbench and look for the the 3 subphase workloads in cpu2017.001.log file."
       echo "            Need '-C perlaaaa' or '-C perlbbbb' or '-C perlcccc' and -P phase_file (-P phase_cpu2017.txt)."
       echo "   -P phase_file"
+      echo "      should be in data dir. fmt='phase_name epoch_time_begin epoch_time_end'"
+      echo "      if there are more than 3 fields, the extra fields are concatenated together (with ','s) and shown above each chart"
+      echo "      You can use the e than 3 fields, the extra fields are concatenated together (with ','s) and shown above each chart"
       echo "   -R x,y     reduce amount of data by dropping x out of y rows from the tsv file."
       echo "      For example -R 1,2 will drop 1 out of 2 samples."
       echo "      reduce_tsv.sh reads the *.txt.tsv file and drops the rows from the txt.tsv file."
@@ -201,7 +207,7 @@ while getopts "AhvSa:b:B:c:C:D:d:e:F:g:I:j:m:N:o:P:R:r:s:w:X:x:" opt; do
       echo "             %cpu_shrt% with short cpu name (ie if cpu name is Broadwell then replace %cpu_shrt% with bdw)"
       echo "             %cpu_long% with short cpu name (ie if cpu name is Broadwell then replace %cpu_long% with broadwell)"
       echo "             %host% with hostname"
-      echo "             %sku% with sku string from lzc (ie 1T or B19a)"
+      echo "             %sku% with sku string from lzc (ie 2T or B19a)"
       echo "             %cpu2017_threads% with the total number of threads of cpu2017 (assuming it is a cpu2017 run and the file perf_cpu_groups.txt exists"
       echo "           so if for '-s %sku%_%cpu_shrt%' you would get a string '1T_bdw' if the info for the host in that dir is 1T broadwell server"
       echo "           A 'sku' line (with the 'sku' for each server) gets added to the summary sheet"
@@ -318,7 +324,7 @@ if [ "$OPTIONS" != "" ]; then
   fi
 fi
 
-INPUT_DIR=$DIR
+INPUT_DIR=$DIR_IN
 
 if [ $VERBOSE -gt 0 ]; then
   echo "$0.$LINENO SKIP_XLS= $SKIP_XLS"
@@ -498,7 +504,13 @@ if [ "$INPUT_FILE_LIST" != "" ]; then
     echo "$0.$LINENO got input_file_list= $INPUT_FILE_LIST"
   fi
 else
-   DIR_ORIG=$DIR
+   DIR_ORIG=$DIR_IN
+   IFS=':' read -ra DIR_IN_ARR <<< "$DIR_IN"
+   IFS=$IFS_SV
+   STR=
+   echo "$0.$LINENO DIR_IN_ARR= ${DIR_IN_ARR[@]}"
+   for ((dn=0; dn < ${#DIR_IN_ARR[@]}; dn++)); do
+     DIR=${DIR_IN_ARR[$dn]}
    CKF=60secs.log
    GOT_DIR=0
    RESP=`find $DIR -name $CKF | wc -l | awk '{$1=$1;print}'`
@@ -577,7 +589,6 @@ else
          if [ $VERBOSE -gt 0 ]; then
            echo "$0.$LINENO found51 $CKF file in dir $DIR"
          fi
-         STR=
          j=0
          GOT_TS_INIT=0
          for ii in $RESP; do
@@ -656,7 +667,9 @@ else
            fi
          done
          DIR=$STR
-         #echo "$0.$LINENO: -__________- using2 DIR= $DIR, orig DIR= $DIR_ORIG" > /dev/stderr
+         DIR_OUT_ARR[$dn]=$STR
+         DIR_OUT="$DIR_OUT $STR"
+         echo "$0.$LINENO: -__________- using2 DIR= $DIR, orig DIR= $DIR_ORIG" > /dev/stderr
        else
          echo "$0.$LINENO: didn't find 60secs.log nor metric_out nor sys_*_perf_stat.txt file under dir $DIR. dir_orig= $DIR_ORIG at line $LINENO Bye"
          exit 1
@@ -669,12 +682,21 @@ else
      echo "$0.$LINENO found 60secs.log file in dir $RESP"
      DIR=$(dirname $RESP)
      echo "$0.$LINENO using3 DIR= $DIR, orig DIR= $DIR_ORIG"
+     else
+         DIR_OUT="$DIR_OUT $DIR"
      fi
    fi
+   done
+
+   echo "$0.$LINENO after DIR_IN_ARR loop STR= $STR"
+   echo "$0.$LINENO dir_out= $DIR_OUT"
+   DIR=$DIR_OUT
+   for i in $DIR; do echo "$0.$LINENO got dir $i"; done
 fi
 
 
 LST=$DIR
+echo "$0.$LINENO DIR_ORIG= $DIR_ORIG, DIR= $DIR LST= $LST"
 if [ $VERBOSE -gt 0 ]; then
   echo "$0.$LINENO DIR: $DIR"
 fi
@@ -717,16 +739,33 @@ for i in $LST; do
   if [ "$PHASE_FILE" != "" ]; then
     RESP=`find $i -name $PHASE_FILE`
     echo "$0.$LINENO find phase= $RESP"
-    if [ "$CLIPX" != "" -a "$RESP" != "" ]; then
+    if [ "${#CLIPX[@]}" != "0" -a "$RESP" != "" ]; then
       cat $RESP
-      CLIP_BEG_END=(`cat $RESP | awk -v clip="$CLIPX" '{if (index($0, clip) > 0) { beg= $2; end= $3; printf("%d\n%d\n", beg, end);exit;}}'`)
-      echo "$0.$LINENO CLIPX= $CLIPX CLIP_BEG_END= ${CLIP_BEG_END[@]}"
-      if [ ${CLIP_BEG_END[0]} != "" -a ${CLIP_BEG_END[1]} != "" ]; then
-        PHS_DIR_NAME[$i,$CLIPX]=$j
+#abcd
+      kk=${#CLIPX[@]}
+      if [ "$j" -ge "$kk" ]; then
+        echo "$0.$LINENO using the first CLIPX phase string due to current dir index $j >= numbr of CLIPX entries ($kk)"
+        kk=0
+      else
+        kk=$j
+      fi
+      echo "dir LST= $LST"
+      CLIP_BEG_END=(`cat $RESP | awk -v clip="${CLIPX[$kk]}" '{if (index($0, clip) > 0) { for (i=1; i <= NF; i++) { printf("%s\n", $i)};exit;}}'`)
+      echo "$0.$LINENO clipx_use= ${CLIPX[$kk]} j= $j CLIPX= ${CLIPX[@]} CLIP_BEG_END= ${CLIP_BEG_END[@]}"
+      if [ ${CLIP_BEG_END[1]} != "" -a ${CLIP_BEG_END[2]} != "" ]; then
+        PHS_CLIPX[$j]=$kk
+        PHS_DIR_NAME[$i,$kk]=$j
         PHS_DIR_LIST[$i]=$j
         PHS_DIR_LKUP[$j]=$i
-        PHS_ARR[$j,0]=${CLIP_BEG_END[0]}
-        PHS_ARR[$j,1]=${CLIP_BEG_END[1]}
+        PHS_ARR[$j,"clipx_idx"]=$kk
+        PHS_ARR[$j,"name"]=${CLIP_BEG_END[0]}
+        PHS_ARR[$j,"beg"]=${CLIP_BEG_END[1]}
+        PHS_ARR[$j,"end"]=${CLIP_BEG_END[2]}
+        PHS_ARR[$j,'extra']=""
+        for ((k=3; k < ${#CLIP_BEG_END[@]}; k++)); do
+          PHS_ARR[$j,'extra']="${PHS_ARR[$j,'extra']},${CLIP_BEG_END[$k]}"
+          echo "PHS_ARR[$j,'extra']=${PHS_ARR[$j,'extra']} and CLIP_BEG_END[$k]= ${CLIP_BEG_END[$k]}"
+        done
       fi
     fi
   fi
@@ -778,7 +817,7 @@ if [ "$SKU_LEN" != "0" ]; then
         LLS="lab_info.lst"
         STR=$idir
         for ((jj=${#PATH_ARR[@]}-1; jj >= 0; jj--)); do
-          LZC_FL=`find $STR  -maxdepth 1 \( -name "$LZC" -o -name "$CLS" -o -name "lzc_info.lst" -o -name "clusto_info.txt" -o -name "$LLS" \)`
+          LZC_FL=`find $STR  -maxdepth 1 \( -name "$LZC" -o -name "$CLS" -o -name "lzc_info.lst" -o -name "clusto_info.txt" -o -name "do_lzc_info.txt" -o -name "$LLS" \)`
           STR=`dirname $STR`
           if [ "$LZC_FL" != "" ]; then
             break
@@ -822,7 +861,7 @@ if [ "$SKU_LEN" != "0" ]; then
         if [ "$LZC_FL" == "" ]; then
           LZC_FL=$LLS
         fi
-        if [[ $LZC_FL = *$LLS* ]]; then
+        if [[ $LZC_FL == *$LLS* ]]; then
           LZC_FL="${PATH_ARR[0]}/$LLS"
           if [ "${LSS_ARR_BY_HOST[$HOSTNM]}" == "" ]; then
             if [ "$itot" == "0" ]; then
@@ -951,9 +990,9 @@ if [ "$SKU_LEN" != "0" ]; then
           } ' $LZC_FL`
           RC=$?
           ck_last_rc $RC $LINENO
-        if [ $VERBOSE -gt 1 ]; then
+        #if [ $VERBOSE -gt 1 ]; then
            echo "LZC_out= $LZC_OUT"
-        fi
+        #fi
         if [ "$LZC_OUT" != "" ]; then
           LZC_ARR_BY_DIR[$idir]="$LZC_OUT"
           LZC_ARR_BY_DIR_NUM[$itot]="$LZC_OUT"
@@ -1005,14 +1044,14 @@ if [ -e $ALST ]; then
 fi
 OXLS=tmp.xlsx
 if [ "$AXLSX_FILE" != "" ]; then
-  OXLS=${AXLSX_FILE}.xlsx
+  SFX=
+  if [ "$JOB_ID" -gt "0" ]; then
+    SFX="_$JOB_ID"
+  fi
+  OXLS=${AXLSX_FILE}${SFX}.xlsx
 fi
 
-shopt -s nullglob
-echo -e "-o\t$OXLS" >> $ALST
-FCTRS=
-SVGS=
-SUM_FILE=sum.tsv
+
 
 if [ $VERBOSE -gt 0 ]; then
   echo "$0.$LINENO LST= $LST" > /dev/stderr
@@ -1031,6 +1070,14 @@ if [ "$INPUT_FILE_LIST" == "" ]; then
   done
 fi
 
+echo "$0.$LINENO bef OXLS= $OXLS"
+
+shopt -s nullglob
+echo -e "-o\t$OXLS" >> $ALST
+FCTRS=
+SVGS=
+SUM_FILE=sum.tsv
+
 TS_BEG=`date +%s`
 if [ "$INPUT_FILE_LIST" == "" ]; then
 oIFS=$IFS
@@ -1047,6 +1094,9 @@ for i in $LST; do
       FLS=$(get_abs_filename "$i/desc.txt")
       if [ -e $FLS ]; then
         OPT_DESC_FILE="$FLS"
+       echo "$0.$LINENO set -d6 desc_file= $OPT_DESC_FILE, i= $i"
+        echo "got opt_desc_file= $FLS"
+       OPT_DESC_FILE_ARR[$DIR_NUM]=$OPT_DESC_FILE
       fi
    fi
  fi
@@ -1085,6 +1135,7 @@ for i in $LST; do
        printf "$0.$LINENO opt_desc_file RC= %s i= %s\n"  $RC $i_abs_dir/desc.txt > /dev/stderr
        echo "$RC" > $i_abs_dir/desc.txt
        OPT_DESC_FILE=$(get_abs_filename "$i_abs_dir/desc.txt")
+       echo "$0.$LINENO set -d5 desc_file= $OPT_DESC_FILE"
        printf "$0.$LINENO opt_desc_file= %s  i= %s\n" $OPT_DESC_FILE $i_abs_dir > /dev/stderr
        OPT_DESC_FILE_ARR[$DIR_NUM]=$OPT_DESC_FILE
        fi
@@ -1125,19 +1176,19 @@ for i in $LST; do
   echo "$0.$LINENO ____got BEG_TM_IN=\"$BEG_TM_IN\"" > /dev/stderr
  fi
  OPT_END_TM=
- if [ "$AVERAGE" == "1" ]; then
+ if [ "$AVERAGE" == "1" -o "$DIR_NUM_MX" == "1" ]; then
  if [ "$END_TM_IN" != "" ]; then
     OPT_END_TM=" -e $END_TM_IN "
  fi
  fi
  #DIRN=${PHS_DIR_LIST[$i]}
- DIRN=${PHS_DIR_NAME[$i,$CLIPX]}
+ DIRN=${PHS_DIR_NAME[$i,${PHS_CLIPX[$DIR_NUM]}]}
  if [ $VERBOSE -gt 0 ]; then
    echo "$0.$LINENO phs_arr dirn= $DIRN"
  fi
  if [ "$DIRN" != "" ]; then
-   OPT_BEG_TM=" -b ${PHS_ARR[$DIRN,0]} "
-   OPT_END_TM=" -e ${PHS_ARR[$DIRN,1]} "
+   OPT_BEG_TM=" -b ${PHS_ARR[$DIRN,'beg']} "
+   OPT_END_TM=" -e ${PHS_ARR[$DIRN,'end']} "
    echo "$0.$LINENO phs_arr dirn= $DIRN OPT_BEG_TM= $OPT_BEG_TM OPT_END_TM= $OPT_END_TM"
  fi
  OPT_SKIP=
@@ -1147,10 +1198,6 @@ for i in $LST; do
  OPT_M=
  if [ "$MAX_VAL" != "" ]; then
    OPT_M=" -m $MAX_VAL "
- fi
- OPT_CLIP=
- if [ "$CLIP" != "" ]; then
-   OPT_CLIP=" -c $CLIP "
  fi
  OPT_DEBUG=
  if [ "$DEBUG_OPT" != "" ]; then
@@ -1217,13 +1264,13 @@ for i in $LST; do
      echo "${LZC_ARR_BY_DIR[$i]}" > $JOB_WORK_DIR/lzc_info.txt
    fi
 
-   echo "$0.$LINENO: $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p \"$OPT_P\" $OPT_DEBUG $OPT_REDUCE $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i \"*.png\" -s $SUM_FILE -x $XLS.xlsx -o \"$OPT_OPT\" $OPT_PH -w $JOB_WORK_DIR -t $DIR" > $SYS_2_TSV_STDOUT_FILE
+   echo "$0.$LINENO: $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p \"$OPT_P\" $OPT_DEBUG $OPT_REDUCE $OPT_SKIP $OPT_M -d . $OPT_BEG_TM $OPT_END_TM -i \"*.png\" -s $SUM_FILE -x $XLS.xlsx -o \"$OPT_OPT\" $OPT_PH -w $JOB_WORK_DIR -t $DIR" > $SYS_2_TSV_STDOUT_FILE
    if [ "$BACKGROUND" -le "0" ]; then
-          $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$OPT_P" $OPT_DEBUG $OPT_REDUCE $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o "$OPT_OPT" $OPT_PH -w $JOB_WORK_DIR -t $DIR &>> $SYS_2_TSV_STDOUT_FILE
+          $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$OPT_P" $OPT_DEBUG $OPT_REDUCE $OPT_SKIP $OPT_M -d . $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o "$OPT_OPT" $OPT_PH -w $JOB_WORK_DIR -t $DIR &>> $SYS_2_TSV_STDOUT_FILE
           RC=$?
           ck_last_rc $RC $LINENO
    else
-          $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$OPT_P" $OPT_DEBUG $OPT_REDUCE $OPT_SKIP $OPT_M -d . $OPT_CLIP $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o "$OPT_OPT" $OPT_PH -w $JOB_WORK_DIR -t $DIR &>> $SYS_2_TSV_STDOUT_FILE &
+          $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$OPT_P" $OPT_DEBUG $OPT_REDUCE $OPT_SKIP $OPT_M -d . $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o "$OPT_OPT" $OPT_PH -w $JOB_WORK_DIR -t $DIR &>> $SYS_2_TSV_STDOUT_FILE &
           LPID=$!
           RC=$?
           BK_DIR[$LPID]=$i
@@ -1364,11 +1411,11 @@ for i in $LST; do
  if [ "$AVERAGE" == "1" ]; then
     echo -e "-A" >> $ALST
  fi
- if [ "$CLIP" != "" ]; then
-    echo -e "-c\t$CLIP" >> $ALST
- fi
+# if [ "$CLIP" != "" ]; then
+#    echo -e "-c\t$CLIP" >> $ALST
+# fi
  if [ "${LZC_ARR_BY_DIR[$i]}" != "" ]; then
-     GOT_SKU=`echo "${LZC_ARR_BY_DIR[$i]}" | grep '^sku;' | sed 's/^sku;//'`
+     GOT_SKU=`echo "${LZC_ARR_BY_DIR[$i]}" | grep '^sku;' | sed 's/^sku;//'|head -1`
      echo -e "--sku\t$GOT_SKU" >> $ALST
      if [ $VERBOSE -gt 0 ]; then
        echo "$0.$LINENO ____________ got sku= $GOT_SKU"
@@ -1376,20 +1423,32 @@ for i in $LST; do
  fi
  if [ "$DESC_FILE" != "" ]; then
    echo -e "-d\t\"$DESC_FILE\"" >> $ALST
+   echo "$0.$LINENO set -d1 desc_file= $DESC_FILE"
+ fi
+ if [ "${PHS_ARR[$i_idx,'name']}" != "" ]; then
+   RESP=${PHS_ARR[$i_idx,'name']}
+   if [ "${PHS_ARR[$i_idx,'extra']}" != "" ]; then
+     RESP="${RESP},${PHS_ARR[$i_idx,'extra']}"
+   fi
+   echo -e "--phase\t\"$RESP\"" >> $ALST
+   echo "$0.$LINENO set --phase $RESP"
  fi
  if [ "$DESC_FILE" == "" ]; then
    if [ -e desc.txt ]; then
       FLS=$(get_abs_filename "desc.txt")
       OPT_DESC_FILE="$FLS"
+      echo "$0.$LINENO set -d4 desc_file= $OPT_DESC_FILE"
    fi
  fi
  if [ "$AVERAGE" == "0" ]; then
    if [ "${OPT_DESC_FILE_ARR[$i_idx]}" != "" ]; then
      OPT_DESC_FILE=${OPT_DESC_FILE_ARR[$i_idx]}
+      echo "$0.$LINENO set -d3 desc_file= $OPT_DESC_FILE"
    fi
  fi
  if [ "$OPT_DESC_FILE" != "" ]; then
       echo -e "-d\t\"$OPT_DESC_FILE\"" >> $ALST
+      echo "$0.$LINENO set -d2 desc_file= $OPT_DESC_FILE"
  fi
  echo -e "-i\t\"$i/*.png\"" >> $ALST
  #echo -e "-x\t$i.xlsx" >> $ALST
