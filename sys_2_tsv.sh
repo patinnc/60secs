@@ -29,7 +29,7 @@ FS_ARR_INIT=0
 FS_ARR_MX=0
 MAX_VAL=
 AVERAGE=0
-CLIP=
+#CLIP=
 AVG_DIR=
 G_SUM=()
 JOB_ID=0
@@ -59,9 +59,9 @@ while getopts "hvASa:B:b:c:D:d:e:g:i:j:m:o:P:p:R::s:t:w:x:" opt; do
       BEG_TM_IN=$OPTARG
       echo "$0.$LINENO: top BEG_TM_IN= $BEG_TM_IN"
       ;;
-    c )
-      CLIP=$OPTARG
-      ;;
+#    c )
+#      CLIP=$OPTARG
+#      ;;
     d )
       DIR=$OPTARG
       ;;
@@ -121,7 +121,7 @@ while getopts "hvASa:B:b:c:D:d:e:g:i:j:m:o:P:p:R::s:t:w:x:" opt; do
       echo "Usage: $0 [-h] -d sys_data_dir [-v] [ -p prefix ]"
       echo "   -a avg_dir average files (-A ) will be put in this dir"
       echo "   -B base_dir top level dir"
-      echo "   -d dir containing sys_XX_* files created by 60secs.sh"
+      echo "   -d dir containing sys_XX_* files created by 60secs.sh, if you have > 1 dir, seperate with ':'s"
       echo "   -b beg_tm ending timestamp to clip time to"
       echo "   -c clip_to_Phase  enter string of phase for clipping (like x264_r*)"
       echo "   -e end_tm ending timestamp to clip time to"
@@ -444,6 +444,7 @@ if [ -e $DIR/../run.log ]; then
   TST_END_TM=`cat $DIR/../run.log | awk '/ end /{printf("%d\n", $2);exit;}'`
 fi
 BEG=`cat $DIR/60secs.log | awk '{printf("%s\n", $(NF));exit;}'`
+TS_INITIAL=$BEG
 BEG_ADJ=`cat $DIR/60secs.log | awk -v script="$0.$LINENO.awk" '
    function dt_to_epoch(date_str, offset) {
    # started on Tue Dec 10 23:23:30 2019
@@ -498,6 +499,7 @@ if [ "$BEG_TM_IN" != "" ]; then
 fi
     echo "$0.$LINENO got here" > /dev/stderr
     #exit 1
+  echo "$0.$LINENO END_TM= $END_TM"
 if [ "$END_TM_IN" == "" -a "$TST_END_TM" != "" ]; then
   END_TM=$TST_END_TM
   echo "$0.$LINENO END_TM= $END_TM"
@@ -1296,14 +1298,18 @@ trows++; printf("\t$ power") > NFL;
 # 8  0      0 787579520  50260 1063436    0    0  1014 13481 2600  815  6  0 94  0  0 2021-06-26 13:15:55
 # 8  0      0 787232448  52096 1390556    0    0   784 21540 3444 1150  7  1 93  0  0 2021-06-26 13:16:25
 
+    echo "$0.$LINENO ckck vmstat ts_initial= $TS_INITIAL ts_beg= $BEG ts_end= $END_TM"
     DURA=`awk -v ts_beg="$BEG" -v ts_end="$END_TM" 'BEGIN{ts_beg+=0.0;ts_end+=0.0; if (ts_beg > 0.0 && ts_end > 0.0) {printf("%d\n", ts_end-ts_beg); } else {printf("-1\n");};exit;}'`
-    awk -v work_dir="$WORK_DIR"  -v ts_beg="$BEG" -v pfx="$PFX" -v max_lines="$DURA" -v sum_file="$SUM_FILE" -v sum_flds="runnable{vmstat runnable PIDs|OS},interrupts/s{|OS},context switch/s{|OS},%user{|CPU},%idle{|CPU|%stdev}" '
+    awk -v work_dir="$WORK_DIR" -v ts_initial="$TS_INITIAL" -v ts_end="$END_TM" -v ts_initial="$TS_INITIAL" -v ts_beg="$BEG" -v pfx="$PFX" -v max_lines="$DURA" -v sum_file="$SUM_FILE" -v sum_flds="runnable{vmstat runnable PIDs|OS},interrupts/s{|OS},context switch/s{|OS},%user{|CPU},%idle{|CPU|%stdev}" '
      BEGIN{
        beg=1;
        col_mx=-1;
        mx=0;
        n_sum = 0;
        max_lines += 0;
+       ts_beg += 0;
+       ts_end += 0;
+       ts_initial += 0;
        has_ts = 0;
        if (sum_file != "" && sum_flds != "") {
          n_sum = split(sum_flds, sum_arr, ",");
@@ -1350,9 +1356,9 @@ trows++; printf("\t$ power") > NFL;
      {
        	FNM=ARGV[ARGIND];
         NFL=work_dir "/" FNM ".tsv";
-        if (max_lines > 0.0 && mx > max_lines) {
-          exit;
-        }
+        #if (max_lines > 0.0 && mx > max_lines) {
+        #  exit;
+        #}
      }
      /swpd/{
         if (beg == 0) { next; }
@@ -1376,7 +1382,7 @@ trows++; printf("\t$ power") > NFL;
           tab="\t";
         }
         sv[++mx]=hdr;
-        #printf("\n") > NFL;
+        printf("vmstat ckck hdr= %s\n", hdr);
         next;
      }
      {
@@ -1427,8 +1433,54 @@ trows++; printf("\t\n") > NFL;
          col_end = col_mx; # dont plot the date & time string
          col_ts = 1;
        }
+       use_rows=0;
+       skp_rows=0;
+       for (i=2; i <= mx; i++) {
+          if (n_sum > 0) {
+            n = split(sv[i], arr, "\t");
+            dt_tm_str = "";
+            if (has_ts == 1) {
+              dt = arr[ts_dt_col];
+              tm = arr[ts_tm_col];
+              ndt = split(dt, dt_arr, "-");
+              ntm = split(tm, tm_arr, ":");
+              dt_str = dt_arr[1] " " dt_arr[2] " " dt_arr[3] " " tm_arr[1] " " tm_arr[2] " " tm_arr[3];
+              epch=mktime(dt_str);
+              if (ts_beg0 == "") {
+                ts_beg0 = epch;
+                # mktime uses current timezone which may be different then data time zone
+                # assume that 1st epoch time is within an hour of ts_beg.
+                ts_beg_i = sprintf("%d", ts_initial) + 0;
+                ts_intrvl = (epch - ts_beg_i) % 3600; 
+                #printf("dt= %s, tm= %s, epch= %s, ts_beg= %s dt_str= %s, ts_intrvl= %s\n", dt, tm, epch, ts_beg, dt_str, ts_intrvl);
+                #exit(1);
+              }
+              v0 = (epch - ts_beg0);
+              v = ts_initial+v0;
+              if (1==1&&((ts_beg > 0 && v < ts_beg) || (ts_end > 0 && v > ts_end))) {
+                #printf("dt= %s, tm= %s ckck skip line %d vmstat line for ts_initial= %.0f ts_beg= %.0f cur= %.0f v= %.0f ts_end= %.0f ts_beg0= %.0f\n",
+                #   dt, tm, i, ts_initial, ts_beg, v, v0, ts_end, ts_beg0);
+                skp_rows++;
+                continue;
+              }
+              #printf("ckck use  line %d vmstat line for ts_initial= %.0f ts_beg= %.0f cur= %.0f ts_end= %.0f v0= %.0f\n", i, ts_initial, ts_beg, v, ts_end, v0);
+              #dt_tm_str = sprintf("%3f\t%.3f\t", ts_initial+(epch - ts_beg0), epch - ts_beg0) > NFL;
+            }
+            use_rows++;
+            if (1==2) {
+            sv_dttm[use_rows] = dt_tm_str;
+            for (i_sum=1; i_sum <= n_sum; i_sum++) {
+              j = sum_lkup[i_sum];
+              sum_occ[i_sum] += 1;
+              sum_tot[i_sum] += arr[j];
+              sum_x2[i_sum] += arr[j]*arr[j];
+            }
+            }
+          }
+          #sv_data[use_rows] = sprintf("%s\n", sv[i]);
+       }
        printf("title\tvmstat all\tsheet\tvmstat\ttype\tline\n") > NFL;
-       printf("hdrs\t%d\t%s\t%d\t%d\t%d\n", 2+trows, col_beg, mx+1+trows, col_end, col_ts) > NFL;
+       printf("hdrs\t%d\t%s\t%d\t%d\t%d\n", 2+trows, col_beg, use_rows+1+trows, col_end, col_ts) > NFL;
        r_col = -1;
        b_col = -1;
        us_col = -1;
@@ -1486,7 +1538,12 @@ trows++; printf("\t\n") > NFL;
        }
      
        printf("%s\n", nwln) > NFL;
-       for (i=2; i <= mx; i++) {
+       use_rows=0;
+       skp_rows=0;
+       for (i=1; i <= mx; i++) {
+          #if (sv_dttm[i] != "") {printf("%s", sv_dttm[i]) > NFL; }
+          #printf("%s", sv_data[i]) > NFL;
+          #continue;
           if (n_sum > 0) {
             n = split(sv[i], arr, "\t");
             if (has_ts == 1) {
@@ -1500,35 +1557,45 @@ trows++; printf("\t\n") > NFL;
                 ts_beg0 = epch;
                 # mktime uses current timezone which may be different then data time zone
                 # assume that 1st epoch time is within an hour of ts_beg.
-                ts_beg_i = sprintf("%d", ts_beg) + 0;
+                ts_beg_i = sprintf("%d", ts_initial) + 0;
                 ts_intrvl = (epch - ts_beg_i) % 3600; 
                 #printf("dt= %s, tm= %s, epch= %s, ts_beg= %s dt_str= %s, ts_intrvl= %s\n", dt, tm, epch, ts_beg, dt_str, ts_intrvl);
                 #exit(1);
               }
-              printf("%3f\t%.3f\t", ts_beg+(epch - ts_beg0), epch - ts_beg0) > NFL;
+              v0 = (epch - ts_beg0);
+              v = ts_initial+v0;
+              if (1==1&&((ts_beg > 0 && v < ts_beg) || (ts_end > 0 && v > ts_end))) {
+                #printf("dt= %s, tm= %s ckck skip line %d vmstat line for ts_initial= %.0f ts_beg= %.0f cur= %.0f v= %.0f ts_end= %.0f ts_beg0= %.0f\n",
+                #   dt, tm, i, ts_initial, ts_beg, v, v0, ts_end, ts_beg0);
+                skp_rows++;
+                continue;
+              }
+              #printf("ckck use  line %d vmstat line for ts_initial= %.0f ts_beg= %.0f cur= %.0f ts_end= %.0f v0= %.0f\n", i, ts_initial, ts_beg, v, ts_end, v0);
+              printf("%3f\t%.3f\t", ts_initial+(epch - ts_beg0), epch - ts_beg0) > NFL;
             }
+            use_rows++;
             for (i_sum=1; i_sum <= n_sum; i_sum++) {
               j = sum_lkup[i_sum];
               sum_occ[i_sum] += 1;
               sum_tot[i_sum] += arr[j];
               sum_x2[i_sum] += arr[j]*arr[j];
-
             }
           }
           printf("%s\n", sv[i]) > NFL;
        }
+       printf("vmstat ckkck use_rows= %d, skip_rows= %d, mx= %d\n", use_rows, skp_rows, mx);
        #printf("hdrs\t%d\t%s\t%d\t%d\t%d\n", 2+trows, col_beg, mx+1+trows, col_end, col_ts) > NFL;
        printf("\ntitle\tvmstat cpu\tsheet\tvmstat\ttype\tline\n") > NFL;
-       printf("hdrs\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", 2+trows, col_beg, mx+1+trows, col_end, col_ts, r_col+col_beg, r_col+col_beg, b_col+col_beg, b_col+col_beg, us_col+col_beg, col_mx) > NFL;
+       printf("hdrs\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", 2+trows, col_beg, use_rows+1+trows, col_end, col_ts, r_col+col_beg, r_col+col_beg, b_col+col_beg, b_col+col_beg, us_col+col_beg, col_mx) > NFL;
 
        printf("\ntitle\tvmstat interrupts & context switches\tsheet\tvmstat\ttype\tline\n") > NFL;
-       printf("hdrs\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", 2+trows, col_beg, mx+1+trows, col_end, col_ts, in_col+col_beg, in_col+col_beg, cs_col+col_beg, cs_col+col_beg) > NFL;
+       printf("hdrs\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", 2+trows, col_beg, use_rows+1+trows, col_end, col_ts, in_col+col_beg, in_col+col_beg, cs_col+col_beg, cs_col+col_beg) > NFL;
 
        printf("\ntitle\tvmstat memory cache, free & buffers\tsheet\tvmstat\ttype\tline\n") > NFL;
-       printf("hdrs\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", 2+trows, col_beg, mx+1+trows, col_end, col_ts, cache_col+col_beg, cache_col+col_beg, free_col+col_beg, free_col+col_beg, buff_col+col_beg, buff_col+col_beg) > NFL;
+       printf("hdrs\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", 2+trows, col_beg, use_rows+1+trows, col_end, col_ts, cache_col+col_beg, cache_col+col_beg, free_col+col_beg, free_col+col_beg, buff_col+col_beg, buff_col+col_beg) > NFL;
 
        printf("\ntitle\tvmstat IO blocks in & blocks out\tsheet\tvmstat\ttype\tline\n") > NFL;
-       printf("hdrs\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", 2+trows, col_beg, mx+1+trows, col_end, col_ts, bi_col+col_beg, bi_col+col_beg, bo_col+col_beg, bo_col+col_beg) > NFL;
+       printf("hdrs\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\t%d\n", 2+trows, col_beg, use_rows+1+trows, col_end, col_ts, bi_col+col_beg, bi_col+col_beg, bo_col+col_beg, bo_col+col_beg) > NFL;
 
        close(NFL);
        if (n_sum > 0) {
@@ -1543,6 +1610,7 @@ trows++; printf("\t\n") > NFL;
                   stdev = sqrt((sum_x2[i_sum] / n) - (avg * avg))
                 }
              }
+             if (avg == 0) {printf("ckck umm avg= 0, col= %s res= %s\n", sum_prt[i_sum], sum_res[i_sum]); }
              if (index(sum_opt[i_sum], "%stdev") > 0) {
                 printf("%s\t%s\t%f\t%s %%stdev\n",  sum_res[i_sum], "vmstat", 100.0*stdev/avg, sum_prt[i_sum]) >> sum_file;
              }
@@ -1557,6 +1625,10 @@ trows++; printf("\t\n") > NFL;
    #mv $i.tsv $WORK_DIR
    SHEETS="$SHEETS $i.tsv"
   fi
+
+
+
+
   if [[ $i == *"_mpstat.txt"* ]]; then
     echo "do mpstat"
 #Linux 4.14.131 (agent-dedicated1812-phx2) 	01/21/2020 	_x86_64_	(32 CPU)
@@ -1565,7 +1637,8 @@ trows++; printf("\t\n") > NFL;
 #12:01:02 AM    0   10.10    4.04    2.02    0.00    0.00    0.00    0.00    0.00    0.00   83.84
 #12:01:02 AM    1    1.03    6.19    2.06    0.00    0.00    0.00    0.00    0.00    0.00   90.72
 
-    awk  -v work_dir="$WORK_DIR" -v script="$0.$LINENO.mpstat.awk" -v sum_file="$SUM_FILE" -v options="$OPTIONS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" '
+    echo "$0.$LINENO ckck mpstat ts_initial= $TS_INITIAL ts_beg= $BEG ts_end= $END_TM"
+    awk  -v ts_initial="$TS_INITIAL" -v work_dir="$WORK_DIR" -v script="$0.$LINENO.mpstat.awk" -v sum_file="$SUM_FILE" -v options="$OPTIONS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" '
      BEGIN{
         beg=1;
         grp_mx=0;
@@ -1597,14 +1670,14 @@ trows++; printf("\t\n") > NFL;
          dt_str = dt_beg["yy"] " " dt_beg["mm"] " " dt_beg["dd"] " " dt_tm["hh"] " " dt_tm["mm"] " " dt_tm["ss"];
          #printf("%s dt_str= %s\n", script, dt_str) > "/dev/stderr";
          epoch = mktime(dt_str);
-         #printf("%s epoch= %s offset= %s, ts_beg= %s\n", script, epoch, offset, ts_beg) > "/dev/stderr";
+         #printf("%s epoch= %s offset= %s, ts_beg= %f ts_initial= %f\n", script, epoch, offset, ts_beg, ts_initial) > "/dev/stderr";
          if (epoch_init == 0) {
              epoch_init = epoch;
          }
-         epoch = ts_beg + (epoch - epoch_init);
-         if ((epoch-ts_beg) < 0.0) {
-           if ((ts_beg-epoch) > (24*3600)) {  # try to handle the change of day
-            printf("%s epoch= %f, hhmmss= %s, dt_str= %s ts_beg= %f. epoch-ts_beg= %f ampm= %s bye\n", script, epoch, hhmmss, dt_str, ts_beg, epoch-ts_beg, ampm) > "/dev/stderr";
+         epoch = ts_initial + (epoch - epoch_init);
+         if ((epoch-ts_initial) < 0.0) {
+           if ((ts_initial-epoch) > (24*3600)) {  # try to handle the change of day
+            printf("%s epoch= %f, hhmmss= %s, dt_str= %s ts_initial= %f. epoch-ts_initial= %f ampm= %s bye\n", script, epoch, hhmmss, dt_str, ts_initial, epoch-ts_initial, ampm) > "/dev/stderr";
             exit(1);
            } else {
              epoch += (24*3600);
@@ -1682,6 +1755,9 @@ trows++; printf("\t\n") > NFL;
         if (ts_end > 0.0 && epoch > ts_end) {
            next;
         }
+        if (ts_beg > 0.0 && epoch < ts_beg) {
+           next;
+        }
         if (grps[grp] == "") {
           grps[grp] = ++grp_mx;
           grp_nm[grp_mx] = grp;
@@ -1708,17 +1784,32 @@ trows++; printf("\t\n") > NFL;
 trows++; printf("This command prints CPU time breakdowns per CPU, which can be used to check for an imbalance. A\n") > NFL;
 trows++; printf("single hot CPU can be evidence of a single-threaded application.\n") > NFL;
 trows++; printf("\n") > NFL;
-
-          #row++;
-          #printf("title\tmpstat user %%cpu top-like\tsheet\tmpstat\ttype\tscatter_straight\n", grp_nm[g]) > NFL;
-          #row++;
-          #printf("hdrs\t%d\t%d\t%d\t%d\t1\n", trows+row+1, 2, -1, 2) > NFL;
-          row++;
-          printf("title\tmpstat user %%cpu top-like\tsheet\tmpstat\ttype\tline_stacked\n") > NFL;
-          row++;
-          printf("hdrs\t%d\t%d\t%d\t%d\t1\n", trows+row+1, 2, -1, grp_mx) > NFL;
+          col_lst_mx = 0;
           col_i = -1;
           col_u = -1;
+          for (i=1; i <= hdr_mx; i++) {
+            if (hdrs[i] == "%usr")    { col_u   = i; col_lst[++col_lst_mx] = i;}
+            if (hdrs[i] == "%idle")   { col_i   = i; col_lst[++col_lst_mx] = i;}
+            if (hdrs[i] == "%sys")    { col_s   = i; col_lst[++col_lst_mx] = i;}
+            if (hdrs[i] == "%iowait") { col_io  = i; col_lst[++col_lst_mx] = i;}
+            if (hdrs[i] == "%soft")   { col_sft = i; col_lst[++col_lst_mx] = i;}
+          }
+
+       
+       for (cl=1; cl <= col_lst_mx; cl++) {
+          cur_col = col_lst[cl];
+          doing_idle = 0;
+          if (cur_col == col_i) {
+            doing_idle = 1;
+          }
+          hdr_str = hdrs[cur_col];
+          if (doing_idle == 1) {
+            hdr_str = "%busy";
+          }
+          row++;
+          printf("title\tmpstat %s top-like\tsheet\tmpstat\ttype\tline_stacked\n", hdr_str) > NFL;
+          row++;
+          printf("hdrs\t%d\t%d\t%d\t%d\t1\n", trows+row+1, 2, -1, grp_mx) > NFL;
           bckts_mx = 16;
 
           bckts = (grp_mx-1)/bckts_mx;
@@ -1728,14 +1819,6 @@ trows++; printf("\n") > NFL;
           }
           for (i=1; i <= bckts_mx; i++) { bckt_arr[i] = 0;}
 
-          for (i=1; i <= hdr_mx; i++) {
-            if (hdrs[i] == "%usr") { col_u = i; }
-            if (hdrs[i] == "%idle") { col_i = i; }
-          }
-        #for (g=1; g <= grp_mx; g++) {
-        #  if (got_skip_mpstat_percpu_charts > 0 && grp_nm[g] != "all") {
-        #     continue;
-        #  }
           tab="";
           printf("TS\tts_rel\t") > NFL;
           for (i=1; i <= grp_mx; i++) {
@@ -1755,10 +1838,12 @@ trows++; printf("\n") > NFL;
             for (c=1; c <= grp_mx; c++) {
               n = grp_nm[c];
               if (n == "all") { continue;}
-              v = grp_list[c,r,col_u];
+              v = grp_list[c,r,col_lst[cl]];
               bckt = int(n/bckts) + 1;
               bckt_arr[bckt] += tm_dff * v/100.0;
-              #bckt_arr[bckt] += v;
+              if (doing_idle == 1) {
+                v = 100 - v;
+              }
               printf("%s%.3f", tab, v) > NFL;
               tab="\t";
             }
@@ -1767,13 +1852,12 @@ trows++; printf("\n") > NFL;
           }
           row++;
           printf("\n") > NFL;
-        #}
         row++;
         printf("\n") > NFL;
 
           tot_tm_dff = tm_rw[grp_row[1]] - ts_beg;
           row++;
-          printf("title\tmpstat %% cpus_in_buckets_used histogram, bucktet size= %d cpus\tsheet\tmpstat\ttype\tcolumn\n", bckts) > NFL;
+          printf("title\tmpstat %s cpus_in_buckets_used histogram, buckt sz= %d cpus, 100%%->all cpus in buckt used\tsheet\tmpstat\ttype\tcolumn\n", hdr_str, bckts) > NFL;
           row++;
           printf("hdrs\t%d\t%d\t%d\t%d\t-1\n", trows+row+1, 0, trows+row+2, 15) > NFL;
           tab="";
@@ -1787,13 +1871,18 @@ trows++; printf("\n") > NFL;
           printf("\n") > NFL;
           tab="";
           for (i=1; i <= bckts_mx; i++) {
-            printf("%s%.3f", tab, 100.0*bckt_arr[i]/(bckts*tot_tm_dff)) > NFL;
+            v = 100.0*bckt_arr[i]/(bckts*tot_tm_dff);
+            if (doing_idle == 1) {
+              v = 100.0 - v;
+            }
+            printf("%s%.3f", tab, v) > NFL;
             tab="\t";
           }
           row++;
           printf("\n") > NFL;
           row++;
           printf("\n") > NFL;
+       }
 
         for (g=1; g <= grp_mx; g++) {
           if (got_skip_mpstat_percpu_charts > 0 && grp_nm[g] != "all") {
@@ -1870,7 +1959,8 @@ trows++; printf("\n") > NFL;
     if [ "$LSCPU_FL" != "" ]; then
      NCPUS=`awk '/^CPU.s.:/ { printf("%s\n", $2);exit;}' $LSCPU_FL`
     fi
-    awk -v num_cpus="$NCPUS" -v work_dir="$WORK_DIR" -v max_cpus=100 -v sum_file="$SUM_FILE" -v options="$OPTIONS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" -v typ="pidstat" '
+    echo "$0.$LINENO ckck vmstat ts_initial= $TS_INITIAL ts_beg= $BEG ts_end= $END_TM"
+    awk -v ts_initial="$TS_INITIAL" -v num_cpus="$NCPUS" -v work_dir="$WORK_DIR" -v max_cpus=100 -v sum_file="$SUM_FILE" -v options="$OPTIONS" -v ts_beg="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" -v typ="pidstat" '
      BEGIN{
         beg=1;
         grp_mx=0;
@@ -1878,6 +1968,9 @@ trows++; printf("\n") > NFL;
         chart=typ;
         did_notes=0;
         tm_rw = 0;
+        ts_initial += 0;
+        ts_beg += 0;
+        ts_end += 0;
         tm_beg += 0;
         tm_end += 0;
         epoch_init = 0;
@@ -1924,7 +2017,7 @@ trows++; printf("\n") > NFL;
          if (epoch_init == 0) {
              epoch_init = epoch;
          }
-         epoch = ts_beg + (epoch - epoch_init + 1); # the plus 1 assumes a 1 second interval.
+         epoch = ts_initial + (epoch - epoch_init + 1); # the plus 1 assumes a 1 second interval.
          return epoch;
       }
       function sort_data(arr_in, arr_mx, mx_lines) {
@@ -2043,12 +2136,16 @@ function yarr_compare(i1, v1, i2, v2,    l, r, m1, m2)
              ampm_str = $2;
            }
            if (index($0, " %CPU ") > 1) {
+              area="cpu";
               for(i=2; i <= NF; i++) {
                 cpu_hdr_list[$i] = i
                 cpu_hdr_lkup[i] = $i
               }
-              area="cpu";
               epoch = dt_to_epoch($1, ampm_str);
+              if ((ts_beg > 0 && epoch < ts_beg) || (ts_end > 0 && epoch > ts_end)) {
+                area = "";
+                next;
+              }
               tm_rw = tm_rw+1;
               tm_arr[tm_rw] = epoch;
               next;
@@ -2060,6 +2157,10 @@ function yarr_compare(i1, v1, i2, v2,    l, r, m1, m2)
                 io_hdr_lkup[i] = $i
               }
               epoch = dt_to_epoch($1, $2);
+              if ((ts_beg > 0 && epoch < ts_beg) || (ts_end > 0 && epoch > ts_end)) {
+                area = "";
+                next;
+              }
               ++tm_rw_io;
               tm_arr_io[tm_rw_io] = epoch;
               next;
@@ -2382,6 +2483,7 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
    #mv $i.tsv $WORK_DIR
    SHEETS="$SHEETS $i.tsv"
  fi
+
   if [[ $i == *"_iostat.txt"* ]]; then
 #avg-cpu:  %user   %nice %system %iowait  %steal   %idle
 #           1.32    3.52    0.76    0.16    0.00   94.24
@@ -2410,8 +2512,9 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
 
 
 
+    echo "$0.$LINENO ckck iostat ts_initial= $TS_INITIAL ts_beg= $BEG ts_end= $END_TM"
     echo "do iostat ts_beg= $BEG ts_end= $END_TM"
-    awk -v work_dir="$WORK_DIR" -v ts_beg="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" -v typ="iostat"  -v sum_file="$SUM_FILE" -v sum_flds="rkB/s{io RdkB/s|disk},wkB/s{io wrkB/s|disk},avgrq-sz{io avg Req_sz|disk},avgqu-sz{io avg que_sz|disk},%util{io %util|disk}" '
+    awk -v ts_initial="$TS_INITIAL" -v work_dir="$WORK_DIR" -v ts_beg="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" -v typ="iostat"  -v sum_file="$SUM_FILE" -v sum_flds="rkB/s{io RdkB/s|disk},wkB/s{io wrkB/s|disk},avgrq-sz{io avg Req_sz|disk},avgqu-sz{io avg que_sz|disk},%util{io %util|disk}" '
      BEGIN{
         beg=1;
         grp_mx=0;
@@ -2421,12 +2524,14 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
         mx_io=0;
         mx_dev=0;
         tm_beg = 0;
+        ts_initial += 0;
         ts_beg += 0;
         ts_end += 0;
         epoch_init = 0;
         got_am_pm = 1;
         col_off = 0;
         n_sum = 0;
+        use_lines = 1;
        if (sum_file != "" && sum_flds != "") {
          n_sum = split(sum_flds, sum_arr, ",");
          for (i_sum=1; i_sum <= n_sum; i_sum++) {
@@ -2480,7 +2585,10 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
          if (epoch_init == 0) {
              epoch_init = epoch;
          }
-         epoch = ts_beg + (epoch - epoch_init + 1); # the plus 1 assumes a 1 second interval.
+         epoch = ts_initial + (epoch - epoch_init + 1); # the plus 1 assumes a 1 second interval.
+         if (epoch_1st == "") {
+           epoch_1st = epoch;
+         }
          return epoch;
       }
       function line_data(row, arr_in, arr_mx, title, hdr, mytarr) {
@@ -2493,7 +2601,7 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
        printf("TS\tts_rel\t%s\n", hdr) > NFL;
        for (i=2; i <= arr_mx; i++) {
          ++row;
-         printf("%.3f\t%.4f\t%s\n", mytarr[i], mytarr[i]-ts_beg, arr_in[i]) > NFL;
+         printf("%.3f\t%.4f\t%s\n", mytarr[i], mytarr[i]-ts_initial, arr_in[i]) > NFL;
        }
        return row;
      }
@@ -2516,15 +2624,22 @@ trows++; printf("\tthe total across all CPUs; 1591%% shows that that java proces
          dt_beg["mm"] = substr($1, 1, 2);
          dt_beg["dd"] = substr($1, 4, 2);
          epoch = dt_to_epoch($2, $3);
-         if (ts_end > 0.0 && epoch > ts_end) {
-              exit;
-         }
          if (tm_beg == 0) {
            tm_beg = epoch;
          }
-         printf("iostat beg_date= mm.dd.yyyy %s.%s.%s, tm= %s epoch= %f\n", dt_beg["mm"], dt_beg["dd"], dt_beg["yy"], $2, epoch) > "/dev/stderr";
+         if ((ts_end > 0.0 && epoch > ts_end) || (ts_beg > 0.0 && epoch < ts_beg)) {
+           use_lines = 0;
+           next;
+         } else {
+           use_lines = 1;
+         }
+         #printf("iostat beg_date= mm.dd.yyyy %s.%s.%s, tm= %s epoch= %f\n", dt_beg["mm"], dt_beg["dd"], dt_beg["yy"], $2, epoch) > "/dev/stderr";
      }
-
+     {
+       if (use_lines == 0) {
+         next;
+       }
+     }
      /^avg-cpu:/{
         if (mx_cpu == 0) {
           mx_cpu=1;
@@ -2704,11 +2819,12 @@ row += trows;
 #12:05:00 AM        lo   1251.00   1251.00    259.82    259.82      0.00      0.00      0.00      0.00
 #12:05:00 AM      ifb0      0.00      0.00      0.00      0.00      0.00      0.00      0.00      0.00
     echo "do sar_dev"
-    awk -v work_dir="$WORK_DIR" -v ts_beg="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" -v typ="sar network IFACE"  -v sum_file="$SUM_FILE" -v sum_flds="rxkB/s{net rdKB/s|network},txkB/s{net wrKB/s|network},%ifutil{net %util|network}" '
+    awk -v ts_initial="$TS_INITIAL" -v work_dir="$WORK_DIR" -v ts_beg="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" -v typ="sar network IFACE"  -v sum_file="$SUM_FILE" -v sum_flds="rxkB/s{net rdKB/s|network},txkB/s{net wrKB/s|network},%ifutil{net %util|network}" '
      BEGIN{beg=1;
         grp_mx=0;
         hdr_mx=0;
         chart=typ;
+        ts_initial += 0.0;
         ts_beg += 0.0;
         ts_end += 0.0;
         mx_cpu=0;
@@ -2770,7 +2886,7 @@ row += trows;
          if (epoch_init == 0) {
              epoch_init = epoch;
          }
-         epoch = ts_beg + (epoch - epoch_init + 1); # the plus 1 assumes a 1 second interval.
+         epoch = ts_initial + (epoch - epoch_init + 1); # the plus 1 assumes a 1 second interval.
          return epoch;
       }
 
@@ -2794,7 +2910,7 @@ row += trows;
        printf("TS\tts_offset\t%s\n", hdr) > NFL;
        for (i=2; i <= arr_mx; i++) {
          ++row;
-         printf("%d\t%d\t%s\n", tmarr_in[i], tmarr_in[i]-ts_beg, arr_in[i]) > NFL;
+         printf("%d\t%d\t%s\n", tmarr_in[i], tmarr_in[i]-epoch_1st, arr_in[i]) > NFL;
                 if (n_sum > 0) {
                   n = split(arr_in[i], tst_arr, "\t");
                   for (i_sum=1; i_sum <= n_sum; i_sum++) {
@@ -2889,8 +3005,13 @@ row += trows;
         str="";
         tab="";
         epoch = dt_to_epoch($1, $2);
-        if (ts_end > 0.0 && epoch > ts_end) {
-          exit;
+        if (epoch_1st == "") {
+          epoch_1st = epoch;
+        }
+        if ((ts_end > 0.0 && epoch > ts_end) ||  (ts_beg > 0.0 && epoch < ts_beg)) {
+          area = "";
+          next;
+          #exit;
         }
         got_nonzero = 0;
         for (i=3-col_off; i <= NF; i++) {
@@ -2962,9 +3083,73 @@ row+= trows;
    #mv $i.tsv $WORK_DIR
    SHEETS="$SHEETS $i.tsv"
  fi
+  if [[ $i == *"sys_gen_table_01.txt" ]]; then
+    echo "do sys_gen_table"
+    awk -v ts_initial="$TS_INITIAL" -v work_dir="$WORK_DIR" -v ts_beg="$BEG"  -v ts_end="$END_TM" -v pfx="$PFX" -v typ="sql_client_stats" '
+     BEGIN{beg=1;
+        hdr_mx=0;
+        epoch_init = 0;
+        chart = typ;
+        ts_beg += 0;
+        ts_end += 0;
+        ts_initial += 0;
+        beg = 1;
+      }
+      function line_data(row, arr_in, arr_mx, title, hdr) {
+       ++row;
+       printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", title, chart) > NFL;
+       ++row;
+       n = split(hdr, arr, "\t");
+       printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", row+1, 2, row+arr_mx, n+1, 1) > NFL;
+       ++row;
+       printf("%s\n", hdr) > NFL;
+       for (i=1; i <= arr_mx; i++) {
+         ++row;
+         printf("%s\n", sv[i]) > NFL;
+       }
+       return row;
+     }
+     {
+        if (beg == 1) {
+          FNM=ARGV[ARGIND];
+          NFL=work_dir "/" FNM ".tsv";
+          hdr_in = $0;
+          ncols = split(hdr, hdr_arr, "\t");
+          beg = 0;
+          next;
+        }
+        n = split($0, arr, "\t");
+        epoch = arr[1]+0.0;
+        if (ts_end > 0.0 && epoch > ts_end) {
+            exit;
+        }
+        if (ts_beg > 0.0 && epoch < ts_beg) {
+          next;
+        }
+        sv_tm[++sv_mx] = epoch;
+        sv[sv_mx] = $0;
+        next;
+     }
+     END{
+       row = -1;
+       ttl="sql_client stats";
+       row = line_data(row, sv, sv_mx, ttl, hdr_in);
+       ++row;
+       printf("\n") > NFL;
+       #for (i=1; i <= sv_mx; i++) {
+       #   printf("%s\n", sv[i]) > NFL;
+       #}
+       close(NFL);
+     }
+   ' $i
+   ck_last_rc $? $LINENO
+   #mv $i.tsv $WORK_DIR
+   SHEETS="$SHEETS $i.tsv"
+ fi
+
   if [[ $i == *"_sar_tcp.txt"* ]]; then
     echo "do sar_tcp"
-    awk -v work_dir="$WORK_DIR" -v ts_beg="$BEG"  -v ts_end="$END_TM" -v pfx="$PFX" -v typ="sar tcp stats" '
+    awk -v ts_initial="$TS_INITIAL" -v work_dir="$WORK_DIR" -v ts_beg="$BEG"  -v ts_end="$END_TM" -v pfx="$PFX" -v typ="sar tcp stats" '
      BEGIN{beg=1;
         grp_mx=0;
         hdr_mx=0;
@@ -2976,6 +3161,7 @@ row+= trows;
         epoch_init = 0;
         ts_beg += 0;
         ts_end += 0;
+        ts_initial += 0;
       }
       function dt_to_epoch(hhmmss, ampm, all) {
          # the epoch seconds from the date time info in the file is local time,not UTC.
@@ -2999,7 +3185,10 @@ row+= trows;
              printf("dt_str= %s, all= %s\n", dt_str, all) > "/dev/stderr";
              epoch_init = epoch;
          }
-         epoch = ts_beg + (epoch - epoch_init + 1); # the plus 1 assumes a 1 second interval.
+         epoch = ts_initial + (epoch - epoch_init + 1); # the plus 1 assumes a 1 second interval.
+         if (epoch_1st == "") {
+           epoch_1st = epoch;
+         }
          return epoch;
       }
       function line_data(row, arr_in, arr_mx, title, hdr) {
@@ -3012,7 +3201,7 @@ row+= trows;
        printf("TS\tts_rel\t%s\n", hdr) > NFL;
        for (i=2; i <= arr_mx; i++) {
          ++row;
-         printf("%d\t%d\t%s\n", sv_tm[i], sv_tm[i]-ts_beg, arr_in[i]) > NFL;
+         printf("%d\t%d\t%s\n", sv_tm[i], sv_tm[i]-epoch_1st, arr_in[i]) > NFL;
        }
        return row;
      }
@@ -3083,6 +3272,10 @@ row+= trows;
         epoch = dt_to_epoch($1, $2, $0);
         if (ts_end > 0.0 && epoch > ts_end) {
             exit;
+        }
+        if (ts_beg > 0.0 && epoch < ts_beg) {
+          area = "";
+          next;
         }
         str="";
         tab="";
@@ -3189,7 +3382,14 @@ row += trows;
       fi
     fi
   fi
+  got_infra_file=
   if [[ $i == *"infra_cputime.txt" ]]; then
+    got_infra_file=$i
+  fi
+  if [[ $i == *"sys_20_proc_stats.txt" ]]; then
+    got_infra_file=$i
+  fi
+  if [ "$got_infra_file" != "" ]; then
     echo "$0.$LINENO: got $DIR/infra_cputime.txt" > /dev/stderr
     INCPUS=0
 
@@ -3198,8 +3398,8 @@ row += trows;
     fi
     echo "$0.$LINENO: WORK_DIR= $WORK_DIR" 
     echo "$0.$LINENO: _____________ INCPUS= $INCPUS, LSCPU_FL= $LSCPU_FL WORK_DIR= $WORK_DIR" > /dev/stderr
-    echo "$SCR_DIR/rd_infra_cputime.sh -w $WORK_DIR -O \"$OPTIONS\" -f $i -n $INCPUS -S $SUM_FILE -m $WORK_DIR/$MUTTLEY_OUT_FILE"
-          $SCR_DIR/rd_infra_cputime.sh -w $WORK_DIR -O "$OPTIONS" -f $i -n $INCPUS -S $SUM_FILE -m $WORK_DIR/$MUTTLEY_OUT_FILE
+    echo "$SCR_DIR/rd_infra_cputime.sh -t "$TS_INITIAL" -b "$BEG" -e "$END_TM" -w $WORK_DIR -O \"$OPTIONS\" -f $i -n $INCPUS -S $SUM_FILE -m $WORK_DIR/$MUTTLEY_OUT_FILE"
+          $SCR_DIR/rd_infra_cputime.sh -t "$TS_INITIAL" -b "$BEG" -e "$END_TM" -w $WORK_DIR -O "$OPTIONS" -f $i -n $INCPUS -S $SUM_FILE -m $WORK_DIR/$MUTTLEY_OUT_FILE
           ck_last_rc $? $LINENO
     if [ -e $WORK_DIR/$i.tsv ]; then
       if [ "$REDUCE" != "" ]; then
@@ -3859,10 +4059,12 @@ function yarr_compare(i1, v1, i2, v2,    l, r, m1, m2, n1, n2)
 
   if [[ $i == *"_nicstat.txt"* ]]; then
     echo "do nicstat"
-    awk -v work_dir="$WORK_DIR" -v beg_ts="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" -v sum_file="$SUM_FILE" -v sum_flds="InKB{TCP_RdKB/s|network},OutKB{TCP_WrKB/s|network},RdKB{NetDev_RdKB/s|network},WrKB{NetDev_WrKB/s|network},IErr{NetDev_IErr/s|network},OErr{NetDev_OErr/s|network},%Util{NetDev_%Util|network}" '
+    echo "$0.$LINENO ckck nicstat ts_initial= $TS_INITIAL ts_beg= $BEG ts_end= $END_TM"
+    awk -v ts_initial="$TS_INITIAL" -v work_dir="$WORK_DIR" -v beg_ts="$BEG" -v ts_end="$END_TM" -v pfx="$PFX" -v sum_file="$SUM_FILE" -v sum_flds="InKB{TCP_RdKB/s|network},OutKB{TCP_WrKB/s|network},RdKB{NetDev_RdKB/s|network},WrKB{NetDev_WrKB/s|network},IErr{NetDev_IErr/s|network},OErr{NetDev_OErr/s|network},%Util{NetDev_%Util|network}" '
      BEGIN{
         beg_ts += 0.0;
         ts_end += 0.0;
+        ts_initial += 0.0;
         n_sum = 0;
        if (sum_file != "" && sum_flds != "") {
          n_sum = split(sum_flds, sum_arr, ",");
@@ -3918,7 +4120,13 @@ function yarr_compare(i1, v1, i2, v2,    l, r, m1, m2, n1, n2)
         } else {
           NFL = work_dir "/" FNM ".tsv";
           n   = split($0, arr, ":");
-          ts  = arr[1];
+          ts  = arr[1]+0;
+          if (ts_1st == "") {
+            ts_1st = ts;
+          }
+          if ((beg_ts > 0 && ts < beg_ts) || (ts_end > 0 && ts > ts_end)) {
+            next;
+          }
           typ = arr[2];
           iidx = hdr_str[typ];
           rw = ++hdr_row[iidx];
@@ -3955,12 +4163,12 @@ function yarr_compare(i1, v1, i2, v2,    l, r, m1, m2, n1, n2)
            row++;
            printf("\n") > NFL;
            for (rw=1; rw <= hdr_row[i]; rw++) {
-              if (ts_end > 0.0 && ts_row[i,rw] > ts_end) {
-                continue;
-              }
-              ts_diff = ts_row[i,rw]-beg_ts;
+              #if (ts_end > 0.0 && ts_row[i,rw] > ts_end) {
+              #  continue;
+              #}
+              ts_diff = ts_row[i,rw]-ts_1st;
               if (ts_diff < 0.0) {continue;}
-              printf("%s\t%.0f\t%.3f", hdr_typ[i], ts_row[i,rw], ts_row[i,rw]-beg_ts) > NFL;
+              printf("%s\t%.0f\t%.3f", hdr_typ[i], ts_row[i,rw], ts_row[i,rw]-ts_1st) > NFL;
               for (k=1; k <= hdr_mx[i]; k++) {
                  printf("\t%s", data[i,rw,k]) > NFL;
                  if (hdr_lkup[k] != -1) {
@@ -4461,10 +4669,10 @@ if [ "$SHEETS" != "" -a "$SKIP_XLS" == "0" ]; then
    if [ "$MAX_VAL" != "" ]; then
      OPT_M=" -m $MAX_VAL "
    fi
-   OPT_C=
-   if [ "$CLIP" != "" ]; then
-     OPT_C=" -c $CLIP "
-   fi
+#   OPT_C=
+#   if [ "$CLIP" != "" ]; then
+#     OPT_C=" -c $CLIP "
+#   fi
    OPT_O=
    if [ "$OPTIONS" != "" ]; then
      OPT_O=" -O $OPTIONS "
