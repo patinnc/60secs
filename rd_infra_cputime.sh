@@ -4,8 +4,23 @@
 VERBOSE=0
 export LC_ALL=C
 
-while getopts "hvf:m:n:o:O:S:w:" opt; do
+ck_last_rc() {
+   local RC=$1
+   local FROM=$2
+   if [ $RC -gt 0 ]; then
+      echo "$0: got non-zero RC=$RC at $LINENO. called from line $FROM" > /dev/stderr
+      exit $RC
+   fi
+}
+
+while getopts "hvb:e:f:m:n:o:O:S:t:w:" opt; do
   case ${opt} in
+    b )
+      BEG_TS=$OPTARG
+      ;;
+    e )
+      END_TS=$OPTARG
+      ;;
     f )
       IN_FL=$OPTARG
       ;;
@@ -24,6 +39,9 @@ while getopts "hvf:m:n:o:O:S:w:" opt; do
     S )
       SUM_FILE=$OPTARG
       ;;
+    t )
+      TS_INITIAL=$OPTARG
+      ;;
     w )
       WORK_DIR=$OPTARG
       ;;
@@ -40,6 +58,9 @@ while getopts "hvf:m:n:o:O:S:w:" opt; do
       echo "   -n num_cpus    number of cpus on the server"
       echo "   -S sum_file    summary file"
       echo "   -w work_dir    all tsv output files go in this dir"
+      echo "   -b beg_ts      begin epoch time stamp (for clipping)"
+      echo "   -e end_ts      end epoch time stamp (for clipping)"
+      echo "   -t ts_initial  ts_initial (when the data collection was begun)"
       echo "   -v verbose mode"
       exit 1
       ;;
@@ -90,7 +111,7 @@ fi
 
 AWK_BIN=awk  # awk is a link to gawk
 
-$AWK_BIN -v script_nm="$0.$LINENO.awk" -v mutt_file="$MUTT_FL" -v mutt_ofile="$MUTT_OUT_FL" -v cur_dir="$CUR_DIR" -v options="$OPTIONS" -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofile="$OUT_FL" '
+$AWK_BIN -v beg_ts="$BEG_TS" -v end_ts="$END_TS" -v ts_initial="$TS_INITIAL" -v script_nm="$0.$LINENO.awk" -v mutt_file="$MUTT_FL" -v mutt_ofile="$MUTT_OUT_FL" -v cur_dir="$CUR_DIR" -v options="$OPTIONS" -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofile="$OUT_FL" '
   BEGIN {
    num_cpus += 0;
    nm_lkfor = "edge-gateway";
@@ -100,6 +121,8 @@ $AWK_BIN -v script_nm="$0.$LINENO.awk" -v mutt_file="$MUTT_FL" -v mutt_ofile="$M
    col_vsz = -1;
    col_tm  = -1;
    col_cmd = -1;
+   beg_ts += 0.0;
+   end_ts += 0.0;
    pse_col_pid = -1;
    pse_col_rss = -1;
    pse_col_vsz = -1;
@@ -644,6 +667,17 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
 #  eth0: 1789224819997486 3969195799626   14    0    0    14          0  24714218 2735699337437607 4819718487079    0    0    0     0       0          0
   /^__net_dev__ /{
     i = 0;
+    ts = $2 + 0;
+    ts_skip = 0;
+    if ((beg_ts > 0.0 && ts < beg_ts) || (end_ts > 0.0 && ts > end_ts)) {
+      ts_skip = 1;
+      while ( getline  > 0) {
+        if ($0 == "" || substr($0, 1, 2) == "__") {
+          break;
+        }
+      }
+    }
+    if (ts_skip == 0) {
     netdev_dt[++netdev_mx] = $2;
     netdev_lns[netdev_mx] = 0;
     rd_bytes_col = 0;
@@ -685,6 +719,7 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
       netdev_lns[netdev_mx] = j;
       }
     }
+    }
   }
 
   /^__diskstats__ /{
@@ -704,6 +739,17 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
 # Field  5 -- # of writes completed.  This is the total number of writes completed successfully.
 # Field  6 -- # of writes merged.  See the description of field 2.
 # Field  7 -- # of sectors written. This is the total number of sectors written successfully.
+    ts = $2 + 0;
+    ts_skip = 0;
+    if ((beg_ts > 0.0 && ts < beg_ts) || (end_ts > 0.0 && ts > end_ts)) {
+      ts_skip = 1;
+      while ( getline  > 0) {
+        if ($0 == "" || substr($0, 1, 2) == "__") {
+          break;
+        }
+      }
+    }
+    if (ts_skip == 0) {
     diskstats_dt[++diskstats_mx] = $2;
     diskstats_lns[diskstats_mx] = 0;
     diskstats_tots = 0;
@@ -715,12 +761,11 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
       if ($0 == "" || (length($1) > 2 && substr($1, 1, 2) == "__")) {
         break;
       }
-      #if ($2  == 0 && $3 != "dm-0") {
       dev = $3;
       dev_len = length(dev);
      
 
-#		if (NF >= 14) {
+#		if (NF >= 14) 
 #			sdev.rd_ios     = rd_ios;
 #			sdev.rd_merges  = rd_merges_or_rd_sec;
 #			sdev.rd_sectors = rd_sec_or_wr_ios;
@@ -733,21 +778,18 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
 #			sdev.tot_ticks  = tot_ticks;
 #			sdev.rq_ticks   = rq_ticks;
 #
-#			if (NF >= 18) {
+#			if (NF >= 18) 
 #				#/* Discard I/O */
 #				sdev.dc_ios     = dc_ios;
 #				sdev.dc_merges  = dc_merges;
 #				sdev.dc_sectors = dc_sec;
 #				sdev.dc_ticks   = dc_ticks;
-#			}
 #
-#			if (NF >= 20) {
+#			if (NF >= 20) 
 #				# Flush I/O 
 #				sdev.fl_ios     = fl_ios;
 #				sdev.fl_ticks   = fl_ticks;
-#			}
-#		}
-#		else if (NF == 7) {
+#		else if (NF == 7) 
 #			#/* Partition without extended statistics */
 #			#if (DISPLAY_EXTENDED(flags))
 #		#		continue;
@@ -756,7 +798,7 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
 #			sdev.rd_sectors = rd_merges_or_rd_sec;
 #			sdev.wr_ios     = rd_sec_or_wr_ios;
 #			sdev.wr_sectors = rd_ticks_or_wr_sec;
-#		}
+#		
 
       use_it= 0;
       if (substr(dev, 1, 2) == "sd") {
@@ -805,8 +847,20 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
       diskstats_data[diskstats_mx,1,"tot_ticks"] += tot_ticks+0;
       }
     }
+    }
   }
   /^__docker_ps__ /{
+    ts = $2 + 0;
+    ts_skip = 0;
+    if ((beg_ts > 0.0 && ts < beg_ts) || (end_ts > 0.0 && ts > end_ts)) {
+      ts_skip = 1;
+      while ( getline  > 0) {
+        if ($0 == "" || substr($0, 1, 2) == "__") {
+          break;
+        }
+      }
+    }
+    if (ts_skip == 0) {
     docker_dt[++docker_mx] = $2;
     docker_lns[docker_mx] = 0;
     k_infra = 0;
@@ -840,8 +894,20 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
     docker_typ[docker_mx, 1] = k_infra;
     docker_typ[docker_mx, 2] = k_serv;
     docker_typ[docker_mx, 3] = k_other;
+    }
   }
   /^__muttley__ /{
+    ts = $2 + 0;
+    ts_skip = 0;
+    if ((beg_ts > 0.0 && ts < beg_ts) || (end_ts > 0.0 && ts > end_ts)) {
+      ts_skip = 1;
+      while ( getline  > 0) {
+        if ($0 == "" || substr($0, 1, 2) == "__") {
+          break;
+        }
+      }
+    }
+    if (ts_skip == 0) {
     ++muttley_mx;
     muttley_dt[muttley_mx] = $2;
     while ( getline  > 0) {
@@ -887,8 +953,20 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
     if ($0 == "" ) {
       next;
     }
+    }
   }
   /^__uptime__/ {
+    ts = $2 + 0;
+    ts_skip = 0;
+    if ((beg_ts > 0.0 && ts < beg_ts) || (end_ts > 0.0 && ts > end_ts)) {
+      ts_skip = 1;
+      while ( getline  > 0) {
+        if ($0 == "" || substr($0, 1, 2) == "__") {
+          break;
+        }
+      }
+    }
+    if (ts_skip == 0) {
     ++idle_mx;
     idle_dt[idle_mx] = $2;
     idle_dt_diff = 0.0;
@@ -917,8 +995,20 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
     up_prev = up;
     id_prev = id;
     next;
+    }
   }
   /^__net_snmp_udp__/ {
+    ts = $2 + 0;
+    ts_skip = 0;
+    if ((beg_ts > 0.0 && ts < beg_ts) || (end_ts > 0.0 && ts > end_ts)) {
+      ts_skip = 1;
+      while ( getline  > 0) {
+        if ($0 == "" || substr($0, 1, 2) == "__") {
+          break;
+        }
+      }
+    }
+    if (ts_skip == 0) {
     ++net_mx;
     net_dt[net_mx] = $2;
     net_dt_diff = 0.0;
@@ -950,9 +1040,21 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
       }
     }
     next;
+    }
   }
 #__uhostd_containers__ 1617299715 1617328515
   /^__uhostd_/ {
+    ts = $2 + 0;
+    ts_skip = 0;
+    if ((beg_ts > 0.0 && ts < beg_ts) || (end_ts > 0.0 && ts > end_ts)) {
+      ts_skip = 1;
+      while ( getline  > 0) {
+        if ($0 == "" || substr($0, 1, 2) == "__") {
+          break;
+        }
+      }
+    }
+    if (ts_skip == 0) {
     getline;
     while ( getline  > 0) {
       if ($0 == "") {
@@ -998,6 +1100,7 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
         uhostd_cntr_lkup[cntr_i,"svc"] = svc;
       }
     }
+    }
   }
 #__net_snmp_udp__ 1602432740 1602432780
 #Tcp: RtoAlgorithm RtoMin RtoMax MaxConn ActiveOpens PassiveOpens AttemptFails EstabResets CurrEstab InSegs OutSegs RetransSegs InErrs OutRsts InCsumErrors
@@ -1008,6 +1111,17 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
 #__systemd_cgtop__ 1617582237 1617596637
 
   /^__systemd_cgtop__ /{
+    ts = $2 + 0;
+    ts_skip = 0;
+    if ((beg_ts > 0.0 && ts < beg_ts) || (end_ts > 0.0 && ts > end_ts)) {
+      ts_skip = 1;
+      while ( getline  > 0) {
+        if ($0 == "" || substr($0, 1, 2) == "__") {
+          break;
+        }
+      }
+    }
+    if (ts_skip == 0) {
     ++cg_mx;
     cg_dt[cg_mx] = $2;
     #getline;
@@ -1118,9 +1232,21 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
       cg_data[cg_mx,cg_i,"mem"] = $(NF-2);
       #printf("tm= %10.3f ln= %s\n", tm, cg);
     }
+    }
   }
 
   /^__date__/ {
+    ts = $2 + 0;
+    ts_skip = 0;
+    if ((beg_ts > 0.0 && ts < beg_ts) || (end_ts > 0.0 && ts > end_ts)) {
+      ts_skip = 1;
+      while ( getline  > 0) {
+        if ($0 == "" || substr($0, 1, 2) == "__") {
+          break;
+        }
+      }
+    }
+    if (ts_skip == 0) {
     ++mx;
     dt[mx] = $2;
     #delete pid_hsh;
@@ -1231,6 +1357,7 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
       }
       pid_prev[pid_i,"secs"] = secs
       pid_prev[pid_i,"proc"] = proc;
+    }
     }
     }
   }
@@ -1754,6 +1881,7 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
     printf("cgroup tdiff %d secs\n", tdiff);
     #trow = -1;
     #srvcs_mx = 0;
+    if (ncg_list_mx > 0) {
     for (cg=1; cg <= 4; cg++) {
       trow++;
       if (cg == 1) { str1 = "docker all"; }
@@ -1782,11 +1910,6 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
           if (sgrp == "sys.srvc") { continue; }
           if (sgrp != "") { continue; }
           v0 = tolower(nm);
-          #if (v0 != dckr_all && !(v0 in srvcs_list)) {
-          #  srvcs_list[v0] = ++srvcs_mx;
-          #  srvcs_lkup[srvcs_mx,"nm"] = v0;
-          #  srvcs_lkup[srvcs_mx,"tm"] = 0.0;
-          #}
           k = ++bycg_list[cg,"mx"];
           bycg_list[cg,"list",k] = i;
           printf("cg= %d, nm= %s, ttl= %s\n", cg, nm, str);
@@ -1868,7 +1991,6 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
            }
            ncg_n = ncg_lkup[i,"mx"];
            sum = 0.0;
-#abcd
            for(kk=1; kk <= ncg_n; kk++) {
              lkup_i = ncg_lkup[i,"list",kk];
              v1 = cg_data[k,lkup_i,"tm"];
@@ -1896,7 +2018,6 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
              }
            }
            v2 = top_fctr * sum/tdff;
-#abcd
            if (cg == 4) {
              tm_attributable_to_cntr += sum;
              srvcs_i = srvcs_list[nm];
@@ -1939,12 +2060,15 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
       printf("\n") > ofile;
       trow++;
     }
+    }
      printf("cgrps_val_arr["cat_mx"] = %d\n", cgrps_val_arr["cat_mx"]);
     if (1==1) {
-#abcde
     for (ii=1; ii <= cgrps_val_arr["cat_mx"]; ii++) {
         nm   = cgrps_val_arr["cat_nm",ii];
         my_n = cgrps_val_arr["vals_mx",ii];
+        if (my_n == 0) {
+          continue;
+        }
         str  = cgrps_val_arr["str",ii];
         fflush();
         nstr = sprintf("%s\t%s\t%f\t%s val_arr", "cgrp_val_arr", "cgrps_val_arr", my_n, str " " nm);
@@ -2035,12 +2159,12 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
           strp = "RPS _all_ p" px[kk];
           printf("%s\t%s\t%f\t%s\n", "RPS_per_hst", "RPS_per_hst", uval, strp) >> sum_file;
         }
-#abcde
         #mutt_lkup[mutt_mx] = mutt_nm;
     }
 
 
 
+    if (proc_mx > 0) {
     delete idx;
     delete res_i;
     for(i=1; i <= proc_mx; i++) {
@@ -2049,7 +2173,6 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
     asorti(idx, res_i, "tot_compare")
     #trow = -1;
     trow++;
-#abcd
     if ( use_top_pct_cpu == 0) {
       str = "infra procs cpus (1==1cpu_busy)";
     } else {
@@ -2090,7 +2213,6 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
         tm = srvcs_lkup[i,"tm"];
         n = srvcs_lkup[i,"mutt_mx"];
         calls = 0;
-#abcd
         for (j=1; j <= n; j++) {
            k = srvcs_lkup[i,"mutt_list",j];
            calls += nmutt_lkup[k,"tot"];
@@ -2153,7 +2275,9 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
       printf("total %%mutt_calls attributable to cgrs= %.3f%% or %.3f of %.3f, calls not attributable to cgrps= %.3f%%\n",
         v, calls_attributable_to_cntr_mutt, nmutt_calls_tot, 100.0 - v);
     }
+    }
 
+#abcd
     for(i=1; i <= pse_proc_mx; i++) {
       pse_idx[i] = i;
     }
@@ -2503,6 +2627,7 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
          }
       }
     }
+    printf("_________ diskstats_mx= %d\n", diskstats_mx);
     if (diskstats_mx > 0) {
       if (1 == 2) {
       trow++;
@@ -2747,6 +2872,7 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
          }
       }
     }
+    if (proc_mx > 0) {
     if ( use_top_pct_cpu == 0) {
       str = "top infra procs cpus (1=1cpu_busy)";
       str2 = "cpu_secs";
@@ -2826,12 +2952,16 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
     }
     printf("%%cpus\n") > ofile;
     trow++;
+    }
+#abcd
     if (sum_file != "") {
       close(sum_file);
     }
     close(ofile);
+    exit(0);
   }
   ' $IN_FL
   RC=$?
+  ck_last_rc $? $LINENO
 exit $RC
 
