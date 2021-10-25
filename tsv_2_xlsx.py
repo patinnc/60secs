@@ -31,6 +31,7 @@ opened_wkbk = False
 closed_wkbk = False
 
 options_filename = ""
+options_phase    = ""
 clip = ""
 options_str = ""
 options_str_top = ""
@@ -72,6 +73,7 @@ options, remainder = getopt.getopt(sys.argv[1:], 'Aa:b:c:d:e:f:i:m:o:O:P:p:s:S:v
                                                          'sum_all=',
                                                          'verbose'
                                                          'sku=',
+                                                         'phase=',
                                                          ])
 sv_remainder = remainder
 do_avg = False
@@ -86,36 +88,39 @@ gcolor_lst= ["#1f77b4", "#aec7e8", "#ff7f0e", "#ffbb78", "#2ca02c", "#98df8a", "
   "#8c564b", "#c49c94", "#e377c2", "#f7b6d2", "#7f7f7f", "#c7c7c7", "#bcbd22", "#dbdb8d", "#17becf", "#9edae5" ];
 
 for opt, arg in options:
-    if opt in ('-A', '--average'):
+    if opt == '-A' or opt == '--average':
         do_avg = True
-    elif opt in ('-a', '--avg_dir'):
+    elif opt == '-a' or opt == '--avg_dir':
         avg_dir = arg
-    elif opt in ('-b', '--begin'):
+    elif opt == '-b' or opt == '--begin':
         ts_beg = float(arg)
-    elif opt in ('-c', '--clip'):
+    elif opt == '-c' or opt == '--clip':
         clip   = arg
-    elif opt in ('-d', '--desc'):
+    elif opt == '-d' or opt == '--desc':
         desc   = arg
-    elif opt in ('-e', '--end'):
+    elif opt == '-e' or opt == '--end':
         ts_end = float(arg)
-    elif opt in ('-f', '--file'):
+    elif opt == '-f' or opt == '--file':
         options_filename = arg
-    elif opt in ('-o', '--output'):
+    elif opt == '-o' or opt == '--output':
         output_filename = arg
-    elif opt in ('--sku'):
+    elif opt == '--sku':
         options_sku = arg
-    elif opt in ('-O', '--options'):
+        print("_______ --sku arg, opt=", opt, ", arg= ", arg)
+    elif opt == '--phase':
+        options_phase = arg
+    elif opt == '-O' or opt == '--options':
         options_str = arg
         options_str_top = arg
         #print("options_str_top= ", options_str_top, file=sys.stderr)
-    elif opt in ('-m', '--max'):
+    elif opt == '-m' or opt == '--max':
         max_val = float(arg)
-    elif opt in ('-S', '--sum_file'):
+    elif opt == '-S' or opt == '--sum_file':
         #got_sum_all += 1
         sum_all_file = arg
         sum_all_base = os.path.basename(sum_all_file)
         print("sum_all_base= %s" % (sum_all_base))
-    elif opt in ('-v', '--verbose'):
+    elif opt == '-v' or opt == '--verbose':
         verbose = True
 
 if options_str.find("drop_summary") >= 0:
@@ -318,11 +323,12 @@ for fo2 in range(len(fl_options)):
                                                             'sum_all=',
                                                             'verbose',
                                                             'sku=',
+                                                            'phase=',
                                                             ])
    for opt, arg in options:
-       if opt in ('-A', '--average'):
+       if opt == '-A' or opt ==  '--average':
            do_avg = True
-       elif opt in ('-p', '--prefix'):
+       elif opt == '-p' or opt == '--prefix':
            prefix = arg
            prefix_dict[fo] = prefix
 
@@ -394,6 +400,7 @@ for bmi in range(base_mx+1):
                                                             'sum_all=',
                                                             'verbose',
                                                             'sku=',
+                                                            'phase=',
                                                             ])
 
    image_files=[]
@@ -415,32 +422,35 @@ for bmi in range(base_mx+1):
    do_avg_write = False
    
    for opt, arg in options:
-       if opt in ('-i', '--images'):
+       if opt == '-i' or opt == '--images':
            for x in glob.glob(arg):
               image_files.append(x)
-       elif opt in ('-b', '--begin'):
+       elif opt == '-b' or opt == '--begin':
            ts_beg = float(arg)
            print("ts_beg= %f" % (ts_beg), file=sys.stderr)
-       elif opt in ('-e', '--end'):
+       elif opt == '-e' or opt == '--end':
            ts_end = float(arg)
            print("ts_end= %f" % (ts_end), file=sys.stderr)
-       elif opt in ('-c', '--clip'):
+       elif opt == '-c' or opt == '--clip':
            clip = arg
            print("python clip= ", clip)
-       elif opt in ('-d', '--desc'):
+       elif opt == '-d' or opt == '--desc':
            desc = arg
            all_charts_one_row[fo2][3] = desc
-       elif opt in ('-o', '--output'):
+       elif opt == '-o' or opt == '--output':
            output_filename = arg
-       elif opt in ('-O', '--options'):
+       elif opt == '-O' or opt == '--options':
            options_str = arg
-       elif opt in ('-m', '--max'):
+       elif opt == '-m' or opt == '--max':
            max_val = float(arg)
-       elif opt in ('-A', '--average'):
+       elif opt == '-A' or opt == '--average':
            do_avg = True
-       elif opt in ('--sku'):
+       elif opt == '--sku':
            options_sku = arg
-       elif opt in ('-P', '--phase'):
+           print("_______ --sku arg, opt=", opt, ", arg= ", arg)
+       elif opt == '--phase':
+           options_phase = arg
+       elif opt == '-P' or opt == '--phase':
            phase = arg
            print("tsv_2_xls.ph: phase file= %s" % (phase), file=sys.stderr)
            #with open(phase, 'rU') as tsv:
@@ -467,10 +477,10 @@ for bmi in range(base_mx+1):
            tsv.close
            opt_phase = sorted(opt_phase_in, key=lambda x: x[1])
            #print("phase= ", opt_phase, file=sys.stderr)
-       elif opt in ('-p', '--prefix'):
+       elif opt == '-p' or opt == '--prefix':
            prefix = arg
            prefix_dict[fo] = prefix
-       elif opt in ('-s', '--size'):
+       elif opt == '-s' or opt == '--size':
            # chart size width,height in 'excel 2007 pixels' which apparently aren't exactly pixels
            ch_tsize = arg.split(",")
            if len(ch_tsize) == 0:
@@ -486,7 +496,7 @@ for bmi in range(base_mx+1):
               ch_size[3] = float(ch_tsize[2])
            if len(ch_tsize) == 4:
               ch_size[3] = float(ch_tsize[3])
-       elif opt in ('-v', '--verbose'):
+       elif opt == '-v' or opt == '--verbose':
            verbose = True
 
    
@@ -730,6 +740,7 @@ for bmi in range(base_mx+1):
           data[drw][3] = str(drow_end)
           return drow_end, dcol_cat
 
+      print("got do_avg= ", do_avg)
       dcol_cat = -1
       for c in range(chrts):
           #print("got chrt[%d] for x= %s\n" % (c, x))
@@ -1004,6 +1015,7 @@ for bmi in range(base_mx+1):
          #print("---- skipped2a= %d, write_rows= %d, write_rows3= %d, ts_beg= %f, ts_end= %f ts_first= %f ts_last= %f" % (skipped, write_rows, write_rows3, ts_beg, ts_end, ts_first, ts_last), file=sys.stderr)
       
       printed_no_data_for_chart_msg = False
+      sku_or_desc_text = None
       for c in range(chrts):
           dcol_cat = -1
           title_rw = ch_arr[c][0][1]
@@ -1235,6 +1247,7 @@ for bmi in range(base_mx+1):
                 if worksheet_charts != None:
                    desc_str = None
                    if options_all_charts_one_row == True:
+                      print("___got desc= ",desc, ", desc_str", desc_str, ", fo2.3= ",  all_charts_one_row[fo2][3], ", fo2=", fo2)
                       if desc == None:
                         if options_sku != None:
                            desc_str = options_sku
@@ -1248,28 +1261,51 @@ for bmi in range(base_mx+1):
                       if verbose > 0:
                          print("++++__calc0  chart for sheet= %s, fo2= %d desc= %s" % (sheet_nm, fo2, all_charts_one_row[fo2][3]), file=sys.stderr)
                       dsc = all_charts_one_row[fo2][3]
-                      if dsc != None and not dsc in all_charts_one_row_hash:
+                      txt1 = ""
+                      if options_sku != None:
+                         txt1 = options_sku
+                      if sku_or_desc_text != None:
+                         txt1 += " " + sku_or_desc_text
+                      if options_phase != "": 
+                         txt1 += " " + options_phase
+                      #if dsc == None:
+                      #   if txt1 != "":
+                      #     dsc = txt1
+                      #else:
+                      #   if txt1 != "":
+                      #     dsc += txt1
+                      print("___got dsc1= ",dsc, ", desc= ",desc, ", desc_str", desc_str, ", txt1= ", txt1)
+                      dsc_fo2 = None
+                      if dsc != None:
+                         dsc_fo2 = dsc + str(fo2)
+                         print("dsc= ",dsc, ", fo2= ", fo2,", dsc_fo2= ", dsc_fo2)
+                      #if (dsc != None and not dsc in all_charts_one_row_hash) or (txt1 != "" and not txt1 in all_charts_one_row_hash):
+                      #if (dsc != None and not dsc in all_charts_one_row_hash):
+                      if (dsc_fo2 != None and not dsc_fo2 in all_charts_one_row_hash):
                          all_charts_one_row_max += 1
                          if desc != None:
-                            file1 = open(desc,"r")  
+                            file1 = open(desc,"r")
                             txt = file1.readline().rstrip('\n')
                             file1.close() 
                          else:
                             txt = desc_str
-                         all_charts_one_row_hash[dsc] = {"index": all_charts_one_row_max, "charts":0, "txt":txt}
+                         all_charts_one_row_hash[dsc_fo2] = {"index": all_charts_one_row_max, "charts":0, "txt":txt, "txt1":txt1}
+                         print("___got dsc2= ",dsc_fo2, ", desc= ",desc, ", desc_str", desc_str, ", txt1= ", txt1, ", dsc_i=", all_charts_one_row_max)
                       dsc_i = -1
                       if dsc != None:
-                         dsc_i    = all_charts_one_row_hash[dsc]["index"]
-                         ch_in_rw = all_charts_one_row_hash[dsc]["charts"]
+                         dsc_i    = all_charts_one_row_hash[dsc_fo2]["index"]
+                         ch_in_rw = all_charts_one_row_hash[dsc_fo2]["charts"]
+                         print("___got dsc3= ",dsc, ", desc= ",desc, ", desc_str", desc_str, ", txt1= ", txt1, ", ch_in_rw= ", ch_in_rw, ", dsc_i=", dsc_i)
                          all_charts_one_row[dsc_i][0] = 3+ dsc_i * (3+int(ch_size[1]*ch_size[2]))
                          all_charts_one_row[dsc_i][1] = ch_in_rw * int(ch_size[3])
                          if verbose > 0:
                             print("ch_left_at_cola= ", all_charts_one_row[dsc_i][1], ", title= ", title,  file=sys.stderr)
                          if ch_in_rw == 0:
                             worksheet_charts.write(all_charts_one_row[dsc_i][0]-2, 0, txt);
+                            sku_or_desc_text = txt
                          ch_top_at_row  = all_charts_one_row[dsc_i][0]
                          ch_left_at_col = all_charts_one_row[dsc_i][1]
-                         all_charts_one_row_hash[dsc]["charts"] += 1
+                         all_charts_one_row_hash[dsc_fo2]["charts"] += 1
                          if verbose > 0:
                             print("ch_left_at_col3= ", ch_left_at_col, ", title= ", title,  file=sys.stderr)
                          
@@ -1292,8 +1328,18 @@ for bmi in range(base_mx+1):
              rc = -1
              if worksheet_charts != None:
                 worksheet_charts.write(ch_top_at_row -1, ch_left_at_col+1, title);
-                if options_sku != None:
-                   worksheet_charts.write(ch_top_at_row-2, ch_left_at_col+1, options_sku);
+                if sku_or_desc_text != None or options_phase != "":
+                   txt = ""
+                   if options_sku != None:
+                     txt = options_sku
+                   if sku_or_desc_text != None:
+                     txt += " " + sku_or_desc_text
+                   if options_phase != "": 
+                     txt += " " + options_phase
+                   worksheet_charts.write(ch_top_at_row-2, ch_left_at_col+1, txt)
+                #if sku_or_desc_text == None and options_sku != None:
+                #   worksheet_charts.write(ch_top_at_row-2, ch_left_at_col+1, options_sku);
+                #   print("ch_row= ", ch_top_at_row-2, ", ch_col= ", ch_left_at_col+1, ", sku= ", options_sku)
                 if num_series == 0:
                    print("error: got num_series = 0 for chart1 title= %s file= %s" % (title, x), file=sys.stderr)
                 else:
