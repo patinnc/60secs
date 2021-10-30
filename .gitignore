@@ -87,4 +87,6 @@ do_toplev.py
 flamegraph_utils_v2.tar.gz
 flamegraph_utils_v3.tar.gz
 perf
+flamegraph_utils_v3.tar.gz
+install_and_run_on_cloud.sh_cfg
 
