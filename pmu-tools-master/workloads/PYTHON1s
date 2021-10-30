@@ -1,3 +1,0 @@
-#!/bin/sh
-
-python -c 'for x in xrange(40000000): pass'

@@ -1,2 +1,0 @@
-#!/bin/sh
-FORCECPU=jkt ./ucevent.py --mock "$@"
