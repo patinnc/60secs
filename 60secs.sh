@@ -444,7 +444,9 @@ for TSKj in `seq $TB $TE`; do
     else
     for i in `seq 1 $WAIT`; do
       #echo "i= $i of $WAIT"
-      printf "i= %d of %d\n" $i $WAIT
+      TM_CURN=`date +"%s"`
+      TM_DFF=$((TM_CURN-TM_BEG))
+      printf "iter= %d. end secs= %d, elap_secs= %d\n" $i $WAIT $TM_DFF
       uptime >> $FL
       j=$((j+$INTRVL))
       if [ $j -ge $WAIT ]; then
@@ -875,7 +877,7 @@ if [ "$BKGRND" == "1" ]; then
   PID_LST_NC=
   CMA=
   if [ "$PRF_PID" != "" ]; then
-    $RESP=`pgrep pfay1_sleep.sh | head -1`
+    RESP=`pgrep pfay1_sleep.sh | head -1`
     if [ "$RESP" != "" ]; then
      PID_LST=$RESP
      PID_LST_NC=$RESP
@@ -886,6 +888,9 @@ if [ "$BKGRND" == "1" ]; then
     TSK=${TSK_LST[$TSKj]}
     TSKPID=${TSK_PID[$TSKj]}
     PID_LST="${PID_LST}${CMA}$TSKPID"
+    if [ "$VERBOSE" -gt "0" ]; then
+      echo "$0.$LINENO tsk= $TSK $TSKj tskpid= $TSKPID, pid_lst= $PID_LST"
+    fi
     if [ "$TSKPID" != "" ]; then
       PID_LST_NC="${PID_LST_NC} $TSKPID"
     fi
@@ -924,7 +929,9 @@ if [ "$WAIT_AT_END" == "1" -a "$DO_W" == "1" ]; then
   for i in `seq 1 $WAIT`; do
     #echo "i= $i of $WAIT"
     ts_cur=`date "+%s"`
-    printf "i= %d of %d\n" $i $WAIT
+    TM_CURN=`date +"%s"`
+    TM_DFF=$((TM_CURN-TM_BEG))
+    printf "iter= %d. end secs= %d, elap_secs= %d\n" $i $WAIT $TM_DFF
     if [ "$FL_UPTM" != "" ]; then
        uptime >> $FL_UPTM
     fi
