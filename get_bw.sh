@@ -77,9 +77,14 @@ if [ -e $TSC ]; then
 fi
 
 LSCPU=$DIR/lscpu.txt
-LSCPU_INFO=()
 if [ -e $LSCPU ]; then
-  LSCPU_INFO=(`awk -v tsc="$TSC_FREQ" '
+  LSCPU_DATA=`cat $LSCPU`
+else
+  LSCPU_DATA=`lscpu`
+fi
+LSCPU_INFO=()
+if [ "$LSCPU_DATA" != "" ]; then
+  LSCPU_INFO=(`echo "$LSCPU_DATA" | awk -v tsc="$TSC_FREQ" '
    BEGIN{ if (tsc != "") { tsc_v = tsc; } }
    /^CPU.s.:/{num_cpus = $2;}
    /^Thread.s. per core:/{ tpc = $4; }
@@ -98,7 +103,7 @@ if [ -e $LSCPU ]; then
      printf("%s\n", skt);
      printf("%s\n", tpc);
    }
-  ' $LSCPU`)
+  '`)
   echo "LSCPU_INFO= ${LSCPU_INFO[@]}"
 fi
 
@@ -107,8 +112,8 @@ if [ "$THR_PER_CORE_IN" != "" ]; then
   thr_per_core=$THR_PER_CORE_IN
 fi
 
-#echo awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSCPU_INFO[1]}" -v num_cpus="${LSCPU_INFO[0]}" -v dlm=" " 
-awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSCPU_INFO[1]}" -v num_cpus="${LSCPU_INFO[0]}" -v dlm=" " '
+#echo awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSCPU_INFO[1]}" -v num_cpus="${LSCPU_INFO[0]}" -v dlm=" "
+awk -v infile="$INFILE" -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_INFO[3]}" -v vendor="${LSCPU_INFO[2]}" -v tsc_ghz="${LSCPU_INFO[1]}" -v num_cpus="${LSCPU_INFO[0]}" -v dlm=" " '
    function ck_tm(tm) {
    if (!(tm in tm_list)) {
      tm_list[tm] = ++tm_mx;
@@ -169,7 +174,7 @@ awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_
 #    return ((EV("CPU_CLK_UNHALTED.THREAD", level) / 2) * (1 + EV("CPU_CLK_UNHALTED.ONE_THREAD_ACTIVE", level) / EV("CPU_CLK_UNHALTED.REF_XCLK", level))) if ebs_mode else(EV("CPU_CLK_UNHALTED.THREAD_ANY", level) / 2) if smt_enabled else CLKS(self, EV, level)
     lkup[++j] = "idq_uops_not_delivered.core";           not_deliv = j;
     #lkup[++j] = "offcore_requests.demand_data_rd"
-    #lkup[++j] = "offcore_requests_outstanding.demand_data_rd"; 
+    #lkup[++j] = "offcore_requests_outstanding.demand_data_rd";
     lkup[++j] = "qpi_data_bandwidth_tx";                 qpi_tx  = j;
     lkup[++j] = "unc_c_tor_inserts.miss_opcode.0x182";   tor_ins = j;
     lkup[++j] = "unc_c_tor_occupancy.miss_opcode.0x182"; tor_occ = j;
@@ -199,37 +204,6 @@ awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_
       v = lkup[j];
       if (!(v in evt_list)) {
         k = j;
-#        ck=0;
-#        if (j == ++ck) { qpi0 = k; }
-#        if (j == ++ck) { qpi1 = k; }
-#        if (j == ++ck) { qpi2 = k; }
-#        if (j == ++ck) { unc_cha_miss = k; }
-#        if (j == ++ck) { unc_cha_occ  = k; }
-#        if (j == ++ck) { unc_cha_clk  = k; }
-#        if (j == ++ck) { pwr  = k; }
-#        if (j == ++ck) { offc_pwr  = k; }
-#        if (j == ++ck) { offc_dmnd_data_rd    = k; }
-#        if (j == ++ck) { offc_out_dmnd_data_rd= k; }
-#        if (j == ++ck) { unc_cha_ref  = k; }
-#        if (j == ++ck) { unc_upi_bytes= k; }
-#        if (j == ++ck) { instr        = k; }
-#        if (j == ++ck) { ret_cycles   = k; }
-#        if (j == ++ck) { cyc          = k; }
-#        if (j == ++ck) { instr        = k; }
-#        if (j == ++ck) { ret_slots    = k; }
-#        if (j == ++ck) { thr_any      = k; }
-#        if (j == ++ck) { not_deliv    = k; }
-#        ck += 2;
-#        #if (j == 18) { offc_dmnd_data_rd    = k; }
-#        #if (j == 19) { offc_out_dmnd_data_rd= k; }
-#        if (j == ++ck) { qpi_tx = k;}
-#        if (j == ++ck) { tor_ins = k;}
-#        if (j == ++ck) { tor_occ = k;}
-#        if (j == ++ck) { tor_clk = k;}
-#        if (ck != lkup_mx) {
-#          printf("messup here, ck= %d, lkup_mx= %d. bye\n", ck, lkup_mx) > "/dev/stderr";
-#          exit(1);
-#        }
         evt_list[v] = j;
         evt_lkup[j] = v;
         evt_mx = j;
@@ -252,37 +226,132 @@ awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_
     rec_num=0;
     tm_col = 0;
     tm_tot = 0;
+    while ((getline < infile) > 0) {
+       if (length($0) == 0 || substr($1,1,1) == "#") { continue; }
+       if ($0 ~ / Performance counter stats /) { # for process id 40516:
+         fmt_mode = "human"; # human formatted (not -x ";")
+         if (index($0, "for process") > 0) {
+           per_what = per_pid;
+         } else {
+           # doing whole system
+           per_what = per_sys;
+         }
+         continue;
+       }
+       if (index($0, ";") > 0) {
+         if (index($0, "cpu-clock") > 0) {
+           nn = split($0, brr, ";");
+           if (brr[3] == "cpu-clock") {
+             tm_col = -1;
+           }
+           if (brr[4] == "cpu-clock") {
+             tm_col = 0;
+           }
+           #printf("%s, ________tm_col= %s\n", $0, tm_col);
+         }
+         break;
+       }
+       if ( fmt_mode == "human" && index($0, "cpu-clock") > 0) {
+#         10,000.62 msec cpu-clock                 #    2.000 CPUs utilized
+          tm_cpu_secs = $1*0.001;
+          tot_cpus_utilized = $5+0.0;
+           if ($3 == "cpu-clock") {
+             tm_col = -1;
+           }
+       }
+       if (index($0, "seconds time elapsed") > 0) {
+         tot_tm_elap = $1+0.0;
+         tm_tot = tot_tm_elap;
+         print $0;
+         break;
+       }
+    }
+    close(infile);
   }
   /not counted/{next;}
   /not supported/{next;}
   / Performance counter stats / { # for process id 40516:
-    fmt_mode = "human"; # human formatted (not -x ";")
-    if (index($0, "for process") > 0) {
-      per_what = per_pid;
-    } else {
-      # doing whole system
-      per_what = per_sys;
-    }
+    next;
   }
+  { if (length($0) == 0 || substr($1,1,1) == "#") { next; }}
 
-
-  /;/{
+  $0 ~ /;/ || fmt_mode == "human" {
+    if (fmt_mode == "human") {
+      if (index($0, "seconds time elapsed") > 0) {
+        next;
+      }
+      n = 0;
+      i = 1;
+      arr[++n] = $i;
+      gsub(",", "", arr[1]);
+      pos = index($0, $i);
+      len0 = length($0);
+      len1 = length($i);
+      if (NF > 1) {
+        if (substr($0, pos+len1+1, 1) != " ") {
+          # has nonblank 2nd field (units) between evt_count and evt_name
+          arr[++n] = $(++i);
+        } else {
+          arr[++n] = "";
+        }
+      }
+      arr[++n] = $(++i); # evt_nm in arr[3]
+      last_fld = $NF;
+      if (substr(last_fld, 1, 1) == "(" && substr(last_fld, length(last_fld),1) == ")") {
+         pct = substr(last_fld, 2, length(last_fld)-2) + 0.0;
+      } else {
+         pct = 100.0;
+      }
+      arr[++n] = sprintf("%.0f", 0.01e9 * pct * tot_cpus_utilized * tot_tm_elap);
+      arr[++n] = pct;
+      got_pound = 0;
+      for (i=3; i <= NF; i++) {
+        if ($i == "#") {
+          got_pound = 1;
+          continue;
+        }
+        if (got_pound == 0) {
+          continue;
+        }
+        if (got_pound == 1) {
+          arr[++n] = $(i);
+          if (i != NF) { ++n;}
+          ++got_pound;
+          dlm = "";
+          continue;
+        }
+        arr[n] = arr[n] dlm $i;
+        dlm = " ";
+      }
+      if(1==2 && index($0, "mperf") > 0) {
+      printf("line orig= %s\n", $0);
+      printf("line now =");
+      for(i=1; i <= n; i++) {printf("arr[%d]=%s\n",i, arr[i]);}
+      }
+    } else {
+      n = split($1, arr, ";");
+    }
     if (++rec_num == 1) {
       # dont handle if 1st field is CPUxx field
+#239627.82;msec;cpu-clock;239627851474;100.00;47.861;CPUs utilized
 #4999.99;msec;cpu-clock;4999995441;100.00;1.000;CPUs utilized
 #15909855795;;msr/aperf/;4999996839;100.00;3181.976;M/sec
 #10987308158;;msr/mperf/;5000008876;100.00;2197.465;M/sec
       # see if this is just a total for the whole run (no timestamp as 1st field)
-      n=split($1, arr, ";");
       v0 = arr[1]+0.0;
       v1 = arr[2]+0.0;
-      printf("1st rec, v0= %s, v1= %s\n", v0, v1);
-      if (v1 == 0 && (arr[2] == "" || arr[2] ~ /^[a-z]/)) { # no time field
-        printf("got here: 1st rec, v0= %s, v1= %s\n", v0, v1);
+      #printf("1st rec, v0= %s, v1= %s\n", v0, v1);
+      if (v1 == 0 && (arr[2] == "" || arr[2] ~ /^[a-z]/)) {
+        # no time field in 1st col
         if (n >= 4) {
-          tm_tot = 1.0e-9 * arr[4];
+          tm_tot = 0.001 * arr[1];
+          if (arr[3] == "cpu-clock" && n >= 6) {
+            tm_cpu_secs = tm_tot;
+            tm_tot = tm_tot/arr[6];
+            printf("tm_tot= %f, tm_cpu_secs= %f arr[1]= %s\n", tm_tot, tm_cpu_secs, arr[1]);
+            printf("num_cpus= %s tsc_ghz= %s\n", num_cpus, tsc_ghz);
+          }
         }
-        tm_col = -1;
       }
     }
     j = 0;
@@ -292,7 +361,7 @@ awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_
     else if (index($0, "msr/irperf/") > 0) { j=instr; }
     else if (index($0, "instructions") > 0) { j=instr; }
     else if (index($0, "ret_uops_cycles") > 0) { j=ret_cycles; }
-    n=split($1, arr, ";");
+    #n = split($1, arr, ";");
     cpu_col=0;
     if (n > 2 && index(arr[2+tm_col], "CPU") == 1) {
       cpu_col=1;
@@ -314,14 +383,14 @@ awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_
         evt_list[e] = ++evt_mx;
         evt_lkup[evt_mx] = e;
         j = evt_mx;
-        printf("added evt[%d]= %s\n", j, e);
+        printf("added evt[%d]= %s, cpu_col= %d, tm_col= %d idx= %d\n", j, e, cpu_col, tm_col, 4+cpu_col+tm_col);
         }
       }
       if (index(e, "l3_lat_out_cycles") > 0) { L3cyc = j; }
       if (index(e, "l3_lat_out_misses") > 0) { L3m = j; }
     }
     if (j != 0) {
-      n=split($1, arr, ";");
+      #n = split($1, arr, ";");
       cpu_col=0;
       if (index(arr[2+tm_col], "CPU") == 1) {
         cpu_col=1;
@@ -332,6 +401,13 @@ awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_
         tm_i = ck_tm(arr[1]);
       }
       evt[j,tm_i] += arr[2+cpu_col + tm_col];
+      if (1==2 && index($0, "mperf") > 0) {
+      printf("evt[%d,%d] += arr[2+%d+%d]= %s\n", j, tm_i, cpu_col, tm_col, evt[j,tm_i]);
+      if(index($0, "mperf") > 0) {
+         printf("mperf: %s\n", $0);
+         for(ii=1; ii <= n; ii++) { printf("arr[%d]= %s\n", ii, arr[ii]); }
+      }
+      }
       evt[j,tm_i,"inst"]++;
       evt[j,tm_i,"ns"] += arr[5+cpu_col + tm_col];
       evt[j,tm_i,"multi"] = arr[6+cpu_col + tm_col];
@@ -344,11 +420,11 @@ awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_
     }
   }
   /unc._read_write/{
-   n=split($1, arr, ";");
-      cpu_col =0;
-      if (index(arr[2+tm_col], "CPU") == 1) {
-        cpu_col =1;
-      }
+   #n = split($1, arr, ";");
+   cpu_col = 0;
+   if (index(arr[2+tm_col], "CPU") == 1) {
+     cpu_col =1;
+   }
    if (tm_tot > 0) {
      tm_i = ck_tm(tm_tot);
    } else {
@@ -362,7 +438,7 @@ awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_
    #evt[j,tm_i,"multi"] = arr[6+cpu_col + tm_col];
    #printf("unc_rd_wr %s, v= %s bw= %f\n", arr[4+cpu_col + tm_col], arr[2+cpu_col + tm_col], 64.0e-9*evt[unc_rdwr,tm_i]) > "/dev/stderr";
    #exit;
-      next;
+   next;
  }
  END{
    #exit;
@@ -407,23 +483,23 @@ awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_
     if (evt[ret_slots,1] != "" && evt[thr_any,1] != "") {
       h[++cats] = "%retiring";
       td_ret = cats;
-    } 
-   } 
+    }
+   }
    if (evt[icx_topd_slots,1] != "" && evt[icx_topd_ret,1] != "") {
       h[++cats] = "%td_ret";
       icx_td_ret = cats;
       got_icx_td_ret = 1;
-   } 
+   }
    if (evt[icx_topd_slots,1] != "" && evt[icx_topd_bs,1] != "") {
       h[++cats] = "%td_bs";
       icx_td_bs = cats;
       got_icx_td_bs = 1;
-   } 
+   }
    if (evt[icx_topd_slots,1] != "" && evt[icx_topd_be,1] != "") {
       h[++cats] = "%td_be";
       icx_td_be = cats;
       got_icx_td_be = 1;
-   } 
+   }
    if (evt[icx_topd_slots,1] != "" && evt[icx_topd_fe,1] != "" && evt[icx_uop_drop,1] != "") {
       h[++cats] = "%td_fe";
       icx_td_fe = cats;
@@ -539,7 +615,7 @@ awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_
           L3lat_cycles = v;
         }
       }
-      #if (h[j] == "MssO/cyc") 
+      #if (h[j] == "MssO/cyc")
       if (h[j] == "L3MssBW") {
         #if (index(vendor, "AMD") > 0) {
         #  #v = lat_fctr * evt[L3cyc,i]/evt[L3m,i];
@@ -566,7 +642,7 @@ awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_
           } else {
             v = 0.0;
           }
-          
+
           #if (sockets > 0) { skt = sockets; } else { skt = 1.0; }
           #if (evt[unc_cha_clk,i,"inst"] > 0) {
           #  v1 = evt[unc_cha_clk,i]/(evt[unc_cha_clk,i,"ns"]);
@@ -613,15 +689,15 @@ awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_
         v = lat_fctr * evt[L3cyc,i]/evt[L3m,i];
         if (tor_occ == L3cyc) { v *= 0.5; }
         if (index(vendor, "AMD") > 0) {
-          v = v/frqGHz; 
+          v = v/frqGHz;
         } else {
           v = v/tsc_ghz;
         }
-        
       }
       if (h[j] == "MissO/cyc") { v = lat_fctr * evt[L3cyc,i]/evt[cyc,i]; }
       if (h[j] == "IPC") { v = evt[instr,i]/evt[cyc,i]; }
       if (h[j] == "%retiring" && got_clx_td_ret != 1) {
+         #printf("thr_per_core= %s\n", thr_per_core) > "/dev/stderr";
          td_denom = (4*evt[thr_any,i]/thr_per_core);
          v = 100.0*evt[ret_slots,i]/td_denom;
          td_ret_val = v;
@@ -639,11 +715,11 @@ awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_
         td_frt_end_val = v;
         #printf("%%frt_end:  100.0*evt[not_deliv,%d]= %g td_denom= %g v= %f\n", i, 100.0*evt[not_deliv,i], td_denom, v);
       }
-      if (evt[clk_one_thr,1] != "") {
-        if (h[j] == "%bad_spec") { v = 100.0*(evt[uops_issued_any,i]-evt[ret_slots,i] + ((4*evt[recovery_cycles,i])))/td_denom; if (v < 0){v=0.0;} td_bad_spec_val = v; }
-      } else {
+      #if (evt[clk_one_thr,1] != "") {
+      #  if (h[j] == "%bad_spec") { v = 100.0*(evt[uops_issued_any,i]-evt[ret_slots,i] + ((4*evt[recovery_cycles,i])))/td_denom; if (v < 0){v=0.0;} td_bad_spec_val = v; }
+      #} else {
         if (h[j] == "%bad_spec") { v = 100.0*(evt[uops_issued_any,i]-evt[ret_slots,i] + ((4*evt[recovery_cycles,i])/2))/td_denom; if (v < 0){v=0.0;} td_bad_spec_val = v; }
-      }
+      #}
       if (h[j] == "%be_spec") { v = 100 - td_ret_val - td_frt_end_val; if (v < 0) { v = 0.0; }}
       if (h[j] == "%bck_end") { v = 100 - td_ret_val - td_frt_end_val - td_bad_spec_val; if (v < 0) { v = 0.0; }}
       if (h[j] == "%ret_cyc") { v = 100.0*evt[ret_cycles,i]/evt[cyc,i]; }
@@ -684,13 +760,17 @@ awk -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" -v sockets="${LSCPU_
         }
       }
       if (h[j] == "pf_lcl") { v = 64.0e-9 * evt[pfl,i]/tm_dff; }
-      if (h[j] == "pkg_watts") { v = evt[pwr,i]/tm_dff; 
+      if (h[j] == "pkg_watts") { v = evt[pwr,i]/tm_dff;
         #printf("\npwr: evt[%d,%d]= %f tm_diff= %f v= %f\n", pwr,i, evt[pwr,i], tm_dff, v);
       }
       if (h[j] == "pf_rmt") { v = 64.0e-9 * evt[pfr,i]/tm_dff; }
       if (h[j] == "dmnd_lcl") { v = 64.0e-9 * evt[meml,i]/tm_dff; }
       if (h[j] == "dmnd_rmt") { v = 64.0e-9 * evt[memr,i]/tm_dff; }
-      if (h[j] == "%busy") { bsy = 1.0e-9*(evt[mperf,i])/(num_cpus * tsc_ghz * tm_dff); v = 100.0*bsy;}
+      if (h[j] == "%busy") {
+        bsy = 1.0e-9*(evt[mperf,i])/(num_cpus * tsc_ghz * tm_dff);
+        v = 100.0*bsy;
+        #printf("\n%%busy: evt[mperf,i]= %s, num_cpus= %s, tsc_ghz= %s, tm_dff= %s\n", evt[mperf,i], num_cpus, tsc_ghz, tm_dff);
+      }
       if (h[j] == "frqGHz") { frqGHz = tsc_ghz * evt[cyc,i]/evt[mperf,i]; v = frqGHz;}
       printf("%s%8.3f", dlm, v);
     }
