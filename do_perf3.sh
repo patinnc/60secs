@@ -1,10 +1,36 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 SCR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+SCR_BASENAME=`basename $0`
 export LC_ALL=C
 AWK_BIN=awk
 if [ -e $SCR_DIR/bin/gawk ]; then
   AWK_BIN=$SCR_DIR/bin/gawk
+fi
+
+declare -a CFG_OPTS
+cfg_opts_arr=()
+CFG_FL="$SCR_DIR/${SCR_BASENAME}_cfg"
+if [ ! -e $CFG_FL ]; then
+  CFG_FL="$SCR_DIR/60secs/${SCR_BASENAME}_cfg"
+fi
+if [ -e $CFG_FL ]; then
+readarray -t cfg_opts_arr < <(awk '
+        {
+          if (NF == 0) { next;}
+          printf("%s\n", $0);
+        }
+        ' $CFG_FL)
+fi
+milan_td_events=
+if [ "${#cfg_opts_arr[@]}" -gt "0" ]; then
+  for ((i_coa=0; i_coa < ${#cfg_opts_arr[@]}; i_coa++)); do
+    # add pipe to xargs to trim leading trailing whitespace
+    RESP=`echo "${cfg_opts_arr[$i_coa]}" | awk -v want="milan_td_events:" '$1 == want { printf("%s\n", substr($0, length($1)+1));exit(0);}' | xargs`
+    if [ "$RESP" != "" ]; then
+      milan_td_events="$RESP"
+    fi
+  done
 fi
 
 #SCR_DIR=`dirname "$(readlink -f "$0")"`
@@ -313,23 +339,12 @@ echo "# started on $dtc $dte" > $FL
       EVT="cpu-clock,instructions,cycles,$STALL_UOPS,$DISP_STALL1,stalled-cycles-backend,stalled-cycles-frontend"
       EVT="cpu-clock,instructions,cycles,$STALL_UOPSIC,$STALL_UOPS_C,$STALL_UOPS_I,$STALL_UOPS"
       #EVTF="cpu-clock,msr/aperf/,msr/mperf/,msr/tsc/,msr/irperf/"
-      IRPERF=
-      #if [ -e /sys/devices/msr/events/irperf ]; then
-      #   unreliable
-      #  IRPERF=",msr/irperf/"
-      #else
-        IRPERF=",instructions"
-      #fi
-      if [ "$CPU_DECODE" == "Zen Naples/Whitehaven/Summit Ridge/Snowy Owl" ]; then
-        IRPERF=",instructions"
-      fi
-      EVTF="cpu-clock,msr/aperf/,msr/mperf/$IRPERF"
       CYCLES_ANY="cpu/name='cycles_any',event=0x76,cmask=0x1,inv=0/"
       BR_MISP_CYCLES="cpu/name='br_misp_cycles',event=0xc3,cmask=0x1,inv=0/"
       RET_INST_CYCLES="cpu/name='ret_inst_cycles',event=0xc0,cmask=0x1,inv=0/"
-      RET_UOPS="cpu/name='ret_uops',event=0xc1/"
-      RET_UOPS_CYCLES="cpu/name='ret_uops_cycles',event=0xc1,cmask=0x1,inv=0/"
-      DISP_0UOPS_CYCLES="cpu/name='disp_0uops_cycles',event=0xa9,cmask=0x01,inv=0/"
+      #RET_UOPS="cpu/name='ret_uops',event=0xc1/"
+      #RET_UOPS_CYCLES="cpu/name='ret_uops_cycles',event=0xc1,cmask=0x1,inv=0/"
+      #DISP_0UOPS_CYCLES="cpu/name='disp_0uops_cycles',event=0xa9,cmask=0x01,inv=0/"
       if [ -e /sys/devices/amd_df ]; then
         MEMBW=",amd_df/name='unc0_read_write',event=0x7,umask=0x38/,amd_df/name='unc1_read_write',event=0x47,umask=0x38/,amd_df/name='unc2_read_write',event=0x87,umask=0x38/,amd_df/name='unc3_read_write',event=0xc7,umask=0x38/,amd_df/name='unc4_read_write',event=0x107,umask=0x38/,amd_df/name='unc5_read_write',event=0x147,umask=0x38/,amd_df/name='unc6_read_write',event=0x187,umask=0x38/,amd_df/name='unc7_read_write',event=0x1c7,umask=0x38/"
         if [ "$skts" -gt "1" ]; then
@@ -357,8 +372,16 @@ echo "# started on $dtc $dte" > $FL
       if [ "$CK_PWR" != "" ]; then
         PWR_EVT=",power/energy-pkg/"
       fi
-      EVT="$EVTF,${RET_INST_CYCLES},${RET_UOPS_CYCLES}${MEMBW}${L3ACC}${L3LAT},$HWPF_LCL,$HWPF_RMT,$MEM_LCL,$MEM_RMT${PWR_EVT}"
-      #EVT="$EVTF,$DISP_STALL1,$DISP_STALL0,stalled-cycles-backend,stalled-cycles-frontend"
+      EVTF="cpu-clock,duration_time,msr/aperf/,msr/mperf/,instructions"
+      BR_RET=",cpu/event=0xc2,umask=0x00,name=ExRetBrn/"
+      BR_MSP=",cpu/event=0xc3,umask=0x00,name=ExRetBrnMisp/"
+      OCSRC_OP=",cpu/event=0xaa,umask=0x2,name=DeSrcOpDisp.opcache/"
+      OCSRC_DEC=",cpu/event=0xaa,umask=0x1,name=DeSrcOpDisp.x86Decoder/"
+      OC_ACC=",cpu/event=0x28f,umask=0x7,name=OpCacheHitMiss.access/"
+      OC_MSS=",cpu/event=0x28f,umask=0x4,name=OpCacheHitMiss.miss/"
+      IFILL_SYS=",cpu/event=0x83,umask=0x00,name=IcCacheFillSys/"
+      EVT_TD=duration_time,${BR_RET}${BR_MSP}${OCSRC_OP}${OCSRC_DEC}${OC_ACC}${OC_MSS}${IFILL_SYS},cpu/event=0xc1,umask=0x0,name=uops_retired/${milan_td_events}
+      EVT="$EVTF,${EVT_TD}${MEMBW}${L3ACC}${L3LAT},$HWPF_LCL,$HWPF_RMT,$MEM_LCL,$MEM_RMT${PWR_EVT}"
     else
       # ice lake topdown events
       #  topdown-bad-spec OR cpu/topdown-bad-spec/
@@ -411,13 +434,14 @@ TD2=",{cpu/slots/,topdown-be-bound,topdown-bad-spec,topdown-fe-bound,topdown-ret
         UOPS_ISSUED_ANY=",cpu/event=0x0e,umask=0x01,name='uops_issued.any'/"
         UOPS_RETIRED_RETIRE_SLOTS=",cpu/event=0xc2,umask=0x02,name='uops_retired.retire_slots'/"
         #echo "got NEED_JUST_CYCLES == $NEED_JUST_CYCLES, THA_EVT= $THA_EVT"
-        if [ "$NEED_JUST_CYCLES" == "1" ]; then
+        #if [ "$NEED_JUST_CYCLES" == "1" ]; then
           CLK_ONE_THREAD_ACTIVE=",cpu/event=0x3c,umask=0x02,name='cpu_clk_unhalted.one_thread_active'/"
           CLK_REF_XCLK=",cpu/event=0x3c,umask=0x01,name='cpu_clk_unhalted.ref_xclk'/"
+          CLK_REF_XCLK_ANY=",cpu/any=1,event=0x3c,umask=0x01,name='cpu_clk_unhalted.ref_xclk_any'/"
           THA_EVT=
-        fi
+        #fi
         #INT_MISC_RECOVERY=",cpu/event=0x0d,umask=0x01,any=1,period=2000003,name='int_misc.recovery_cycles_any'/"
-        INT_MISC_RECOVERY=",cpu/event=0x0d,umask=0x01,any=${DO_ANY},name='int_misc.recovery_cycles_any'/"
+        INT_MISC_RECOVERY=",cpu/event=0x0d,umask=0x01,any=1,name='int_misc.recovery_cycles_any'/"
         CYC_ACT_STALLS_TOT=",cpu/name='cycle_activity.stalls_total',cmask=0x4,umask=0x4,event=0xa3/"
         UOP_EXE_CYC_GE1=",cpu/name='uops_executed.cycles_ge_1_uop_exe',cmask=0x1,umask=0x1,event=0xb1/"
       fi
@@ -566,17 +590,14 @@ TD2=",{cpu/slots/,topdown-be-bound,topdown-bad-spec,topdown-fe-bound,topdown-ret
         IDQ_EVT=",cpu/name='idq_uops_not_delivered.core',event=0x9c,umask=0x01/"
       fi
     fi
-    UOP_EVT=
-    #GOT_UOP_EVT=`echo $PERF_LIST | grep uops_retired.retire_slots`
-    #if [ "$GOT_UOP_EVT" != "" ]; then
-    #  UOP_EVT=",uops_retired.retire_slots"
-    #fi
     SKT_EVT="${SKT_EVT}${PWR_EVT}${UNC_CHA}"
     if [ "$DO_SYS" == "0" ]; then
       SKT_EVT=
     fi
+    BR_RET=",cpu/event=0xc4,umask=0x00,name=br_inst_retired.all_branches/"
+    BR_MSP=",cpu/event=0xc5,umask=0x00,name=br_misp_retired.all_branches/"
     #EVT="cpu-clock,task-clock,instructions,cycles,ref-cycles,idq_uops_not_delivered.core,uops_retired.retire_slots,cpu_clk_unhalted.thread_any,power/energy-pkg/${EVT}${UNC_CHA}${OFFC}"
-    EVT="cpu-clock,instructions,msr/aperf/,msr/mperf/${TD_EVTS}${IDQ_EVT}${UOP_EVT}${THA_EVT}${UOPS_ISSUED_ANY}${UOPS_RETIRED_RETIRE_SLOTS}${CYC_ACT_STALLS_TOT}${UOP_EXE_CYC_GE1}${CLK_ONE_THREAD_ACTIVE}${CLK_REF_XCLK}${INT_MISC_RECOVERY}${OFFC}${SKT_EVT}"
+    EVT="cpu-clock,duration_time,instructions,msr/aperf/,msr/mperf/${TD_EVTS}${IDQ_EVT}${THA_EVT}${UOPS_ISSUED_ANY}${UOPS_RETIRED_RETIRE_SLOTS}${CYC_ACT_STALLS_TOT}${UOP_EXE_CYC_GE1}${CLK_ONE_THREAD_ACTIVE}${CLK_REF_XCLK}${CLK_REF_XCLK_ANY}${BR_MSP}${BR_RET}${INT_MISC_RECOVERY}${OFFC}${SKT_EVT}"
     fi
     #echo "do: $PERF_BIN stat -x \";\"  --per-socket -a -I $ms -o $FL -e $EVT" > /dev/stderr
     #echo "do: $PERF_BIN stat -x \";\"  --per-socket -a -I $ms -o $FL -e $EVT"
