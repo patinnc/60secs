@@ -26,7 +26,7 @@ milan_td_events=
 if [ "${#cfg_opts_arr[@]}" -gt "0" ]; then
   for ((i_coa=0; i_coa < ${#cfg_opts_arr[@]}; i_coa++)); do
     # add pipe to xargs to trim leading trailing whitespace
-    RESP=`echo "${cfg_opts_arr[$i_coa]}" | awk -v want="milan_td_events:" '$1 == want { printf("%s\n", substr($0, length($1)+1));exit(0);}' | xargs`
+    RESP=`echo "${cfg_opts_arr[$i_coa]}" | awk -v want="milan_td_events:" '$1 == want { printf("%s\n", substr($0, length($1)+1));exit(0);}' | sed -e 's/^[[:space:]]*// ' | sed -e 's/[[:space:]]*$//'`
     if [ "$RESP" != "" ]; then
       milan_td_events="$RESP"
     fi
