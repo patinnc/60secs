@@ -1,0 +1,27 @@
+
+eqn: 1+2
+hdr: exp_3
+
+eqn: 1+[var1] 
+hdr: eqn2
+
+eqn: {eqn2} + {exp_3}
+hdr: eqn3
+
+eqn: 2.0e2 + [var4]
+hdr: eqn204
+
+eqn: 100 * (2 + 3) + 1
+hdr: eqn501
+
+eqn: 2 + (4)^(2)
+hdr: eqn18
+
+eqn: 2 + (4)^(0.5)
+hdr: eqn4
+
+eqn: max((1),(2))
+hdr: max2
+
+eqn: max((1),({eqn18}+1))
+hdr: max_eqn18_p1

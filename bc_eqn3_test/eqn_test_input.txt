@@ -1,0 +1,5 @@
+
+2.00;sec;duration_time
+1;;var1;1;aa
+2;;var2;2;bb
+4;;var4;2;bb
