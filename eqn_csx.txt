@@ -1,0 +1,212 @@
+
+eqn: 100 * [ref-cycles] / ({num_cpus} * 1.0e9 * {tsc_freq}) / {interval}
+hdr: %busy
+
+eqn: {tsc_freq} * [cycles] / [ref-cycles]
+hdr: freqGhz
+
+eqn: [instructions] / [cycles]
+hdr: IPC
+
+
+# below events work on csx for per pid level or 1 thr/core. This set of events lets us compute %ret, %front_end, %bad_spec & %back_end
+# in td eqns below I use cpu_clk_unhalted.thread_any in td_method_1 & td_method_2.
+# or I use cpu_clk_unhalted.one_thread_active in td_method_3.
+# td_method_3 is based on the TopDown details from 'perf list -d -v --debug --details'
+
+eqn: [cpu_clk_unhalted.one_thread_active] + [cpu_clk_unhalted.ref_xclk] + [uops_retired.retire_slots] + [idq_uops_not_delivered.core] + [uops_issued.any]
+hdr: td_method_3
+options: no_print
+
+# below events work on csx for system level & 2 thr/core. This set of events lets us compute %ret, %bad_spec, %front_end & %back_end
+
+eqn: [cpu_clk_unhalted.thread_any] + [uops_retired.retire_slots] + [idq_uops_not_delivered.core] + [uops_issued.any] + [int_misc.recovery_cycles_any]
+hdr: td_method_1
+options: no_print,skip_if_got{td_method_3}
+
+# below events work on csx for system level & 2 thr/core. This set of events lets us compute %ret, %front_end and %bs_be = %bad_spec+%back_end)
+
+eqn: [cpu_clk_unhalted.thread_any] + [uops_retired.retire_slots] + [idq_uops_not_delivered.core] + [uops_issued.any]
+hdr: td_method_2
+options: no_print,skip_if_got{td_method_3}
+
+#TopDownL1_SMT:
+#  SLOTS_SMT
+#       [Total issue-pipeline slots (per-Physical Core till ICL; per-Logical Processor ICL onward)]
+#       [4 * ( ( cycles / 2 ) * ( 1 + cpu_clk_unhalted.one_thread_active / cpu_clk_unhalted.ref_xclk ) )]
+
+eqn: 4 * [cpu_clk_unhalted.thread_any] / {thr_per_core}
+hdr: td_denom_any
+options: no_print,skip_if_got{td_method_3}
+
+# td_denom = (4*evt[thr_any,i]/thr_per_core);
+# td_ret_val = 100.0*evt[ret_slots,i]/td_denom;
+# td_frt_end_val = 100.0*evt[not_deliv,i]/td_denom;
+# td_bad_spec_val = 100.0*(evt[uops_issued_any,i]-evt[ret_slots,i] + ((4*evt[recovery_cycles,i])/2))/td_denom; if (v < 0){v=0.0;} td_bad_spec_val = v; }
+# if (h[j] == "%be_spec") { v = 100 - td_ret_val - td_frt_end_val; if (v < 0) { v = 0.0; }}
+# if (h[j] == "%bck_end") { v = 100 - td_ret_val - td_frt_end_val - td_bad_spec_val; if (v < 0) { v = 0.0; }}
+# 
+# cpu_clk_unhalted.thread_any
+# uops_retired.retire_slots
+# idq_uops_not_delivered.core
+# uops_issued.any
+# int_misc.recovery_cycles_any
+
+
+eqn: 100 * [uops_retired.retire_slots] / {td_denom_any}
+hdr: td_ret
+
+eqn: 100 - ({td_ret} + {td_fe})
+hdr: td_bebs
+options: skip_if_got[int_misc.recovery_cycles_any],use_if_got{td_denom_any}
+
+eqn: 100.0*([uops_issued.any] - [uops_retired.retire_slots]+((4*[int_misc.recovery_cycles_any])/2))/{td_denom_any}
+hdr: td_bs
+
+eqn: 100 * [idq_uops_not_delivered.core] / {td_denom_any}
+hdr: td_fe
+
+eqn: 100.0-({td_ret} + {td_fe} + {td_bs})
+hdr: td_be
+options: skip_if_got{td_bebs},skip_if_got{td_method_3}
+
+#  SLOTS
+#       [Total issue-pipeline slots (per-Physical Core till ICL; per-Logical Processor ICL onward)]
+#       [4 * cycles]
+eqn: 4 * [cycles]
+hdr: td_denom_one
+options: no_print,use_if_got{td_method_3},use_if_got{monitor_per_thread}
+
+#  Retiring
+#       [This category represents fraction of slots utilized by useful work i.e. issued uops that eventually get retired]
+#       [uops_retired.retire_slots / (4 * cycles)]
+eqn: 100 * [uops_retired.retire_slots] / {td_denom_one}
+hdr: td_ret
+
+#  Bad_Speculation
+#       [This category represents fraction of slots wasted due to incorrect speculations]
+#       [( uops_issued.any - uops_retired.retire_slots + 4 * int_misc.recovery_cycles ) / (4 * cycles)]
+eqn: 100.0*([uops_issued.any] - [uops_retired.retire_slots]+ ( 4*[int_misc.recovery_cycles_any]))/{td_denom_one}
+hdr: td_bs
+
+#  Frontend_Bound
+#       [This category represents fraction of slots where the processor's Frontend undersupplies its Backend]
+#       [idq_uops_not_delivered.core / (4 * cycles)]
+eqn: 100 * [idq_uops_not_delivered.core] / {td_denom_one}
+hdr: td_fe
+
+#  Backend_Bound
+#       [This category represents fraction of slots where no uops are being delivered due to a lack of required resources for accepting new uops in the Backend]
+#       [1 - ( (idq_uops_not_delivered.core / (4 * cycles)) + (( uops_issued.any - uops_retired.retire_slots + 4 * int_misc.recovery_cycles ) / (4 * cycles)) + (uops_retired.retire_slots / (4 * cycles)) )]
+eqn: 100.0-({td_ret} + {td_fe} + {td_bs})
+hdr: td_be
+options: use_if_got{td_denom_one}
+
+#TopDownL1_SMT:
+#  SLOTS_SMT
+#       [Total issue-pipeline slots (per-Physical Core till ICL; per-Logical Processor ICL onward)]
+#       [4 * ( ( cycles / 2 ) * ( 1 + cpu_clk_unhalted.one_thread_active / cpu_clk_unhalted.ref_xclk ) )]
+eqn: 4 * ( ( [cycles] / 2 ) * ( 1 + [cpu_clk_unhalted.one_thread_active] / [cpu_clk_unhalted.ref_xclk] ) )
+hdr: td_denom_smt
+options: no_print,use_if_got{td_method_3},use_if_got{monitor_per_system}
+
+
+#  Retiring_SMT
+#       [This category represents fraction of slots utilized by useful work i.e. issued uops that eventually get retired. SMT version; use when SMT is enabled and measuring per logical CPU]  
+#       [uops_retired.retire_slots / (4 * ( ( cycles / 2 ) * ( 1 + cpu_clk_unhalted.one_thread_active / cpu_clk_unhalted.ref_xclk ) ))]
+eqn: 100.0* [uops_retired.retire_slots] / {td_denom_smt}
+hdr: td_ret
+
+#  Bad_Speculation_SMT 
+#       [This category represents fraction of slots wasted due to incorrect speculations. SMT version; use when SMT is enabled and measuring per logical CPU] 
+#       [( uops_issued.any - uops_retired.retire_slots + 4 * ( int_misc.recovery_cycles_any / 2 ) ) / (4 * ( ( cycles / 2 ) * ( 1 + cpu_clk_unhalted.one_thread_active / cpu_clk_unhalted.ref_xclk ) ))]
+eqn: 100.0* ( [uops_issued.any] - [uops_retired.retire_slots] + 4 * ( [int_misc.recovery_cycles_any] / 2 ) ) / {td_denom_smt}
+hdr: td_bs
+
+#  Frontend_Bound_SMT
+#       [This category represents fraction of slots where the processor's Frontend undersupplies its Backend. SMT version; use when SMT is enabled and measuring per logical CPU]
+#       [idq_uops_not_delivered.core / (4 * ( ( cycles / 2 ) * ( 1 + cpu_clk_unhalted.one_thread_active / cpu_clk_unhalted.ref_xclk ) ))]
+eqn: 100.0* [idq_uops_not_delivered.core] / {td_denom_smt}
+hdr: td_fe
+
+#  Backend_Bound_SMT
+#       [This category represents fraction of slots where no uops are being delivered due to a lack of required resources for accepting new uops in the Backend. SMT version; use when SMT is enabled and measuring per logical CPU] 
+#       [1 - ( (idq_uops_not_delivered.core / (4 * ( ( cycles / 2 ) * ( 1 + cpu_clk_unhalted.one_thread_active / cpu_clk_unhalted.ref_xclk ) ))) + (( uops_issued.any - uops_retired.retire_slots + 4 * ( int_misc.recovery_cycles_any / 2 ) ) / (4 * ( ( cycles / 2 ) * ( 1 + cpu_clk_unhalted.one_thread_active / cpu_clk_unhalted.ref_xclk ) ))) + (uops_retired.retire_slots / (4 * ( ( cycles / 2 ) * ( 1 + cpu_clk_unhalted.one_thread_active / cpu_clk_unhalted.ref_xclk ) ))) )]
+eqn: 100.0 - ({td_ret} + {td_bs} + {td_fe})
+hdr: td_be
+options: use_if_got{td_denom_smt}
+
+eqn: 100.0*[cycle_activity.stalls_total]/[cycles]
+hdr: %cyc_be
+
+eqn: 100.0*[uops_executed.cycles_ge_1_uop_exe]/[cycles]
+hdr: %cyc_ret
+
+
+eqn: 1000.0 * [br_inst_retired.all_branches] / [instructions]
+hdr: br_pti
+
+eqn: 100.0 * [br_misp_retired.all_branches] / [br_inst_retired.all_branches]
+hdr: %br_misp
+
+eqn:  (100.0 * [unc_cha_tor_inserts.ia_miss.0x40433] / [unc_cha_tor_inserts.ia.0x40433])
+hdr: LLC_data_rd_%miss/refs
+
+eqn: [OFFCORE_REQUESTS_OUTSTANDING.L3_MISS_DEMAND_DATA_RD] / [OFFCORE_REQUESTS.L3_MISS_DEMAND_DATA_RD]
+hdr: LLC_data_rd_miss_lat_clks
+
+eqn:  (1e9 * [UNC_CHA_TOR_OCCUPANCY.IA_MISS.0x40433] / [UNC_CHA_TOR_INSERTS.IA_MISS.0x40433]) / ( [UNC_CHA_CLOCKTICKS] / ([[[UNC_CHA_CLOCKTICKS]]] * {sockets}) )
+hdr: LLC_data_rd_miss_lat_ns
+
+eqn:  ([UNC_CHA_TOR_OCCUPANCY.IA_MISS.0x40433] / [UNC_CHA_TOR_INSERTS.IA_MISS.0x40433]) / ( {tsc_freq} )
+hdr: LLC_data_rd_miss_lat_MLCns
+
+eqn: [UNC_CHA_CLOCKTICKS] / ([[[UNC_CHA_CLOCKTICKS]]] * {sockets}) / 1e9
+hdr: unc_freq_GHz
+
+eqn: 1.0e-9 * [instructions] / {interval}
+hdr: bips
+
+eqn: 1.0e-9 * [cycles] / {interval}
+hdr: bcps
+
+#eqn: [instructions] / ([cpu_clk_unhalted.thread_any] / {thr_per_core})
+#hdr: core_ipc
+
+#  CoreIPC
+#       [Instructions Per Cycle (per physical core)]
+#       [inst_retired.any / cycles]
+eqn: [instructions] / [cycles]
+hdr: coreIPC
+options: use_if_got{monitor_per_thread}
+
+#  CoreIPC_SMT
+#       [Instructions Per Cycle (per physical core)]
+eqn: [instructions] / ( ( [cycles] / 2 ) * ( 1 + [cpu_clk_unhalted.one_thread_active] / [cpu_clk_unhalted.ref_xclk] ) )
+hdr: coreIPC
+options: use_if_got{monitor_per_system}
+
+#  SMT_2T_Utilization
+#       [Fraction of cycles where both hardware Logical Processors were active]
+#       [1 - cpu_clk_unhalted.one_thread_active / ( cpu_clk_unhalted.ref_xclk_any / 2 )]
+eqn: 100 * (1 - [cpu_clk_unhalted.one_thread_active] / ( [cpu_clk_unhalted.ref_xclk_any] / 2 ))
+hdr: %bothThr
+options: use_if_got{monitor_per_system}
+
+eqn: [power/energy-pkg/] / {interval}
+hdr: watts
+
+eqn: 64.0e-9 * [uncx_read_write]/{interval}
+hdr: memBW_GB/s
+
+eqn: 1.0e-9 * [qpi_data_bandwidth_tx] / {interval}
+hdr: qpiBW_GB/s
+
+eqn: 64.0e-9 * ([qpi_data_bandwidth_txx]/9.0)/ {interval}
+hdr: qpiBW_GB/s
+
+exit
+
+
+
+exit
