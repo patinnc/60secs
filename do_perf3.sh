@@ -380,7 +380,7 @@ echo "# started on $dtc $dte" > $FL
       OC_ACC=",cpu/event=0x28f,umask=0x7,name=OpCacheHitMiss.access/"
       OC_MSS=",cpu/event=0x28f,umask=0x4,name=OpCacheHitMiss.miss/"
       IFILL_SYS=",cpu/event=0x83,umask=0x00,name=IcCacheFillSys/"
-      EVT_TD=duration_time,${BR_RET}${BR_MSP}${OCSRC_OP}${OCSRC_DEC}${OC_ACC}${OC_MSS}${IFILL_SYS},cpu/event=0xc1,umask=0x0,name=uops_retired/${milan_td_events}
+      EVT_TD=duration_time${BR_RET}${BR_MSP}${OCSRC_OP}${OCSRC_DEC}${OC_ACC}${OC_MSS}${IFILL_SYS},cpu/event=0xc1,umask=0x0,name=uops_retired/${milan_td_events}
       EVT="$EVTF,${EVT_TD}${MEMBW}${L3ACC}${L3LAT},$HWPF_LCL,$HWPF_RMT,$MEM_LCL,$MEM_RMT${PWR_EVT}"
     else
       # ice lake topdown events
