@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 # install, setup, config, test, run, fetch, report, combine benchmarks on a list of servers
 # use -h option to see options
@@ -510,8 +510,21 @@ function tot_compare(i1, v1, i2, v2,    l, r)
       #echo "HOSTS= $HOSTS"
     else
       HOSTS=`awk 'BEGIN{ sep=""; }
-        /^#/{ next; }
-        { pos = index($0, "#"); if (pos>1){ $0 = substr($0, 1, pos-1);} gsub(/^[ \t]+|[ \t]+$/, ""); str=str""sep""$0;sep=" "; }
+        /^#/{
+            next;
+        }
+        {
+            pos = index($0, "#");
+            if (pos > 1) {
+                $0 = substr($0, 1, pos-1);
+            }
+            if (($1 == "GCP" || $1 == "UBER" || $1 == "UBER_LAB" || $1 == "AWS") && $2 == ":") {
+                $1 = "";
+                $2 = "";
+            }
+            gsub(/^[ \t]+|[ \t]+$/, "");
+            str=str""sep""$0;sep=" ";
+        }
         END{printf("%s\n", str);
             #printf("hosts= %s\n", str) > "/dev/stderr";
         }' $file`
@@ -519,6 +532,10 @@ function tot_compare(i1, v1, i2, v2,    l, r)
         readarray -t HOST_ARR < <(awk '
         {
           if (NF == 0) { next;}
+            if (($1 == "GCP" || $1 == "UBER" || $1 == "UBER_LAB" || $1 == "AWS") && $2 == ":") {
+                $1 = "";
+                $2 = "";
+            }
           printf("%s\n", $0);
         }
         ' $file)
