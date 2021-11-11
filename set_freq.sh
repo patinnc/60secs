@@ -246,6 +246,10 @@ echo "CPU_NAME= $CPU_NAME"
 MODE="Intel"
 
 case $CPU_NAME in
+  *"arm64"*)
+    MSR_LIST=
+    XMSR_LIST=""
+    ;;
   *"Cascade"*|*"Ice Lake"*|*"Skylake"*)
     MSR_LIST="0x1ad"
     XMSR_LIST="0x1ae" # the mapping
