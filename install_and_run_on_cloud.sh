@@ -63,7 +63,7 @@ fi
 CFG_DIR=./AUTOGEN_config_UNDEFINED
 TAR_GZ=
 DRY_RUN=n
-RUN_CMDS="ping,shell,command,pcmd,lcl_cmd,pssh_test,ssh_test,opt_reboot,popt_${wxy_str}_info,opt_${wxy_str}_info,nameserver_test,scp_tar,untar,opt_install_jdk8,opt_install_jdk11,setup,opt_free_up_disk,config,post,run_cpu,run_ncu,run_cmd,run_disk,run_fio,run_both,run_custom,run_multi,run_specjbb,run_specint,run_sysinfo,run_stream,run_geekbench,peek,pfetch_untar,fetch_untar,get,get_untar,get_recur,report,combine"
+RUN_CMDS="ping,screen,shell,command,pcmd,lcl_cmd,pssh_test,ssh_test,opt_reboot,popt_${wxy_str}_info,opt_${wxy_str}_info,nameserver_test,scp_tar,untar,opt_install_jdk8,opt_install_jdk11,setup,opt_free_up_disk,config,post,run_cpu,run_ncu,run_cmd,run_disk,run_fio,run_both,run_custom,run_multi,run_specjbb,run_specint,run_sysinfo,run_stream,run_geekbench,peek,pfetch_untar,fetch_untar,get,get_untar,get_recur,report,combine"
 SV_CMDS=$RUN_CMDS  # save them off because they get updated in getopts and if the user does -h they won't see the list
 VERBOSE=0
 BMARK_ROOT=/root
@@ -193,7 +193,7 @@ function print_help() {
       echo "     The install steps are: 'scp_tar,untar,setup'."
       echo "     The config  steps are: 'config,post'."
       echo "     The run benchmarks steps are 'run_both|run_cpu|run_ncu|run_disk|run_fio|run_specjbb|run_stream|run_geekbench|run_sysinfo|run_config'"
-      echo "     The 'checking to see if things are running' steps are 'peek' or 'shell'"
+      echo "     The 'checking to see if things are running' steps are 'peek' or 'shell' or 'screen' (if using screen)"
       echo "     The 'collecting output from boxes' step is 'report'"
       echo "     The 'combine results into table' step is 'combine'"
       echo "     The 'fetch output files from server' step is 'fetch' or 'fetch_untar'"
@@ -203,6 +203,7 @@ function print_help() {
       echo "     Below is more detail on each '-r cmd'"
       echo "     'ping' run ping host to see if we can find the server. Note that GCP boxes don't respond to ping. This cmd is optional"
       echo "     'shell' ssh's to the box and opens a bash shell so you can do something not done by this script. This cmd is optional."
+      echo "     'screen' ssh's to the box and opens a bash, can does 'screen -r' to reconnect to detached screen session. This cmd is optional."
       echo "     'command' ssh's to the box and opens a bash shell and runs the command from '-C command_to_be_run'."
       echo "     'pcmd' ssh's to the box and opens a bash shell and runs the command from '-C command_to_be_run', sends output to work_dir/cmd_xxxx.txt"
       echo "     'lcl_cmd' runs (locally) the command from '-C command_to_be_run' and optionally redirects output to -o file"
@@ -842,7 +843,6 @@ for i in $HOSTS; do
       if [ "$RESP" != "" ]; then
         hst_ssh="$RESP"
       fi
-    done
     if [[ $nm =~ ^($hst_beg).* ]]; then
         USERNM=$hst_usr
         USERNM_IN=$hst_usr
@@ -850,6 +850,9 @@ for i in $HOSTS; do
         #echo "$0.$LINENO set username= $USERNM"
         break
     fi
+    done
+    #echo "$0.$LINENO bye"
+    #exit
   fi
 
   do_bkgrnd=0
@@ -955,6 +958,18 @@ for i in $HOSTS; do
   fi
   if [[ $RUN_CMDS == *"shell"* ]]; then
     ssh_cmd $nm "bash"  "-l"
+    echo $SSH_PFX $SSH_HOST "$SSH_CMD"
+    if [ "$DRY_RUN" == "n" ]; then
+          if [ "$nm" == "127.0.0.1" ]; then
+            $SSH_CMD
+          else
+            $SSH_PFX $SSH_HOST "$SSH_CMD"
+          fi
+        dyno_log $SSH_PFX $SSH_HOST "$SSH_CMD"
+    fi
+  fi
+  if [[ $RUN_CMDS == *"screen"* ]]; then
+    ssh_cmd $nm "screen -r"  "-l"
     echo $SSH_PFX $SSH_HOST "$SSH_CMD"
     if [ "$DRY_RUN" == "n" ]; then
           if [ "$nm" == "127.0.0.1" ]; then
