@@ -1899,9 +1899,14 @@ trows++; printf("\n") > NFL;
           sum_i = 0; #idle
           sum_u = 0; #user
           sum_n = 0;
+          # %sys %iowait    %irq   %soft 
           for (i=1; i <= hdr_mx; i++) {
-            if (hdrs[i] == "%usr") { col_u = i; }
-            if (hdrs[i] == "%idle") { col_i = i; }
+            if (hdrs[i] == "%usr")    { col_u = i; }
+            if (hdrs[i] == "%idle")   { col_i = i; }
+            if (hdrs[i] == "%sys")    { col_sys = i; }
+            if (hdrs[i] == "%iowait") { col_iow = i; }
+            if (hdrs[i] == "%irq")    { col_irq = i; }
+            if (hdrs[i] == "%soft")   { col_sft = i; }
             printf("%s%s", tab, hdrs[i]) > NFL;
             tab="\t";
           }
@@ -1913,6 +1918,10 @@ trows++; printf("\n") > NFL;
             for (c=1; c <= hdr_mx; c++) {
               if (c == col_i) { sum_n++; sum_i += grp_list[g,r,c]; }
               if (c == col_u) {          sum_u += grp_list[g,r,c]; }
+              if (c == col_sys) {        sum_sys += grp_list[g,r,c]; }
+              if (c == col_iow) {        sum_iow += grp_list[g,r,c]; }
+              if (c == col_irq) {        sum_irq += grp_list[g,r,c]; }
+              if (c == col_sft) {        sum_sft += grp_list[g,r,c]; }
               printf("%s%s", tab, grp_list[g,r,c]) > NFL;
               tab="\t";
             }
@@ -1926,6 +1935,14 @@ trows++; printf("\n") > NFL;
             printf("mpstat\tmpstat\t%s\tuser %%cpu %s\n", v, grp_nm[g]) >> sum_file;
             v = sum_i/sum_n;
             printf("mpstat\tmpstat\t%s\tidle %%cpu %s\n", v, grp_nm[g]) >> sum_file;
+            v = sum_sys/sum_n;
+            printf("mpstat\tmpstat\t%s\tsysteme %%cpu %s\n", v, grp_nm[g]) >> sum_file;
+            v = sum_iow/sum_n;
+            printf("mpstat\tmpstat\t%s\tiowait %%cpu %s\n", v, grp_nm[g]) >> sum_file;
+            v = sum_irq/sum_n;
+            printf("mpstat\tmpstat\t%s\thw interrupts %%cpu %s\n", v, grp_nm[g]) >> sum_file;
+            v = sum_sft/sum_n;
+            printf("mpstat\tmpstat\t%s\tsw interrupts %%cpu %s\n", v, grp_nm[g]) >> sum_file;
           }
         }
         close(NFL);
