@@ -751,8 +751,12 @@ for i in $LST; do
       fi
       echo "dir LST= $LST"
       CLIP_BEG_END=(`cat $RESP | awk -v clip="${CLIPX[$kk]}" '{if (index($0, clip) > 0) { for (i=1; i <= NF; i++) { printf("%s\n", $i)};exit;}}'`)
+      ck_last_rc $? $LINENO
+      CLIP_BEG_END_LINE=`cat $RESP | awk -v clip="${CLIPX[$kk]}" '{if (index($0, clip) > 0) { printf("%s\n", $0);exit;}}'`
+      ck_last_rc $? $LINENO
+      echo "$0.$LINENO clip_beg_end_line= $CLIP_BEG_END_LINE"
       echo "$0.$LINENO clipx_use= ${CLIPX[$kk]} j= $j CLIPX= ${CLIPX[@]} CLIP_BEG_END= ${CLIP_BEG_END[@]}"
-      if [ ${CLIP_BEG_END[1]} != "" -a ${CLIP_BEG_END[2]} != "" ]; then
+      if [[ ${CLIP_BEG_END[1]} != "" ]] && [[ ${CLIP_BEG_END[2]} != "" ]]; then
         PHS_CLIPX[$j]=$kk
         PHS_DIR_NAME[$i,$kk]=$j
         PHS_DIR_LIST[$i]=$j
@@ -761,10 +765,11 @@ for i in $LST; do
         PHS_ARR[$j,"name"]=${CLIP_BEG_END[0]}
         PHS_ARR[$j,"beg"]=${CLIP_BEG_END[1]}
         PHS_ARR[$j,"end"]=${CLIP_BEG_END[2]}
+        PHS_ARR[$j,'line']="${CLIP_BEG_END_LINE}"
         PHS_ARR[$j,'extra']=""
-        for ((k=3; k < ${#CLIP_BEG_END[@]}; k++)); do
-          PHS_ARR[$j,'extra']="${PHS_ARR[$j,'extra']},${CLIP_BEG_END[$k]}"
-          echo "PHS_ARR[$j,'extra']=${PHS_ARR[$j,'extra']} and CLIP_BEG_END[$k]= ${CLIP_BEG_END[$k]}"
+        for ((k2=3; k2 < ${#CLIP_BEG_END[@]}; k2++)); do
+          PHS_ARR[$j,'extra']="${PHS_ARR[$j,'extra']},${CLIP_BEG_END[$k2]}"
+          echo "PHS_ARR[$j,'extra']=${PHS_ARR[$j,'extra']} and CLIP_BEG_END[$k2]= ${CLIP_BEG_END[$k2]}"
         done
       fi
     fi
@@ -1138,6 +1143,7 @@ for i in $LST; do
        echo "$0.$LINENO set -d5 desc_file= $OPT_DESC_FILE"
        printf "$0.$LINENO opt_desc_file= %s  i= %s\n" $OPT_DESC_FILE $i_abs_dir > /dev/stderr
        OPT_DESC_FILE_ARR[$DIR_NUM]=$OPT_DESC_FILE
+       echo "$0.$LINENO OPT_DESC_FILE_ARR[$DIR_NUM]=$OPT_DESC_FILE"
        fi
      fi
    fi
@@ -1427,11 +1433,32 @@ for i in $LST; do
  fi
  if [ "${PHS_ARR[$i_idx,'name']}" != "" ]; then
    RESP=${PHS_ARR[$i_idx,'name']}
-   if [ "${PHS_ARR[$i_idx,'extra']}" != "" ]; then
-     RESP="${RESP},${PHS_ARR[$i_idx,'extra']}"
-   fi
    echo -e "--phase\t\"$RESP\"" >> $ALST
    echo "$0.$LINENO set --phase $RESP"
+   if [ "${PHS_ARR[$i_idx,'extra']}" != "" ]; then
+     RESP="${RESP},${PHS_ARR[$i_idx,'extra']}"
+     awk -v line="${PHS_ARR[$i_idx,'line']}" -v sum_file="$SUM_FILE" '
+       BEGIN{
+         n = split(line, arr, " ");
+         printf("phase\tphase\t%s\tphase nm\n", arr[1]) >> sum_file;
+         printf("phase\tphase\t%s\tphase nm\n", arr[1]) >  "/dev/stderr";
+         for (i=4; i <= n; i++) {
+           n2 = split(arr[i], brr, "=");
+           printf("phase\tphase\t%s\tphase %s\n", brr[2], brr[1]) >> sum_file;
+           printf("phase\tphase\t%s\tphase %s\n", brr[2], brr[1]) > "/dev/stderr";
+         }
+         exit(0);
+       }
+       '
+       ck_last_rc $? $LINENO
+       echo "$0.$LINENO did phs_arr[$i_idx] to $SUM_FILE"
+     echo "$0.$LINENO OPT_DESC_FILE_ARR[$i_idx] = ${OPT_DESC_FILE_ARR[$i_idx]}"
+     if [ "${OPT_DESC_FILE_ARR[$i_idx]}" != "" ]; then
+       RESP="$(cat "${OPT_DESC_FILE_ARR[$i_idx]}")"
+       echo "$0.$LINENO OPT_DESC_FILE_ARR[$i_idx] = $RESP"
+       echo -e "desc_e\tdesc_e\t${RESP}\tdesc_e"  >> "$SUM_FILE"
+     fi
+   fi
  fi
  if [ "$DESC_FILE" == "" ]; then
    if [ -e desc.txt ]; then
