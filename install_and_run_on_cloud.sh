@@ -10,10 +10,13 @@ SCR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 WORK_DIR=./work_dir
 WORK_TMP="cmd_%04d.txt"
 SCR_BASENAME=`basename $0`
+declare -A HOST_ARR_LKUP
+declare -a HOST_ARR
 
 SSH_MODE="root"
 IFS_SV=$IFS
 
+tm_beg=$(date +%s.%6N)
 # the hard-coded lists of 5x/aws/gcp/onprem host names has been replaced with the files:
 # hosts_5x.lst
 # hosts_aws.lst
@@ -92,7 +95,6 @@ SCRIPT=
 DURA=
 ITERS=
 BKGRND_TASKS_MAX=30
-BKGRND_TASKS_CUR=0
 
 
 GOT_QUIT=0
@@ -105,6 +107,7 @@ catch_signal() {
 trap 'catch_signal' SIGINT
 
 #echo "HOSTS before options: $HOSTS" | cut -c1-200
+
 
 myInvocation="$(printf %q "$BASH_SOURCE")$((($#)) && printf ' %q' "$@")"
 echo "cmd line: $myInvocation"
@@ -273,6 +276,10 @@ function print_help() {
       echo "   -G use sudo ssh mode (if you can't ssh root@host then do a 'ssh host su -l -s /bin/bash ...)"
       echo "   -u user_name   run ssh command as user_name. Default is root. This is for cases where you have to login as yourself"
       echo "      If you use '-u none' then no user@ prefix will be added to hostname. This is for crane zone hosts."
+      echo "   -w work_dir   parallel cmd output put in work_dir. The default it ./work_dir. The work dir will be created if it doesnt exist."
+      echo "      If you dont use the -w option then the default work dir will be cleared before files are put in it."
+      echo "      If you do use the -w option then the new work dir will not be cleared before files are put in it."
+      echo "      This lets you accumulate files in the dir"
       echo "   -v verbose mode"
       echo "   -q pass -q to run_cmd script to get script to stop 60secs monitoring after the script ends"
 }
@@ -283,118 +290,188 @@ USE_LIST=
 USE_LIST_IN=
 QUIT_IN=
 
-while getopts "dgGhqva:b:B:c:C:D:I:l:m:M:n:N:o:O:p:r:R:s:t:T:u:W:z:Z:" opt; do
+myargs=()
+
+while getopts "dgGhqva:b:B:c:C:D:I:l:m:M:n:N:o:O:p:r:R:s:t:T:u:w:W:z:Z:" opt; do
   case ${opt} in
     h )
+      echo "$0.$LINENO got -h help option"
       print_help
       exit 0
       ;;
     q )
       QUIT_IN=1
+      myargs+=("-${opt}")
       ;;
     a )
       ARCHIVE_DIR=$OPTARG
+      myargs+=("-${opt}")
+      myargs+=("${OPTARG}")
       ;;
     b )
       BMARK_ROOT=$OPTARG
+      myargs+=("-${opt}")
+      myargs+=("${OPTARG}")
       DID_bmark_root=1
       ;;
     B )
       BMARK_SUBDIR=$OPTARG
       DID_bmark_root_subdir=1
+      myargs+=("-${opt}")
+      myargs+=("${OPTARG}")
       ;;
     c )
       CFG_DIR=$OPTARG
+      myargs+=("-${opt}")
+      myargs+=("${OPTARG}")
       ;;
     C )
       COMMAND=$OPTARG
+      COMMAND_IN=$OPTARG
+      myargs+=("-${opt}")
+      myargs+=("${OPTARG}")
+      echo "$0.$LINENO command_in= $COMMAND"
       ;;
     d )
       DRY_RUN=y
+      myargs+=("-${opt}")
       ;;
     D )
       DIR_60SECS_SCRIPTS=$OPTARG
+      myargs+=("-${opt}")
+      myargs+=("${OPTARG}")
       ;;
     g )
       if [ $DID_n -eq 0 ]; then
         HOSTS="$GCP_IP"
       fi
+      myargs+=("-${opt}")
       ;;
     G )
       SSH_MODE="sudo"
+      myargs+=("-${opt}")
       ;;
     I )
       ITERS=$OPTARG
+      myargs+=("-${opt}")
+      myargs+=("${OPTARG}")
       ;;
     v )
       VERBOSE=$((VERBOSE+1))
+      myargs+=("-${opt}")
       ;;
     l )
       USE_LIST_IN=$OPTARG
+      myargs+=("-${opt}")
+      myargs+=("${OPTARG}")
       ;;
     m )
       BKGRND_TASKS_MAX_IN=$OPTARG
+      myargs+=("-${opt}")
+      myargs+=("${OPTARG}")
       ;;
     M )
       DISK_MIN_SZ_BYTES=$OPTARG
+      myargs+=("-${opt}")
+      myargs+=("${OPTARG}")
       ;;
     n )
       HOSTS=$OPTARG
+      myargs+=("-${opt}")
+      myargs+=("${OPTARG}")
       DID_n=1
       ;;
     N )
       HOST_NUM=$OPTARG
+      myargs+=("-${opt}")
+      myargs+=("${OPTARG}")
       DID_n=1
       ;;
     o )
       RPT_FILE=$OPTARG
+      myargs+=("-${opt}")
+      myargs+=("${OPTARG}")
       ;;
     O )
       RPT_FILE=$OPTARG
+      myargs+=("-${opt}")
+      myargs+=("${OPTARG}")
       DID_RPT_FILE_init="1"
       ;;
     z )
       CMB_FILE=$OPTARG
+      myargs+=("-${opt}")
+      myargs+=("${OPTARG}")
       ;;
     Z )
       CMB_FILE=$OPTARG
+      myargs+=("-${opt}")
+      myargs+=("${OPTARG}")
       DID_CMB_FILE_init="1"
       ;;
     p )
       PROJ_DIR=$OPTARG
+      myargs+=("-${opt}")
+      myargs+=("${OPTARG}")
       ;;
     r )
       RUN_CMDS=$OPTARG
+      myargs+=("-${opt}")
+      myargs+=("${OPTARG}")
       ;;
     R )
       RUN_CMDS_LOG=$OPTARG
+      myargs+=("-${opt}")
+      myargs+=("${OPTARG}")
       ;;
     s )
       SCRIPT=$OPTARG
+      myargs+=("-${opt}")
+      myargs+=("${OPTARG}")
       ;;
     t )
       TAR_GZ=$OPTARG
+      myargs+=("-${opt}")
+      myargs+=("${OPTARG}")
       ;;
     T )
       DURA=$OPTARG
+      myargs+=("-${opt}")
+      myargs+=("${OPTARG}")
       ;;
     u )
       USERNM_IN=$OPTARG
+      myargs+=("-${opt}")
+      myargs+=("${OPTARG}")
+      ;;
+    w )
+      WORK_DIR="$OPTARG"
+      myargs+=("-${opt}")
+      myargs+=("${OPTARG}")
+      DID_CLEAR_WORK_DIR=1
       ;;
     W )
       WATCH_IN="$OPTARG"
+      myargs+=("-${opt}")
+      myargs+=("${OPTARG}")
       ;;
     : )
-      echo "Invalid option: $OPTARG requires an argument, cmdline= ${@}" 1>&2
+      echo "$0.$LINENO Invalid option: $OPTARG requires an argument, cmdline= ${@}" 1>&2
       exit 1
       ;;
     \? )
-      echo "Invalid option: $OPTARG, cmdline= ${@}" 1>&2
+      echo "$0.$LINENO Invalid option: $OPTARG, cmdline= ${@}" 1>&2
       exit 1
       ;;
   esac
 done
 shift $((OPTIND -1))
+
+if [ "$VERBOSE" -gt "0" ]; then
+  for ((i=0; i < ${#myargs[@]}; i++)); do
+    echo "myargs[$i]= ${myargs[$i]}"
+  done
+fi
 
 if [ "$BKGRND_TASKS_MAX_IN" != "" ]; then
   BKGRND_TASKS_MAX=$BKGRND_TASKS_MAX_IN
@@ -475,7 +552,7 @@ if [ "$USE_LIST" != "" ]; then
     HOSTS=
     SEP=
     if [ "${USE_LIST:0:4}" == "uns:" ]; then
-      HOSTS=`uns $USE_LIST | awk '
+      HOSTS=`uns $USE_LIST | sort | awk '
         BEGIN{str=""; sep="";}
 function tot_compare(i1, v1, i2, v2,    l, r)
 {
@@ -529,7 +606,6 @@ function tot_compare(i1, v1, i2, v2,    l, r)
         END{printf("%s\n", str);
             #printf("hosts= %s\n", str) > "/dev/stderr";
         }' $file`
-        declare -a HOST_ARR
         readarray -t HOST_ARR < <(awk '
         {
           if (NF == 0) { next;}
@@ -540,6 +616,17 @@ function tot_compare(i1, v1, i2, v2,    l, r)
           printf("%s\n", $0);
         }
         ' $file)
+        for ((ik=0; ik < ${#HOST_ARR[@]}; ik++)); do
+           if [ "${HOST_ARR[${ik}]}" == "" ]; then
+             continue
+           fi
+           NM=$(awk -v str="${HOST_ARR[$ik]}" 'BEGIN{ n = split(str, arr, " "); printf("%s\n", arr[1]); exit;}')
+           if [ "$NM" != "" ]; then
+             HOST_ARR_LKUP[$NM]=$ik
+           fi
+        done
+        #echo "$0.$LINENO bye"
+        #exit 
       echo "$0.$LINENO HOST_ARR= ${#HOST_ARR[@]}"
     fi
 fi
@@ -620,6 +707,7 @@ if [ "$USERNM" == "" ]; then
 fi
 
 if [ "$RUN_CMDS" == "" ]; then
+  echo "$0.$LINENO run_cmds= null"
   print_help
   exit 1
 fi
@@ -673,6 +761,17 @@ ssh_cmd()
   fi
 }
 
+function waitForJobs() {
+    while [[ "$(jobs | wc -l)" -gt "${BKGRND_TASKS_MAX}" ]]; do
+      runningJobs=$(jobs | wc -l)
+      echo "Waiting for ${runningJobs} background jobs to < $BKGRND_TASKS_MAX"
+      sleep 1
+      if [ "$GOT_QUIT" == "1" ]; then
+        break
+      fi
+    done
+}
+
 mk_run_fl()
 {
   RUN_FL_CMD="$1"
@@ -680,6 +779,7 @@ mk_run_fl()
   LOG_FL="${2}_${RUN_FL_BASE}.log"
 }
 
+declare -A HOST_NUM_LIST_ASSC
 HOST_NUM_LIST=
 if [ "$HOST_NUM" != "" ]; then
   HOST_NUM_LIST=(`awk -v beg="0" -v end="$NUM_HOST" -v str="$HOST_NUM" '
@@ -747,6 +847,10 @@ if [ "$HOST_NUM" != "" ]; then
   #echo "HOST_NUM_LIST= ${HOST_NUM_LIST[@]}"
   HOST_NUM_BEG=${HOST_NUM_LIST[0]}
   HOST_NUM_END=${HOST_NUM_LIST[${#HOST_NUM_LIST[@]}-1]}
+  for ((i=0; i < ${#HOST_NUM_LIST[@]}; i++)); do
+    j=${HOST_NUM_LIST[$i]}
+    HOST_NUM_LIST_ASSC[$j]=$i
+  done
   #echo "HOST_NUM_BEG= $HOST_NUM_BEG, HOST_NUM_END= $HOST_NUM_END"
 fi
 
@@ -789,7 +893,10 @@ fi
 SV_SSH_MODE=$SSH_MODE
 SV_USERNM=$USERNM
 SV_USERNM_IN=$USERNM_IN
-echo "==== begin ====" > $RES
+tm_cur=$(date +%s.%6N)
+tm_diff=$(echo "scale=6; $tm_cur - $tm_beg" | bc)
+echo "==== begin tm_elap= $tm_diff ===="
+echo "==== begin tm_elap ====" > $RES
 for RN_CM in ${CMD_ARR[@]}; do
   if [ "$RN_CM" == "" ]; then
     break
@@ -798,6 +905,11 @@ NUM_HOST=-1
 for i in $HOSTS; do
   RUN_CMDS=$RN_CM
   NUM_HOST=$((NUM_HOST+1))
+  if [ "$VERBOSE" -gt "0" ]; then
+  tm_cur=$(date +%s.%6N)
+  tm_diff=$(echo "scale=6; $tm_cur - $tm_beg" | bc)
+  echo $LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ===================
+  fi
   if [ "$HOST_NUM" != "" ]; then
     if [ "$NUM_HOST" -lt "$HOST_NUM_BEG" ]; then
        continue
@@ -806,13 +918,16 @@ for i in $HOSTS; do
        continue
     fi
     got_it=0
-    hl_end=$((${#HOST_NUM_LIST[@]}-1))
-    for (( hl_i=0; hl_i <= $hl_end; hl_i++ )); do
-       if [ "${HOST_NUM_LIST[$hl_i]}" == "$NUM_HOST" ]; then
-         got_it=1
-         break
-       fi
-    done
+    if [[ -v "HOST_NUM_LIST_ASSC[$NUM_HOST]" ]] ; then
+      got_it=1
+    fi
+    #hl_end=$((${#HOST_NUM_LIST[@]}-1))
+    #for (( hl_i=0; hl_i <= $hl_end; hl_i++ )); do
+    #   if [ "${HOST_NUM_LIST[$hl_i]}" == "$NUM_HOST" ]; then
+    #     got_it=1
+    #     break
+    #   fi
+    #done
     if [ "$got_it" == "0" ]; then
        echo "skip host num $NUM_HOST, not in -N list"
        continue
@@ -823,7 +938,9 @@ for i in $HOSTS; do
     echo "quitting loop due presence of 'stop' file. You need to delete the file"
     exit 0
   fi
-  echo ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST ===================
+  tm_cur=$(date +%s.%6N)
+  tm_diff=$(echo "scale=6; $tm_cur - $tm_beg" | bc)
+  echo $LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ===================
   nm=$i
   USERNM=$SV_USERNM
   USERNM_IN=$SV_USERNM_IN
@@ -991,11 +1108,11 @@ for i in $HOSTS; do
       echo "$0.$LINENO got pcmd $RUN_CMDS"
     fi
     if [ "$RUN_CMDS" == "pfetch_untar" ]; then
-      COMMAND=`echo "$myInvocation" | sed 's/pfetch_untar/fetch_untar/'`
+      COMMAND=`echo "$myInvocation" | sed 's/pfetch_untar/fetch_untar/g'`
       echo "new cmd= \"$COMMAND\""
     fi
     if [ "$RUN_CMDS" == "pssh_test" ]; then
-      COMMAND=`echo "$myInvocation" | sed 's/pssh_test/ssh_test/'`
+      COMMAND=`echo "$myInvocation" | sed 's/pssh_test/ssh_test/g'`
       echo "new cmd= \"$COMMAND\""
     fi
     if [ "$RUN_CMDS" == "popt_${wxy_str}_info" ]; then
@@ -1039,14 +1156,23 @@ for i in $HOSTS; do
     if [ $VERBOSE -gt 0 ]; then
       echo "$0.$LINENO cmd= $CMD"
     fi
+  if [ "$VERBOSE" -gt "0" ]; then
+  tm_cur=$(date +%s.%6N)
+  tm_diff=$(echo "scale=6; $tm_cur - $tm_beg" | bc)
+  echo $LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ===================
+  fi
     if [ "${#HOST_ARR[@]}" -gt 0 ]; then
-    re='(.*)(%HOST_ARR\{.\}%)(.*)'
-    for ((ki=0; ki < ${#HOST_ARR[@]}; ki++)); do
-      HOST_ARR_ARGS=(`echo "${HOST_ARR[$ki]}" | awk -v str_in="$str" -v nm="$nm" 'BEGIN{;} {if ($1 == nm) {printf("%s\n", $0);}}'`)
-      if [ "${#HOST_ARR_ARGS[@]}" -gt "0" ]; then
-        break
+      if [[ -v "HOST_ARR_LKUP[$nm]" ]]; then
+      ki=${HOST_ARR_LKUP[$nm]}
+      HOST_ARR_ARGS="${HOST_ARR[$ki]}"
       fi
-    done
+  if [ "$VERBOSE" -gt "0" ]; then
+  tm_cur=$(date +%s.%6N)
+  tm_diff=$(echo "scale=6; $tm_cur - $tm_beg" | bc)
+  echo $LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ===================
+  fi
+      if [ "${#HOST_ARR_ARGS[@]}" -gt "0" ]; then
+    re='(.*)(%HOST_ARR\{.\}%)(.*)'
     while [[ $CMD =~ $re ]]; do
       #echo "0= ${BASH_REMATCH[0]}"
       #echo "1= ${BASH_REMATCH[1]}"
@@ -1058,7 +1184,13 @@ for i in $HOSTS; do
       CMD=${BASH_REMATCH[1]}$str_out${BASH_REMATCH[3]}
       #break
     done
+      fi
     fi
+  if [ "$VERBOSE" -gt "0" ]; then
+  tm_cur=$(date +%s.%6N)
+  tm_diff=$(echo "scale=6; $tm_cur - $tm_beg" | bc)
+  echo $LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ===================
+  fi
     #echo "$0.$LINENO bye, cmd = $CMD , orig= $COMMAND"
     #exit 1
     re='(.*)%HOST%(.*)'
@@ -1070,25 +1202,61 @@ for i in $HOSTS; do
       CMD=${BASH_REMATCH[1]}$NUM_HOST${BASH_REMATCH[2]}
     done
     ssh_cmd $nm "$CMD"  "-l"
+  if [ "$VERBOSE" -gt "0" ]; then
+  tm_cur=$(date +%s.%6N)
+  tm_diff=$(echo "scale=6; $tm_cur - $tm_beg" | bc)
+  echo $LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ===================
+  fi
     if [ "$DRY_RUN" == "n" ]; then
-        if [ $BKGRND_TASKS_CUR -ge $BKGRND_TASKS_MAX ]; then
-          wait
-          BKGRND_TASKS_CUR=0
-        fi
-        if [ "$RUN_CMDS" == "pfetch_untar" ]; then
+        waitForJobs
           OUT_FILE=`printf "$WORK_DIR/$WORK_TMP" $NUM_HOST`
+          if [[ "$got_pcmd_or_pfetch" == "1" ]] && [[ -e "$OUT_FILE" ]]; then
+            rm "$OUT_FILE"
+          fi
+        if [ "$RUN_CMDS" == "pfetch_untar" ]; then
           if [ "$do_bkgrnd" == "1" ]; then
             $CMD &> $OUT_FILE &
-            BKGRND_TASKS_CUR=$((BKGRND_TASKS_CUR+1))
           else
             $CMD &> $OUT_FILE
           fi
           dyno_log $SSH_HOST "$CMD"
+        elif [ "$RUN_CMDS" == "pcmd" ]; then
+          myout=()
+          ik=0
+          ij=0
+          while (( ij < ${#myargs[@]} )); do
+            if [ "${myargs[$ij]}" == "pcmd" ]; then
+              myout[$ik]="command"
+            elif [ "${myargs[$ij]}" == "-C" ]; then
+              ij=$((ij+1))
+            elif [ "${myargs[$ij]}" == "-N" ]; then
+              ij=$((ij+1))
+            elif [ "${myargs[$ij]}" == "-m" ]; then
+              ij=$((ij+1))
+            else
+              myout[$ik]="${myargs[$ij]}"
+            fi
+            ik=$((ik+1))
+            ij=$((ij+1))
+          done
+          tm_cur=$(date +%s.%6N)
+          tm_diff=$(echo "scale=6; $tm_cur - $tm_beg" | bc)
+          if [ "$do_bkgrnd" == "1" ]; then
+            echo do $0 ${myout[@]} -C "$CMD" -N $NUM_HOST -m 0  __ $OUT_FILE _ tm_elap= $tm_diff
+            $0 ${myout[@]} -C "$CMD" -N $NUM_HOST -m 0  &> $OUT_FILE &
+          else
+            echo do $0 ${myout[@]} -C "$CMD" -N $NUM_HOST -m 0  __ $OUT_FILE tm_elap= $tm_diff
+            $0 ${myout[@]} -C "$CMD" -N $NUM_HOST -m 0  &> $OUT_FILE
+          fi
+          dyno_log $SSH_HOST "$CMD"
+  if [ "$VERBOSE" -gt "0" ]; then
+  tm_cur=$(date +%s.%6N)
+  tm_diff=$(echo "scale=6; $tm_cur - $tm_beg" | bc)
+  echo $LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ===================
+  fi
         elif [ "$RUN_CMDS" == "pssh_test" ]; then
-          OUT_FILE=`printf "$WORK_DIR/$WORK_TMP" $NUM_HOST`
           if [ "$do_bkgrnd" == "1" ]; then
             $CMD &> $OUT_FILE &
-            BKGRND_TASKS_CUR=$((BKGRND_TASKS_CUR+1))
           else
             $CMD &> $OUT_FILE
           fi
@@ -1104,7 +1272,6 @@ for i in $HOSTS; do
           fi
           if [ "$do_bkgrnd" == "1" ]; then
             {(${wxy_str} ${wxy_hs} $nm | awk '{sv[++mx]=$0;if($1=="UUID"){uuid=$2;}}END{ cmd="metalcli asset get " uuid " --format={{.Sku}}"; while((cmd | getline metalout[++mx2]) > 0); close(cmd);  for(i=1;i <= mx; i++) {printf("%s\n", sv[i]);}  printf("SKU:  %s\n", metalout[1]); printf("-------------------\n");}' >> $OUT_FILE)  &}
-            BKGRND_TASKS_CUR=$((BKGRND_TASKS_CUR+1))
           else
             #echo $CMD &>> $OUT_FILE
             (${wxy_str} ${wxy_hs} $nm | awk '{sv[++mx]=$0;if($1=="UUID"){uuid=$2;}}END{ cmd="metalcli asset get " uuid " --format={{.Sku}}"; while((cmd | getline metalout[++mx2]) > 0); close(cmd);  for(i=1;i <= mx; i++) {printf("%s\n", sv[i]);}  printf("SKU:  %s\n", metalout[1]);printf("-------------------\n");}' >> $OUT_FILE)
@@ -1123,7 +1290,6 @@ for i in $HOSTS; do
           else
             $SSH_PFX $ADD_T $SSH_HOST "$SSH_CMD" &
           fi
-          BKGRND_TASKS_CUR=$((BKGRND_TASKS_CUR+1))
          else
           #$SSH_PFX $SSH_HOST "$SSH_CMD"
           if [ "$nm" == "127.0.0.1" ]; then
@@ -1187,10 +1353,7 @@ for i in $HOSTS; do
     echo $0.$LINENO scp $nm  $SSH_HOST "$SSH_CMD"
     if [ "$DRY_RUN" == "n" ]; then
          #scp $SSH_HOST "$SSH_CMD"
-         if [ $BKGRND_TASKS_CUR -ge $BKGRND_TASKS_MAX ]; then
-           wait
-           BKGRND_TASKS_CUR=0
-         fi
+         waitForJobs
          if [ "$nm" == "127.0.0.1" ]; then
            cp $TAR_GZ $BMARK_ROOT/
          else
@@ -1198,7 +1361,6 @@ for i in $HOSTS; do
            echo $0.$LINENO  scp $TAR_GZ ${SSH_HOST}:
                 if [ "$do_bkgrnd" == "1" ]; then
                   scp $TAR_GZ ${SSH_HOST}:${BMARK_ROOT} &
-                  BKGRND_TASKS_CUR=$((BKGRND_TASKS_CUR+1))
                 else
                   scp $TAR_GZ ${SSH_HOST}:${BMARK_ROOT}
                 fi
@@ -1213,7 +1375,6 @@ for i in $HOSTS; do
            if [ "$do_bkgrnd" == "1" ]; then
              echo $0.$LINENO scp $TAR_GZ ${SCP_USERNM}${nm}:$BMARK_ROOT/
              scp $TAR_GZ ${SCP_USERNM}${nm}:$BMARK_ROOT/ &
-             BKGRND_TASKS_CUR=$((BKGRND_TASKS_CUR+1))
            else
              if [ "$nm" == "127.0.0.1" ]; then
                scp $TAR_GZ $BMARK_ROOT/
@@ -1261,13 +1422,9 @@ for i in $HOSTS; do
     ssh_cmd $nm "tar xzf ${TAR_RT}$filenm -C $BMARK_ROOT"  "-l"
     echo $0.$LINENO ssh $SSH_HOST "$SSH_CMD"
     if [ "$DRY_RUN" == "n" ]; then
-         if [ $BKGRND_TASKS_CUR -ge $BKGRND_TASKS_MAX ]; then
-           wait
-           BKGRND_TASKS_CUR=0
-         fi
+         waitForJobs
          if [ "$do_bkgrnd" == "1" ]; then
            ssh $SSH_HOST "$SSH_CMD" &
-           BKGRND_TASKS_CUR=$((BKGRND_TASKS_CUR+1))
          else
           # ssh $SSH_HOST "$SSH_CMD"
           echo "note that prev ver of untar \"$SSH_CMD\" cmd didn't have ssh -t" > /dev/stderr
@@ -1331,7 +1488,6 @@ for i in $HOSTS; do
           else
                 if [ "$do_bkgrnd" == "1" ]; then
                   $SSH_PFX $SSH_HOST "$SSH_CMD" &
-                  BKGRND_TASKS_CUR=$((BKGRND_TASKS_CUR+1))
                 else
                   $SSH_PFX $SSH_HOST "$SSH_CMD"
                 fi
@@ -1404,19 +1560,22 @@ for i in $HOSTS; do
   LOG_FL_PFX="bmark_${LOG_TS}"
   #echo "LOG_TS= $LOG_TS, LOG_FL_PFX= $LOG_FL_PFX"
 
+  if [ "$VERBOSE" -gt "0" ]; then
+  tm_cur=$(date +%s.%6N)
+  tm_diff=$(echo "scale=6; $tm_cur - $tm_beg" | bc)
+  echo $LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ===================
+  fi
   NW_PROJ=$PROJ_DIR
   re='(.*)%HOST%(.*)'
   while [[ $NW_PROJ =~ $re ]]; do
     NW_PROJ=${BASH_REMATCH[1]}$nm${BASH_REMATCH[2]}
   done
     if [ "${#HOST_ARR[@]}" -gt 0 ]; then
-    re='(.*)(%HOST_ARR\{.\}%)(.*)'
-    for ((ki=0; ki < ${#HOST_ARR[@]}; ki++)); do
-      HOST_ARR_ARGS=(`echo "${HOST_ARR[$ki]}" | awk -v str_in="$str" -v nm="$nm" 'BEGIN{;} {if ($1 == nm) {printf("%s\n", $0);}}'`)
-      if [ "${#HOST_ARR_ARGS[@]}" -gt "0" ]; then
-        break
+      if [[ -v "HOST_ARR_LKUP[$nm]" ]]; then
+      ki=${HOST_ARR_LKUP[$nm]}
+      HOST_ARR_ARGS="${HOST_ARR[$ki]}"
       fi
-    done
+    re='(.*)(%HOST_ARR\{.\}%)(.*)'
     while [[ $NW_PROJ =~ $re ]]; do
       #echo "0= ${BASH_REMATCH[0]}"
       #echo "1= ${BASH_REMATCH[1]}"
@@ -1573,12 +1732,8 @@ for i in $HOSTS; do
           echo ssh $SSH_HOST "$SSH_CMD"
           if [ "$DRY_RUN" == "n" ]; then
               if [ "$do_bkgrnd" == "1" ]; then
-                if [ $BKGRND_TASKS_CUR -ge $BKGRND_TASKS_MAX ]; then
-                  wait
-                  BKGRND_TASKS_CUR=0
-                fi
+                waitForJobs
                 ssh $SSH_HOST "$SSH_CMD" &
-                BKGRND_TASKS_CUR=$((BKGRND_TASKS_CUR+1))
               else
                 #      ssh $SSH_HOST "$SSH_CMD"
                 echo "note that prev ver of cmd at $LINENO didn't have ssh -t" > /dev/stderr
@@ -1784,6 +1939,11 @@ for i in $HOSTS; do
     exit 1
   fi
 
+  if [ "$VERBOSE" -gt "0" ]; then
+  tm_cur=$(date +%s.%6N)
+  tm_diff=$(echo "scale=6; $tm_cur - $tm_beg" | bc)
+  echo $LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ===================
+  fi
   if [ "$DO_FTCH" -gt "0" ]; then
     if [ $BKGRND_TASKS_MAX -gt 0 ]; then
       #do_bkgrnd=1
@@ -1792,17 +1952,12 @@ for i in $HOSTS; do
               if [ "$do_bkgrnd" == "1" ]; then
                 if [ "$NUM_HOST" == "0" ]; then
                   wait
-                  BKGRND_TASKS_CUR=0
-                fi
-                if [ $BKGRND_TASKS_CUR -ge $BKGRND_TASKS_MAX ]; then
-                  wait
-                  BKGRND_TASKS_CUR=0
+                  waitForJobs
                 fi
               fi
               if [ 1 -eq 2 ]; then
                 if [ "$do_bkgrnd" == "1" ]; then
                   $SSH_PFX $SSH_HOST "$SSH_CMD" &
-                  BKGRND_TASKS_CUR=$((BKGRND_TASKS_CUR+1))
                 else
                   $SSH_PFX $SSH_HOST "$SSH_CMD"
                 fi
@@ -1835,7 +1990,6 @@ for i in $HOSTS; do
              echo scp $FTCH_OUTPUT ${FTCH_ARR[$NUM_HOST,1,0]}:$BMARK_ROOT/${BMARK_SUBDIR}/fetch_output.sh
                   scp $FTCH_OUTPUT ${FTCH_ARR[$NUM_HOST,1,0]}:$BMARK_ROOT/${BMARK_SUBDIR}/fetch_output.sh  &
              #scp $FTCH_OUTPUT ${FCSSH_HOST}:$BMARK_ROOT/${BMARK_SUBDIR}/ &
-             BKGRND_TASKS_CUR=$((BKGRND_TASKS_CUR+1))
            else
              scp $FTCH_OUTPUT ${SSH_HOST}:$BMARK_ROOT/${BMARK_SUBDIR}/fetch_output.sh
            fi
@@ -1851,7 +2005,6 @@ for i in $HOSTS; do
       NW_PROJ=${FTCH_NW_PROJ[$NUM_HOST]}
       #if [ "$do_bkgrnd" == "1" ]; then
       #   ssh_cmd $nm "cd $BMARK_ROOT; ./${BMARK_SUBDIR}/fetch_output.sh -p $NW_PROJ" &
-      #   BKGRND_TASKS_CUR=$((BKGRND_TASKS_CUR+1))
       #else
          ssh_cmd $nm "cd $BMARK_ROOT; ./${BMARK_SUBDIR}/fetch_output.sh -p $NW_PROJ"
          FTCH_ARR[$NUM_HOST,2,0]=$SSH_HOST
@@ -1878,7 +2031,6 @@ for i in $HOSTS; do
              echo ssh -n ${SSH_HOST} "$SSH_CMD" __ $OUT_FILE
              ssh -n ${SSH_HOST} "$SSH_CMD" &> $OUT_FILE &
              #ssh -n ${FTCH_ARR[$NUM_HOST,2,0]} "${FTCH_ARR[$NUM_HOST,2,1]}" &> $OUT_FILE &
-             BKGRND_TASKS_CUR=$((BKGRND_TASKS_CUR+1))
            else
              FTCH_RSP1[$NUM_HOST]=`ssh ${SSH_HOST} "$SSH_CMD"`
            fi
@@ -1918,7 +2070,6 @@ for i in $HOSTS; do
               OUT_FILE=`printf "$WORK_DIR/a$WORK_TMP" $NUM_HOST`
               echo $SSH_PFX -n $SSH_HOST "$SSH_CMD" __ $OUT_FILE
               $SSH_PFX -n $SSH_HOST "$SSH_CMD" &> $OUT_FILE &
-              BKGRND_TASKS_CUR=$((BKGRND_TASKS_CUR+1))
             else
               $SSH_PFX $SSH_HOST "$SSH_CMD"
             fi
@@ -1952,7 +2103,6 @@ for i in $HOSTS; do
            if [ "$do_bkgrnd" == "1" ]; then
               echo ssh -n ${SSH_HOST} "$SSH_CMD" __ $OUT_FILE
               ssh -n ${SSH_HOST} "$SSH_CMD" &> $OUT_FILE &
-              BKGRND_TASKS_CUR=$((BKGRND_TASKS_CUR+1))
            else
               FTCH_RSP2[$NUM_HOST]=`ssh ${SSH_HOST} "$SSH_CMD"`
            fi
@@ -2003,7 +2153,6 @@ for i in $HOSTS; do
                 echo    "scp ${SSH_HOST}:$NW_PROJ/../$TAR_GZ $USE_DIR"
                 if [ "$do_bkgrnd" == "1" ]; then
                          scp ${SSH_HOST}:$NW_PROJ/../$TAR_GZ $USE_DIR &
-                         BKGRND_TASKS_CUR=$((BKGRND_TASKS_CUR+1))
                 else
                          scp ${SSH_HOST}:$NW_PROJ/../$TAR_GZ $USE_DIR
                 fi
@@ -2058,6 +2207,11 @@ for i in $HOSTS; do
              continue
        fi
     fi
+  fi
+  if [ "$VERBOSE" -gt "0" ]; then
+  tm_cur=$(date +%s.%6N)
+  tm_diff=$(echo "scale=6; $tm_cur - $tm_beg" | bc)
+  echo $LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ===================
   fi
   if [[ $RUN_CMDS == *"get_recur"* ]]; then
          if [ "$ARCHIVE_DIR" == "" ]; then
@@ -2156,7 +2310,6 @@ for i in $HOSTS; do
                 echo    "scp ${SSH_HOST}:$TAR_GZ $USE_DIR"
                 if [ "$do_bkgrnd" == "1" ]; then
                    scp ${SSH_HOST}:$TAR_GZ $USE_DIR &
-                   BKGRND_TASKS_CUR=$((BKGRND_TASKS_CUR+1))
                 else
                    scp ${SSH_HOST}:$TAR_GZ $USE_DIR
                 fi
@@ -2340,6 +2493,11 @@ for i in $HOSTS; do
       done
     fi
   fi
+  if [ "$VERBOSE" -gt "0" ]; then
+  tm_cur=$(date +%s.%6N)
+  tm_diff=$(echo "scale=6; $tm_cur - $tm_beg" | bc)
+  echo $LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ===================
+  fi
   #echo "sleep 1 sec to try and catch cntrl+c"
   #sleep 1
   if [ "$GOT_QUIT" != "0" ]; then
@@ -2348,10 +2506,10 @@ for i in $HOSTS; do
   fi
 done
 
-if [ $BKGRND_TASKS_CUR -gt 0 ]; then
-  wait
-  BKGRND_TASKS_CUR=0
-fi
+SV_BKGRND_TASKS_MAX=$BKGRND_TASKS_MAX
+BKGRND_TASKS_MAX=1
+waitForJobs
+BKGRND_TASKS_MAX=$SV_BKGRND_TASKS_MAX
 done
 
   if [[ $RUN_CMDS == *"combine"* ]]; then
