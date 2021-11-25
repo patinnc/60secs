@@ -620,6 +620,7 @@ TD2=",{cpu/slots/,topdown-be-bound,topdown-bad-spec,topdown-fe-bound,topdown-ret
     #if [ "$WARGS" != "" ]; then
     #  OPT_A=" $OPT_A $WARGS "
     #fi
+    EVT="context-switches,$EVT"
     echo  "$0.$LINENO foregrnd pid wait ms do_cmd: $FOREGRND $PID $WAIT_IN $ms $WARGS $DO_CMD $EXE_ARGS"
     if [ "$PID" == "" -a "$WAIT_IN" == ""  ]; then
       echo $PERF_BIN stat -x ";" --append $OPT_A -I $ms -o $FL -e "$EVT" $WARGS $DO_CMD $WAIT $EXE_ARGS
