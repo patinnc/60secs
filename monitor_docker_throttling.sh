@@ -43,7 +43,7 @@ while getopts "hvd:I:p:s:t:" opt; do
       echo "usage: $0 -p proj_output_dir [ -d docker_container | -s service_name ] -t time_to_run_in_secs -i interval_in_secs"
       echo "       $0 monitor docker container or service for throttling "
       echo "   -d docker_container (long or short name) (comma separated list if more than 1)"
-      echo "   -i interval_in_secs  sleep interval between get stats"
+      echo "   -I interval_in_secs  sleep interval between get stats"
       echo "   -s service_name (as it appears in the docker ps output (selects all containers for service on host)"
       echo "   -p proj_dir     output dir for stat file"
       echo "   -t time_to_run_in_secs   time in seconds_to_run"
@@ -61,7 +61,6 @@ while getopts "hvd:I:p:s:t:" opt; do
   esac
 done
 shift $((OPTIND -1))
-
 
 
 if [ "$PROJ" == "" ]; then
@@ -134,13 +133,15 @@ PRF_ARR=()
 thr_arr=()
 declare -A dckr_stat_prv
 declare -A dckr_stat_cur
+prf_dat_lst=()
 for ((i=0; i < ${#dckr_arr[@]}; i++)); do
   echo "$0.$LINENO stats for container $i"
   ARR=($(cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cpu.stat | awk '{print $2;}'))
   for ((j=0; j < ${#ARR[@]}; j++)); do
     dckr_stat_prv[$i,$j]=${ARR[$j]}
   done
-  nohup $SCR_DIR/perf record -F 99 -e cpu-clock --cgroup=docker/${dckr_arr[$i]} -g -a -o "$PROJ/prf_${i}.dat" --switch-output --overwrite  -- sleep $TIME_MX &> $PROJ/prf_${i}.log  &
+  prf_dat_lst[$i]="$PROJ/prf_${i}.dat"
+  nohup $SCR_DIR/perf record -F 99 -e cpu-clock --cgroup=docker/${dckr_arr[$i]} -g -a -o "${prf_dat_lst[$i]}" --switch-output --overwrite  -- sleep $TIME_MX &> $PROJ/prf_${i}.log  &
   PID_ARR[$i]=$!
 done
 
@@ -156,6 +157,7 @@ tm_cur=$tm_beg
 tm_end=$((tm_beg+TIME_MX))
 OFILE=$PROJ/docker_cpu_stats.txt
 #  echo "tm_beg= $tm_beg tm_end= $tm_end"
+did_sigusr2=()
 while [[ "$tm_cur" -lt "$tm_end" ]] && [[ "$GOT_QUIT" == "0" ]]; do
   tm_cur=$(date "+%s")
   tm_dff=$((tm_cur-tm_beg))
@@ -168,12 +170,22 @@ while [[ "$tm_cur" -lt "$tm_end" ]] && [[ "$GOT_QUIT" == "0" ]]; do
   for ((i=0; i < ${#dckr_arr[@]}; i++)); do
     if [ ! -e /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cpu.stat ]; then
       if [ "${PID_ARR[$i]}" != "" ]; then
-	 # the container is gone, kill the perf process
+	       # the container is gone, kill the perf process
          echo "__docker_sigint $tm_dff $EPCH $TM_STR" >> $OFILE
          kill -2 ${PID_ARR[$i]}
          PID_ARR[$i]=""
       fi
       continue
+    fi
+    if [ "${did_sigusr2[$i]}" == "1" ]; then
+      did_sigusr2[$i]=0
+      prf_dat_arr=($(find $PROJ -name "prf_${i}.dat*" | sort | grep -v dat.old | grep -v ".txt"))
+      for ((j=0; j < ${#prf_dat_arr[@]}; j++)); do
+        if [ ! -e ${prf_dat_arr[$j]}.txt ]; then
+          echo $SCR_DIR/perf script -i ${prf_dat_arr[$j]} _ ${prf_dat_arr[$j]}.txt
+          $SCR_DIR/perf script -i ${prf_dat_arr[$j]} > ${prf_dat_arr[$h]}.txt &
+        fi
+      done
     fi
     if [ "$VERBOSE" -gt "0" ]; then
       echo "$0.$LINENO stats for container $i"
@@ -192,6 +204,7 @@ while [[ "$tm_cur" -lt "$tm_end" ]] && [[ "$GOT_QUIT" == "0" ]]; do
       echo "$0.$LINENO dckr[$i] throttled $thr_dff"
       echo "__docker_sigusr2 $i $tm_dff $EPCH $TM_STR" >> $OFILE
       kill -SIGUSR2 ${PID_ARR[$i]}
+      did_sigusr2[$i]=1
     fi
   done
   sleep $INTERVAL
@@ -208,10 +221,12 @@ echo "$0.$LINENO begin wait"
 wait
 for ((i=0; i < ${#dckr_arr[@]}; i++)); do
   find $PROJ -name "prf_${i}.dat*"
-  prf_dat_arr=($(find $PROJ -name "prf_${i}.dat*" | grep -v dat.old))
+  prf_dat_arr=($(find $PROJ -name "prf_${i}.dat*" | sort | grep -v dat.old | grep -v ".txt"))
   for ((j=0; j < ${#prf_dat_arr[@]}; j++)); do
-    echo $SCR_DIR/perf script -i ${prf_dat_arr[$j]} _ ${prf_dat_arr[$j]}.txt
-    $SCR_DIR/perf script -i ${prf_dat_arr[$j]} > ${prf_dat_arr[$h]}.txt
+    if [ ! -e ${prf_dat_arr[$j]}.txt ]; then
+      echo $SCR_DIR/perf script -i ${prf_dat_arr[$j]} _ ${prf_dat_arr[$j]}.txt
+      $SCR_DIR/perf script -i ${prf_dat_arr[$j]} > ${prf_dat_arr[$h]}.txt
+    fi
   done
 done
 
