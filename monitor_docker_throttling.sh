@@ -158,6 +158,9 @@ tm_end=$((tm_beg+TIME_MX))
 OFILE=$PROJ/docker_cpu_stats.txt
 #  echo "tm_beg= $tm_beg tm_end= $tm_end"
 did_sigusr2=()
+for ((i=0; i < ${#dckr_arr[@]}; i++)); do
+   did_sigusr2[$i]=0
+done
 while [[ "$tm_cur" -lt "$tm_end" ]] && [[ "$GOT_QUIT" == "0" ]]; do
   tm_cur=$(date "+%s")
   tm_dff=$((tm_cur-tm_beg))
@@ -177,15 +180,18 @@ while [[ "$tm_cur" -lt "$tm_end" ]] && [[ "$GOT_QUIT" == "0" ]]; do
       fi
       continue
     fi
-    if [ "${did_sigusr2[$i]}" == "1" ]; then
-      did_sigusr2[$i]=0
-      prf_dat_arr=($(find $PROJ -name "prf_${i}.dat*" | sort | grep -v dat.old | grep -v ".txt"))
-      for ((j=0; j < ${#prf_dat_arr[@]}; j++)); do
-        if [ ! -e ${prf_dat_arr[$j]}.txt ]; then
-          echo $SCR_DIR/perf script -i ${prf_dat_arr[$j]} _ ${prf_dat_arr[$j]}.txt
-          $SCR_DIR/perf script -i ${prf_dat_arr[$j]} > ${prf_dat_arr[$h]}.txt &
-        fi
-      done
+    if [[ "${did_sigusr2[$i]}" != "0" ]]; then
+      sig_dff=$((EPOCHSECONDS - did_sigusr2[$i]))
+      if [ "$sig_dff" -gt "30" ]; then
+        did_sigusr2[$i]=0
+        prf_dat_arr=($(find $PROJ -name "prf_${i}.dat*" | sort | grep -v dat.old | grep -v ".txt"))
+        for ((j=0; j < ${#prf_dat_arr[@]}; j++)); do
+          if [ ! -e ${prf_dat_arr[$j]}.txt ]; then
+            echo $SCR_DIR/perf script -i ${prf_dat_arr[$j]} _ ${prf_dat_arr[$j]}.txt
+            $SCR_DIR/perf script -i ${prf_dat_arr[$j]} > ${prf_dat_arr[$h]}.txt &
+          fi
+        done
+      fi
     fi
     if [ "$VERBOSE" -gt "0" ]; then
       echo "$0.$LINENO stats for container $i"
@@ -204,10 +210,11 @@ while [[ "$tm_cur" -lt "$tm_end" ]] && [[ "$GOT_QUIT" == "0" ]]; do
       echo "$0.$LINENO dckr[$i] throttled $thr_dff"
       echo "__docker_sigusr2 $i $tm_dff $EPCH $TM_STR" >> $OFILE
       kill -SIGUSR2 ${PID_ARR[$i]}
-      did_sigusr2[$i]=1
+      did_sigusr2[$i]="$EPOCHSECONDS"
     fi
   done
-  sleep $INTERVAL
+  #sleep $INTERVAL
+  sleep 1
 done
 
 echo "$0.$LINENO kill perf jobs if any"
