@@ -86,6 +86,9 @@ if [[ "$DOCKER" != "" ]] && [[ "$SERVICE" != "" ]]; then
   echo "$0.$LINENO must supply either -d or -s service_name"
   exit 1
 fi
+MYPID=$$
+echo $MYPID > $SCR_DIR/../monitor_docker_throttling.pid
+STOPFILE="$SCR_DIR/../monitor_docker_throttling.stop"
 docker_short=$(docker ps)
 echo "$0.$LINENO $?"
 docker_long=$(docker ps --no-trunc)
@@ -216,6 +219,17 @@ while [[ "$tm_cur" -lt "$tm_end" ]] && [[ "$GOT_QUIT" == "0" ]]; do
   done
   #sleep $INTERVAL
   sleep 1
+  if [ "$GOT_QUIT" == "1" ]; then
+      echo "$0.$LINENO quit due to got sigint"
+      break
+  fi
+  if [ -e "$STOPFILE" ]; then
+      RESP=$(cat $STOPFILE)
+      if [ "$RESP" == "$MYPID" ]; then
+          echo "$0.$LINENO quit due to found $STOPFILE"
+          break
+      fi
+   fi
 done
 
 echo "$0.$LINENO kill perf jobs if any"
