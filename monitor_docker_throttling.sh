@@ -166,7 +166,7 @@ while [[ "$tm_cur" -lt "$tm_end" ]] && [[ "$GOT_QUIT" == "0" ]]; do
   tm_dff=$((tm_cur-tm_beg))
   echo "tm_elap= $tm_dff"
   TM_STR=$(date "+%Y%m%d%H%M%S")
-  EPCH="$EPOCHREALTIME"
+  EPCH=$(date "+%s.%N")
   echo "__docker_time $tm_dff $EPCH $TM_STR" >> $OFILE
   thr_ck=()
   thr_dff=()
@@ -180,15 +180,16 @@ while [[ "$tm_cur" -lt "$tm_end" ]] && [[ "$GOT_QUIT" == "0" ]]; do
       fi
       continue
     fi
+    EPCHSECS=$(date "+%s")
     if [[ "${did_sigusr2[$i]}" != "0" ]]; then
-      sig_dff=$((EPOCHSECONDS - did_sigusr2[$i]))
+      sig_dff=$((EPCHSECS - did_sigusr2[$i]))
       if [ "$sig_dff" -gt "30" ]; then
         did_sigusr2[$i]=0
         prf_dat_arr=($(find $PROJ -name "prf_${i}.dat*" | sort | grep -v dat.old | grep -v ".txt"))
         for ((j=0; j < ${#prf_dat_arr[@]}; j++)); do
           if [ ! -e ${prf_dat_arr[$j]}.txt ]; then
             echo $SCR_DIR/perf script -i ${prf_dat_arr[$j]} _ ${prf_dat_arr[$j]}.txt
-            $SCR_DIR/perf script -i ${prf_dat_arr[$j]} > ${prf_dat_arr[$h]}.txt &
+            $SCR_DIR/perf script -i ${prf_dat_arr[$j]} > ${prf_dat_arr[$j]}.txt &
           fi
         done
       fi
@@ -210,7 +211,7 @@ while [[ "$tm_cur" -lt "$tm_end" ]] && [[ "$GOT_QUIT" == "0" ]]; do
       echo "$0.$LINENO dckr[$i] throttled $thr_dff"
       echo "__docker_sigusr2 $i $tm_dff $EPCH $TM_STR" >> $OFILE
       kill -SIGUSR2 ${PID_ARR[$i]}
-      did_sigusr2[$i]="$EPOCHSECONDS"
+      did_sigusr2[$i]="$EPCHSECS"
     fi
   done
   #sleep $INTERVAL
@@ -232,7 +233,7 @@ for ((i=0; i < ${#dckr_arr[@]}; i++)); do
   for ((j=0; j < ${#prf_dat_arr[@]}; j++)); do
     if [ ! -e ${prf_dat_arr[$j]}.txt ]; then
       echo $SCR_DIR/perf script -i ${prf_dat_arr[$j]} _ ${prf_dat_arr[$j]}.txt
-      $SCR_DIR/perf script -i ${prf_dat_arr[$j]} > ${prf_dat_arr[$h]}.txt
+      $SCR_DIR/perf script -i ${prf_dat_arr[$j]} > ${prf_dat_arr[$j]}.txt
     fi
   done
 done
