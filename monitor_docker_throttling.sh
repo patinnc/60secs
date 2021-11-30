@@ -132,19 +132,21 @@ if [ ! -d "$PROJ" ]; then
   mkdir -p $PROJ
 fi
 
+$SCR_DIR/../60secs/extras/spin.x -w freq_sml -n 1 -t 0.01 -l 1000 > $PROJ/spin.x.txt
+
 PRF_ARR=()
 thr_arr=()
 declare -A dckr_stat_prv
 declare -A dckr_stat_cur
 prf_dat_lst=()
 for ((i=0; i < ${#dckr_arr[@]}; i++)); do
-  echo "$0.$LINENO stats for container $i"
+  echo "__container $i ${dckr_arr[$i]}" >> $OFILE
   ARR=($(cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cpu.stat | awk '{print $2;}'))
   for ((j=0; j < ${#ARR[@]}; j++)); do
     dckr_stat_prv[$i,$j]=${ARR[$j]}
   done
   prf_dat_lst[$i]="$PROJ/prf_${i}.dat"
-  nohup $SCR_DIR/perf record -F 99 -e cpu-clock --cgroup=docker/${dckr_arr[$i]} -g -a -o "${prf_dat_lst[$i]}" --switch-output --overwrite  -- sleep $TIME_MX &> $PROJ/prf_${i}.log  &
+  nohup $SCR_DIR/perf record -k CLOCK_MONOTONIC -F 99 -e cpu-clock --cgroup=docker/${dckr_arr[$i]} -g -a -o "${prf_dat_lst[$i]}" --switch-output --overwrite  -- sleep $TIME_MX &> $PROJ/prf_${i}.log  &
   PID_ARR[$i]=$!
 done
 
@@ -162,9 +164,32 @@ OFILE=$PROJ/docker_cpu_stats.txt
 #  echo "tm_beg= $tm_beg tm_end= $tm_end"
 did_sigusr2=()
 for ((i=0; i < ${#dckr_arr[@]}; i++)); do
-   did_sigusr2[$i]=0
+  did_sigusr2[$i]=0
+  RESP=$(cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cpu.cfs_quota_us)
+  echo "__cpu.cfs_quota_us $i $RESP"
+  RESP=$(cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cpu.cfs_period_us)
+  echo "__cpu.cfs_period_us $i $RESP"
+  ARR=($(cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cpu.stat | awk '{print $2;}'))
+  for ((j=0; j < ${#ARR[@]}; j++)); do
+     dckr_stat_prv[$i,$j]=${ARR[$j]}
+  done
+  ARR=($(cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cpuacct.stat | awk '{print $2;}'))
+  for ((j=0; j < ${#ARR[@]}; j++)); do
+     dckr_acctstat_prv[$i,$j]=${ARR[$j]}
+  done
 done
-while [[ "$tm_cur" -lt "$tm_end" ]] && [[ "$GOT_QUIT" == "0" ]]; do
+while [[ "$tm_cur" -lt "$tm_end" ]]; do
+  if [ "$GOT_QUIT" == "1" ]; then
+      echo "$0.$LINENO quit due to got sigint"
+      break
+  fi
+  if [ -e "$STOPFILE" ]; then
+      RESP=$(cat $STOPFILE)
+      if [ "$RESP" == "$MYPID" ]; then
+          echo "$0.$LINENO quit due to found $STOPFILE"
+          break
+      fi
+  fi
   tm_cur=$(date "+%s")
   tm_dff=$((tm_cur-tm_beg))
   echo "tm_elap= $tm_dff"
@@ -216,20 +241,18 @@ while [[ "$tm_cur" -lt "$tm_end" ]] && [[ "$GOT_QUIT" == "0" ]]; do
       kill -SIGUSR2 ${PID_ARR[$i]}
       did_sigusr2[$i]="$EPCHSECS"
     fi
+    ARR=($(cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cpuacct.stat | awk '{print $2;}'))
+    str=""
+    for ((j=0; j < ${#ARR[@]}; j++)); do
+       dckr_acctstat_cur[$i,$j]=${ARR[$j]}
+       thr_dff[$j]=$((dckr_acctstat_cur[$i,$j] - dckr_acctstat_prv[$i,$j]))
+       str="$str ${thr_dff[$j]}"
+       dckr_acctstat_prv[$i,$j]=${dckr_stat_cur[$i,$j]}
+    done
+    echo "__docker_cpuacct_stat $EPCH $i $str" >> $OFILE
   done
   #sleep $INTERVAL
   sleep 1
-  if [ "$GOT_QUIT" == "1" ]; then
-      echo "$0.$LINENO quit due to got sigint"
-      break
-  fi
-  if [ -e "$STOPFILE" ]; then
-      RESP=$(cat $STOPFILE)
-      if [ "$RESP" == "$MYPID" ]; then
-          echo "$0.$LINENO quit due to found $STOPFILE"
-          break
-      fi
-   fi
 done
 
 echo "$0.$LINENO kill perf jobs if any"
