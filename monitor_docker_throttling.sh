@@ -247,7 +247,7 @@ while [[ "$tm_cur" -lt "$tm_end" ]]; do
        dckr_acctstat_cur[$i,$j]=${ARR[$j]}
        thr_dff[$j]=$((dckr_acctstat_cur[$i,$j] - dckr_acctstat_prv[$i,$j]))
        str="$str ${thr_dff[$j]}"
-       dckr_acctstat_prv[$i,$j]=${dckr_stat_cur[$i,$j]}
+       dckr_acctstat_prv[$i,$j]=${dckr_acctstat_cur[$i,$j]}
     done
     echo "__docker_cpuacct_stat $EPCH $i $str" >> $OFILE
   done
