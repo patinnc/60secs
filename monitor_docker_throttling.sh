@@ -89,6 +89,9 @@ fi
 MYPID=$$
 echo $MYPID > $SCR_DIR/../monitor_docker_throttling.pid
 STOPFILE="$SCR_DIR/../monitor_docker_throttling.stop"
+if [ -e "$STOPFILE" ]; then
+  rm "$STOPFILE"
+fi
 docker_short=$(docker ps)
 echo "$0.$LINENO $?"
 docker_long=$(docker ps --no-trunc)
@@ -177,7 +180,12 @@ for ((i=0; i < ${#dckr_arr[@]}; i++)); do
   for ((j=0; j < ${#ARR[@]}; j++)); do
      dckr_acctstat_prv[$i,$j]=${ARR[$j]}
   done
+  cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cgroup.procs | xargs -I '{}' ps  -p {} -o pid,comm > cgroup.procs_short.txt
+  cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cgroup.procs | xargs -I '{}' ps  -p {} -f > cgroup.procs_long.txt
+  cpuacct_usage_prv[$i]=$(cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cpuacct.usage)
 done
+
+
 while [[ "$tm_cur" -lt "$tm_end" ]]; do
   if [ "$GOT_QUIT" == "1" ]; then
       echo "$0.$LINENO quit due to got sigint"
@@ -187,6 +195,7 @@ while [[ "$tm_cur" -lt "$tm_end" ]]; do
       RESP=$(cat $STOPFILE)
       if [ "$RESP" == "$MYPID" ]; then
           echo "$0.$LINENO quit due to found $STOPFILE"
+          rm $STOPFILE
           break
       fi
   fi
@@ -250,6 +259,10 @@ while [[ "$tm_cur" -lt "$tm_end" ]]; do
        dckr_acctstat_prv[$i,$j]=${dckr_acctstat_cur[$i,$j]}
     done
     echo "__docker_cpuacct_stat $EPCH $i $str" >> $OFILE
+    RESP=$(cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cpuacct.usage)
+    v=$((RESP-cpuacct_usage_prv[$i]))
+    echo "__docker_cpuacct_usage $EPCH $i $v" >> $OFILE
+    cpuacct_usage_prv[$i]="$RESP"
   done
   #sleep $INTERVAL
   sleep 1
