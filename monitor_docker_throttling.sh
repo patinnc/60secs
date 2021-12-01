@@ -17,12 +17,16 @@ catch_signal() {
 trap 'catch_signal' SIGINT
 
 INTERVAL=10
+FREQ_SMPL=99
 
 
-while getopts "hvd:I:p:s:t:" opt; do
+while getopts "hvd:f:I:p:s:t:" opt; do
   case ${opt} in
     d )
       DOCKER=$OPTARG
+      ;;
+    f )
+      FREQ_SMPL=$OPTARG
       ;;
     I )
       INTERVAL=$OPTARG
@@ -43,6 +47,7 @@ while getopts "hvd:I:p:s:t:" opt; do
       echo "usage: $0 -p proj_output_dir [ -d docker_container | -s service_name ] -t time_to_run_in_secs -i interval_in_secs"
       echo "       $0 monitor docker container or service for throttling "
       echo "   -d docker_container (long or short name) (comma separated list if more than 1)"
+      echo "   -f freq_samples      samples per second (per cpu on which the container is running). Default = 99. Higher freq -> more overhead"
       echo "   -I interval_in_secs  sleep interval between get stats"
       echo "   -s service_name (as it appears in the docker ps output (selects all containers for service on host)"
       echo "   -p proj_dir     output dir for stat file"
@@ -150,7 +155,7 @@ for ((i=0; i < ${#dckr_arr[@]}; i++)); do
     dckr_stat_prv[$i,$j]=${ARR[$j]}
   done
   prf_dat_lst[$i]="$PROJ/prf_${i}.dat"
-  nohup $SCR_DIR/perf record -k CLOCK_MONOTONIC -F 99 -e cpu-clock --cgroup=docker/${dckr_arr[$i]} -g -a -o "${prf_dat_lst[$i]}" --switch-output --overwrite  -- sleep $TIME_MX &> $PROJ/prf_${i}.log  &
+  nohup $SCR_DIR/perf record -k CLOCK_MONOTONIC -F $FREQ_SMPL -e cpu-clock --cgroup=docker/${dckr_arr[$i]} -g -a -o "${prf_dat_lst[$i]}" --switch-output --overwrite  -- sleep $TIME_MX &> $PROJ/prf_${i}.log  &
   PID_ARR[$i]=$!
 done
 
