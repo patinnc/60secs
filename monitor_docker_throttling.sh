@@ -171,6 +171,8 @@ tm_cur=$tm_beg
 tm_end=$((tm_beg+TIME_MX))
 #  echo "tm_beg= $tm_beg tm_end= $tm_end"
 did_sigusr2=()
+has_java=()
+declare -A has_java_det
 for ((i=0; i < ${#dckr_arr[@]}; i++)); do
   did_sigusr2[$i]=0
   RESP=$(cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cpu.cfs_quota_us)
@@ -185,8 +187,21 @@ for ((i=0; i < ${#dckr_arr[@]}; i++)); do
   for ((j=0; j < ${#ARR[@]}; j++)); do
      dckr_acctstat_prv[$i,$j]=${ARR[$j]}
   done
-  cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cgroup.procs | xargs -I '{}' ps  -p {} -o pid,comm > cgroup.procs_short.txt
-  cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cgroup.procs | xargs -I '{}' ps  -p {} -f > cgroup.procs_long.txt
+  cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cgroup.procs | xargs -I '{}' ps  -p {} -o pid,comm > $PROJ/cgroup.procs_short.txt
+  cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cgroup.procs | xargs -I '{}' ps  -p {} -f > $PROJ/cgroup.procs_long.txt
+  has_java[$i]=$(grep java $PROJ/cgroup.procs_short.txt | wc -l)
+  if [ "${has_java[$i]}" -gt "0" ]; then
+    ARR=($(grep java $PROJ/cgroup.procs_short.txt | awk '{printf("%s\n", $1);}'))
+    for ((j=0; j < ${#has_java[$i]}; j++)); do
+      has_java_det[$i,$j,"host_pid"]=${ARR[$j]}
+      has_java_det[$i,$j,"dckr_pid"]=$(grep NSpid /proc/${ARR[$j]}/status | awk '{printf("%s", $3);}')
+      hst_java_det[$i,$j,"user"]=$(grep java $PROJ/cgroup.procs_long.txt | grep ${ARR[$j]} | awk '{printf("%s\n", $1);}')
+    done
+    docker cp get_symbol_map_for_perf_from_java_in_container.tar.gz ${dckr_arr[$i]}:/tmp/
+    docker exec -it ${dckr_arr[$i]} bash -c "cd /tmp; tar xzf /tmp/get_symbol_map_for_perf_from_java_in_container.tar.gz"
+  fi
+  # ps -ef |grep java |grep deepeta
+  # grep NSpid /proc/335930/status
   cpuacct_usage_prv[$i]=$(cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cpuacct.usage)
 done
 
@@ -228,10 +243,22 @@ while [[ "$tm_cur" -lt "$tm_end" ]]; do
       if [ "$sig_dff" -gt "30" ]; then
         did_sigusr2[$i]=0
         prf_dat_arr=($(find $PROJ -name "prf_${i}.dat*" | sort | grep -v dat.old | grep -v ".txt"))
+        opt_symfs=
+        if [ "${#has_java[$i]}" -gt "0" ]; then; j++)); then
+          juser=${has_java_det[$i,0,"user"]} # assume all java is same user
+          docker exec -it ${dckr_arr[$i]} --user $juser bash -c "cd /tmp; ./fg_jmaps.sh"
+          opt_symfs=" --symfs /tmp "
+          for ((j=0; j < ${#has_java[$i]}; j++)); do
+            hpid=${has_java_det[$i,$j,"host_pid"]}
+            dpid=${has_java_det[$i,$j,"dckr_pid"]}
+            has_java_det[$i,$j,"dckr_pid"]=$(grep NSpid /proc/${ARR[$j]}/status | awk '{printf("%s", $3);}')
+            docker cp ${dckr_arr[$i]}:/tmp/perf-${dpid}.map /tmp/perf-${hpid}.map
+          done
+        fi
         for ((j=0; j < ${#prf_dat_arr[@]}; j++)); do
           if [ ! -e ${prf_dat_arr[$j]}.txt ]; then
-            echo $SCR_DIR/perf script -i ${prf_dat_arr[$j]} _ ${prf_dat_arr[$j]}.txt
-            $SCR_DIR/perf script -i ${prf_dat_arr[$j]} > ${prf_dat_arr[$j]}.txt &
+            echo $SCR_DIR/perf script -i ${prf_dat_arr[$j]} $opt_symfs  _ ${prf_dat_arr[$j]}.txt
+            $SCR_DIR/perf script -i ${prf_dat_arr[$j]} $opt_symfs > ${prf_dat_arr[$j]}.txt &
           fi
         done
       fi
