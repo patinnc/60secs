@@ -195,9 +195,10 @@ for ((i=0; i < ${#dckr_arr[@]}; i++)); do
     for ((j=0; j < ${#has_java[$i]}; j++)); do
       has_java_det[$i,$j,"host_pid"]=${ARR[$j]}
       has_java_det[$i,$j,"dckr_pid"]=$(grep NSpid /proc/${ARR[$j]}/status | awk '{printf("%s", $3);}')
-      hst_java_det[$i,$j,"user"]=$(grep java $PROJ/cgroup.procs_long.txt | grep ${ARR[$j]} | awk '{printf("%s\n", $1);}')
+      has_java_det[$i,"user"]=$(grep java $PROJ/cgroup.procs_long.txt | grep ${ARR[$j]} | tail -1 |  awk '{printf("%s", $1);}')
+      echo docker $i, java $j, host_pid= ${has_java_det[$i,$j,"host_pid"]}, dckr_pid= ${has_java_det[$i,$j,"dckr_pid"]}, usr= ${has_java_det[$i,"user"]}
     done
-    docker cp get_symbol_map_for_perf_from_java_in_container.tar.gz ${dckr_arr[$i]}:/tmp/
+    docker cp $SCR_DIR/get_symbol_map_for_perf_from_java_in_container.tar.gz ${dckr_arr[$i]}:/tmp/
     docker exec -it ${dckr_arr[$i]} bash -c "cd /tmp; tar xzf /tmp/get_symbol_map_for_perf_from_java_in_container.tar.gz"
   fi
   # ps -ef |grep java |grep deepeta
@@ -244,21 +245,22 @@ while [[ "$tm_cur" -lt "$tm_end" ]]; do
         did_sigusr2[$i]=0
         prf_dat_arr=($(find $PROJ -name "prf_${i}.dat*" | sort | grep -v dat.old | grep -v ".txt"))
         opt_symfs=
-        if [ "${#has_java[$i]}" -gt "0" ]; then; j++)); then
-          juser=${has_java_det[$i,0,"user"]} # assume all java is same user
-          docker exec -it ${dckr_arr[$i]} --user $juser bash -c "cd /tmp; ./fg_jmaps.sh"
-          opt_symfs=" --symfs /tmp "
+        if [ "${#has_java[$i]}" -gt "0" ]; then
+          juser=${has_java_det[$i,"user"]}
+          echo docker exec -it --user $juser  ${dckr_arr[$i]} bash -c 'cd /tmp; ./fg_jmaps.sh'
+          docker exec -it --user $juser ${dckr_arr[$i]} bash -c 'cd /tmp; ./fg_jmaps.sh'
+          #opt_symfs=" --symfs /tmp "
           for ((j=0; j < ${#has_java[$i]}; j++)); do
             hpid=${has_java_det[$i,$j,"host_pid"]}
             dpid=${has_java_det[$i,$j,"dckr_pid"]}
-            has_java_det[$i,$j,"dckr_pid"]=$(grep NSpid /proc/${ARR[$j]}/status | awk '{printf("%s", $3);}')
+            echo docker cp ${dckr_arr[$i]}:/tmp/perf-${dpid}.map /tmp/perf-${hpid}.map
             docker cp ${dckr_arr[$i]}:/tmp/perf-${dpid}.map /tmp/perf-${hpid}.map
           done
         fi
         for ((j=0; j < ${#prf_dat_arr[@]}; j++)); do
           if [ ! -e ${prf_dat_arr[$j]}.txt ]; then
-            echo $SCR_DIR/perf script -i ${prf_dat_arr[$j]} $opt_symfs  _ ${prf_dat_arr[$j]}.txt
-            $SCR_DIR/perf script -i ${prf_dat_arr[$j]} $opt_symfs > ${prf_dat_arr[$j]}.txt &
+            echo $SCR_DIR/perf script -i ${prf_dat_arr[$j]} --kallsyms=/proc/kallsyms  _ ${prf_dat_arr[$j]}.txt
+            $SCR_DIR/perf script -i ${prf_dat_arr[$j]} --kallsyms=/proc/kallsyms > ${prf_dat_arr[$j]}.txt &
           fi
         done
       fi
@@ -312,10 +314,21 @@ wait
 for ((i=0; i < ${#dckr_arr[@]}; i++)); do
   find $PROJ -name "prf_${i}.dat*"
   prf_dat_arr=($(find $PROJ -name "prf_${i}.dat*" | sort | grep -v dat.old | grep -v ".txt"))
+        if [ "${#has_java[$i]}" -gt "0" ]; then
+          juser=${has_java_det[$i,"user"]} # assume all java is same user
+          echo docker exec -it --user $juser ${dckr_arr[$i]} bash -c 'cd /tmp; ./fg_jmaps.sh'
+          docker exec -it --user $juser ${dckr_arr[$i]} bash -c 'cd /tmp; ./fg_jmaps.sh'
+          for ((j=0; j < ${#has_java[$i]}; j++)); do
+            hpid=${has_java_det[$i,$j,"host_pid"]}
+            dpid=${has_java_det[$i,$j,"dckr_pid"]}
+            echo docker cp ${dckr_arr[$i]}:/tmp/perf-${dpid}.map /tmp/perf-${hpid}.map
+            docker cp ${dckr_arr[$i]}:/tmp/perf-${dpid}.map /tmp/perf-${hpid}.map
+          done
+        fi
   for ((j=0; j < ${#prf_dat_arr[@]}; j++)); do
     if [ ! -e ${prf_dat_arr[$j]}.txt ]; then
-      echo $SCR_DIR/perf script -i ${prf_dat_arr[$j]} _ ${prf_dat_arr[$j]}.txt
-      $SCR_DIR/perf script -i ${prf_dat_arr[$j]} > ${prf_dat_arr[$j]}.txt
+      echo $SCR_DIR/perf script -i ${prf_dat_arr[$j]} --kallsyms=/proc/kallsyms  _ ${prf_dat_arr[$j]}.txt
+      $SCR_DIR/perf script -i ${prf_dat_arr[$j]} --kallsyms=/proc/kallsyms  > ${prf_dat_arr[$j]}.txt
     fi
   done
 done
