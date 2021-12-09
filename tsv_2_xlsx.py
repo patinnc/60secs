@@ -1176,7 +1176,7 @@ for bmi in range(base_mx+1):
                      use_drow_end = drow_end
                    if chart1 != None and ((ch_type == "column" or ch_type == "column_stacked") or drow_end  > (drow_beg+1)):
                     rc = 0;
-                    #print("got bef add_series ch_type= ", ch_type, ", title= ", title, ", drow_beg= ", drow_beg, ", drow_end= ", drow_end);
+                    #print("got bef add_series ch_type= ", ch_type, ", title= ", title, ", drow_beg= ", drow_beg, ", drow_end= ", drow_end," h= ",h,",ph_add=",ph_add, file=sys.stderr);
                     use_color = num_series % len(gcolor_lst)
                     num_series = num_series + 1
                     a_s = {
