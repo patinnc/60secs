@@ -1,0 +1,56 @@
+
+eqn: 100e-9 * [cycles] / ({num_cpus} * {arm_cpu_freq} * {interval})
+hdr: %busy
+hdr_ps: %not_halted
+hdr_alias: metric_CPU utilization %
+options: use_if_got{arm_cpu_freq}
+
+eqn: [instructions] / [cycles]
+hdr: IPC
+hdr_alias: metric_IPC
+
+eqn: [cycles]/[instructions]
+hdr: CPI
+hdr_alias: metric_CPI
+
+eqn: 1.0e-9 * [instructions] / {interval}
+hdr: bips
+hdr_ps: instructions/sec (1e9 instr/sec)
+
+eqn: 1.0e-9 * [cycles] / {interval}
+hdr: bcps
+hdr_ps: cpu-cycles/sec (1e9 cycles/sec)
+
+eqn: 100.0 * ([instructions]/[armv8_pmuv3_0/inst_spec/])*( 1.0 - ([armv8_pmuv3_0/stall_backend/] + [armv8_pmuv3_0/stall_frontend/]) / [cycles])
+hdr: td_ret
+hdr_ps: topdown_Retiring(%)
+tag_ps: td_ret
+charts: td_lvl1_chart
+
+eqn: 100.0 * (([armv8_pmuv3_0/inst_spec/]-[instructions])/[armv8_pmuv3_0/inst_spec/])*( 1.0 - ([armv8_pmuv3_0/stall_backend/] + [armv8_pmuv3_0/stall_frontend/]) / [cycles])
+hdr: td_bs
+hdr_ps: topdown_Bad_Speculation(%)
+tag_ps: td_bs
+charts: td_lvl1_chart
+
+eqn: 100 * [armv8_pmuv3_0/stall_frontend/] / [cycles]
+hdr: td_fe_stall
+hdr_ps: topdown_Frontend_Bound(%)
+tag_ps: td_fe_stall
+charts: td_lvl1_chart
+
+eqn: 100 * [armv8_pmuv3_0/stall_backend/] / [cycles]
+hdr: td_be_stall
+hdr_ps: topdown_Backend_Bound(%)
+tag_ps: td_be_stall
+charts: td_lvl1_chart
+
+
+eqn: 64.0e-9 * [armv8_pmuv3_0/mem_access/]/{interval}
+hdr: load_store_bw
+hdr_ps: load_store_bw (GB/s)
+tag_ps: load_store_bw
+
+eqn: 100.0 * [instructions]/[armv8_pmuv3_0/inst_spec/]
+hdr: %inst_spec
+hdr_ps: %inst/inst_spec
