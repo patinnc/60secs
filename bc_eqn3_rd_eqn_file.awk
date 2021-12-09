@@ -14,7 +14,7 @@
   #  printf("get bc_eqn_glbl_var_arr[%s] = %s\n", v, bc_eqn_glbl_var_arr[v]);
   }
 }  
-FILENAME == eqn_file {
+FILENAME == bc_eqn3_eqn_file {
   #printf("flnm= %s, a, line[%d]= %s\n", FILENAME, FNR, $0);
   if (length($0) == 0 || substr($1, 1,1) == "#") {
     next;
@@ -95,15 +95,23 @@ FILENAME == eqn_file {
     printf("nw kmx= %d, bc_eqn_err_num= %d, uses_row_vars= %d, got_row_vars= %d got_all= %d need_vars= %d, got_vars= %d eqn= %s\n",
         kmx, bc_eqn_err_num, bc_eqn_arr[kmx,"uses_row_vars"], bc_eqn_arr[kmx,"got_row_vars"], got_all, res_arr["need_vars"], res_arr["need_vars"],  eqn);
     }
+    next;
   }
-  if ($1 == "hdr:") {
+  if ($1 == "hdr:" || $1 == "hdr_ps:" || $1 == "hdr_alias:" || $1 == "hdr_alias_factor:" || $1 == "tag_ps:" || $1 == "charts:") {
     if (use_this_eqn != 1) { next;}
-    pos = index($0, $1);
-    v = substr($0, pos+4, length($0));
+    pos = index($0, ":");
+    v0 = substr($0, 1, pos-1);
+    v = substr($0, pos+1, length($0));
+    gsub(/^[ ]+/, "", v0);
+    gsub(/[ ]+$/, "", v0);
     gsub(/^[ ]+/, "", v);
     gsub(/[ ]+$/, "", v);
-    bc_eqn_arr[kmx,"hdr"]= v;
+    bc_eqn_arr[kmx,v0]= v;
+    if ($1 == "charts:") {
+      printf("charts[%d] chrt= %s\n", kmx, v) > "/dev/stderr";
+    }
     #printf("eqn[%d] hdr= %s\n", kmx, v);
+    next;
   }
   if ($1 == "options:") {
     if (use_this_eqn != 1) { next;}
@@ -112,6 +120,10 @@ FILENAME == eqn_file {
     gsub(/^[ ]+/, "", v);
     gsub(/[ ]+$/, "", v);
     bc_eqn_arr[kmx,"options"]= v;
+    next;
+  }
+  {
+    printf("unrecognized line %s in equation file %s\n", $0, FILENAME) > "/dev/stderr";
   }
 }
 END{
@@ -147,11 +159,21 @@ END{
     if (index(bc_eqn_arr[i,"options"], "verbose") > 0) {
       verbose = 1;
     }
-    skip_eqn = bc_eqn_ck_skip_or_use_if_got(i,"skip", verbose);
-    if (skip_eqn == 1) { continue; }
-    use_eqn = bc_eqn_ck_skip_or_use_if_got(i,"use", verbose);
-    if (use_eqn != 1) { continue; }
+    if (bc_eqn_ck_if_got(i, 0) == 0) {
+      continue;
+    }
+    j = 1;
     bc_eqn_arr[i,"got_row_vars"] = bc_eqn_arr[i,"uses_row_vars"];
+      for (k=1; k <= evt_mx; k++) {
+        bc_eqn_row_data[k] = evt_data[k,j];
+        bc_eqn_tmr_data[k] = evt_data[k,j,"ns"];
+        bc_eqn_inst_data[k] = evt_data[k,j,"inst"];
+      }
+      if (j == 1) {
+        bc_eqn_glbl_var_arr["interval"] = tm_lkup[j]+0.0;
+      } else {
+        bc_eqn_glbl_var_arr["interval"] = tm_lkup[j]-tm_lkup[j-1];
+      }
     hdr = bc_eqn_arr[i,"hdr"];
     val = bc_eqn_evalArithmeticExp(bc_eqn_arr[i, "eqn"], 3, arg_arr, verbose, i) + 0.0;
     if (bc_eqn_err_num == 0 || verbose > 0) {
@@ -178,7 +200,7 @@ END{
          val = bc_eqn_evalArithmeticExp(bc_eqn_arr[i, "eqn"], 3, arg_arr, verbose, i) + 0.0;
          verbose = v_sv;
          if (verbose > 0) {
-         printf("bc_eqn_glbl_var_arr[%s] = %s\n", "itp_denom", bc_eqn_glbl_var_arr["itp_demon"]);
+         printf("bc_eqn_glbl_var_arr[%s] = %s\n", "itp_denom", bc_eqn_glbl_var_arr["itp_denom"]);
          }
       }
     }
@@ -315,10 +337,10 @@ END{
     }
   }
   }
-  if (tm_mx >= 1) {
+  if (out_file == "" && tm_mx >= 1) {
     #printf("tm_mx= %d, tm_lkup[%d]= %f\n", tm_mx, tm_mx, tm_lkup[tm_mx]);
     hdr_str = "time";
-    for (j=1; j <= tm_mx; j++) {
+    for (j=0; j <= tm_mx; j++) {
       # delete the computed glbl_var_arr values (the output of the equations) to ensure that the eqn is only used if a prev eqn has initialized it
       delete bc_eqn_glbl_var_arr;
       #for (key in bc_eqn_glbl_var_arr_from_eqn) {
@@ -329,21 +351,28 @@ END{
         bc_eqn_glbl_var_arr[key] = bc_eqn_glbl_var_arr_sv[key];
       }
       for (k=1; k <= evt_mx; k++) {
-        bc_eqn_row_data[k] = evt_data[k,j];
-        bc_eqn_tmr_data[k] = evt_data[k,j,"ns"];
-        bc_eqn_inst_data[k] = evt_data[k,j,"inst"];
+        if (j == 0) {
+          bc_eqn_row_data[k] = evt_data[k,"tot"];
+          bc_eqn_tmr_data[k] = evt_data[k,"tot","ns"];
+          bc_eqn_inst_data[k] = evt_data[k,"tot","inst"];
+        } else {
+          bc_eqn_row_data[k] = evt_data[k,j];
+          bc_eqn_tmr_data[k] = evt_data[k,j,"ns"];
+          bc_eqn_inst_data[k] = evt_data[k,j,"inst"];
+        }
       }
-      if (j == 1) {
+      if (j == 0) {
+        bc_eqn_glbl_var_arr["interval"] = tm_lkup[tm_mx]+0.0;
+      } else if (j == 1) {
         bc_eqn_glbl_var_arr["interval"] = tm_lkup[j]+0.0;
       } else {
         bc_eqn_glbl_var_arr["interval"] = tm_lkup[j]-tm_lkup[j-1];
       }
       det_str = sprintf("%.3f", tm_lkup[j]);
       for (i=1; i <= kmx; i++) {
-        skip_eqn = bc_eqn_ck_skip_or_use_if_got(i, "skip", 0);
-        if (skip_eqn == 1) { continue; }
-        use_eqn = bc_eqn_ck_skip_or_use_if_got(i,"use", 0);
-        if (use_eqn != 1) { continue; }
+        if (bc_eqn_ck_if_got(i, 0) == 0) {
+          continue;
+        }
         val = bc_eqn_evalArithmeticExp(bc_eqn_arr[i, "eqn"], 3, arg_arr, verbose, i) + 0.0;
         got_all = bc_eqn_got_all_needed_variables(i, res_arr);
         if (got_all == 0) {
@@ -361,7 +390,7 @@ END{
              val = bc_eqn_evalArithmeticExp(bc_eqn_arr[i, "eqn"], 3, arg_arr, verbose, i) + 0.0;
              verbose = v_sv;
              if (verbose > 0) {
-             printf("bc_eqn_glbl_var_arr[%s] = %s\n", "itp_denom", bc_eqn_glbl_var_arr["itp_demon"]);
+             printf("bc_eqn_glbl_var_arr[%s] = %s\n", "itp_denom", bc_eqn_glbl_var_arr["itp_denom"]);
              }
           }
           if (no_prt == 0) {
@@ -378,6 +407,340 @@ END{
         printf("%s\n", hdr_str);
       }
       printf("%s\n", det_str);
+    }
+  }
+  if (out_file != "" && tm_mx >= 1) {
+    prt_to_out_file();
+  }
+}
+function prt_to_out_file(     hdr_arr, col, col_cur, hdr_mx, i, j, k, kk, hdr_col, rows, sv_mx, sv_line, bcol) {
+  printf("got prt_to_out_file\n");
+  if (out_file != "" && tm_mx >= 1) {
+    #printf("tm_mx= %d, tm_lkup[%d]= %f\n", tm_mx, tm_mx, tm_lkup[tm_mx]);
+    hdr_mx = -1;
+    do_hdr = 1;
+    hdr_col = -1;
+    trows = 0;
+    sv_verbose = verbose;
+    sv_mx = 0;
+    tm_epoch_beg = bc_eqn3_epoch_time_beg+0;
+    # evt_data really begins with j=1 but I'm starting at j=0 and use j=0 to compute the evt_data[*,"tot"] values
+    for (j=0; j <= tm_mx; j++) { 
+      col_cur = -1;
+      kkk_hdr = 0;
+      kkk_det = 0;
+      kkk_evt = 0;
+      # delete the computed glbl_var_arr values (the output of the equations) to ensure that the eqn is only used if a prev eqn has initialized it
+      delete bc_eqn_glbl_var_arr;
+      #for (key in bc_eqn_glbl_var_arr_from_eqn) {
+      #  delete bc_eqn_glbl_var_arr[key];
+      #}
+      # restore the not-computed values to glbl_var_arr
+      for (key in bc_eqn_glbl_var_arr_sv) {
+        bc_eqn_glbl_var_arr[key] = bc_eqn_glbl_var_arr_sv[key];
+      }
+      if (do_hdr == 1) {
+        hdr_arr[++hdr_mx,"str"] = "epoch";
+        hdr_arr[  hdr_mx,"typ"] = "str";
+        hdr_arr[  hdr_mx,"col"] = ++hdr_col;
+        hdr_arr[++hdr_mx,"str"] = "ts";
+        hdr_arr[  hdr_mx,"typ"] = "str";
+        hdr_arr[  hdr_mx,"col"] = ++hdr_col;
+        hdr_arr[++hdr_mx,"str"] = "rel_ts";
+        hdr_arr[  hdr_mx,"typ"] = "str";
+        hdr_arr[  hdr_mx,"col"] = ++hdr_col;
+        hdr_arr[++hdr_mx,"str"] = "interval";
+        hdr_arr[  hdr_mx,"typ"] = "str";
+        hdr_arr[  hdr_mx,"col"] = ++hdr_col;
+      }
+      if (j == 0) {
+        v = sprintf("%.3f", tm_lkup[tm_mx]);
+      } else {
+        v = sprintf("%.3f", tm_lkup[j]);
+      }
+      col[++col_cur,"val"] = sprintf("%.3f", (tm_epoch_beg + v)); # epoch
+      col[++col_cur,"val"] = v; # ts
+      col[++col_cur,"val"] = v; # rel_ts
+      if (j == 0) {    # interval
+        col[++col_cur,"val"] = v;
+      } else if (j == 1) {    # interval
+        col[++col_cur,"val"] = v;
+      } else {
+        col[++col_cur,"val"] = v - tm_lkup[j-1];
+      }
+      for (k=1; k <= evt_mx; k++) {
+        if (do_hdr == 1) {
+          hdr_arr[++hdr_mx,"str"]  = evt_lkup[k];
+          hdr_arr[  hdr_mx,"typ"]  = "evt";
+          hdr_arr[  hdr_mx,"lkup"] = k;
+          hdr_arr[  hdr_mx,"col"]  = ++hdr_col;
+        } 
+        if (j == 0) {
+          uj = "tot";
+        } else {
+          uj = j;
+        }
+        col[++col_cur,"val"] = evt_data[k,uj];
+        bc_eqn_row_data[k]   = evt_data[k,uj];
+        bc_eqn_tmr_data[k]   = evt_data[k,uj,"ns"];
+        bc_eqn_inst_data[k]  = evt_data[k,uj,"inst"];
+        kkk_evt++;
+      }
+      #printf("kkk_evt= %d\n", kkk_evt) > out_file;
+      if (j == 0) {
+        bc_eqn_glbl_var_arr["interval"] = tm_lkup[tm_mx]+0.0;
+      } else if (j == 1) {
+        bc_eqn_glbl_var_arr["interval"] = tm_lkup[j]+0.0;
+      } else {
+        bc_eqn_glbl_var_arr["interval"] = tm_lkup[j]-tm_lkup[j-1];
+      }
+      if (do_hdr == 1) {
+        printf("aft_evts hdr_mx= %d, hdr_col= %d, col_cur= %d bc_eqn3_epoch_time_beg= %s\n", hdr_mx, hdr_col, col_cur, bc_eqn3_epoch_time_beg) > "/dev/stderr";
+      }
+      col_last_event = col_cur+1;
+      for (i=1; i <= kmx; i++) {
+        if (bc_eqn_ck_if_got(i, 0) == 0) {
+          continue;
+        }
+        verbose = sv_verbose;
+        if (index(bc_eqn_arr[i,"options"], "verbose") > 0) {
+           verbose = 1;
+        }
+        val = bc_eqn_evalArithmeticExp(bc_eqn_arr[i, "eqn"], 3, arg_arr, verbose, i) + 0.0;
+        got_all = bc_eqn_got_all_needed_variables(i, res_arr);
+        if (got_all == 0) {
+          no_prt = index(bc_eqn_arr[i,"options"], "no_print") +0;
+          if (do_hdr == 1) {
+            if (bc_eqn_arr[i, "hdr_ps"] != "") {
+              v = bc_eqn_arr[i, "hdr_ps"];
+            } else {
+              v = bc_eqn_arr[i, "hdr"];
+            }
+            hlen[i] = length(v);
+            if (hlen[i] < 5) { hlen[i] = 5; }
+            hdr_str = hdr_str sprintf("\t%s", v);
+            hdr_arr[++hdr_mx,"str"] = v;
+            hdr_arr[  hdr_mx,"typ"] = "eqn";
+            hdr_arr[  hdr_mx,"lkup"] = i;
+            hdr_arr[  hdr_mx,"no_prt"] = no_prt;
+            hdr_arr[  hdr_mx,"col"] = (no_prt == 0 ? ++hdr_col : -1);
+            #hdr_arr[  hdr_mx,"col"] = ++hdr_col;
+            sv_hdr[i] = v;
+          }
+          #if (j==1) {
+            #printf("j= %d eqn[%d], hdr[%d]= %s val= %f, hdr_col= %d\n", j, i, hdr_mx, hdr_arr[hdr_mx,"str"], val, hdr_col) > "/dev/stderr";
+            #if (no_prt == 0) {
+              #kkk_hdr++;
+              #printf("eqn[%d], hdr= %s, typ= %s, no_prt= %d, col= %d, kkk_hdr= %d\n", i, v, "eqn", no_prt, hdr_arr[  hdr_mx,"col"], kkk_hdr) > out_file;
+            #}
+          #}
+          if (bc_eqn_err_num != 0) {
+             printf("eqn[%d] got err %d str= %s\n", i, bc_eqn_err_num, bc_err);
+             v_sv = verbose;
+             verbose = 1;
+             val = bc_eqn_evalArithmeticExp(bc_eqn_arr[i, "eqn"], 3, arg_arr, verbose, i) + 0.0;
+             verbose = v_sv;
+             if (verbose > 0) {
+             printf("bc_eqn_glbl_var_arr[%s] = %s\n", "itp_denom", bc_eqn_glbl_var_arr["itp_denom"]);
+             }
+          }
+          if (no_prt == 0) {
+            #fmt = "%" hlen[i] ".3f";
+            fmt = "%.3f";
+            v = sprintf(fmt, val);
+            det_str = det_str v;
+            col[++col_cur, "val"] = v;
+            col[  col_cur, "eqn"] = i;
+            #if (j==1) {
+            #kkk_det++;
+            #printf("det[%d], hdr= %s, typ= %s, no_prt= %d, col= %d, kkk_det= %d\n", i, v, "eqn", no_prt, hdr_arr[  hdr_mx,"col"], kkk_det) > out_file;
+            #}
+          }
+          #if (j==1) {
+          #  printf("j= %d eqn[%d], hdr[%d]= %s val= %f, hdr_col= %d col[%d]= %f\n", j, i, hdr_mx, hdr_arr[hdr_mx,"str"], val, hdr_col, col_cur, v) > "/dev/stderr";
+          #}
+          hdr = bc_eqn_arr[i,"hdr"];
+          hdr_lc = tolower(hdr);
+          bc_eqn_glbl_var_arr[hdr_lc] = val;
+          bc_eqn_glbl_var_arr_from_eqn[hdr_lc] = i;
+          hdr_ps = bc_eqn_arr[i,"hdr_ps"];
+          if (hdr_ps != "") {
+          hdr_lc = tolower(hdr_ps);
+          bc_eqn_glbl_var_arr[hdr_lc] = val;
+          bc_eqn_glbl_var_arr_from_eqn[hdr_lc] = i;
+          }
+        }
+      }
+      if (do_hdr == 1) {
+        do_hdr = 0;
+        v = "";
+        printf("at bottom of eqn_loop: hdr_mx= %d, hdr_col= %d, col_cur= %d\n", hdr_mx, hdr_col, col_cur) > "/dev/stderr";
+        ++sv_mx;
+        for (kk=0; kk <= hdr_mx; kk++) {
+          if (hdr_arr[kk,"no_prt"] != 0) { continue;}
+          sv_line[sv_mx] = sv_line[sv_mx] sprintf("%s%s", v, hdr_arr[kk,"str"]);
+          v = "\t";
+        }
+        trows++;
+      }
+      #printf("%s\n", det_str) > out_file;
+        v = "";
+        use_idx = sv_mx;
+        if (j == 0) {
+          use_idx = 0;
+        } else {
+          ++sv_mx;
+          use_idx = sv_mx;
+        }
+        for (kk=0; kk <= col_cur; kk++) {
+          sv_line[use_idx] = sv_line[use_idx] sprintf("%s%s", v, col[kk,"val"]);
+          v = "\t";
+        }
+        trows++;
+    }
+    rows = 0;
+    rows += 4;
+    sheet = bc_eqn3_sheet;
+    chrt  = bc_eqn3_chrt;
+    pfx = bc_eqn3_pfx;
+    bcol = 4;
+    ts_col = 1;
+    tbl0_beg = rows;
+    tbl0_end = trows;
+    printf("title\t%s\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, pfx, sheet) > out_file;
+    printf("hdrs\t%d\t%d\t%d\t%d\t%d\n", tbl0_beg, bcol, -1, hdr_col, ts_col) > out_file;
+    printf("\n") > out_file;
+    # put the typ of subtotal wanted in col B. 101 is an average over non-hidden rows. 104 is the max
+    # so, if the user changes the col B 101 to 104 then the subtotal row will show the max value for each column
+    printf("typ_subtotal\t101\t\t\t") > out_file;
+    for (k=4; k < col_cur; k++) {
+        frm = sprintf("=subtotal(INDIRECT(ADDRESS(ROW(),2, 1)), INDIRECT(ADDRESS(row()+2, column(), 1)):INDIRECT(ADDRESS(row()-1+%d, column(),1)))", tbl0_beg+sv_mx-2);
+        printf("\t%s", frm) > out_file;
+    }
+    printf("\n") > out_file;
+
+    for (k=1; k <= sv_mx; k++) {
+      printf("%s\n", sv_line[k]) > out_file;
+      rows++;
+    }
+    printf("\n") > out_file;
+    rows++;
+    printf("\n") > out_file;
+    rows++;
+    printf("%s\n", sv_line[1]) > out_file; # header
+    rows++;
+    printf("%s\n", sv_line[0]) > out_file; # values for whole run (eqns used event totals)
+    rows++;
+    printf("\n") > out_file;
+    rows++;
+    printf("\n") > out_file;
+    rows++;
+    td_cols_str = "";
+    bw_cols_str = "";
+    ipc_cols_str = "";
+    unh_cols_str = "";
+    lat_cols_str = "";
+    hwpf_cols_str = "";
+    for (k=0; k <= hdr_mx; k++) {
+       i  = hdr_arr[k,"lkup"];
+       cl = hdr_arr[k,"col"] ;
+       if (hdr_arr[k,"typ"] != "eqn" || cl < 0) { continue; }
+       str = hdr_arr[k,"str"];
+       if (index(bc_eqn_arr[i,"charts"], "td_lvl1_chart") > 0) {
+          printf("chart cols td_lvl1_chart cl= %d\n", cl) > "/dev/stderr";
+          td_cols_str = td_cols_str sprintf("\t%s\t%s", cl, cl);
+       }
+       if (index(str, "GB/s") > 0) {
+          bw_cols_str = bw_cols_str sprintf("\t%s\t%s", cl, cl);
+       }
+       if (str == "IPC" || index(str, "GHz") > 0 || index(str, "PKI") > 0 || index(str, "PTI") > 0) {
+          ipc_cols_str = ipc_cols_str sprintf("\t%s\t%s", cl, cl);
+       }
+       if (index(str, "not_halted") > 0 || index(str, "%L3_miss") > 0 || index(str, "%LLC misses") > 0 ||  index(str, "%both_HT_threads_active") > 0) {
+          if (index(str, "miss") > 0) {
+            xtra_str = ", %LLC misses"
+          }
+          if (index(str, "%both_HT_threads_active") > 0) {
+            xtra_str2 = ", %both_HT_threads_active";
+          }
+          unh_cols_str = unh_cols_str sprintf("\t%s\t%s", cl, cl);
+       }
+       if (index(str, "latency") > 0) {
+          lat_cols_str = lat_cols_str sprintf("\t%s\t%s", cl, cl);
+       }
+       if (index(str, "hw prefetch") > 0) {
+          hwpf_cols_str = hwpf_cols_str sprintf("\t%s\t%s", cl, cl);
+       }
+    }
+    if (td_cols_str != "") {
+      printf("title\t%s TopLev Level 1 Percentages\tsheet\t%s\ttype\tline_stacked\n", chrt, sheet) > out_file;
+      printf("hdrs\t%d\t%d\t%d\t%d\t%d%s\n", tbl0_beg, bcol, -1, hdr_col, ts_col, td_cols_str) > out_file;
+      printf("\n") > out_file;
+      rows += 3;
+      printf("\ntitle\t%s Top Lev: %%cpus Back/Front End Bound, Retiring\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, pfx, sheet) > out_file;
+      printf("hdrs\t%d\t%d\t%d\t%d\t%d%s\n", tbl0_beg, bcol, -1, hdr_col, ts_col, td_cols_str) > out_file;
+      printf("\n") > out_file;
+      rows += 3;
+    }
+    if (bw_cols_str != "") {
+      printf("title\t%s mem bw\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, pfx, sheet) > out_file;
+      printf("hdrs\t%d\t%d\t%d\t%d\t%d%s\n", tbl0_beg, bcol, -1, hdr_col, ts_col, bw_cols_str) > out_file;
+      printf("\n") > out_file;
+      rows += 3;
+    }
+    if (ipc_cols_str != "") {
+      printf("\ntitle\t%s IPC, CPU freq, LLC misses\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, pfx, sheet) > out_file;
+      printf("hdrs\t%d\t%d\t%d\t%d\t%d%s\n", tbl0_beg, bcol, -1, hdr_col, ts_col, ipc_cols_str) > out_file;
+      printf("\n") > out_file;
+      rows += 3;
+    }
+    if (unh_cols_str != "") {
+      printf("title\t%s %%cpus not halted (running)%s%s\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, xtra_str, xtra_str2, pfx, sheet) > out_file;
+      printf("hdrs\t%d\t%d\t%d\t%d\t%d%s\n", tbl0_beg, bcol, -1, hdr_col, ts_col, unh_cols_str) > out_file;
+      printf("\n") > out_file;
+      rows += 3;
+    }
+    if (lat_cols_str != "") {
+      printf("title\t%s miss latency\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, pfx, sheet) > out_file;
+      printf("hdrs\t%d\t%d\t%d\t%d\t%d%s\n", tbl0_beg, bcol, -1, hdr_col, ts_col, lat_cols_str) > out_file;
+      printf("\n") > out_file;
+      rows += 3;
+    }
+    if (hwpf_cols_str != "") {
+      printf("title\t%s hw prefetch bw (GB/s)\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, pfx, sheet) > out_file;
+      printf("hdrs\t%d\t%d\t%d\t%d\t%d%s\n", tbl0_beg, bcol, -1, hdr_col, ts_col, hwpf_cols_str) > out_file;
+      printf("\n") > out_file;
+      rows += 3;
+    }
+    printf("\n") > out_file;
+    rows++;
+    printf("bc_eqn3 at end: got sum_file= %s\n", sum_file) > "/dev/stderr";
+    close(out_file);
+    if (sum_file != "") {
+      nh = split(sv_line[1], harr, "\t");
+      nv = split(sv_line[0], varr, "\t");
+      for (i=col_last_event+1; i <= col_cur; i++) {
+        printf("average\tperf_stat\t%.6f\t%s\n", varr[i], harr[i]) >> sum_file;
+      }
+      for (i=col_last_event+1; i <= col_cur; i++) {
+        j = col[i, "eqn"];
+        if (j != "" && bc_eqn_arr[j,"hdr_alias"] != "") {
+          str  = bc_eqn_arr[j,"hdr_alias"];
+          fctr = bc_eqn_arr[j,"hdr_alias_factor"];
+          if (fctr == "") { fctr = 1.0;}
+          printf("itp_metric\tperf_stat\t%.6f\t%s\n", fctr*varr[i], str) >> sum_file;
+        }
+      }
+      for (i=1; i <= evt_mx; i++) {
+        str  = evt_lkup[i];
+        v    = evt_data[i,"tot"];
+        inst = evt_data[i,"tot","inst"];
+        if (harr[i] == "cpu-clock") { printf("cpu-clock: tot= %.3f, inst= %.3f avg= %.3f\n", v, inst, v/inst) > "/dev/stderr";}
+        if (inst > 0) {
+            printf("average\tperf_stat\t%.6f\t%s\n", v/inst, str) >> sum_file;
+        }
+      }
+      close(sum_file);
     }
   }
 }
