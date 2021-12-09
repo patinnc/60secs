@@ -297,6 +297,14 @@ function bc_eqn_ck_var_val_def(grp, var_evt_nm, cmp_oper, cmp_val, vrb,    i, v,
     return -1;
   }
 }
+function bc_eqn_ck_if_got(kmx_in, vrb_in,    skip_eqn, use_eqn) {
+  skip_eqn = bc_eqn_ck_skip_or_use_if_got(kmx_in, "skip", 0);
+  if (skip_eqn == 1) { return 0; }
+  use_eqn = bc_eqn_ck_skip_or_use_if_got(kmx_in,"use", 0);
+  if (use_eqn != 1) { return 0; }
+  return 1;
+}
+
 function bc_eqn_ck_skip_or_use_if_got(kmx_in, skip_or_use, vrb_in,   ck, rc, rc2, pos, pos0, pos1, str, str2, lkfor, lkfor_len, dlm, i, cmp_oper, cmp_val) {
   # return 1 if variable found and need to not use this eqn
   # else return 0 
@@ -505,7 +513,7 @@ function bc_eqn_evalArithmeticExp(s_eqn_in, mode, inout_arr, vrb, k4,   s, v, pa
         break;
       }
     }
-    v = bc_eqn_evalExp(arr[0], vrb);
+    v = bc_eqn_evalExp(arr[0], vrb, k4);
     if (bc_eqn_err_num > 0) {
       return v;
     }
@@ -543,7 +551,7 @@ function bc_eqn_evalArithmeticExp(s_eqn_in, mode, inout_arr, vrb, k4,   s, v, pa
       printf("paren.2: v= %s, arr[0]= %s  s= %s\n", v, arr[0], s);
     }
   }
-  return bc_eqn_evalExp(s, vrb);
+  return bc_eqn_evalExp(s, vrb, k4);
 }
 function bc_eqn_prt_list(str_in, mx, arr_num, arr_opr, sva_in, vrb,    k) {
   if (vrb > 0) {
@@ -552,7 +560,7 @@ function bc_eqn_prt_list(str_in, mx, arr_num, arr_opr, sva_in, vrb,    k) {
   }
 }
 #function bc_eqn_evalExp(s, vrb,    op, ln, reSNA, reNA, reUN, sv_mx, sva,
-function bc_eqn_evalExp(s, vrb,    op, ln, sv_mx, sva,
+function bc_eqn_evalExp(s, vrb, k4,   op, ln, sv_mx, sva,
           rc, rc2, rc3, crr, sv_num, sv_opr, got_md, go_as, i, j, v) {
     gsub(/[()]/, "", s);
     if (vrb > 0) {
@@ -709,9 +717,13 @@ function bc_eqn_evalExp(s, vrb,    op, ln, sv_mx, sva,
           if (sv_opr[i] == "*") { sv_num[i] = sv_num[i] * sv_num[i+1]; }
           else if (sv_opr[i] == "/") {
             if (sv_num[i+1] == 0.0) {
-              bc_eqn_err_num = 1;
-              sv_num[i] = 0;
-              return 0;
+              if (index(bc_eqn_arr[k4,"options"], "if_denom_zero_return_zero") > 0) {
+                sv_num[i] = 0;
+              } else {
+                 bc_eqn_err_num = 1;
+                 sv_num[i] = 0;
+                 return 0;
+              }
             } else {
               sv_num[i] = sv_num[i] / sv_num[i+1];
             }
