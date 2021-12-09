@@ -12,6 +12,16 @@ INFILE=
 VERBOSE=0
 UNKNOWN="n/a"
 
+if [ -p /dev/stdin ]; then
+        #echo "Data was piped to this script!"
+        # If we want to read the input line by line
+        #while IFS= read line; do
+        #        echo "Line: ${line}"
+        #done
+        RESP=$(cat)
+        #echo "resp= $RESP"
+else
+
 while getopts "ha:f:i:m:n:u:v:V:" opt; do
   case ${opt} in
     a )
@@ -107,6 +117,7 @@ model name	: $NAME
 $ASTR
 "
 fi
+fi # if not piped input
 
 if [[ "$OSTYPE" == "darwin"* ]]; then
   if [ "$1" == "" -a "$INFILE" == "" -a "$RESP" == "" ]; then
