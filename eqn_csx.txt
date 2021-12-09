@@ -1,13 +1,23 @@
 
 eqn: 100 * [ref-cycles] / ({num_cpus} * 1.0e9 * {tsc_freq}) / {interval}
 hdr: %busy
+hdr_ps: %not_halted
+hdr_alias: metric_CPU utilization %
 
 eqn: {tsc_freq} * [cycles] / [ref-cycles]
-hdr: freqGhz
+hdr: freqGHz
+hdr_ps: avg_freq (GHz)
+tag_ps: avg_freq_ghz
+hdr_alias: metric_CPU operating frequency (in GHz)
+
 
 eqn: [instructions] / [cycles]
 hdr: IPC
+hdr_alias: metric_IPC
 
+eqn: [cycles]/[instructions]
+hdr: CPI
+hdr_alias: metric_CPI
 
 # below events work on csx for per pid level or 1 thr/core. This set of events lets us compute %ret, %front_end, %bad_spec & %back_end
 # in td eqns below I use cpu_clk_unhalted.thread_any in td_method_1 & td_method_2.
@@ -16,19 +26,51 @@ hdr: IPC
 
 eqn: [cpu_clk_unhalted.one_thread_active] + [cpu_clk_unhalted.ref_xclk] + [uops_retired.retire_slots] + [idq_uops_not_delivered.core] + [uops_issued.any]
 hdr: td_method_3
-options: no_print
+options: no_print,skip_if_got{cpu_type==Ice Lake}
 
 # below events work on csx for system level & 2 thr/core. This set of events lets us compute %ret, %bad_spec, %front_end & %back_end
 
 eqn: [cpu_clk_unhalted.thread_any] + [uops_retired.retire_slots] + [idq_uops_not_delivered.core] + [uops_issued.any] + [int_misc.recovery_cycles_any]
 hdr: td_method_1
-options: no_print,skip_if_got{td_method_3}
+options: no_print,skip_if_got{td_method_3},skip_if_got{cpu_type==Ice Lake}
 
 # below events work on csx for system level & 2 thr/core. This set of events lets us compute %ret, %front_end and %bs_be = %bad_spec+%back_end)
 
 eqn: [cpu_clk_unhalted.thread_any] + [uops_retired.retire_slots] + [idq_uops_not_delivered.core] + [uops_issued.any]
 hdr: td_method_2
-options: no_print,skip_if_got{td_method_3}
+options: no_print,skip_if_got{td_method_3},skip_if_got{cpu_type==Ice Lake}
+
+
+eqn: 100.0 * ([topdown-retiring]+[idq_uops_not_delivered.core]-[int_misc.uop_dropping]+[topdown-be-bound]+[topdown-bad-spec])/[cpu/slots/]
+hdr: tdicx_sum
+hdr_ps: topdown_Sum
+options: no_print,use_if_got{cpu_type==Ice Lake}
+
+
+eqn: 100.0 * [topdown-retiring] / [cpu/slots/]
+hdr: tdicx_ret
+hdr_ps: topdown_Retiring(%)
+options: use_if_got{cpu_type==Ice Lake}
+charts: td_lvl1_chart
+
+eqn: 100.0 * [topdown-bad-spec] / [cpu/slots/]
+hdr: tdicx_bs
+hdr_ps: topdown_Bad_Speculation(%)
+options: use_if_got{cpu_type==Ice Lake}
+charts: td_lvl1_chart
+
+eqn: 100.0 * ( [idq_uops_not_delivered.core] - [int_misc.uop_dropping] ) / [cpu/slots/]
+hdr: tdicx_fe
+hdr_ps: topdown_Frontend_Bound(%)
+options: use_if_got{cpu_type==Ice Lake}
+charts: td_lvl1_chart
+
+eqn: 100.0 * [topdown-be-bound] / [cpu/slots/]
+hdr: tdicx_be
+hdr_ps: topdown_Backend_bound(%)
+options: use_if_got{cpu_type==Ice Lake},verbose
+charts: td_lvl1_chart
+
 
 #TopDownL1_SMT:
 #  SLOTS_SMT
@@ -37,6 +79,7 @@ options: no_print,skip_if_got{td_method_3}
 
 eqn: 4 * [cpu_clk_unhalted.thread_any] / {thr_per_core}
 hdr: td_denom_any
+hdr_ps: td_denom
 options: no_print,skip_if_got{td_method_3}
 
 # td_denom = (4*evt[thr_any,i]/thr_per_core);
@@ -55,26 +98,34 @@ options: no_print,skip_if_got{td_method_3}
 
 eqn: 100 * [uops_retired.retire_slots] / {td_denom_any}
 hdr: td_ret
+hdr_ps: topdown_Retiring(%)
+charts: td_lvl1_chart
 
 eqn: 100 - ({td_ret} + {td_fe})
 hdr: td_bebs
 options: skip_if_got[int_misc.recovery_cycles_any],use_if_got{td_denom_any}
+charts: td_lvl1_chart
 
 eqn: 100.0*([uops_issued.any] - [uops_retired.retire_slots]+((4*[int_misc.recovery_cycles_any])/2))/{td_denom_any}
 hdr: td_bs
+hdr_ps: topdown_Bad_Speculation(%)
+charts: td_lvl1_chart
 
 eqn: 100 * [idq_uops_not_delivered.core] / {td_denom_any}
 hdr: td_fe
+charts: td_lvl1_chart
 
 eqn: 100.0-({td_ret} + {td_fe} + {td_bs})
 hdr: td_be
 options: skip_if_got{td_bebs},skip_if_got{td_method_3}
+charts: td_lvl1_chart
 
 #  SLOTS
 #       [Total issue-pipeline slots (per-Physical Core till ICL; per-Logical Processor ICL onward)]
 #       [4 * cycles]
 eqn: 4 * [cycles]
 hdr: td_denom_one
+hdr_ps: td_denom
 options: no_print,use_if_got{td_method_3},use_if_got{monitor_per_thread}
 
 #  Retiring
@@ -82,18 +133,23 @@ options: no_print,use_if_got{td_method_3},use_if_got{monitor_per_thread}
 #       [uops_retired.retire_slots / (4 * cycles)]
 eqn: 100 * [uops_retired.retire_slots] / {td_denom_one}
 hdr: td_ret
+hdr_ps: topdown_Retiring(%)
+charts: td_lvl1_chart
 
 #  Bad_Speculation
 #       [This category represents fraction of slots wasted due to incorrect speculations]
 #       [( uops_issued.any - uops_retired.retire_slots + 4 * int_misc.recovery_cycles ) / (4 * cycles)]
 eqn: 100.0*([uops_issued.any] - [uops_retired.retire_slots]+ ( 4*[int_misc.recovery_cycles_any]))/{td_denom_one}
 hdr: td_bs
+hdr_ps: topdown_Bad_Speculation(%)
+charts: td_lvl1_chart
 
 #  Frontend_Bound
 #       [This category represents fraction of slots where the processor's Frontend undersupplies its Backend]
 #       [idq_uops_not_delivered.core / (4 * cycles)]
 eqn: 100 * [idq_uops_not_delivered.core] / {td_denom_one}
 hdr: td_fe
+charts: td_lvl1_chart
 
 #  Backend_Bound
 #       [This category represents fraction of slots where no uops are being delivered due to a lack of required resources for accepting new uops in the Backend]
@@ -101,6 +157,7 @@ hdr: td_fe
 eqn: 100.0-({td_ret} + {td_fe} + {td_bs})
 hdr: td_be
 options: use_if_got{td_denom_one}
+charts: td_lvl1_chart
 
 #TopDownL1_SMT:
 #  SLOTS_SMT
@@ -108,6 +165,7 @@ options: use_if_got{td_denom_one}
 #       [4 * ( ( cycles / 2 ) * ( 1 + cpu_clk_unhalted.one_thread_active / cpu_clk_unhalted.ref_xclk ) )]
 eqn: 4 * ( ( [cycles] / 2 ) * ( 1 + [cpu_clk_unhalted.one_thread_active] / [cpu_clk_unhalted.ref_xclk] ) )
 hdr: td_denom_smt
+hdr_ps: td_denom
 options: no_print,use_if_got{td_method_3},use_if_got{monitor_per_system}
 
 
@@ -116,18 +174,23 @@ options: no_print,use_if_got{td_method_3},use_if_got{monitor_per_system}
 #       [uops_retired.retire_slots / (4 * ( ( cycles / 2 ) * ( 1 + cpu_clk_unhalted.one_thread_active / cpu_clk_unhalted.ref_xclk ) ))]
 eqn: 100.0* [uops_retired.retire_slots] / {td_denom_smt}
 hdr: td_ret
+hdr_ps: topdown_Retiring(%)
+charts: td_lvl1_chart
 
 #  Bad_Speculation_SMT 
 #       [This category represents fraction of slots wasted due to incorrect speculations. SMT version; use when SMT is enabled and measuring per logical CPU] 
 #       [( uops_issued.any - uops_retired.retire_slots + 4 * ( int_misc.recovery_cycles_any / 2 ) ) / (4 * ( ( cycles / 2 ) * ( 1 + cpu_clk_unhalted.one_thread_active / cpu_clk_unhalted.ref_xclk ) ))]
 eqn: 100.0* ( [uops_issued.any] - [uops_retired.retire_slots] + 4 * ( [int_misc.recovery_cycles_any] / 2 ) ) / {td_denom_smt}
 hdr: td_bs
+hdr_ps: topdown_Bad_Speculation(%)
+charts: td_lvl1_chart
 
 #  Frontend_Bound_SMT
 #       [This category represents fraction of slots where the processor's Frontend undersupplies its Backend. SMT version; use when SMT is enabled and measuring per logical CPU]
 #       [idq_uops_not_delivered.core / (4 * ( ( cycles / 2 ) * ( 1 + cpu_clk_unhalted.one_thread_active / cpu_clk_unhalted.ref_xclk ) ))]
 eqn: 100.0* [idq_uops_not_delivered.core] / {td_denom_smt}
 hdr: td_fe
+charts: td_lvl1_chart
 
 #  Backend_Bound_SMT
 #       [This category represents fraction of slots where no uops are being delivered due to a lack of required resources for accepting new uops in the Backend. SMT version; use when SMT is enabled and measuring per logical CPU] 
@@ -135,6 +198,7 @@ hdr: td_fe
 eqn: 100.0 - ({td_ret} + {td_bs} + {td_fe})
 hdr: td_be
 options: use_if_got{td_denom_smt}
+charts: td_lvl1_chart
 
 eqn: 100.0*[cycle_activity.stalls_total]/[cycles]
 hdr: %cyc_be
@@ -149,26 +213,45 @@ hdr: br_pti
 eqn: 100.0 * [br_misp_retired.all_branches] / [br_inst_retired.all_branches]
 hdr: %br_misp
 
-eqn:  (100.0 * [unc_cha_tor_inserts.ia_miss.0x40433] / [unc_cha_tor_inserts.ia.0x40433])
+eqn:  (100.0 * [unc_cha_tor_inserts.ia_miss.0x40433]) / ([unc_cha_tor_inserts.ia.0x40433])
 hdr: LLC_data_rd_%miss/refs
+options: if_denom_zero_return_zero
+
+eqn:  (1000.0 * [unc_cha_tor_inserts.ia_miss.0x40433] / [instructions])
+hdr: LLC_data_rd_miss PTI
+hdr_ps: LLC-misses PTI
+
+eqn:  64.0e-9 * [unc_cha_tor_inserts.ia_miss.0x40433] / {interval}
+hdr: LLC_data_rd_miss_bw
+hdr_ps: LLC-miss bw (GB/s)
+
+eqn:  (64.0e-9 * [unc_cha_tor_occupancy.ia_miss.0x40433]) / ([unc_cha_tor_inserts.ia_miss.0x40433])
+hdr: LLC_data_rd_miss_lat(clks)
+hdr_ps: L3 miss latency (core_clks)
+options: if_denom_zero_return_zero
+
 
 eqn: [OFFCORE_REQUESTS_OUTSTANDING.L3_MISS_DEMAND_DATA_RD] / [OFFCORE_REQUESTS.L3_MISS_DEMAND_DATA_RD]
 hdr: LLC_data_rd_miss_lat_clks
 
-eqn:  (1e9 * [UNC_CHA_TOR_OCCUPANCY.IA_MISS.0x40433] / [UNC_CHA_TOR_INSERTS.IA_MISS.0x40433]) / ( [UNC_CHA_CLOCKTICKS] / ([[[UNC_CHA_CLOCKTICKS]]] * {sockets}) )
+eqn:  (1e9 * [UNC_CHA_TOR_OCCUPANCY.IA_MISS.0x40433] / [UNC_CHA_TOR_INSERTS.IA_MISS.0x40433]) / ( [UNC_CHA_CLOCKTICKS] / ([[UNC_CHA_CLOCKTICKS]] * {sockets}))
 hdr: LLC_data_rd_miss_lat_ns
+options: if_denom_zero_return_zero
 
 eqn:  ([UNC_CHA_TOR_OCCUPANCY.IA_MISS.0x40433] / [UNC_CHA_TOR_INSERTS.IA_MISS.0x40433]) / ( {tsc_freq} )
 hdr: LLC_data_rd_miss_lat_MLCns
+options: if_denom_zero_return_zero
 
-eqn: [UNC_CHA_CLOCKTICKS] / ([[[UNC_CHA_CLOCKTICKS]]] * {sockets}) / 1e9
+eqn: [UNC_CHA_CLOCKTICKS] / ([[UNC_CHA_CLOCKTICKS]] * {sockets}) / 1e9
 hdr: unc_freq_GHz
 
 eqn: 1.0e-9 * [instructions] / {interval}
 hdr: bips
+hdr_ps: instructions/sec (1e9 instr/sec)
 
 eqn: 1.0e-9 * [cycles] / {interval}
 hdr: bcps
+hdr_ps: cpu-cycles/sec (1e9 cycles/sec)
 
 #eqn: [instructions] / ([cpu_clk_unhalted.thread_any] / {thr_per_core})
 #hdr: core_ipc
@@ -195,18 +278,30 @@ options: use_if_got{monitor_per_system}
 
 eqn: [power/energy-pkg/] / {interval}
 hdr: watts
+hdr_ps: power_pkg (watts)
+hdr_alias: metric_package power (watts)
 
 eqn: 64.0e-9 * [uncx_read_write]/{interval}
 hdr: memBW_GB/s
+hdr_ps: unc_read_write (GB/s)
+hdr_alias:   metric_memory bandwidth total (MB/sec)
+hdr_alias_factor: 1000.0
+#   nwfor[kmx,1,"alias_oper"]="*";
 
 eqn: 1.0e-9 * [qpi_data_bandwidth_tx] / {interval}
 hdr: qpiBW_GB/s
+hdr_ps: QPI_BW (GB/sec)
+hdr_alias: metric_UPI Data transmit BW (MB/sec) (only data)
+hdr_alias_factor: 1000.0
 
 eqn: 64.0e-9 * ([qpi_data_bandwidth_txx]/9.0)/ {interval}
 hdr: qpiBW_GB/s
+hdr_ps: QPI_BW (GB/sec)
+hdr_alias: metric_UPI Data transmit BW (MB/sec) (only data)
+hdr_alias_factor: 1000.0
 
-exit
-
-
+eqn: [UNC_CHA_CLOCKTICKS] / [[UNC_CHA_CLOCKTICKS]]
+hdr: uncore_freq
+hdr_ps: uncore_freq (GHz)
 
 exit
