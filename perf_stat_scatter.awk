@@ -199,42 +199,6 @@ function dt_to_epoch(offset) {
       next;
    }
 }
-#  FILENAME==ARGV[2]{
-#    next;
-#     #/^Issuing command .*\/benchspec\/.* -f speccmds.cmd / 
-#  if (match($0, /^Issuing command .*\/benchspec\/.* -f speccmds.cmd /) == 1) {
-#    #printf("got %s\n", $0);
-#    n = split($0, arr, /\//);
-#    for (i=1; i < n; i++) {
-#      #printf("arr[%d]= %s\n", i, arr[i]);
-#      if (arr[i] == "CPU") {
-#       sub_test = arr[i+1];
-#       #printf("sub_test= %s\n", sub_test);
-#       break;
-#      }
-#    }
-#    getline;
-#    if (index($0, "Start command: ") == 1) {
-#      n = split($0, arr, /[()]/);
-#      beg = arr[2];
-#      #printf("beg= %s\n",beg);
-#      getline;
-#      if (index($0, "Stop command: ") == 1) {
-#        n = split($0, arr, /[()]/);
-#        end = arr[2];
-#        ++st_mx;
-#        st_sv[st_mx,1]=sub_test;
-#        st_sv[st_mx,2]=beg+0.0;
-#        st_sv[st_mx,3]=end+0.0;
-#      printf("%f\t%s\n", st_sv[st_mx,2], st_sv[st_mx,1]);
-#        next;
-#      }
-#    }
-#    next;
-#  } else {
-#    next;
-#  }
-#  }
 
 /^# started on / {
 # started on Sat 26 Dec 2020 12:59:46 AM PST 1608973186.709312151
@@ -264,27 +228,6 @@ function dt_to_epoch(offset) {
   #printf("data_str = \"%s\"\n", date_str);
   tst_epoch = dt_to_epoch(0.0);
   #printf("tst_epoch= %s\n", tst_epoch);
-  # works
-  #   darr[1]= Dec
-  #   darr[2]= 12
-  #   darr[3]= 10
-  #   darr[4]= 38
-  #   darr[5]= 31
-  #   darr[6]= 2019
-  #   dt_str= 2019 12 12 10 38 31
-  #   epoch= 1576175911 offset= 0
-  #   tst_epoch= 1576175911
-  # fails
-  #   darr[1]= Jan
-  #   darr[2]= 
-  #   darr[3]= 6
-  #   darr[4]= 13
-  #   darr[5]= 36
-  #   darr[6]= 55
-  #   darr[7]= 2020
-  #   dt_str= 55 1  6 13 36
-  #   epoch= -1 offset= 0
-  #   tst_epoch= -1
   next;
 }
 /<not supported>/ {
@@ -293,8 +236,6 @@ function dt_to_epoch(offset) {
 /<not counted>/ {
   next;
 }
-#  2879.939941800;<not supported>;Bytes;qpi_ctl_bandwidth_tx;0;100.00;;
-#  2879.947975321;<not counted>;;cpu-clock;69060526;100.00;;
 
 /;/{
   #          1        2          3   4          5           6
@@ -814,7 +755,6 @@ function got_lkfor_init(kmx, eqn) {
        nwfor[kmx,1,"alias_oper"]="*";
      }
 
-#abcd
      if (use_qpi_bw == 2) {
        kmx = got_lkfor_init(kmx, "(64.0/9.0) * 1.0e-9 * ( [qpi_data_bandwidth_tx0] + [qpi_data_bandwidth_tx1] + [qpi_data_bandwidth_tx2] ) / {interval}" );
        got_lkfor[kmx,"typ_match"]="require_any"; # 
@@ -1530,6 +1470,7 @@ function got_lkfor_init(kmx, eqn) {
      }
      printf("\n") > out_file;
    }
+#abcd
    write_specint_summary(sum_file);
    if (n_sum > 0) {
         printf("got perf_stat n_sum= %d\n", n_sum) > "/dev/stderr";
