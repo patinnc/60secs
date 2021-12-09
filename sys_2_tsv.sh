@@ -3389,8 +3389,13 @@ row += trows;
     echo "$0.$LINENO: PS_CPUS= $PS_CPUS"
 
     echo "do perf_stat data $i with BEG= $BEG, end= $END_TM" > /dev/stderr
+    if [[ "$OPTIONS" =~ .*"perf_stat_bc_eqn3".* ]]; then
+    echo  $SCR_DIR/bc_eqn3.sh $OPT_MEM $OPT_P $OPT_C $OPT_D -b "$BEG"  $OPT_TME -o "$OPTIONS" -O $WORK_DIR/$i.tsv -f $i $PS_CPUS -S $SUM_FILE
+          $SCR_DIR/bc_eqn3.sh $OPT_MEM $OPT_P $OPT_C $OPT_D -b "$BEG"  $OPT_TME -o "$OPTIONS" -O $WORK_DIR/$i.tsv -f $i $PS_CPUS -S $SUM_FILE
+    else
     echo  $SCR_DIR/perf_stat_scatter.sh $OPT_MEM $OPT_P $OPT_C $OPT_D -b "$BEG"  $OPT_TME -o "$OPTIONS" -O $WORK_DIR/$i.tsv -f $i $PS_CPUS -S $SUM_FILE
           $SCR_DIR/perf_stat_scatter.sh $OPT_MEM $OPT_P $OPT_C $OPT_D -b "$BEG"  $OPT_TME -o "$OPTIONS" -O $WORK_DIR/$i.tsv -f $i $PS_CPUS -S $SUM_FILE
+    fi
           ck_last_rc $? $LINENO
       if [ "$REDUCE" != "" ]; then
         echo "$0.$LINENO $SCR_DIR/reduce_tsv.sh -f $WORK_DIR/$i.tsv -R $REDUCE"
