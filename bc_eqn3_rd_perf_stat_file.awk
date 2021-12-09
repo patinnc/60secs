@@ -10,11 +10,8 @@ function ck_tm(tm) {
    }
 }
 BEGIN{
-#    10.013064568;3909750994;;L3_accesses;80100000630;100.00;4.068;M/sec
-#    10.013064568;5063462830;;L3_lat_out_cycles;80100005350;100.00;5.268;M/sec
-#    10.013064568;214924035;;L3_lat_out_misses;80100007663;100.00;0.224;M/sec
-    if (lscpu_info != "") {
-      n = split(lscpu_info, arr, ",");
+    if (bc_eqn3_lscpu_info != "") {
+      n = split(bc_eqn3_lscpu_info, arr, ",");
       for (i=1; i < n; i+=2) {
         bc_eqn_glbl_var_arr[arr[i]] = arr[i+1];
         if (arr[i] == "num_cpus") { num_cpus = arr[i+1]; }
@@ -24,10 +21,10 @@ BEGIN{
         }
       }
     }
-    if (index(options, "no_aliases") == 0) {
-      n_aliases = split("qpi_data_bandwidth_tx[0-9]+,unc[0-9]+_read_write,cpu-cycles,cpu_clk_unhalted.thread,msr/aperf/,msr/mperf/,cpu/cycles/,cpu/ref-cycles/," \
+    if (index(bc_eqn3_options, "no_aliases") == 0) {
+      n_aliases = split("qpi[0-0]+_data_bandwidth_tx,qpi_data_bandwidth_tx[0-9]+,unc[0-9]+_read_write,cpu-cycles,cpu_clk_unhalted.thread,msr/aperf/,msr/mperf/,cpu/cycles/,cpu/ref-cycles/," \
          "inst_retired.any, cpu_clk_thread_unhalted.one_thread_active, cpu_clk_thread_unhalted.ref_xclk_any, cpu_clk_thread_unhalted.ref_xclk", arr1, ",");
-      n         = split("qpi_data_bandwidth_txx,       uncx_read_write,   cycles,    cycles,                cycles,    ref-cycles, cycles,     ref-cycles,     " \
+      n         = split("qpi_data_bandwidth_txx,     qpi_data_bandwidth_txx,       uncx_read_write,   cycles,    cycles,                cycles,    ref-cycles, cycles,     ref-cycles,     " \
          "inst_retired.any, cpu_clk_unhalted.one_thread_active,        cpu_clk_unhalted.ref_xclk_any,        cpu_clk_unhalted.ref_xclk", arr2, ",");
       if (n_aliases != n) {
         printf("number of aliases must match, got n1_aliases= %d, n2_aliases= %d\n", n_aliases, n) > "/dev/stderr";
@@ -62,7 +59,7 @@ BEGIN{
     monitor_what = "";
     rec_num=0;
     tm_tot = 0;
-    while ((getline < infile) > 0) {
+    while ((getline < bc_eqn3_infile) > 0) {
        if ($1 == "#" && $2 == "time" && $3 == "counts") {
            fmt_mode = "human";
        }
@@ -112,8 +109,8 @@ BEGIN{
                  col_values = i - 2;
                  if (i == 5) {
                      if (col_cpu != 2) {
-                       printf("bc_eqn: something wrong, got duration_time string in col %d but cpu_col= %s (didnt find CPUxx col). line= %s. forcing div by zero err. infile=%s\n", i, col_cpu, $0, infile);
-                       printf("bc_eqn: something wrong, got duration_time string in col %d but cpu_col= %s (didnt find CPUxx col). line= %s. forcing div by zero err. infile=%s\n", i, col_cpu, $0, infile) > "/dev/stderr";
+                       printf("bc_eqn: something wrong, got duration_time string in col %d but cpu_col= %s (didnt find CPUxx col). line= %s. forcing div by zero err. bc_eqn3_infile=%s\n", i, col_cpu, $0, bc_eqn3_infile);
+                       printf("bc_eqn: something wrong, got duration_time string in col %d but cpu_col= %s (didnt find CPUxx col). line= %s. forcing div by zero err. bc_eqn3_infile=%s\n", i, col_cpu, $0, bc_eqn3_infile) > "/dev/stderr";
                        fflush();
                        #err_div_by_zero = 1;
                        #printf("dummy for an error by div by zero = %f\n", 1/0);
@@ -130,8 +127,8 @@ BEGIN{
                  }
                  if (i == 3) {
                      if ((col_cpu+0) > 0) {
-                       printf("bc_eqn: something wrong, got duration_time string in col %d but cpu_col= %s (found CPUxx col). line= %s. forcing div by zero err. file= %s\n", i, col_cpu, $0, infile);
-                       printf("bc_eqn: something wrong, got duration_time string in col %d but cpu_col= %s (found CPUxx col). line= %s. forcing div by zero err. file= %s\n", i, col_cpu, $0, infile) > "/dev/stderr";
+                       printf("bc_eqn: something wrong, got duration_time string in col %d but cpu_col= %s (found CPUxx col). line= %s. forcing div by zero err. file= %s\n", i, col_cpu, $0, bc_eqn3_infile);
+                       printf("bc_eqn: something wrong, got duration_time string in col %d but cpu_col= %s (found CPUxx col). line= %s. forcing div by zero err. file= %s\n", i, col_cpu, $0, bc_eqn3_infile) > "/dev/stderr";
                        fflush();
                        err_div_by_zero = 1;
                        #printf("dummy for an error by div by zero = %f\n", 1/0);
@@ -163,17 +160,21 @@ BEGIN{
          break;
        }
     }
-    close(infile);
+    close(bc_eqn3_infile);
     if (verbose > 0) {
       printf("fmt_mode= %s\n", fmt_mode);
     }
 }
 
-  FILENAME == infile && $0 ~ /not counted|not supported| Performance counter stats |seconds time elapsed / {
+  FILENAME == bc_eqn3_infile && $0 ~ /not counted|not supported| Performance counter stats |seconds time elapsed / {
     next;
   }
-  FILENAME == infile {
+  FILENAME == bc_eqn3_infile {
     if (length($0) == 0 || substr($1,1,1) == "#") {
+      if ($0 ~ /^# started on / && NF == 10) {
+        bc_eqn3_epoch_time_beg = $NF
+        printf("epoch_time_beg = %s\n", $NF) > "/dev/stderr";
+      }
       next; 
     }
   }
@@ -186,7 +187,7 @@ BEGIN{
 #            401.98 Joules power/energy-pkg/         #    0.002 K/sec
 #         5,550,474        unc0_read_write           #    0.023 M/sec
 
-  FILENAME == infile && ($0 ~ /;/ || fmt_mode == "human") {
+  FILENAME == bc_eqn3_infile && ($0 ~ /;/ || fmt_mode == "human") {
     if (fmt_mode == "human") {
       if (index($0, "seconds time elapsed") > 0) {
         next;
@@ -444,15 +445,15 @@ BEGIN{
       if (verbose > 0) {
       printf("tm_lkup[%s]= %s col_tm= %s tm_tot= %s tot_tm_elap= %s  v= %s, e= %s, line= %s\n", tm_i, tm_lkup[tm_i], col_tm, tm_tot, tot_tm_elap, arr[col_values], arr[col_evt_nm], $0);
       }
-      evt_data[evt_i,tm_i]        += arr[col_values];
-      bc_eqn_row_data[evt_i]      += arr[col_values];
+      evt_data[evt_i,tm_i]          += arr[col_values];
+      bc_eqn_row_data[evt_i]        += arr[col_values];
       evt_data[evt_i,tm_i,"inst"]++;
-      evt_data[evt_i,tm_i,"ns"]   += arr[col_evt_nm+1];
-      evt_data[evt_i,tm_i,"multi"] = arr[col_evt_nm+2];
-      evt_data[evt_i,"tot"]       += arr[col_values];
+      evt_data[evt_i,tm_i,"ns"]     += arr[col_evt_nm+1];
+      evt_data[evt_i,tm_i,"multi"]   = arr[col_evt_nm+2];
+      evt_data[evt_i,"tot"]         += arr[col_values];
       evt_data[evt_i,"tot","inst"]++;
-      evt_data[evt_i,"tot","ns"]  += arr[col_evt_nm+1];
-      evt_data[evt_i,"tot","multi"] = arr[col_evt_nm+2];
+      evt_data[evt_i,"tot","ns"]    += arr[col_evt_nm+1];
+      evt_data[evt_i,"tot","multi"]  = arr[col_evt_nm+2];
     }
     next;
   }
