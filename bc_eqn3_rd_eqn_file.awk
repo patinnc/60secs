@@ -97,6 +97,21 @@ FILENAME == bc_eqn3_eqn_file {
     }
     next;
   }
+  if ($1 == "chart_def:" || $1 == "chart_title:" || $1 == "chart_select_str:") {
+    pos = index($0, ":");
+    v0 = substr($0, 1, pos-1);
+    v = substr($0, pos+1, length($0));
+    gsub(/^[ ]+/, "", v0);
+    gsub(/[ ]+$/, "", v0);
+    gsub(/^[ ]+/, "", v);
+    gsub(/[ ]+$/, "", v);
+    if ($1 == "chart_def:") {
+      bc_eqn_chart_mx++;
+    }
+    bc_eqn_charts[bc_eqn_chart_mx, v0] = v;
+    printf("_bc_eqn_charts[%d]: %s= %s\n", bc_eqn_chart_mx, v0, v);
+    next;
+  }
   if ($1 == "hdr:" || $1 == "hdr_ps:" || $1 == "hdr_alias:" || $1 == "hdr_alias_factor:" || $1 == "tag_ps:" || $1 == "charts:") {
     if (use_this_eqn != 1) { next;}
     pos = index($0, ":");
@@ -108,7 +123,7 @@ FILENAME == bc_eqn3_eqn_file {
     gsub(/[ ]+$/, "", v);
     bc_eqn_arr[kmx,v0]= v;
     if ($1 == "charts:") {
-      printf("charts[%d] chrt= %s\n", kmx, v) > "/dev/stderr";
+      printf("ck bc_eqn_charts charts tag[%d] chrt= %s\n", kmx, v) > "/dev/stderr";
     }
     #printf("eqn[%d] hdr= %s\n", kmx, v);
     next;
@@ -641,6 +656,25 @@ function prt_to_out_file(     hdr_arr, col, col_cur, hdr_mx, i, j, k, kk, hdr_co
     unh_cols_str = "";
     lat_cols_str = "";
     hwpf_cols_str = "";
+    printf("bc_eqn_chart_mx = %s\n", bc_eqn_chart_mx) > "/dev/stderr";
+    for (jj=1; jj <= bc_eqn_chart_mx; jj++) {
+      v = bc_eqn_charts[jj, "chart_def"];
+      printf("_++++++++____++++______________bc_eqn_charts: chart cols %s cl= %d\n", v, cl) > "/dev/stderr";
+      if (v == "") { continue; }
+      printf("_++++++++____++++______________bc_eqn_charts: chart cols %s cl= %d\n", v, cl) > "/dev/stderr";
+      for (k=0; k <= hdr_mx; k++) {
+        cl = hdr_arr[k,"col"] ;
+        if (hdr_arr[k,"typ"] != "eqn" || cl < 0) { continue; }
+        i  = hdr_arr[k,"lkup"];
+        printf("bc_eqn_chart[%d]: bc_eqn_arr[%d,"charts"]= %s, v= %s\n", jj, i, bc_eqn_arr[i,"charts"], v) > "/dev/stderr";
+        if (index(bc_eqn_arr[i,"charts"], v) > 0) {
+          str = hdr_arr[k,"str"];
+          bc_eqn_charts[jj, "chart_cols_str"] = bc_eqn_charts[jj, "chart_cols_str"] sprintf("\t%s\t%s", cl, cl);
+          printf("_++++++++____++++_______________bc_eqn_charts:  chart cols %s cl= %d, col_str= %s\n", v, cl, bc_eqn_charts[jj, "chart_cols_str"]  ) > "/dev/stderr";
+        }
+      }
+    }
+    
     for (k=0; k <= hdr_mx; k++) {
        i  = hdr_arr[k,"lkup"];
        cl = hdr_arr[k,"col"] ;
@@ -711,6 +745,16 @@ function prt_to_out_file(     hdr_arr, col, col_cur, hdr_mx, i, j, k, kk, hdr_co
       printf("hdrs\t%d\t%d\t%d\t%d\t%d%s\n", tbl0_beg, bcol, -1, hdr_col, ts_col, hwpf_cols_str) > out_file;
       printf("\n") > out_file;
       rows += 3;
+    }
+    for (jj=1; jj <= bc_eqn_chart_mx; jj++) {
+       str = bc_eqn_charts[jj, "chart_cols_str"];
+       if (str != "") {
+         v = bc_eqn_charts[jj, "chart_title"];
+         printf("title\t%s %s\tsheet\t%s%s\ttype\tscatter_straight\n", chrt, v, pfx, sheet) > out_file;
+         printf("hdrs\t%d\t%d\t%d\t%d\t%d%s\n", tbl0_beg, bcol, -1, hdr_col, ts_col, str) > out_file;
+         printf("\n") > out_file;
+         rows += 3;
+       }
     }
     printf("\n") > out_file;
     rows++;
