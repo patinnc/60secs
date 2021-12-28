@@ -1095,8 +1095,10 @@ for i in $LST; do
  OPT_DESC_FILE=
  i_abs_dir=$(get_abs_dir $i)
  if [ "$DESC_FILE" == "" ]; then
+      echo "ck  i_ibs_dir desc.txt= $i/desc.txt"
    if [ -e $i/desc.txt ]; then
       FLS=$(get_abs_filename "$i/desc.txt")
+      echo "got i_ibs_dir desc.txt= $FLS"
       if [ -e $FLS ]; then
         OPT_DESC_FILE="$FLS"
        echo "$0.$LINENO set -d6 desc_file= $OPT_DESC_FILE, i= $i"
@@ -1555,8 +1557,10 @@ for i in $LST; do
          FLS_MP=$SDIR/$flnm
        fi
        if [[ $flnm == *"$try_phs"* ]]; then
-         echo -e "-P\t\"$i/$SDIR/$flnm\"" >> $ALST
-         echo "$0.$LINENO phase $OPT_PH"
+         #echo -e "-P\t\"$i/$SDIR/$flnm\"" >> $ALST
+         #echo -e "-P\t\"$SDIR/$flnm\"" >> $ALST
+         echo -e "$SDIR/$flnm" >> $ALST
+         echo "$0.$LINENO phase try_phs= $try_phs flnm= $flnm"
          continue
        fi
        if [[ $flnm == *"$SUM_FILE"* ]]; then
