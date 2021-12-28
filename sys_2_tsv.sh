@@ -189,7 +189,7 @@ fi
 if [ "$SUM_FILE_IN" != "" ]; then
   SUM_FILE=$WORK_DIR/$SUM_FILE_IN
 fi
-echo "$0: SUM_FILE= $SUM_FILE" > /dev/stderr
+echo "$0.$LINENO: SUM_FILE= $SUM_FILE" > /dev/stderr
 if [ "$SUM_FILE" != "" ]; then
   printf "title\tsummary\tsheet\tsummary\ttype\tcopy\n"  > $SUM_FILE;
   printf "hdrs\t2\t0\t-1\t3\t-1\n" >> $SUM_FILE;
@@ -204,7 +204,21 @@ done
 
 PH_TM_END=0
 if [ "$PHASE_FILE" != "" ]; then
-  PH_TM_END=`awk '{if ($3 != "") {last= $3;}} END{printf("%s\n", last);}' $PHASE_FILE`
+  if [ ! -e $PHASE_FILE ]; then
+    echo "$0.$LINENO ck phase_file= $PHASE_FILE"
+    RESP=$(find . -name $PHASE_FILE)
+    echo "$0.$LINENO rsp phase_file= $RESP"
+    if [ "$RESP" == "" ]; then
+      RESP=$(find .. -name $PHASE_FILE)
+    fi
+    if [ "$RESP" != "" ]; then
+      PHASE_FILE=$RESP
+    fi
+  fi
+  echo "$0.$LINENO phase_file= $PHASE_FILE"
+  if [ -e $PHASE_FILE ]; then
+    PH_TM_END=`awk '{if ($3 != "") {last= $3;}} END{printf("%s\n", last);}' $PHASE_FILE`
+  fi
   echo "PH_TM_END= $PH_TM_END" > /dev/stderr
 fi
 
@@ -578,7 +592,6 @@ CPU2017_FILES_ARR=()
 if [ "$CPU2017_LOG_NUM" != "" ]; then
   ifl=$CPU2017_LOG_NUM
   CPU2017_FILES_ARR=("CPU2017.00${ifl}.intrate.txt" "CPU2017.00${ifl}.intrate.refrate.txt"  "CPU2017.00${ifl}.log")
-
 fi
 #for ifl in "phase_cpu2017.txt" "CPU2017.001.intrate.txt" "CPU2017.001.intrate.refrate.txt"  "CPU2017.001.log"; do
 for ifl in ${CPU2017_FILES_ARR[@]}; do
@@ -607,6 +620,9 @@ if [ -e $DIR/yab_cmds.txt ]; then
   EXTRA_FILES="$EXTRA_FILES $DIR/yab_cmds.txt"
   echo "$0: got $DIR/yab_cmds.txt at $LINENO" > /dev/stderr
 fi
+fi
+if [ "$PHASE_FILE" != "" ]; then
+  EXTRA_FILES="$EXTRA_FILES $PHASE_FILE"
 fi
 FILES=`ls -1 $DIR/sys_*_*.txt $EXTRA_FILES`
 echo "FILES = $FILES"
@@ -810,6 +826,7 @@ ck_perf_cpu_arr
 #echo "$0.$LINENO bye"
 #exit 1
 
+# top of loop over list of files to be processed
 for i in $FILES; do
  if [ -e job_${JOB_ID}.stop ]; then
     RESP=`head -1 job_${JOB_ID}.stop`
@@ -3567,14 +3584,20 @@ row += trows;
     #echo "$0.$LINENO bye"
     #exit 1
   fi
+    #echo "$0.$LINENO: ck  phase_cpu2017.txt file $i"
   if [[ $i =~ phase_cpu2017.txt ]]; then
     echo "$0.$LINENO: got CPU2017.00${CPU2017_LOG_NUM}.intrate.txt $i at $LINENO" > /dev/stderr
-    OFILE="$WORK_DIR/$i.tsv"
+    echo "$0.$LINENO: got phase_cpu2017.txt file $i"
+    FLNM=$(basename $i)
+    OFILE="$WORK_DIR/$FLNM.tsv"
+    echo $0.$LINENO awk -v ofile="$OFILE" -v ts_beg="$BEG"  -v sum_file="$SUM_FILE" awk $i
     awk -v ofile="$OFILE" -v ts_beg="$BEG"  -v sum_file="$SUM_FILE" '
  #subtest beg_epoch end_epoch
       BEGIN{
         subtst=0;
-        tm_beg = ts_beg;
+        if ((ts_beg+0) > 0) {
+          tm_beg = ts_beg;
+        }
       }
       {
         if (NF >= 3) {
@@ -3592,7 +3615,9 @@ row += trows;
        if (subtst==0) {
          exit;
        }
-       printf("title\tcpu2017 subtests\tsheet\tcpu2017_phase\ttype\tscatter_straight\n") > ofile;
+       # dont have set_x_axis_date_axis stuff working yet in 
+       #printf("title\tcpu2017 subtests\tsheet\tcpu2017_phase\ttype\tline\n") > ofile;
+       printf("title\tcpu2017 subtests\tsheet\tcpu2017_phase\ttype\tline\toptions\tset_x_axis_date_axis\ttrue\n") > ofile;
        row++;
        printf("hdrs\t%d\t%d\t-1\t%d\t1\n", row+1, 2, 2+subtst) > ofile;
        row++;
@@ -3628,6 +3653,7 @@ row += trows;
       }
     ' $i
     ck_last_rc $? $LINENO
+    SHEETS="$SHEETS $FLNM.tsv"
   fi
   if [[ $i =~ CPU2017.00${CPU2017_LOG_NUM}.intrate.*txt ]]; then
     echo "$0.$LINENO: got CPU2017.00${CPU2017_LOG_NUM}.intrate.txt $i at $LINENO" > /dev/stderr
