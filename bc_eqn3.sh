@@ -187,13 +187,13 @@ if [ "$LSCPU_DATA" != "" ]; then
    /^Thread.s. per core:/{ tpc = $4; }
    /^Socket.s.:/{ skt = $2; }
    /^Vendor ID/{ mkr = $3;}
-   #/^CPU max MHz:/ { if (mkr == "AuthenticAMD" && tsc="") {tsc2= $4; tsc_v2 = 0.001 * tsc;}}
+   /^CPU max MHz:/ { cpu_max_ghz = 0.001 * $4;}
    /^BogoMIPS/{ if (tsc == "" && (mkr == "GenuineIntel" || mkr == "AuthenticAMD")) { tsc = $2/2 ;tsc_v = 0.001 * tsc;}}
    /^Model name:/ {
      if (index($0, "AMD ") == 0) {for (i=NF; i > 3; i--) { if (index($i, "GHz") > 0) { tsc = $i; gsub("GHz", "", tsc); tsc_v = tsc; break;}}}
    }
    END{
-     printf("num_cpus,%d,tsc_freq,%.3f,chip_maker,%s,sockets,%d,thr_per_core,%d,arch,%s,cpu_type,%s\n", num_cpus, tsc_v, mkr, skt, tpc, arch, cpu_type);
+     printf("num_cpus,%d,tsc_freq,%.3f,chip_maker,%s,sockets,%d,thr_per_core,%d,arch,%s,cpu_type,%s,cpu_max_ghz,%s\n", num_cpus, tsc_v, mkr, skt, tpc, arch, cpu_type, cpu_max_ghz);
    }
   '`
   if [ "$VERBOSE" -gt "0" ]; then
