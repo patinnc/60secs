@@ -206,7 +206,7 @@ function print_help() {
       echo "     Below is more detail on each '-r cmd'"
       echo "     'ping' run ping host to see if we can find the server. Note that GCP boxes don't respond to ping. This cmd is optional"
       echo "     'shell' ssh's to the box and opens a bash shell so you can do something not done by this script. This cmd is optional."
-      echo "     'screen' ssh's to the box and opens a bash, can does 'screen -r' to reconnect to detached screen session. This cmd is optional."
+      echo "     'screen' ssh's to the box and opens a bash, can does 'screen -r' to reconnect to detached screen session. This cmd is optional. (ctrl-a ctrl-d to detach (close screen but leave running, ctrl-a [ starts copy mode then ctrl-f ctlr-b to scroll fwd/bck, q exits copy mode)"
       echo "     'command' ssh's to the box and opens a bash shell and runs the command from '-C command_to_be_run'."
       echo "     'pcmd' ssh's to the box and opens a bash shell and runs the command from '-C command_to_be_run', sends output to work_dir/cmd_xxxx.txt"
       echo "     'lcl_cmd' runs (locally) the command from '-C command_to_be_run' and optionally redirects output to -o file"
