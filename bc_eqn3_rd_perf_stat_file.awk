@@ -20,6 +20,10 @@ BEGIN{
         printf("bc_eqn_glbl_var_arr[%s]= %s\n", arr[i], arr[i+1]);
         }
       }
+      if (bc_eqn_glbl_var_arr["arch"] == "aarch64" && arm_cpu_freq == "" && bc_eqn_glbl_var_arr["cpu_max_ghz"] != "") {
+        arm_cpu_freq = bc_eqn_glbl_var_arr["cpu_max_ghz"];
+        bc_eqn_glbl_var_arr["arm_cpu_freq"] = arm_cpu_freq;
+      }
     }
     if (index(bc_eqn3_options, "no_aliases") == 0) {
       n_aliases = split("qpi[0-0]+_data_bandwidth_tx,qpi_data_bandwidth_tx[0-9]+,unc[0-9]+_read_write,cpu-cycles,cpu_clk_unhalted.thread,msr/aperf/,msr/mperf/,cpu/cycles/,cpu/ref-cycles/," \
