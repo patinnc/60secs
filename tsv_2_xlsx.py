@@ -12,6 +12,7 @@
 
 from __future__ import print_function
 from __future__ import unicode_literals
+from datetime import date
 import xlsxwriter
 import csv
 import getopt
@@ -650,6 +651,8 @@ for bmi in range(base_mx+1):
                           print("ch ch_typ= %s, title= %s, ch_opt[%s:" % (ch_type, data[i][1], opk), opv, file=sys.stderr)
                       if verbose > 0 and opk == "set_y_axis_name":
                           print("ch ch_typ= %s, title= %s, ch_opt[%s:" % (ch_type, data[i][1], opk), opv, file=sys.stderr)
+                      if verbose > 0 and opk == "set_x_axis_date_axis":
+                          print("ch ch_typ= %s, title= %s, ch_opt[%s:" % (ch_type, data[i][1], opk), opv, file=sys.stderr)
               if j == 0 and data[i][j] == "hdrs":
                  #print("got hdrs for x= %s\n" % (x))
                  ch.append(["hdrs", i])
@@ -1184,7 +1187,12 @@ for bmi in range(base_mx+1):
                          'values':     [wrksh_nm, drow_beg, h+ph_add, use_drow_end, h+ph_add],
                     }
                     if use_cats:
-                       a_s['categories'] = [wrksh_nm, drow_beg, dcol_cat+ph_add, use_drow_end, dcol_cat+ph_add]
+                       if 'set_x_axis_date_axis' in ch_opts[c]:
+                           a_s['categories'] = [wrksh_nm, drow_beg, dcol_cat+ph_add, use_drow_end, dcol_cat+ph_add]
+                           print("did set_x_axis categories, sheet_nm= %s, ch_typ= %s, file= %s, drow_beg= %d drow_end= %d dcol_cat= %d, dcol_cat= %d" % (sheet_nm, ch_type, x, drow_beg, drow_end, dcol_cat, dcol_cat), file=sys.stderr)
+                           print("did set_x_axis categories, min= ", data[drow_beg][dcol_cat], ", max= ", data[drow_end][dcol_cat], file=sys.stderr)
+                       else:
+                           a_s['categories'] = [wrksh_nm, drow_beg, dcol_cat+ph_add, use_drow_end, dcol_cat+ph_add]
                     if (mcol_list[hh][1]-mcol_list[hh][0]) > 1 or num_series > 1:
                        a_s['points'] = [{'fill': {'color': gcolor_lst[use_color]}}]
                        if ch_type == "column_stacked":
@@ -1210,6 +1218,9 @@ for bmi in range(base_mx+1):
                 chart1.show_blanks_as(chart_show_blanks_as)
              if 'chart_show_blanks_as' in ch_opts[c]:
                 chart1.show_blanks_as(ch_opts[c]['chart_show_blanks_as'])
+             if 'set_x_axis_date_axis' in ch_opts[c]:
+                chart1.set_x_axis({'date_axis': True, 'min' : 0, 'max': date(math.ceil(6195.0/365.0))})
+                print("did set_x_axis date_axis, sheet_nm= %s, ch_typ= %s, file= %s, drow_beg= %d drow_end= %d hcol_beg= %d, hcol_end= %d" % (sheet_nm, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end), file=sys.stderr)
              if 'set_x_axis_name' in ch_opts[c]:
                 chart1.set_x_axis({'name': ch_opts[c]['set_x_axis_name']})
              if 'set_y_axis_name' in ch_opts[c]:
