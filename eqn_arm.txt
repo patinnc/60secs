@@ -1,4 +1,9 @@
 
+
+eqn: {arm_cpu_freq}
+hdr: freqGHz
+hdr_ps: freq_GHz
+
 eqn: 100e-9 * [cycles] / ({num_cpus} * {arm_cpu_freq} * {interval})
 hdr: %busy
 hdr_ps: %not_halted
@@ -46,11 +51,78 @@ tag_ps: td_be_stall
 charts: td_lvl1_chart
 
 
-eqn: 64.0e-9 * [armv8_pmuv3_0/mem_access/]/{interval}
-hdr: load_store_bw
-hdr_ps: load_store_bw (GB/s)
-tag_ps: load_store_bw
+eqn: 1000 * [armv8_pmuv3_0/mem_access/]/[instructions]
+hdr: load_store_PTI
+#hdr_ps: load_store_bw (GB/s)
+#tag_ps: load_store_bw
 
 eqn: 100.0 * [instructions]/[armv8_pmuv3_0/inst_spec/]
 hdr: %inst_spec
 hdr_ps: %inst/inst_spec
+
+
+#armv8_pmuv3_0/inst_spec/	cycles	instructions	armv8_pmuv3_0/stall_backend/	armv8_pmuv3_0/mem_access/	armv8_pmuv3_0/stall_frontend/	armv8_pmuv3_0/l2d_cache/	armv8_pmuv3_0/l3d_cache/	arm_cmn_0/dtc_cycles/	arm_cmn_0/hnf_mc_reqs/	arm_cmn_0/hnf_slc_sf_cache_access/	arm_cmn_0/hnf_cache_fill/	armv8_pmuv3_0/l3d_cache_refill/	armv8_pmuv3_0/l2d_cache_wb/	armv8_pmuv3_0/l3d_cache_allocate/	arm_cmn_0/hnf_cache_miss/	arm_cmn_0/hnf_slc_eviction/	armv8_pmuv3_0/l2d_cache_refill/	arm_cmn_0/hnf_mc_retries/	arm_cmn_0/hnf_qos_pocq_occupancy_read/	armv8_pmuv3_0/l2d_cache_allocate/	cpu-clock
+
+
+eqn: 64.0e-9 * ([arm_cmn_0/hnf_mc_reqs/] - [arm_cmn_0/hnf_mc_retries/]) / {interval}
+hdr: memBW_GB/s
+#hdr_ps: load_store_bw (GB/s)
+#tag_ps: load_store_bw
+
+eqn: 64e-9 * [arm_cmn_0/hnf_cache_miss/] / {interval}
+hdr: L3_missBw_GB/s
+hdr_ps: LLC-miss bw (GB/s)
+
+eqn: 64e-9 * [armv8_pmuv3_0/l2d_cache_wb/] / {interval}
+hdr: L2_missBw_GB/s
+hdr_ps: L2-miss bw (GB/s)
+
+eqn: 100.0 * [armv8_pmuv3_0/l2d_cache_wb/] / [armv8_pmuv3_0/l2d_cache/]
+hdr: %L2_miss
+hdr_ps: %L2-miss (miss/access)
+charts: %miss
+
+chart_def: %miss
+chart_title: %miss per cache
+
+#eqn: 100.0 * [arm_cmn_0/hnf_slc_sf_cache_access/] / [armv8_pmuv3_0/l3d_cache/]
+#hdr: %L3_snoops
+#hdr_ps: %L3-snoops (snoops/tot_access)
+#charts: %miss
+#
+#eqn: 100.0 * ([armv8_pmuv3_0/l3d_cache/] - [arm_cmn_0/hnf_slc_sf_cache_access/]) / [armv8_pmuv3_0/l3d_cache/]
+#hdr: %L3_miss
+#hdr_ps: %L3-miss (misses/tot_access)
+#charts: %miss
+#
+#eqn: 100.0 * [arm_cmn_0/hnf_slc_sf_cache_access/] / [armv8_pmuv3_0/l2d_cache_wb/]
+#hdr: %L3_snoops2
+#hdr_ps: %L3-snoops2 (snoops/tot_access)
+#charts: %miss
+#
+#eqn: 100.0 * ([armv8_pmuv3_0/l2d_cache_wb/] - [arm_cmn_0/hnf_slc_sf_cache_access/]) / [armv8_pmuv3_0/l2d_cache_wb/]
+#hdr: %L3_miss2
+#hdr_ps: %L3-miss2 (misses/tot_access)
+#charts: %miss
+
+eqn: 100.0 * [arm_cmn_0/hnf_slc_sf_cache_access/] / [armv8_pmuv3_0/l2d_cache_wb/]
+hdr: %L3_snoops3
+hdr_ps: %L3-snoops3 (snoops/tot_access)
+charts: %miss
+
+eqn: 100.0 * [armv8_pmuv3_0/hnf_cache_miss] / [armv8_pmuv3_0/l2d_cache_wb/]
+hdr: %L3_miss3
+hdr_ps: %L3-miss3 (misses/tot_access)
+charts: %miss
+
+
+eqn: 4096 * [arm_cmn_0/hnf_qos_pocq_occupancy_read/] / [armv8_pmuv3_0/l2d_cache_wb/]
+hdr: L3_miss_lat_cycles
+hdr_ps: L3 miss latency (core_clks)
+#charts: %miss
+
+eqn: 16.0 * ([l3_lat_out_cycles]/[l3_lat_out_misses])/{freqGHz}
+hdr: L3_miss_lat_ns
+hdr_ps: L3 miss latency (ns)
+
+
