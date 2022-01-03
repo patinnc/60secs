@@ -599,7 +599,9 @@ function tot_compare(i1, v1, i2, v2,    l, r)
             if (($1 == "GCP" || $1 == "UBER" || $1 == "UBER_LAB" || $1 == "AWS") && $2 == ":") {
                 $1 = "";
                 $2 = "";
+                $1 = $1;
             }
+            if ($0 == "exit") { exit(0);}
             gsub(/^[ \t]+|[ \t]+$/, "");
             str=str""sep""$0;sep=" ";
         }
@@ -612,7 +614,9 @@ function tot_compare(i1, v1, i2, v2,    l, r)
             if (($1 == "GCP" || $1 == "UBER" || $1 == "UBER_LAB" || $1 == "AWS") && $2 == ":") {
                 $1 = "";
                 $2 = "";
+                $1 = $1;
             }
+            if ($0 == "exit") { exit(0);}
           printf("%s\n", $0);
         }
         ' $file)
