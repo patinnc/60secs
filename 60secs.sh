@@ -617,8 +617,11 @@ for TSKj in `seq $TB $TE`; do
     if [ 1 == 1 ]; then
       CURDIR=`pwd`
       nohup $SCR_DIR/do_perf3.sh -p $CURDIR -I $INTRVL -b $PERF_BIN -w $WAIT &> do_perf3.log &
-    TSK_PID[$TSKj]=$!
-    PRF_PID=$!
+      RESP=$!
+      sleep 1
+      pstree -p $RESP
+      PRF_PID=$RESP
+      TSK_PID[$TSKj]=$RESP
     else
       ms=$(($INTRVL*1000))
       EVT=
@@ -877,11 +880,21 @@ if [ "$BKGRND" == "1" ]; then
   PID_LST_NC=
   CMA=
   if [ "$PRF_PID" != "" ]; then
-    RESP=`pgrep pfay1_sleep.sh | head -1`
-    if [ "$RESP" != "" ]; then
-     PID_LST=$RESP
-     PID_LST_NC=$RESP
-     CMA=","
+    V=$(pstree -p $PRF_PID)
+    RESP=$(pgrep pfay1_sleep.sh)
+    echo "ck for pfay1_sleep.sh pids $RESP belonging to do_perf3.sh pid= $PRF_PID pstree= $V"
+    if [[ "$RESP" != "" ]] && [[ "$V" != "" ]]; then
+     for iii in $RESP; do
+       V2=$(echo "$V" | grep $iii)
+       echo "try pfay1_sleep.sh pid $iii belonging to do_perf3.sh pid= $PRF_PID pstree= $RESP"
+       if [[ "$V2" != "" ]]; then
+	 echo "got pfay1_sleep.sh pid $iii belonging to do_perf3.sh pid= $PRF_PID pstree= $RESP"
+         PID_LST=$iii
+         PID_LST_NC=$iii
+         CMA=","
+         break
+       fi
+     done
     fi
   fi
   for TSKj in `seq $TB $TE`; do
@@ -992,15 +1005,21 @@ if [ "$WAIT_AT_END" == "1" -a "$DO_W" == "1" ]; then
       ck_time
     if [ "$GOT_QUIT" == "1" ]; then
        echo "quitting loop due signal" > /dev/stderr
-       echo "PID_LST_NC= b${PID_LST_NC}b" > /dev/stderr
+       echo "PID_LST_NC= ${PID_LST_NC}" > /dev/stderr
        if [ "$PID_LST_NC" != "" ]; then
-       if [ "$PID_LST_NC" -gt "10" ]; then
-       echo "kill -2 $PID_LST_NC"
-             #kill -2 $PID_LST_NC
-       sleep 2
-       echo "kill -9 $PID_LST_NC"
-             #kill -9 $PID_LST_NC
-       fi
+         KILL_ARR=()
+         for iii in $PID_LST_NC; do
+           if [ "$iii" -gt "10" ]; then
+             KILL_ARR+=($iii)
+             echo "kill -2 $iii"
+             kill -2 $iii
+	   fi
+         done
+         sleep 5
+         if [[ "${#KILL_ARR[@]}" -gt "0" ]]; then
+           echo "kill -9 ${KILL_ARR[@]}"
+                 kill -9 ${KILL_ARR[@]}
+         fi
        fi
        break
     fi
