@@ -665,6 +665,43 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
 #  eth1:       0       0    0    0    0     0          0         0        0       0    0    0    0     0       0          0
 #docker0:       0       0    0    0    0     0          0         0        0       0    0    0    0     0       0          0
 #  eth0: 1789224819997486 3969195799626   14    0    0    14          0  24714218 2735699337437607 4819718487079    0    0    0     0       0          0
+  /^__net_eth0_stats__ /{
+    i = 0;
+    ts = $2 + 0;
+    ts_skip = 0;
+    typ_rec = $1;
+    if ((beg_ts > 0.0 && ts < beg_ts) || (end_ts > 0.0 && ts > end_ts)) {
+      ts_skip = 1;
+      while ( getline  > 0) {
+        if ($0 == "" || substr($0, 1, 2) == "__") {
+          break;
+        }
+      }
+    }
+    if (ts_skip == 0) {
+    netdev_dt[++netdev_mx] = $2;
+    netdev_lns[netdev_mx] = 0;
+    rd_bytes_col = 0;
+    wr_bytes_col = 0;
+    j = 0;
+    while ( getline  > 0) {
+      ++i;
+      if ($0 == "" || substr($0, 1, 2) == "__") {
+         break;
+      } else {
+      j++;
+      netdev_data[netdev_mx,j,"device"] = "eth0";
+      netdev_data[netdev_mx,j,"bytes_rd"] += $1;
+      netdev_data[netdev_mx,j,"bytes_wr"] += $2;
+      netdev_data[netdev_mx,j,"packets_rd"] += $3;
+      netdev_data[netdev_mx,j,"packets_wr"] += $4;
+      netdev_lns[netdev_mx] = j;
+      #printf("got netdev_eth0_stats line[%d,%d]= %s\n", netdev_mx, j, $0) > "/dev/stderr";
+      }
+    }
+    }
+  }
+
   /^__net_dev__ /{
     i = 0;
     ts = $2 + 0;
