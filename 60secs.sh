@@ -959,9 +959,18 @@ if [ "$WAIT_AT_END" == "1" -a "$DO_W" == "1" ]; then
     echo "__net_snmp_udp__ $ts_cur $ts_end"   >> $FL_STATS
     egrep "Tcp:|Udp:" /proc/net/snmp          >> $FL_STATS
     echo ""                                   >> $FL_STATS
-    echo "__net_dev__ $ts_cur $ts_end"        >> $FL_STATS
-    cat /proc/net/dev                         >> $FL_STATS
-    echo ""                                   >> $FL_STATS
+#    echo "__net_dev__ $ts_cur $ts_end"        >> $FL_STATS
+#    cat /proc/net/dev                         >> $FL_STATS
+#    echo ""                                   >> $FL_STATS
+    echo "__net_eth0_stats__ $ts_cur $ts_end" >> $FL_STATS
+    str="";
+    for j in rx_bytes tx_bytes rx_packets tx_packets; do
+       v=$(cat /sys/class/net/eth0/statistics/$j)
+       str="$str $v"
+    done
+    echo "$str"                                >> $FL_STATS
+    echo ""                                    >> $FL_STATS
+
 
     if [ "$FL_PWR" != "" ]; then
       DT=`date +%s.%N`
