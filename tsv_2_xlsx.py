@@ -13,6 +13,8 @@
 from __future__ import print_function
 from __future__ import unicode_literals
 from datetime import date
+#from importlib import reload
+import importlib
 import xlsxwriter
 import csv
 import getopt
@@ -24,8 +26,9 @@ import math
 
 # the 2 statements below workaround a "UnicodeEncodeError: 'ascii' codec can't encode character u'\xb5' in position 21: ordinal not in range(128)"
 # error when I read yab cmd json files
-reload(sys)  
-sys.setdefaultencoding('utf8')
+importlib.reload(sys)  
+#if sys.version_info.major == 2:
+#sys.setdefaultencoding('utf8')
 
 output_filename = 'chart_line.xlsx'
 opened_wkbk = False
