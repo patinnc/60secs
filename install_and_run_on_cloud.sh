@@ -729,7 +729,7 @@ SSH_PFX=
 ssh_cmd()
 {
   if [ "$SSH_MODE" == "sudo" ]; then
-    SSH_PFX="ssh -t "
+    SSH_PFX="ssh -o StrictHostKeyChecking=no -t -A "
     if [ "$USERNM" == "none" ]; then
       SSH_HOST=$1
     else
@@ -741,7 +741,7 @@ ssh_cmd()
     fi
     SSH_CMD="sudo su $load_env -c \"$2\""
   else
-    SSH_PFX="ssh -t "
+    SSH_PFX="ssh -o StrictHostKeyChecking=no -t -A "
     if [ "$1" == "127.0.0.1" ]; then
       SSH_CMD=$2
       SSH_PFX=
