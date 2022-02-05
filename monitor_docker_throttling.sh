@@ -97,6 +97,8 @@ STOPFILE="$SCR_DIR/../monitor_docker_throttling.stop"
 if [ -e "$STOPFILE" ]; then
   rm "$STOPFILE"
 fi
+
+
 docker_short=$(docker ps)
 echo "$0.$LINENO $?"
 docker_long=$(docker ps --no-trunc)
@@ -104,6 +106,9 @@ echo "$0.$LINENO $?"
 declare -a dckr_arr
 SV_IFS="$IFS"
 if [ "$DOCKER" != "" ]; then
+#
+# given container find the long and short container name
+#
   IFS=', ' read -r -a dckr_arr <<< "$DOCKER"
   echo "dckr_arr= ${dckr_arr[@]}"
   IFS="$SV_IFS"
@@ -122,6 +127,9 @@ if [ "$DOCKER" != "" ]; then
     fi
   done
 else
+#
+# given service name, find container name for it.
+#
   RESP=$(echo "$docker_long"  | grep "${SERVICE}")
   if [ "$RESP" == "" ]; then
     echo "$0.$LINENO no containers with the service \"$SERVICE\" found"
@@ -131,7 +139,7 @@ else
   dckr_arr=($(echo "$RESP" | awk '{if ($1 == "NAME") {next;} printf("%s\n", $1);}'))
 fi
 echo "dckr_arr= ${dckr_arr[@]}"
-#root@dca1-3tx:/tmp# cat /sys/fs/cgroup/cpu,cpuacct/docker/b6715b80b4b5a00918b72d0e7afd4280cd27af5b1ad7d1a04768dbb5741c867d/cpu.stat
+# cat /sys/fs/cgroup/cpu,cpuacct/docker/b6715b80b4b5a00918b72d0e7afd4280cd27af5b1ad7d1a04768dbb5741c867d/cpu.stat
 #nr_periods 2950474
 #nr_throttled 104
 #throttled_time 122999595615
@@ -140,8 +148,18 @@ if [ ! -d "$PROJ" ]; then
   mkdir -p $PROJ
 fi
 
+#
+# I need to know the tsc freq and the cpu freq... run for 0.01 second
+#
 $SCR_DIR/../60secs/extras/spin.x -w freq_sml -n 1 -t 0.01 -l 1000 > $PROJ/spin.x.txt
 
+#
+# for each container get starting cpu.stat
+# And start perf sampling call stacks on container but put the samples in round robin memory buffer.
+# Don't write the output file till perf gets the kill -2 perf_pid signal.
+# you can set the sampling rate (def 100 samples/sec). We are trying to monitor what goes on in a 0.1 sec docker cpu slot so this will only give us 10 samples per 0.1 cpu bucket.
+# Also have timeout $TIME_MX for perf to run. Event we use is cpu-clock (software event). But we could use clockticks.
+#
 OFILE=$PROJ/docker_cpu_stats.txt
 PRF_ARR=()
 thr_arr=()
@@ -172,6 +190,11 @@ tm_end=$((tm_beg+TIME_MX))
 #  echo "tm_beg= $tm_beg tm_end= $tm_end"
 did_sigusr2=()
 has_java=()
+#
+# for each container, get initial docket stats.
+# also check if the container is running java. If it is then copy the code to get the java symbol file into the container.
+# And get the mapping of the java pid in the container to the java pid outside the container.
+#
 declare -A has_java_det
 for ((i=0; i < ${#dckr_arr[@]}; i++)); do
   did_sigusr2[$i]=0
@@ -205,6 +228,26 @@ for ((i=0; i < ${#dckr_arr[@]}; i++)); do
   # grep NSpid /proc/335930/status
   cpuacct_usage_prv[$i]=$(cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cpuacct.usage)
 done
+
+
+#
+# this is the main monitoring loop. Ends if time exceeds max time or if script caught sigint (sometimes miss signal if sleeping) or if stopfile is found.
+# Data is output each interval but it is just docker cpu stats for each container.
+# for each container:
+#   1) check if the container is gone (then tell perf for that container to quit.
+#   2) Check if I've sent a sigusr2 to a container (because we previously saw throttling in step 3) below).
+#      I delay doing the 'perf script' post-processing of the perf dat file till 30 seconds after sending the 'kill -SIGUSR2 perf_pid' to make sure perf has finished writing the file.
+#      And I generate the java symbol file (if java used) before doing the 'perf script' cmd
+#        have to go into container, generate the java map file, copy the map file out to /tmp with the 'not container' java pid.
+#        perf looks for map files in /tmp name /tmp/perf-{host_java_pid].map
+#      Then do perf script to convert the .dat file to .txt
+#   3) check if the cpu throttling has occurred (via docker cpu.stat). If so then send sigusr2 to perf to dump call stacks to .dat file.
+#      Won't process the dump file right away... wait 30 seconds since the last sigusr2 to be sure everything is done and we haven't gotten a storm of throttling.
+#      We could be sending a sigusr2 every 1 second if the containers keep throttling. But there would be only 1 second of samples in the file.
+#      The sigusr2 doesn't terminate perf, just tells perf to write its buffers out.
+#   4) write more stats to the output file (including a message if we did a sigusr2)
+# so, if no throttling then we just read the docker stat files, write the stats to a text file, sleep 1, repeat
+# 
 
 
 while [[ "$tm_cur" -lt "$tm_end" ]]; do
@@ -305,6 +348,9 @@ while [[ "$tm_cur" -lt "$tm_end" ]]; do
 done
 # fctr = 1e-9 # to convert cpuacct.usage and throttling to cpus = fctr * 'cpuacct.usage diff'/time_diff
 
+#
+# now we've exited the monitoring loop so stop all the perf processes.
+#
 echo "$0.$LINENO kill perf jobs if any"
 for ((i=0; i < ${#dckr_arr[@]}; i++)); do
   if [ "${PID_ARR[$i]}" != "" ]; then
@@ -312,8 +358,17 @@ for ((i=0; i < ${#dckr_arr[@]}; i++)); do
      kill -2 ${PID_ARR[$i]}
   fi
 done
+
+#
+# wait for perf to exit
+#
 echo "$0.$LINENO begin wait"
 wait
+
+#
+# now for each container, we need to check if we sent a sigusr2 to get a call stack .dat file but we haven't yet post processed the output.
+# If so we have to do the 'get java map file' stuff and 'perf script' now
+#
 for ((i=0; i < ${#dckr_arr[@]}; i++)); do
   find $PROJ -name "prf_${i}.dat*"
   prf_dat_arr=($(find $PROJ -name "prf_${i}.dat*" | sort | grep -v dat.old | grep -v ".txt"))
