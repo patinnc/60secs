@@ -84,6 +84,10 @@ awk -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK
     if ($1 == "__docker_sigint" && sv_mx > 0) {
       next;
     }
+    doing_sigint = 0;
+    if ($1 == "__docker_sigint") {
+       doing_sigint = 1;
+    }
     cid = $2;
     elap = $3;
     epch = $4;
@@ -250,6 +254,9 @@ awk -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK
         printf("%-5d %s\n", mod_inst[i,v], v);
       }
       tm_beg[i] = tm_end[i] - ds_intrvl; # so if the interval is 1 second then the time we want is end_time - 1.0 seconds
+      if (doing_sigint == 1) {
+        tm_beg[i] = tm_end[i];
+      }
       #tm_beg[i] = tm_end[i] - 4*ds_intrvl;
       printf("tm_beg[%d] = %f, tm_end[%d]= %f, ds_intrvl= %f\n", i, tm_beg[i], i, tm_end[i], ds_intrvl);
       sv_line_num[i] = line_num;
@@ -336,7 +343,7 @@ awk -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK
           system(cmd);
           close(cmd);
         }
-        if (k==1) {
+        if (k==1 && doing_sigint == 0) {
           # The call stacks for the interval with cpu throttling.
           for (j=bef_line; j <= sv_line_num[i]; j++) {
             # insert the fake "time_xx" prefix to the module name
