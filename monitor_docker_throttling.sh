@@ -165,6 +165,7 @@ PRF_ARR=()
 thr_arr=()
 declare -A dckr_stat_prv
 declare -A dckr_stat_cur
+PERF_EVT="cpu-clock"
 prf_dat_lst=()
 for ((i=0; i < ${#dckr_arr[@]}; i++)); do
   echo "__container $i ${dckr_arr[$i]}" >> $OFILE
@@ -173,7 +174,7 @@ for ((i=0; i < ${#dckr_arr[@]}; i++)); do
     dckr_stat_prv[$i,$j]=${ARR[$j]}
   done
   prf_dat_lst[$i]="$PROJ/prf_${i}.dat"
-  nohup $SCR_DIR/perf record -k CLOCK_MONOTONIC -F $FREQ_SMPL -e cpu-clock --cgroup=docker/${dckr_arr[$i]} -g -a -o "${prf_dat_lst[$i]}" --switch-output --overwrite  -- sleep $TIME_MX &> $PROJ/prf_${i}.log  &
+  nohup $SCR_DIR/perf record -k CLOCK_MONOTONIC -F $FREQ_SMPL -e $PERF_EVT --cgroup=docker/${dckr_arr[$i]} -g -a -o "${prf_dat_lst[$i]}" --switch-output --overwrite  -- sleep $TIME_MX &> $PROJ/prf_${i}.log  &
   PID_ARR[$i]=$!
 done
 
@@ -195,6 +196,8 @@ has_java=()
 # also check if the container is running java. If it is then copy the code to get the java symbol file into the container.
 # And get the mapping of the java pid in the container to the java pid outside the container.
 #
+echo "__perf_event $PERF_EVT" >> $OFILE
+echo "__perf_sample_freq $FREQ_SMPL" >> $OFILE
 declare -A has_java_det
 for ((i=0; i < ${#dckr_arr[@]}; i++)); do
   did_sigusr2[$i]=0
@@ -221,8 +224,12 @@ for ((i=0; i < ${#dckr_arr[@]}; i++)); do
       has_java_det[$i,"user"]=$(grep java $PROJ/cgroup.procs_long.txt | grep ${ARR[$j]} | tail -1 |  awk '{printf("%s", $1);}')
       echo docker $i, java $j, host_pid= ${has_java_det[$i,$j,"host_pid"]}, dckr_pid= ${has_java_det[$i,$j,"dckr_pid"]}, usr= ${has_java_det[$i,"user"]}
     done
+    echo docker cp $SCR_DIR/get_symbol_map_for_perf_from_java_in_container.tar.gz ${dckr_arr[$i]}:/tmp/
     docker cp $SCR_DIR/get_symbol_map_for_perf_from_java_in_container.tar.gz ${dckr_arr[$i]}:/tmp/
-    docker exec -it ${dckr_arr[$i]} bash -c "cd /tmp; tar xzf /tmp/get_symbol_map_for_perf_from_java_in_container.tar.gz"
+    #echo docker exec -it ${dckr_arr[$i]} /bin/bash -c "cd /tmp; tar xzf /tmp/get_symbol_map_for_perf_from_java_in_container.tar.gz -C /tmp; ls -l"
+    echo docker exec -it ${dckr_arr[$i]} /bin/bash -c "cd /tmp; tar xzf get_symbol_map_for_perf_from_java_in_container.tar.gz"
+    docker exec ${dckr_arr[$i]} /bin/bash -c "cd /tmp; tar xzf get_symbol_map_for_perf_from_java_in_container.tar.gz"
+    #docker exec -it ${dckr_arr[$i]} bash -c "cd /tmp; tar xzf /tmp/get_symbol_map_for_perf_from_java_in_container.tar.gz; ls -l"
   fi
   # ps -ef |grep java |grep deepeta
   # grep NSpid /proc/335930/status
@@ -292,7 +299,9 @@ while [[ "$tm_cur" -lt "$tm_end" ]]; do
           juser=${has_java_det[$i,"user"]}
           if [ "$juser" != "" ]; then
           echo docker exec -it --user $juser  ${dckr_arr[$i]} bash -c 'cd /tmp; ./fg_jmaps.sh'
-          docker exec -it --user $juser ${dckr_arr[$i]} bash -c 'cd /tmp; ./fg_jmaps.sh'
+          #docker exec -it --user $juser ${dckr_arr[$i]} /bin/bash -c 'cd /tmp; ./fg_jmaps.sh'
+          #docker exec --user $juser ${dckr_arr[$i]} /bin/bash -c 'cd /tmp; ./fg_jmaps.sh'
+          docker exec --privileged -it --user $juser ${dckr_arr[$i]} /bin/bash -c "cd /tmp; ./fg_jmaps.sh; ls -l /tmp"
           #opt_symfs=" --symfs /tmp "
           for ((j=0; j < ${has_java[$i]}; j++)); do
             hpid=${has_java_det[$i,$j,"host_pid"]}
