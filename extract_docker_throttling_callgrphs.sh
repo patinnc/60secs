@@ -16,9 +16,9 @@ for ((i=0; i < ${#LIST[@]}; i++)); do
 
 echo "$0.$LINENO RESP=$(grep sigusr2 ${LIST[$i]})"
 RESP=$(grep sigusr2 ${LIST[$i]})
-if [ "$RESP" == "" ]; then
-  continue
-fi
+#if [ "$RESP" == "" ]; then
+#  continue
+#fi
 
 IDIR=$(dirname ${LIST[$i]})
 CLK_PRF=0
@@ -75,12 +75,15 @@ awk -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK
     ds_throttled_secs = 1.0e-9 * ds_throttle;
     ds_throttled_periods = ds_nr_throttled;
   }
-  /^__docker_sigusr2 / {
+  /^__docker_sigusr2 |^__docker_sigint / {
 # so we actually saw throttling and sent sigusr2 to dump call stacks.
 # Now we look for a perf*.dat*.txt file at the time (or after the time) of the sigusr2
 # we might have back to back dump files if the throttling occurred during 2 consecutive seconds.
 # I have a dumb loop to look for dat.txt files with date strings up to 10 seconds after the sigusr2 time. Seems to work.
 
+    if ($1 == "__docker_sigint" && sv_mx > 0) {
+      next;
+    }
     cid = $2;
     elap = $3;
     epch = $4;
