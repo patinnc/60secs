@@ -296,7 +296,7 @@ awk -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK
         fl = "tmp_" i "_" k".txt";
         flsc = "tmp_" i "_" k"_sc.txt";
         flsc1 = "tmp_" i "_" k"_sc1.txt";
-        flsvg = "tmp_" onum_str "_" i "_" k"_sc.svg";
+        flsvg = sprintf("tmp_%s_%.2d_%d_sc.svg", onum_str, i, k);
         if (k==0) {
           # This is the case of the call stacks before the interval with the throttling
           # We can just do a standard stackcollapse-perf.pl -> flamegraph.pl for this case
@@ -333,9 +333,12 @@ awk -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK
             flsc1 = flsc;
           }
           ttl = sprintf("not throttled elapsed time covers %.3f secs", tm_bef[1] - tm_bef[0]);
+          if ((dckr[container_num, "period_secs"]+0) == 0) {
+            dckr[container_num, "period_secs"] = 0.1;
+          }
+          cpu_quota_per_period = dckr[container_num, "cpu_quota_secs"] / dckr[container_num, "period_secs"];
           sttl = sprintf("avg cpus/period= %.3f vs cpu quota of %.3f cpus/period",
-            dckr[container_num, "period_secs"] * (bef/samples_per_sec) /(tm_bef[1] - tm_bef[0]), 
-            dckr[container_num, "cpu_quota_secs"]);
+            (bef/samples_per_sec) /(tm_bef[1] - tm_bef[0]), cpu_quota_per_period);
             #bef_line /(tm_bef[1] - tm_bef[0]), 
           #cmd = "perl " scr_dir "/FlameGraph/flamegraph.pl --title \"" ttl "\" " flsc1 " > " flsvg;
           cmd = "perl " scr_dir "/FlameGraph/flamegraph.pl --title \"" ttl "\" --subtitle \"" sttl "\" "  flsc1 " > " flsvg;
@@ -381,7 +384,7 @@ awk -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK
           }
           ttl = sprintf("throttled elapsed time covers %.3f secs", tm_aft[1] - tm_aft[0]);
           sttl = sprintf("throttled periods= %d throttled_secs= %.3f. max= %.3f cpus/period in interval %s",
-            sv_ufl[i,"ds_throttled_periods"], sv_ufl[i,"ds_throttled_secs"], mx_val/samples_per_sec, mx_ky);
+            sv_ufl[i,"ds_throttled_periods"], sv_ufl[i,"ds_throttled_secs"], (mx_val/samples_per_sec)/dckr[container_num, "period_secs"], mx_ky);
           cmd = "perl " scr_dir "/FlameGraph/flamegraph.pl --title \"" ttl "\" --subtitle \"" sttl "\" "  flsc1 " > " flsvg;
           printf("cmd= %s\n", cmd);
           system(cmd);
