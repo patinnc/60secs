@@ -26,7 +26,11 @@ import math
 
 # the 2 statements below workaround a "UnicodeEncodeError: 'ascii' codec can't encode character u'\xb5' in position 21: ordinal not in range(128)"
 # error when I read yab cmd json files
-importlib.reload(sys)  
+if sys.version_info.major == 2:
+  import imp
+  imp.reload(sys)  
+else:
+  importlib.reload(sys)  
 #if sys.version_info.major == 2:
 #sys.setdefaultencoding('utf8')
 
@@ -86,6 +90,7 @@ ts_beg = -1.0
 ts_end = -1.0
 avg_dir = None;
 
+gmarker_type_lst = ["square", "diamond", "triangle", "x", "star", "short_dash", "long_dash", "circle", "plus"]
 #print("remainder files: ", remainder)
 #gcolor_lst = ["#b0556a", "#7adf39", "#8d40d6", "#ead12d", "#0160eb", "#aaed78", "#f945b7", "#04e6a0", "#cf193b", "#4df8ca", "#b21f72", "#41981b", "#b773eb", "#276718", "#f39afb", "#0ea26a", "#015fc6", "#ec7118", "#108cf5", "#feab4f", "#1eacf8", "#a13502", "#49f6fd", "#9e5d33", "#30d8ec", "#ab952f", "#8156a5", "#f5db82", "#1e67a9", "#f6b17c", "#47caf9", "#695909", "#7daaef", "#a4ce84", "#ef89bb", "#1c6c43", "#ecb5f2", "#7ddab8", "#0f88b4", "#07a1b2"];
 gcolor_lst= ["#1f77b4", "#aec7e8", "#ff7f0e", "#ffbb78", "#2ca02c", "#98df8a", "#d62728", "#ff9896", "#9467bd", "#c5b0d5",
@@ -1081,6 +1086,14 @@ for bmi in range(base_mx+1):
           #got_how_many_series_for_chart = 0
           #if ch_type == "scatter_straight" and options_str_top.find("line_for_scatter") > -1:
           #   ch_type = "line"
+          ch_markers = 0
+          if ch_type == "scatter_straight_markers":
+             ch_type =  "scatter_straight"
+             ch_markers = 1
+          if ch_type == "line_markers":
+             ch_type =  "line"
+             ch_markers = 1
+          #print("ch_type= ", ch_type)
           if ch_type == "scatter_straight" or ch_type == "line":
              if ph_done == 0 and do_ph_add == 1 and dcol_cat > 0:
                 #ph_done = 1
@@ -1205,6 +1218,11 @@ for bmi in range(base_mx+1):
                               a_s['points'].append({'fill': {'color': gcolor_lst[use_color]}})
                          #print("use chart gcolor_list[%d], sheet_nm= %s, ch_typ= %s, file= %s, drow_beg= %d drow_end= %d hcol_beg= %d, hcol_end= %d, ph_add= %d, h= %d" % (use_color, sheet_nm, ch_type, x, drow_beg, drow_end, hcol_beg, hcol_end, ph_add, h), chart1, file=sys.stderr)
                     a_s['line'] = {'color': gcolor_lst[use_color]}
+                    if ch_markers == 1:
+                       use_marker = num_series % len(gmarker_type_lst)
+                       #a_s['marker'] = {'type': 'automatic', 'fill':   {'color': gcolor_lst[use_color]},}
+                       a_s['marker'] = {'type': gmarker_type_lst[use_marker], 'size': 7, 'border': {'color': gcolor_lst[use_color]},  'fill':   {'color': gcolor_lst[use_color]},}
+                       #print("ch_type= ", ch_type, ", add markers")
                     #print("got add_series1, a_s= ", a_s);
                     rc = chart1.add_series(a_s)
           if got_how_many_series_for_chart == 0:
@@ -1261,7 +1279,7 @@ for bmi in range(base_mx+1):
                 if worksheet_charts != None:
                    desc_str = None
                    if options_all_charts_one_row == True:
-                      print("___got desc= ",desc, ", desc_str", desc_str, ", fo2.3= ",  all_charts_one_row[fo2][3], ", fo2=", fo2)
+                      #print("___got desc= ",desc, ", desc_str", desc_str, ", fo2.3= ",  all_charts_one_row[fo2][3], ", fo2=", fo2)
                       if desc == None:
                         if options_sku != None:
                            desc_str = options_sku
@@ -1288,11 +1306,11 @@ for bmi in range(base_mx+1):
                       #else:
                       #   if txt1 != "":
                       #     dsc += txt1
-                      print("___got dsc1= ",dsc, ", desc= ",desc, ", desc_str", desc_str, ", txt1= ", txt1)
+                      #print("___got dsc1= ",dsc, ", desc= ",desc, ", desc_str", desc_str, ", txt1= ", txt1)
                       dsc_fo2 = None
                       if dsc != None:
                          dsc_fo2 = dsc + str(fo2)
-                         print("dsc= ",dsc, ", fo2= ", fo2,", dsc_fo2= ", dsc_fo2)
+                         #print("dsc= ",dsc, ", fo2= ", fo2,", dsc_fo2= ", dsc_fo2)
                       #if (dsc != None and not dsc in all_charts_one_row_hash) or (txt1 != "" and not txt1 in all_charts_one_row_hash):
                       #if (dsc != None and not dsc in all_charts_one_row_hash):
                       if (dsc_fo2 != None and not dsc_fo2 in all_charts_one_row_hash):
@@ -1304,12 +1322,12 @@ for bmi in range(base_mx+1):
                          else:
                             txt = desc_str
                          all_charts_one_row_hash[dsc_fo2] = {"index": all_charts_one_row_max, "charts":0, "txt":txt, "txt1":txt1}
-                         print("___got dsc2= ",dsc_fo2, ", desc= ",desc, ", desc_str", desc_str, ", txt1= ", txt1, ", dsc_i=", all_charts_one_row_max)
+                         #print("___got dsc2= ",dsc_fo2, ", desc= ",desc, ", desc_str", desc_str, ", txt1= ", txt1, ", dsc_i=", all_charts_one_row_max)
                       dsc_i = -1
                       if dsc != None:
                          dsc_i    = all_charts_one_row_hash[dsc_fo2]["index"]
                          ch_in_rw = all_charts_one_row_hash[dsc_fo2]["charts"]
-                         print("___got dsc3= ",dsc, ", desc= ",desc, ", desc_str", desc_str, ", txt1= ", txt1, ", ch_in_rw= ", ch_in_rw, ", dsc_i=", dsc_i)
+                         #print("___got dsc3= ",dsc, ", desc= ",desc, ", desc_str", desc_str, ", txt1= ", txt1, ", ch_in_rw= ", ch_in_rw, ", dsc_i=", dsc_i)
                          all_charts_one_row[dsc_i][0] = 3+ dsc_i * (3+int(ch_size[1]*ch_size[2]))
                          all_charts_one_row[dsc_i][1] = ch_in_rw * int(ch_size[3])
                          if verbose > 0:
