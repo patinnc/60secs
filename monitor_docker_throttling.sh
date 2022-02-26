@@ -18,12 +18,16 @@ trap 'catch_signal' SIGINT
 
 INTERVAL=10
 FREQ_SMPL=99
+PERF_EVT="cpu-clock"
 
 
-while getopts "hvd:f:I:p:s:t:" opt; do
+while getopts "hvd:e:f:I:p:s:t:" opt; do
   case ${opt} in
     d )
       DOCKER=$OPTARG
+      ;;
+    e )
+      PERF_EVT=$OPTARG
       ;;
     f )
       FREQ_SMPL=$OPTARG
@@ -47,6 +51,7 @@ while getopts "hvd:f:I:p:s:t:" opt; do
       echo "usage: $0 -p proj_output_dir [ -d docker_container | -s service_name ] -t time_to_run_in_secs -i interval_in_secs"
       echo "       $0 monitor docker container or service for throttling "
       echo "   -d docker_container (long or short name) (comma separated list if more than 1)"
+      echo "   -e perf_event        event to monitor. default is cpu-clock."
       echo "   -f freq_samples      samples per second (per cpu on which the container is running). Default = 99. Higher freq -> more overhead"
       echo "   -I interval_in_secs  sleep interval between get stats"
       echo "   -s service_name (as it appears in the docker ps output (selects all containers for service on host)"
@@ -160,12 +165,15 @@ $SCR_DIR/../60secs/extras/spin.x -w freq_sml -n 1 -t 0.01 -l 1000 > $PROJ/spin.x
 # you can set the sampling rate (def 100 samples/sec). We are trying to monitor what goes on in a 0.1 sec docker cpu slot so this will only give us 10 samples per 0.1 cpu bucket.
 # Also have timeout $TIME_MX for perf to run. Event we use is cpu-clock (software event). But we could use clockticks.
 #
+OPT_F=
+if [[ "$FREQ_SMPL" -gt "0" ]]; then
+  OPT_F=" -F $FREQ_SMPL "
+fi
 OFILE=$PROJ/docker_cpu_stats.txt
 PRF_ARR=()
 thr_arr=()
 declare -A dckr_stat_prv
 declare -A dckr_stat_cur
-PERF_EVT="cpu-clock"
 prf_dat_lst=()
 for ((i=0; i < ${#dckr_arr[@]}; i++)); do
   echo "__container $i ${dckr_arr[$i]}" >> $OFILE
@@ -174,7 +182,7 @@ for ((i=0; i < ${#dckr_arr[@]}; i++)); do
     dckr_stat_prv[$i,$j]=${ARR[$j]}
   done
   prf_dat_lst[$i]="$PROJ/prf_${i}.dat"
-  nohup $SCR_DIR/perf record -k CLOCK_MONOTONIC -F $FREQ_SMPL -e $PERF_EVT --cgroup=docker/${dckr_arr[$i]} -g -a -o "${prf_dat_lst[$i]}" --switch-output --overwrite  -- sleep $TIME_MX &> $PROJ/prf_${i}.log  &
+  nohup $SCR_DIR/perf record -k CLOCK_MONOTONIC $OPT_F -e $PERF_EVT --cgroup=docker/${dckr_arr[$i]} -g -a -o "${prf_dat_lst[$i]}" --switch-output --overwrite  -- sleep $TIME_MX &> $PROJ/prf_${i}.log  &
   PID_ARR[$i]=$!
 done
 
@@ -313,8 +321,8 @@ while [[ "$tm_cur" -lt "$tm_end" ]]; do
         fi
         for ((j=0; j < ${#prf_dat_arr[@]}; j++)); do
           if [ ! -e ${prf_dat_arr[$j]}.txt ]; then
-            echo $SCR_DIR/perf script -i ${prf_dat_arr[$j]} --kallsyms=/proc/kallsyms  _ ${prf_dat_arr[$j]}.txt
-            $SCR_DIR/perf script -i ${prf_dat_arr[$j]} --kallsyms=/proc/kallsyms > ${prf_dat_arr[$j]}.txt &
+            echo $SCR_DIR/perf script -I --header -i ${prf_dat_arr[$j]} --kallsyms=/proc/kallsyms  _ ${prf_dat_arr[$j]}.txt
+            $SCR_DIR/perf script -I --header -i ${prf_dat_arr[$j]} --kallsyms=/proc/kallsyms > ${prf_dat_arr[$j]}.txt &
           fi
         done
       fi
@@ -396,8 +404,8 @@ for ((i=0; i < ${#dckr_arr[@]}; i++)); do
         fi
   for ((j=0; j < ${#prf_dat_arr[@]}; j++)); do
     if [ ! -e ${prf_dat_arr[$j]}.txt ]; then
-      echo $SCR_DIR/perf script -i ${prf_dat_arr[$j]} --kallsyms=/proc/kallsyms  _ ${prf_dat_arr[$j]}.txt
-      $SCR_DIR/perf script -i ${prf_dat_arr[$j]} --kallsyms=/proc/kallsyms  > ${prf_dat_arr[$j]}.txt
+      echo $SCR_DIR/perf script -I --header  -i ${prf_dat_arr[$j]} --kallsyms=/proc/kallsyms  _ ${prf_dat_arr[$j]}.txt
+      $SCR_DIR/perf script -I --header -i ${prf_dat_arr[$j]} --kallsyms=/proc/kallsyms  > ${prf_dat_arr[$j]}.txt
     fi
   done
 done
