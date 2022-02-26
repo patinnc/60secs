@@ -319,19 +319,32 @@ awk -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK
           system(cmd);
           close(cmd);
           close(flsc);
-          if (1==2) {
+          # below code looks for duplicate consecutive stack entries and only emits the 1st entry
           while ((getline < flsc) > 0) {
-            #if (substr($1, 1, 5) == "time_") {
-            if (match($0, /^time_[0-9]+_/) > 0) {
-              $0 = substr($0, 1, RLENGTH-1) ";" substr($0, RLENGTH+1);
-              $1 = $1;
+            nn = split($0, sarr, ";");
+            printf("%s", sarr[1]) > flsc1
+            ij = 2;
+            while (ij <= nn) {
+              if (sarr[ij-1] == sarr[ij]) {ij++; continue;}
+              printf(";%s", sarr[ij]) > flsc1;
+              ij++;
             }
-            printf("%s\n", $0) > flsc1;
+            printf("\n") > flsc1;
           }
           close(flsc1);
-          } else {
-            flsc1 = flsc;
-          }
+#          if (1==2) {
+#          while ((getline < flsc) > 0) {
+#            #if (substr($1, 1, 5) == "time_") {
+#            if (match($0, /^time_[0-9]+_/) > 0) {
+#              $0 = substr($0, 1, RLENGTH-1) ";" substr($0, RLENGTH+1);
+#              $1 = $1;
+#            }
+#            printf("%s\n", $0) > flsc1;
+#          }
+#          close(flsc1);
+#          } else {
+#            flsc1 = flsc;
+#          }
           ttl = sprintf("not throttled elapsed time covers %.3f secs", tm_bef[1] - tm_bef[0]);
           if ((dckr[container_num, "period_secs"]+0) == 0) {
             dckr[container_num, "period_secs"] = 0.1;
