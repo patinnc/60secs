@@ -3,10 +3,42 @@
 INF=docker_cpu_stats.txt
 SCR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
-if [ "$1" == "" ]; then
-IDIR=archive_aura_callgraphs_v01_no_prf_dat
-else
-IDIR=$1
+while getopts "hvd:f:I:p:s:t:" opt; do
+  case ${opt} in
+    d )
+      DIR_IN=$OPTARG
+      ;;
+    f )
+      PRF_DAT=$OPTARG
+      ;;
+    v )
+      VERBOSE=$((VERBOSE+1))
+      ;;
+    h )
+      echo "usage: $0 -p proj_output_dir [ -d docker_container | -s service_name ] -t time_to_run_in_secs -i interval_in_secs"
+      echo "       $0 monitor docker container or service for throttling "
+      echo "   -d dir_with_prf.dat_files"
+      echo "   -f prf.dat_file      optional prf.dat in -d dir. Default is process all .dat files"
+      echo "   -j just_gen_callstacks "
+      echo "   -v              verbose mode"
+      exit
+      ;;
+    : )
+      echo "$0.$LINENO Invalid option: $OPTARG requires an argument" 1>&2
+      exit 1
+      ;;
+    \? )
+      echo "$0.$LINENO Invalid option: $OPTARG" 1>&2
+      exit 1
+      ;;
+  esac
+done
+shift $((OPTIND -1))
+
+IDIR=$DIR_IN
+if [[ "$IDIR" == "" ]] || [[ ! -d "$IDIR" ]]; then
+  echo "$0.LINENO you must enter -d dir_with_prf.dat_files or -d $IDIR not found"
+  exit 1
 fi
 
 LIST=($(find $IDIR -name docker_cpu_stats.txt))
