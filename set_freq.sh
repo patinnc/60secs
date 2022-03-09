@@ -292,7 +292,7 @@ function show_MSRs() {
   k=0
   for j in $MSR_LIST; do
     MSR=$j
-    REGS=`rdmsr --all $MSR`
+    REGS=`rdmsr --all $MSR | sed 's/.*: //'`
     ALL_SAME=1
     first_val=
     for i in $REGS; do
@@ -315,7 +315,7 @@ function show_MSRs() {
   done
   for j in $XMSR_LIST; do
     MSR=$j
-    REGS=`rdmsr --all $MSR`
+    REGS=`rdmsr --all $MSR | sed 's/.*: //'`
     ALL_SAME=1
     first_val=
     for i in $REGS; do
