@@ -672,7 +672,7 @@ else
          echo "$0.$LINENO: -__________- using2 DIR= $DIR, orig DIR= $DIR_ORIG" > /dev/stderr
        else
          echo "$0.$LINENO: didn't find 60secs.log nor metric_out nor sys_*_perf_stat.txt file under dir $DIR. dir_orig= $DIR_ORIG at line $LINENO Bye"
-         exit 1
+         #exit 1
        fi
      fi
    else
@@ -896,11 +896,11 @@ if [ "$SKU_LEN" != "0" ]; then
 #xyz
         if [ $VERBOSE -gt 1 ]; then
           echo "$0.$LINENO got LZC_FL= $LZC_FL"
-          echo "$0.$LINENO awk -v infile=$LZC_FL -v host=$GOT_HST -v sku_in=${SKU[@]} -v cpu_fam=$GOT_CPU -v cpu2017_thrds=$CPU2017_THRDS"
+           echo $0.$LINENO awk -v infile="$LZC_FL" -v host="$GOT_HST" -v sku_in="${SKU[@]}" -v cpu_fam="$GOT_CPU" -v cpu2017_thrds="$CPU2017_THRDS"
         fi
-        LZC_OUT=`awk -v infile="$LZC_FL" -v host="$GOT_HST" -v sku_in="${SKU[@]}" -v cpu_fam="$GOT_CPU" -v cpu2017_thrds="$CPU2017_THRDS" '
+                  LZC_OUT=$(awk -v infile="$LZC_FL" -v host="$GOT_HST" -v sku_in="${SKU[@]}" -v cpu_fam="$GOT_CPU" -v cpu2017_thrds="$CPU2017_THRDS" '
           BEGIN{
-            #printf("host= %s, sku= %s, cpu_fam= %s\n", host, sku_in, cpu_fam) > "/dev/stderr";
+            printf("host= %s, sku= %s, cpu_fam= %s\n", host, sku_in, cpu_fam) > "/dev/stderr";
             str = tolower(cpu_fam);
             if (index(str, "sky") > 0) { cpu = "skx"; }
             if (index(str, "cascade") > 0) { cpu = "csx"; }
@@ -992,8 +992,9 @@ if [ "$SKU_LEN" != "0" ]; then
               printf("sku;%s\n", sku_in);
             }
             exit(0);
-          } ' $LZC_FL`
+          } ' $LZC_FL)
           RC=$?
+           echo $0.$LINENO awk -v infile="$LZC_FL" -v host="$GOT_HST" -v sku_in="${SKU[@]}" -v cpu_fam="$GOT_CPU" -v cpu2017_thrds="$CPU2017_THRDS"
           ck_last_rc $RC $LINENO
         #if [ $VERBOSE -gt 1 ]; then
            echo "LZC_out= $LZC_OUT"
