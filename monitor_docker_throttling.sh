@@ -265,6 +265,8 @@ done
 # 
 
 
+dckr_i=0
+dckr_mod=10
 while [[ "$tm_cur" -lt "$tm_end" ]]; do
   if [ "$GOT_QUIT" == "1" ]; then
       echo "$0.$LINENO quit due to got sigint"
@@ -290,7 +292,7 @@ while [[ "$tm_cur" -lt "$tm_end" ]]; do
     if [ ! -e /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cpu.stat ]; then
       if [ "${PID_ARR[$i]}" != "" ]; then
 	       # the container is gone, kill the perf process
-         echo "__docker_sigint $tm_dff $EPCH $TM_STR" >> $OFILE
+         echo "__docker_sigint $i $tm_dff $EPCH $TM_STR" >> $OFILE
          kill -2 ${PID_ARR[$i]}
          PID_ARR[$i]=""
       fi
@@ -359,6 +361,30 @@ while [[ "$tm_cur" -lt "$tm_end" ]]; do
     v=$((RESP-cpuacct_usage_prv[$i]))
     echo "__docker_cpuacct_usage $EPCH $i $v" >> $OFILE
     cpuacct_usage_prv[$i]="$RESP"
+
+    #dckr_arr=($(ls -1 /sys/fs/cgroup/cpu,cpuacct/docker | grep -E -v "cgroup|cpu\.|cpuacct|notify|tasks"))
+    #echo "__container_ids__ ${$dckr_arr[@]} $ts_cur $ts_end"
+    #for ((k=0; k < ${#dckr_arr[@]}; k++)); do
+    dckr_ck=$(($dckr_i % $dckr_mod))
+    if [ "$dckr_ck" == "0" ]; then
+      cid=${dckr_arr[$i]}
+      echo "__container_stats $EPCH $i $cid" >> $OFILE
+      for kk in cpu.stat cpuacct.stat cpuacct.usage; do
+        echo "__$kk" >> $OFILE
+        cat /sys/fs/cgroup/cpu,cpuacct/docker/$cid/$kk >> $OFILE
+      done
+      for kk in blkio.throttle.io_serviced blkio.throttle.io_service_bytes; do
+        echo "__$kk" >> $OFILE
+        cat /sys/fs/cgroup/blkio/docker/$cid/$kk >> $OFILE
+      done
+      for kk in memory.stat; do
+        echo "__$kk" >> $OFILE
+        cat /sys/fs/cgroup/memory/docker/$cid/$kk >> $OFILE
+      done
+    fi
+    dckr_i=$((dckr_i+1))
+    #done
+
   done
   #sleep $INTERVAL
   sleep 1
