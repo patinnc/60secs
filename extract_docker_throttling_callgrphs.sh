@@ -3,23 +3,56 @@
 INF=docker_cpu_stats.txt
 SCR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
-while getopts "hvd:f:I:p:s:t:" opt; do
+END_DIR=1
+
+while getopts "hvc:d:e:f:H:m:p:o:s:" opt; do
   case ${opt} in
+    c )
+      CPU_BSY=$OPTARG
+      ;;
     d )
       DIR_IN=$OPTARG
       ;;
+    e )
+      END_DIR=$OPTARG
+      ;;
     f )
-      PRF_DAT=$OPTARG
+      FILE_LIST="$OPTARG"
+      ;;
+    H )
+      HOST_STR="$OPTARG"
+      ;;
+    m )
+      MAX_HIGH=$OPTARG
+      ;;
+    s )
+      SEL_PRF_STR=$OPTARG
+      ;;
+    o )
+      OUTFILE=$OPTARG
+      ;;
+    p )
+      PXX=$OPTARG
       ;;
     v )
       VERBOSE=$((VERBOSE+1))
       ;;
     h )
-      echo "usage: $0 -p proj_output_dir [ -d docker_container | -s service_name ] -t time_to_run_in_secs -i interval_in_secs"
-      echo "       $0 monitor docker container or service for throttling "
+      echo "usage: $0 -d dir_with_prf_files -f prf_dat_file -s prf_dat_sel_string"
+      echo "       $0 extract SVGs from perf.dat files in dir"
       echo "   -d dir_with_prf.dat_files"
-      echo "   -f prf.dat_file      optional prf.dat in -d dir. Default is process all .dat files"
-      echo "   -j just_gen_callstacks "
+      echo "   -f prf.dat_file.txt     optional prf.dat*.txt in -d dir. Default is process all .dat files. files separated by ','"
+      echo "   -s string            string to use to select on some (1?) of the files in dir (like 13 to select file 13)"
+      echo "   -c cpus              cpus busy in interval to be considered throttled. Put call graphs for intervals with num_cpu >= 'cpus' in throttled file"
+      echo "                        otherwise put in the non-throttled file"
+      echo "                        if both '-c cpus' and '-p pxx' are entereed then -c cpus is used and -p pxx is ignored"
+      echo "   -p pXX               percentile to use (like 90). Put call graphs for intervals with cpu util >= pxx in throttled file"
+      echo "                        otherwise put in the non-throttled file"
+      echo "   -m max_high          max number of stacks high... useful for very tall stacks"
+      echo "   -H host_str          this string will be added to flamegraph title. Intended for case where you are only doing 1 host"
+      echo "   -o outfile           if doing -p pxx then all 'throttle' callstacks will put in outfile_thr.txt. non-thr in outfile_not.txt"
+      echo "                        default is 'summary'"
+      echo "   -e 0|1               This is for processing multiple host dirs. If you are doing the last host dir do -e 1 else do -e 0"
       echo "   -v              verbose mode"
       exit
       ;;
@@ -40,7 +73,6 @@ if [[ "$IDIR" == "" ]] || [[ ! -d "$IDIR" ]]; then
   echo "$0.LINENO you must enter -d dir_with_prf.dat_files or -d $IDIR not found"
   exit 1
 fi
-
 LIST=($(find $IDIR -name docker_cpu_stats.txt))
 echo "LIST= $LIST, list mx= ${#LIST[@]}"
 
@@ -60,6 +92,16 @@ if [ -e $IDIR/spin.x.txt ]; then
   CLK_TOD=$(awk '/t_gettimeofday= /{printf("%s", $2);}' $IDIR/spin.x.txt)
 fi
 
+if [[ "$PXX" != "" ]] && [[ "$CPU_BSY" != "" ]]; then
+  PXX=
+fi
+if [[ "$CPU_BSY" != "" ]] && [[ "$OUTFILE" == "" ]]; then
+  OUTFILE="summary"
+fi
+if [[ "$PXX" != "" ]] && [[ "$OUTFILE" == "" ]]; then
+  OUTFILE="summary"
+fi
+
 FG_STKCOL="FlameGraph/stackcollapse-perf.pl"
 LKFOR_FG_DIRS=($SCR_DIR/../  $HOME  $HOME/repos)
 for ((ii=0; ii < ${#LKFOR_FG_DIRS[@]}; ii++)); do
@@ -75,13 +117,22 @@ echo "___________ onum= $i dir= $IDIR"
 
 samples_per_sec=99
 
-awk -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK_TOD" -v scr_dir="$fg_scr_dir" -v dir="$IDIR" -v onum=$i '
+echo $0.$LINENO awk -v host_str="$HOST_STR" -v max_high="$MAX_HIGH" -v file_list_in="$FILE_LIST" -v end_dir="$END_DIR" -v cpus_busy="$CPU_BSY" -v pxx="$PXX" -v outfile="$OUTFILE" -v sel_prf_str="$SEL_PRF_STR"  -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK_TOD" -v scr_dir="$fg_scr_dir" -v dir="$IDIR" -v onum=$i > /dev/stderr
+awk -v host_str="$HOST_STR" -v max_high="$MAX_HIGH" -v file_list_in="$FILE_LIST" -v end_dir="$END_DIR" -v cpus_busy="$CPU_BSY" -v pxx="$PXX" -v outfile="$OUTFILE" -v sel_prf_str="$SEL_PRF_STR"  -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK_TOD" -v scr_dir="$fg_scr_dir" -v dir="$IDIR" -v onum=$i '
   BEGIN{
      clk_prf += 0;
      clk_tod += 0;
+     cid_mx = -1;
+     max_high += 0;
+     if (file_list_in != "") {
+       file_list_n = split(file_list_in, file_list, ",");
+       for (i=1; i <= file_list_n; i++) { printf("file_list[%d]= %s\n", i, file_list[i]);}
+     }
+      
   }
 /^__cpu.cfs_quota_us /{
-   container_num = $2;
+   container_num = $2+0;
+   if (cid_mx < container_num) { cid_mx = container_num; }
    dckr[container_num, "cpu_quota_secs"] = 1.0e-6 * $3;
 }
 /^__cpu.cfs_period_us /{
@@ -113,23 +164,32 @@ awk -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK
 # we might have back to back dump files if the throttling occurred during 2 consecutive seconds.
 # I have a dumb loop to look for dat.txt files with date strings up to 10 seconds after the sigusr2 time. Seems to work.
 
-    if ($1 == "__docker_sigint" && sv_mx > 0) {
-      next;
-    }
+    printf("got __doc sig %s\n", $0);
+    #if ($1 == "__docker_sigint" && sv_mx > 0) {
+    #  next;
+    #}
     doing_sigint = 0;
+    cid = -1;
     if ($1 == "__docker_sigint") {
        doing_sigint = 1;
     }
-    cid = $2;
-    elap = $3;
-    epch = $4;
+    if (NF == 4) {
+      elap = $2;
+      epch = $3;
+      dtstr= $4;
+    }
+    if (NF == 5) {
+      cid = $2;
+      elap = $3;
+      epch = $4;
+      dtstr= $5;
+    }
     prf_tm = 0;
     if (clk_prf > 0 && clk_tod > 0) {
       prf_tm = epch - clk_tod + clk_prf;
       printf("estimate sigusr2 perf timestamp= %f epch= %s\n", prf_tm, epch);
     }
     
-    dtstr= $5;
 
 # __docker_sigusr2 0 15062 1638012722.414496 20211127113202
 #           1 1
@@ -144,18 +204,39 @@ awk -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK
     dt_ss= substr(dtstr, 13, 2);
     printf("hh= %s mm = %s ss= %s, dt= %s\n", dt_hh, dt_mm, dt_ss, dtstr);
     got_it=0;
-    for (i=0; i < 10; i++) {
+    if (file_list_n >= (sv_mx+1) && outfile != "") {
+      ufl = file_list[sv_mx+1];
+      printf("using ufl from file_list[%d]= %s, file_list_n= %d\n", sv_mx+1, ufl, file_list_n);
+      got_it = 1;
+    } else {
+    if ($1 == "__docker_sigint") {
+      cid_beg = 0;
+      cid_beg = cid_mx;
+    } else {
+      cid_beg = cid; 
+      cid_end = cid; 
+    }
+    for (cid= cid_end; cid >= cid_beg; cid--) {
+    for (i=0; i < 20; i++) {
       udt = dt2ss+i;
       ufl = sprintf("%s/prf_%d.dat.%.0f*.txt", dir, cid, udt);
       #ufl = sprintf("%sdir "/prf_" cid ".dat." udt "*.txt";
       printf("ufl= %s  cid= %d udt= %d\n", ufl, cid, udt);
       if (system("test -f " ufl)==0) {
         got_it=1;
+        printf("got_it ufl= %s  cid= %d udt= %d\n", ufl, cid, udt);
         break;
       }
     }
+       if (got_it == 1) { break; }
+    }
+    }
     if (got_it == 1) {
       sv_mx++;
+      if (file_list_n > 0) {
+         printf("file_list[%d]= %s\n", sv_mx, file_list[sv_mx]);
+         printf("use ufl      = %s\n", ufl);
+      }
       cmd = "ls " ufl " | head -1";
       cmd | getline line;
       close(cmd);
@@ -168,6 +249,7 @@ awk -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK
       sv_ufl[sv_mx,"ds_throttled_periods"] = ds_throttled_periods;
 
     } else {
+      printf("missed finding match for prf file ufl= %s dt2ss= %s\n", ufl, ddt2ss);
       printf("missed finding match for prf file ufl= %s dt2ss= %s\n", ufl, ddt2ss) > "/dev/stderr";
     }
   }
@@ -192,15 +274,26 @@ awk -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK
 # in the "time_0.2" bucket and so on. I think after sigusr2-1.2 seconds I just clump all those call stacks togther.
 # The flamegraph scripts treat the "time_0.1" string like a module name.
 # All that is great, but the code below also has to parse the perf call stack stuff.
+    if (sel_prf_str != "") {
+      sel_prf_str+= 0;
+    }
 
     for (i=1; i <= sv_mx; i++) {
       ufl = sv_ufl[i,"nm"];
       printf("ufl[%d]= %s\n", i, ufl);
     }
-    printf("+++++++++ using 1 instead of sv_mx= %d\n", sv_mx);
+    #printf("+++++++++ using 1 instead of sv_mx= %d\n", sv_mx);
+    bkts[1] = bkts[2] = 0;
+    bkt_samples[1] = bkt_samples[2] = 0;
+    tot_tm_diff = 0;
     #for (i=2; i <= 2; i++) 
     for (i=1; i <= sv_mx; i++) {
+      if (sel_prf_str != "" && sel_prf_str != i) {
+        continue;
+      }
       ufl = sv_ufl[i,"nm"];
+      #bkts[1] = bkts[2] = 0;
+      #bkt_samples[1] = bkt_samples[2] = 0;
       cg=0;
       line_num=-1;
       while ((getline < ufl) > 0) {
@@ -221,7 +314,8 @@ awk -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK
         }
         sv_lines[i,line_num] = $0;
         if ($0 == "") { continue; }
-        if (substr($0, 1, 1) != "\t") {
+        char0 = substr($0, 1, 1);
+        if (char0 != "\t" && char0 != "#") {
           # this is not a call graph line. Look for the cpu number line [001]. The process name can have spaces (i think) so get the cpu string and work backwards.
           cg++;
           sv_ufl[i, "cg_mx"] = cg;
@@ -236,7 +330,7 @@ awk -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK
             } 
           }
           if (cpu_fld == -1) {
-            printf("missed cpu fld for line[%d]= %s\n", line_num, $0);
+            printf("missed cpu fld for line[%d]= %s file= %s\n", line_num, $0, ufl);
             exit(1);
           }
           mod = $1;
@@ -246,9 +340,9 @@ awk -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK
           if (substr(mod, 1, 4) == "xt-h") {
             mod = "xt-h";
           }
-#line[66562] tm= 3614141.041924, tm_beg[1]= 3614137.655765, str= tcheck 465830 [019] 3614141.041924:   10101010 cpu-clock: 
-#line[66584] tm= 0.000000, tm_beg[1]= 3614137.655765, str= Reference Handl 14579 [029] 3614141.045519:   10101010 cpu-clock: 
-#line[66591] tm= 3614141.046863, tm_beg[1]= 3614137.655765, str= xt-h 16253 [015] 3614141.046863: 10101010 cpu-clock:
+          #line[66562] tm= 3614141.041924, tm_beg[1]= 3614137.655765, str= tcheck 465830 [019] 3614141.041924:   10101010 cpu-clock: 
+          #line[66584] tm= 0.000000, tm_beg[1]= 3614137.655765, str= Reference Handl 14579 [029] 3614141.045519:   10101010 cpu-clock: 
+          #line[66591] tm= 3614141.046863, tm_beg[1]= 3614137.655765, str= xt-h 16253 [015] 3614141.046863: 10101010 cpu-clock:
 
           # get list of modules
           if (!((i,mod) in mod_list)) {
@@ -264,6 +358,15 @@ awk -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK
           if (cg_arr[i, "tm_beg"] == "") {
              cg_arr[i, "tm_beg"] = tm;
           }
+          tm_dff = tm - cg_arr[i, "tm_beg"];
+          tm_bkt = int(tm_dff * 100);
+          cg_arr[i, "tm_bkt", tm_bkt]++;
+          if (cg_arr[i, "tm_bkt_tm_beg", tm_bkt] == "") {
+            cg_arr[i, "tm_bkt_tm_beg", tm_bkt] = tm;
+          }
+          cg_arr[i, "tm_bkt_tm_end", tm_bkt] = tm;
+          #printf("cg_arr[%d, "tm_bkt_tm_beg", %d]= %.3f, end= %.3f\n", i, tm_bkt, cg_arr[i, "tm_bkt_tm_beg", tm_bkt], cg_arr[i, "tm_bkt_tm_end", tm_bkt]);
+          cg_arr[i, "tm_bkt_mx"] = tm_bkt;
           cg_arr[i, "tm_end"] = tm;
           cg_arr[i, cg, "mod"] = mod;
           cg_arr[i, cg, "mx"]  = 0;
@@ -278,9 +381,135 @@ awk -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK
       }
       close(ufl)
       # so we have read the perf dat txt file and got call stacks
+      sv_line_num[i] = line_num;
       tm_end[i] = tm;
+      pxx += 0;
+      cpus_busy += 0;
+      cpu_quota_per_period = dckr[container_num, "cpu_quota_secs"] / dckr[container_num, "period_secs"];
+      printf("cpu quota= %.3f, pxx_cpus= %.3f, cpus_busy= %.3f\n", cpu_quota_per_period, (0.01*pxx*cpu_quota_per_period), cpus_busy);
       cg_mx[i] = cg;
-      printf("\n\ndir %d module counts for file %d, tm_beg= %f tm_end= %f tm_diff= %f\n", onum, i, cg_arr[i,"tm_beg"], cg_arr[i,"tm_end"], cg_arr[i,"tm_end"] - cg_arr[i,"tm_beg"]);
+      tm_bkt_beg = 0;
+      tm_bkt_end = cg_arr[i, "tm_bkt_mx"];
+      for (tb = 0; tb <= tm_bkt_end/10; tb++) {
+        tm_b[tb]=0;
+      }
+      for (tb = tb_bkt_beg; tb <= tm_bkt_end; tb++) {
+        #printf("tm_bkt[%d]= %3d\n", tb, cg_arr[i, "tm_bkt", tb]);
+        tbi = int(tb/10);
+        tm_b[tbi] += cg_arr[i, "tm_bkt", tb];
+        if (tm_b_tm_beg[tbi] == "") {
+          tm_b_tm_beg[tbi] = cg_arr[i, "tm_bkt_tm_beg", tb];
+        }
+        tm_b_tm_end[tbi] = cg_arr[i, "tm_bkt_tm_end", tb];
+      }
+      for (tb = 0; tb <= tm_bkt_end/10; tb++) {
+        cpus = 10.0 * tm_b[tb] / samples_per_sec;
+        #printf("tm_b[%d]= %.3f ", tb, cpus);
+        if ((pxx > 0 && cpus >= (0.01*pxx*cpu_quota_per_period)) || (cpus_busy > 0.0 && cpus >= cpus_busy)) {
+            tm_b_st[tb] = "thr";
+        } else {
+            tm_b_st[tb] = "not";
+        }
+        tm_b_vals[tb] = 0
+        #printf(", %s\n", tm_b_st[tb]);
+      }
+      tot_tm_diff +=  cg_arr[i,"tm_end"] - cg_arr[i,"tm_beg"];
+      printf("\n\ndir %d module counts for file %d, tm_beg= %f tm_end= %f tm_diff= %.3f tot_tm_diff= %.3f\n", onum, i, cg_arr[i,"tm_beg"], cg_arr[i,"tm_end"], cg_arr[i,"tm_end"] - cg_arr[i,"tm_beg"], tot_tm_diff);
+      if (outfile != "") {
+          outfile_lst[1] = outfile "_thr.txt";
+          outfile_lst[2] = outfile "_not.txt";
+          outfile_sc[1] = outfile "_thr_sc.txt";
+          outfile_sc[2] = outfile "_not_sc.txt";
+          outfile_bkts[1] = outfile "_thr_bkts.txt";
+          outfile_bkts[2] = outfile "_not_bkts.txt";
+          outfile_smpls[1] = outfile "_thr_smpls.txt";
+          outfile_smpls[2] = outfile "_not_smpls.txt";
+          h_str="";
+          if (host_str != "") { h_str = "_" host_str;}
+          outfile_svg[1] = outfile "_thr" h_str ".svg";
+          outfile_svg[2] = outfile "_not" h_str ".svg";
+          outfile_str[1] = "throttled";
+          outfile_str[2] = "not throttled";
+          got_it = 2;
+          for (j=0; j <= sv_line_num[i]; j++) {
+            if (sv_lines_time[i, j] != "") {
+            tm = sv_lines_time[i, j];
+            ln_beg = j;
+            tm_dff = tm - cg_arr[i, "tm_beg"];
+            tm_bkt = int(tm_dff * 100);
+            tb = int(tm_bkt/10)
+            if (tm_b_st[tb] == "thr") {
+              got_it = 1;
+              tm_b_vals[tb]++;
+              #continue;
+              #printf("%s\n", sv_lines[i,j]) > outfile_thr;
+            } else {
+              got_it = 2;
+            }
+            if (sv_lines[i, j] != "" && substr(sv_lines[i,j], 1,1) != "#") {
+               bkt_samples[got_it]++;
+            }
+            }
+            if (j > 0 && sv_lines[i,j] == sv_lines[i,j-1]) {continue;}
+            if (index(sv_lines[i,j], "[unknown] ([unknown])") > 0) {continue;}
+            if (match(sv_lines[i,j], /\[unknown\] .*perf-.*.map/)) {continue;}
+            if (max_high > 0 && ((j-ln_beg) > max_high && sv_lines[i,j] != "")) {continue;}
+            printf("%s\n", sv_lines[i,j]) >> outfile_lst[got_it];
+          }
+          for (tb = 0; tb <= tm_bkt_end/10; tb++) {
+            if (tm_b_st[tb] == "thr") { bkts[1]++; } else { bkts[2]++; }
+            #printf("tb_b_vals[%d]= %d\n", tb, tm_b_vals[tb]);
+          }
+          printf("_______i= %d, sv_mx= %d\n", i, sv_mx);
+          if ((i == sv_mx || (sel_prf_str != "" && sel_prf_str == i))) {
+            for (fl=1; fl <= 2; fl++) {
+              printf("%d\n", bkts[fl]) >> outfile_bkts[fl];
+              printf("%d\n", bkt_samples[fl]) >> outfile_smpls[fl];
+            }
+            for (fl=1; fl <= 2; fl++) {
+              close(outfile_bkts[fl]);
+              close(outfile_smpls[fl]);
+            }
+            for (fl=1; fl <= 2; fl++) {
+              close(outfile_lst[fl]);
+            }
+          }
+          if (end_dir == 1 && (i == sv_mx || (sel_prf_str != "" && sel_prf_str == i))) {
+            for (fl=1; fl <= 2; fl++) {
+              bkts[fl] = 0;
+              bkt_samples[fl]  = 0;
+            }
+            for (fl=1; fl <= 2; fl++) {
+              while ((getline < outfile_bkts[fl]) > 0) {
+                bkts[fl] += $1;
+              }
+              close(outfile_bkts[fl]);
+              while ((getline < outfile_smpls[fl]) > 0) {
+                bkt_samples[fl] += $1;
+              }
+              close(outfile_smpls[fl]);
+            }
+          for (fl=1; fl <= 2; fl++) {
+           if (bkts[fl] == 0) { continue;}
+          cmd = "perl " scr_dir "/FlameGraph/stackcollapse-perf.pl " outfile_lst[fl] " > " outfile_sc[fl];
+          printf("cmd= %s\n", cmd);
+          system(cmd);
+          close(cmd);
+          close(outfile_sc[fl]);
+          h_str = "";
+          if (host_str != "") { h_str = ", " host_str;}
+          ttl = sprintf("%s elapsed time covers %.3f secs of tot %.3f secs%s", outfile_str[fl], bkts[fl]*0.1, 0.1*(bkts[1]+bkts[2]), h_str);
+          sttl = sprintf("avg cpus/period= %.3f vs cpu quota of %.3f cpus/period",
+             bkt_samples[fl]/samples_per_sec / (bkts[fl]*0.1),cpu_quota_per_period);
+          cmd = "perl " scr_dir "/FlameGraph/flamegraph.pl --title \"" ttl "\" --subtitle \"" sttl "\" "  outfile_sc[fl] " > " outfile_svg[fl];
+          printf("cmd= %s\n", cmd);
+          system(cmd);
+          close(cmd);
+          }
+          }
+        #printf("bye ___here\n");
+        continue;
+      }
       for (j=1; j <= mod_mx[i]; j++) {
         v = mod_lkup[i,j];
         printf("%-5d %s\n", mod_inst[i,v], v);
@@ -291,7 +520,6 @@ awk -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK
       }
       #tm_beg[i] = tm_end[i] - 4*ds_intrvl;
       printf("tm_beg[%d] = %f, tm_end[%d]= %f, ds_intrvl= %f\n", i, tm_beg[i], i, tm_end[i], ds_intrvl);
-      sv_line_num[i] = line_num;
       bef=0;
       aft=0;
       bef_line= -1;
