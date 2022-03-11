@@ -158,6 +158,11 @@ fi
 #
 $SCR_DIR/../60secs/extras/spin.x -w freq_sml -n 1 -t 0.01 -l 1000 > $PROJ/spin.x.txt
 
+ls -l /dev/block/ > $PROJ/dev_block.txt
+ls -l /dev/disk/by-id > $PROJ/dev_disk_by_id.txt
+ls -l /dev/disk/by-path > $PROJ/dev_disk_by_path.txt
+ls -l /dev/disk/by-label > $PROJ/dev_disk_by_label.txt
+
 #
 # for each container get starting cpu.stat
 # And start perf sampling call stacks on container but put the samples in round robin memory buffer.
