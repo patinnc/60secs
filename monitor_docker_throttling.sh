@@ -17,11 +17,12 @@ catch_signal() {
 trap 'catch_signal' SIGINT
 
 INTERVAL=10
+TRIGGER=60
 FREQ_SMPL=99
 PERF_EVT="cpu-clock"
 
 
-while getopts "hvd:e:f:I:p:s:t:" opt; do
+while getopts "hvd:e:f:I:m:p:s:t:" opt; do
   case ${opt} in
     d )
       DOCKER=$OPTARG
@@ -34,6 +35,9 @@ while getopts "hvd:e:f:I:p:s:t:" opt; do
       ;;
     I )
       INTERVAL=$OPTARG
+      ;;
+    m )
+      MODE=$OPTARG
       ;;
     p )
       PROJ=$OPTARG
@@ -57,6 +61,11 @@ while getopts "hvd:e:f:I:p:s:t:" opt; do
       echo "   -s service_name (as it appears in the docker ps output (selects all containers for service on host)"
       echo "   -p proj_dir     output dir for stat file"
       echo "   -t time_to_run_in_secs   time in seconds_to_run"
+      echo "   -m mode         if -m trigger then write file whenever trigger condition is true"
+      echo "                   if -m trigger=xx then write file whenever trigger condition is true and xx seconds have elapsed since trigger was true"
+      echo "                     This keegs from writing too many files when trigger is true"
+      echo "                     The default is '-m trigger=60'"
+      echo "                     if '-m trigger' is the same as '-m trigger=1'"
       echo "   -v              verbose mode"
       exit
       ;;
@@ -96,6 +105,23 @@ if [[ "$DOCKER" != "" ]] && [[ "$SERVICE" != "" ]]; then
   echo "$0.$LINENO must supply either -d or -s service_name"
   exit 1
 fi
+if [[ "$MODE" != "" ]]; then
+  if [[ "$MODE" == "trigger" ]]; then
+     TRIGGER=1
+  else
+     k=${MODE:0:8}
+     v=${MODE:8}
+     if [[ "$k" == "trigger=" ]] && [[ "$v" != "" ]]; then
+       TRIGGER=$v
+     else
+       echo "$0.$LINENO mode must be -m trigger or -m trigger=num where num is seconds after trigger is true to write perf dat files"
+       echo "$0.$LINENO got k= $k and v= $v"
+       exit 1
+     fi
+  fi
+fi
+echo "$0.$LINENO write files when trigger is true plus $TRIGGER seconds"
+
 MYPID=$$
 echo $MYPID > $SCR_DIR/../monitor_docker_throttling.pid
 STOPFILE="$SCR_DIR/../monitor_docker_throttling.stop"
@@ -202,6 +228,7 @@ tm_beg=$(date "+%s")
 tm_cur=$tm_beg
 tm_end=$((tm_beg+TIME_MX))
 #  echo "tm_beg= $tm_beg tm_end= $tm_end"
+got_trigger=()
 did_sigusr2=()
 has_java=()
 #
@@ -213,6 +240,7 @@ echo "__perf_event $PERF_EVT" >> $OFILE
 echo "__perf_sample_freq $FREQ_SMPL" >> $OFILE
 declare -A has_java_det
 for ((i=0; i < ${#dckr_arr[@]}; i++)); do
+  got_trigger[$i]=0
   did_sigusr2[$i]=0
   RESP=$(cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cpu.cfs_quota_us)
   echo "__cpu.cfs_quota_us $i $RESP" >> $OFILE
@@ -347,11 +375,24 @@ while [[ "$tm_cur" -lt "$tm_end" ]]; do
        dckr_stat_prv[$i,$j]=${dckr_stat_cur[$i,$j]}
     done
     echo "__docker_stat $EPCH $i $str" >> $OFILE
+    if [[ "${got_trigger[$i]}" != "0" ]]; then
+      trg_dff=$((EPCHSECS - got_trigger[$i]))
+      if [ "$trg_dff" -ge "$TRIGGER" ]; then
+        echo "$0.$LINENO dckr[$i] throttled $thr_dff"
+        echo "__docker_sigusr2 $i $tm_dff $EPCH $TM_STR" >> $OFILE
+        kill -SIGUSR2 ${PID_ARR[$i]}
+        #if [[ "${did_sigusr2[$i]}" == "0" ]]; then
+          did_sigusr2[$i]="$EPCHSECS"
+        #fi
+        got_trigger[$i]=0
+      fi
+    fi
     if [ "${thr_dff[1]}" -gt "0" ]; then
       echo "$0.$LINENO dckr[$i] throttled $thr_dff"
-      echo "__docker_sigusr2 $i $tm_dff $EPCH $TM_STR" >> $OFILE
-      kill -SIGUSR2 ${PID_ARR[$i]}
-      did_sigusr2[$i]="$EPCHSECS"
+      #kill -SIGUSR2 ${PID_ARR[$i]}
+      if [[ "${got_trigger[$i]}" == "0" ]]; then
+        got_trigger[$i]="$EPCHSECS"
+      fi
     fi
     ARR=($(cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cpuacct.stat | awk '{print $2;}'))
     str=""
