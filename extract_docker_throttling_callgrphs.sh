@@ -340,6 +340,13 @@ awk -v host_str="$HOST_STR" -v max_high="$MAX_HIGH" -v file_list_in="$FILE_LIST"
           if (substr(mod, 1, 4) == "xt-h") {
             mod = "xt-h";
           }
+          if (substr(mod, 1, 1) == ":" && ((":" $2) == $1)) {
+            # not sure why perf puts :pid_num for the process name sometimes. Maybe because the process is has died already.
+            # But this causes (sometimes) lots of pointless module name call stacks. Just put them all in _unknown module.
+            $1 = "_unknown";
+            $1 = $1;
+            sv_lines[i,line_num] = $0;
+          }
           #line[66562] tm= 3614141.041924, tm_beg[1]= 3614137.655765, str= tcheck 465830 [019] 3614141.041924:   10101010 cpu-clock: 
           #line[66584] tm= 0.000000, tm_beg[1]= 3614137.655765, str= Reference Handl 14579 [029] 3614141.045519:   10101010 cpu-clock: 
           #line[66591] tm= 3614141.046863, tm_beg[1]= 3614137.655765, str= xt-h 16253 [015] 3614141.046863: 10101010 cpu-clock:
