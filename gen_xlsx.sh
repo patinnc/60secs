@@ -2684,14 +2684,18 @@ function arr_in_compare_rev(i1, v1, i2, v2,    l, r)
       exit 1
     fi
  fi
+ WPYTHON=$(which python)
+ if [[ "$WPYTHON" != *"python"* ]]; then
+   WPYTHON=$(which python3)
+ fi
        TS_CUR=`date +%s`
        TS_DFF=$(($TS_CUR-$TS_BEG))
-       echo "$0.$LINENO: before python tsv_2_xlsx.py, elap_secs= $TS_DFF"
+       echo "$0.$LINENO: before $WPYTHON tsv_2_xlsx.py, elap_secs= $TS_DFF"
   #if [ $VERBOSE -gt 0 ]; then
-    echo "$0.$LINENO python $SCR_DIR/tsv_2_xlsx.py $OPT_SM $OPT_a $OPT_A $OPT_TM -O "$OPTIONS" $OPT_M -f $ALST $SHEETS" > /dev/stderr
+    echo "$0.$LINENO $WPYTHON $SCR_DIR/tsv_2_xlsx.py $OPT_SM $OPT_a $OPT_A $OPT_TM -O "$OPTIONS" $OPT_M -f $ALST $SHEETS" > /dev/stderr
     #cat $ALST
   #fi
-        python $SCR_DIR/tsv_2_xlsx.py -v $OPT_SM $OPT_a $OPT_A $OPT_TM -O "$OPTIONS" $OPT_M -f $ALST $SHEETS &> $FSTDOUT
+        $WPYTHON $SCR_DIR/tsv_2_xlsx.py -v $OPT_SM $OPT_a $OPT_A $OPT_TM -O "$OPTIONS" $OPT_M -f $ALST $SHEETS &> $FSTDOUT
         PY_RC=$?
         PY_PID=$!
         #sleep 1
