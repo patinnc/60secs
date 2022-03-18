@@ -4,8 +4,10 @@ INF=docker_cpu_stats.txt
 SCR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
 END_DIR=1
+EXCL_ARR=()
+INCL_ARR=()
 
-while getopts "hvc:d:e:f:H:m:p:o:s:" opt; do
+while getopts "hvc:d:e:f:H:m:p:o:s:x:X:" opt; do
   case ${opt} in
     c )
       CPU_BSY=$OPTARG
@@ -34,6 +36,12 @@ while getopts "hvc:d:e:f:H:m:p:o:s:" opt; do
     p )
       PXX=$OPTARG
       ;;
+    x )
+      EXCL_ARR+=("$OPTARG")
+      ;;
+    X )
+      INCL_ARR+=("$OPTARG")
+      ;;
     v )
       VERBOSE=$((VERBOSE+1))
       ;;
@@ -50,9 +58,11 @@ while getopts "hvc:d:e:f:H:m:p:o:s:" opt; do
       echo "                        otherwise put in the non-throttled file"
       echo "   -m max_high          max number of stacks high... useful for very tall stacks"
       echo "   -H host_str          this string will be added to flamegraph title. Intended for case where you are only doing 1 host"
-      echo "   -o outfile           if doing -p pxx then all 'throttle' callstacks will put in outfile_thr.txt. non-thr in outfile_not.txt"
+      echo "   -o outfile           if doing -p pxx then all 'throttle' callstacks will put in outfile_thr.txt. non-thr in outfile_not_thr.txt"
       echo "                        default is 'summary'"
       echo "   -e 0|1               This is for processing multiple host dirs. If you are doing the last host dir do -e 1 else do -e 0"
+      echo "   -x exclude_str       exclude call stacks containing thse strings. can be specified more than once. This is mostly for debugging at this point"
+      echo "   -X include_str       include only call stacks containing thse strings. can be specified more than once. This is mostly for debugging at this point"
       echo "   -v              verbose mode"
       exit
       ;;
@@ -78,7 +88,7 @@ echo "LIST= $LIST, list mx= ${#LIST[@]}"
 
 for ((i=0; i < ${#LIST[@]}; i++)); do
 
-echo "$0.$LINENO RESP=$(grep sigusr2 ${LIST[$i]})"
+#echo "$0.$LINENO RESP=$(grep sigusr2 ${LIST[$i]})"
 RESP=$(grep sigusr2 ${LIST[$i]})
 #if [ "$RESP" == "" ]; then
 #  continue
@@ -117,8 +127,236 @@ echo "___________ onum= $i dir= $IDIR"
 
 samples_per_sec=99
 
-echo $0.$LINENO awk -v host_str="$HOST_STR" -v max_high="$MAX_HIGH" -v file_list_in="$FILE_LIST" -v end_dir="$END_DIR" -v cpus_busy="$CPU_BSY" -v pxx="$PXX" -v outfile="$OUTFILE" -v sel_prf_str="$SEL_PRF_STR"  -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK_TOD" -v scr_dir="$fg_scr_dir" -v dir="$IDIR" -v onum=$i > /dev/stderr
-awk -v host_str="$HOST_STR" -v max_high="$MAX_HIGH" -v file_list_in="$FILE_LIST" -v end_dir="$END_DIR" -v cpus_busy="$CPU_BSY" -v pxx="$PXX" -v outfile="$OUTFILE" -v sel_prf_str="$SEL_PRF_STR"  -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK_TOD" -v scr_dir="$fg_scr_dir" -v dir="$IDIR" -v onum=$i '
+x_str=
+sep=
+for ((i=0; i < ${#EXCL_ARR[@]}; i++)); do
+  x_str="${x_str}${sep}${EXCL_ARR[$i]}"
+  sep="|"
+done
+
+X_str=
+sep=
+for ((i=0; i < ${#INCL_ARR[@]}; i++)); do
+  X_str="${X_str}${sep}${INCL_ARR[$i]}"
+  sep="|"
+done
+
+# __container_stats 1647029526.494557053 0 6d5c2a012b1a1ace0fffc81b2791aff0d3e8d30b11b9f2ff41249109808772bd
+# __cpu.stat
+# nr_periods 2537340
+# nr_throttled 508
+# throttled_time 196221582114
+# __cpuacct.stat
+# user 25515036
+# system 681248
+# __cpuacct.usage
+# 262751628314962
+# __blkio.throttle.io_serviced
+# 259:4 Read 72
+# 259:4 Write 989
+# 259:4 Sync 110
+# 259:4 Async 951
+# 259:4 Total 1061
+# Total 1061
+# __blkio.throttle.io_service_bytes
+# 259:4 Read 1835008
+# 259:4 Write 1355997184
+# 259:4 Sync 1990656
+# 259:4 Async 1355841536
+# 259:4 Total 1357832192
+# Total 1357832192
+# __memory.stat
+# cache 735780864
+# rss 59590410240
+# rss_huge 53221523456
+# shmem 0
+# mapped_file 5840896
+# dirty 102400
+# writeback 0
+# pgpgin 87673846
+# pgpgout 86972211
+# pgfault 233552909
+# pgmajfault 25
+# inactive_anon 0
+# active_anon 59536715776
+# inactive_file 788443136
+# active_file 1024000
+# unevictable 0
+# hierarchical_memory_limit 64424509440
+# total_cache 735780864
+# total_rss 59590410240
+# total_rss_huge 53221523456
+# total_shmem 0
+# total_mapped_file 5840896
+# total_dirty 102400
+# total_writeback 0
+# total_pgpgin 87673846
+# total_pgpgout 86972211
+# total_pgfault 233552909
+# total_pgmajfault 25
+# total_inactive_anon 0
+# total_active_anon 59536715776
+# total_inactive_file 788443136
+# total_active_file 1024000
+# total_unevictable 0
+# 
+awk -v sum_file="sv/sum.tsv" -v in_dir="$IDIR" '
+  BEGIN{
+    csi_mx = -1;
+  }
+  /^__container_stats / {
+     #  1647029526.494557053 0 6d5c2a012b1a1ace0fffc81b2791aff0d3e8d30b11b9f2ff41249109808772bd
+     #printf("got %s\n", $0);
+     tm = $2;
+     cid = $3;
+     if (!(cid in cid_list)) {
+       cid_list[cid] = ++cid_mx;
+       cid_lkup[cid_mx] = cid;
+     }
+     cs_i[cid]++;
+     cntr = $4;
+     if (tm_beg == "") {
+        tm_beg = tm;
+     }
+     tm_end = tm;
+     tm_dff = tm_end - tm_beg;
+     while ((getline) > 0) {
+      if(substr($1, 1, 2) == "__") {
+        if ($1 == "__cpu.stat") {
+          sect = "per"
+        } else if ($1 == "__cpuacct.stat") {
+          sect = "cpu"
+        } else if ($1 == "__cpuacct.usage") {
+          sect = "usage"
+        } else if ($1 == "__blkio.throttle.io_serviced") {
+          sect = "io_count"
+        } else if ($1 == "__blkio.throttle.io_service_bytes") {
+          sect = "io_bytes"
+        } else if ($1 == "__memory.stat") {
+          sect = "mem"
+        } else {
+          break;
+        }
+        if (!(sect in sect_list)) {
+          sect_list[sect] = ++sect_mx;
+          sect_lkup[sect_mx] = sect;
+        }
+        continue;
+      }
+      if (sect == "per" || sect == "cpu") {
+        if (!((sect,$1) in key_list)) {
+          key_list[sect,$1] = ++key_mx[sect];
+          key_lkup[sect,key_mx[sect]] = $1;
+          #printf("added key[%s]= %s %s\n", key_mx[sect], sect, $1);
+        }
+        fctr= 1.0;
+        if (sect == "per") {
+          if($1 == "throttled_time") { fctr = 1e-9; }
+        } else {
+          fctr = 0.01;
+        }
+        stats[cid, cs_i[cid], sect, $1] = $2 * fctr;
+      } else if (sect == "usage") {
+        if (!((sect,sect) in key_list)) {
+          key_list[sect,sect] = ++key_mx[sect];
+          key_lkup[sect,key_mx[sect]] = sect;
+          #printf("added key[%s]= %s %s\n", key_mx[sect], sect, $1);
+        }
+        stats[cid, cs_i[cid], sect, sect] = $1 * 1e-9;
+      } else if (sect == "io_count" || sect == "io_bytes") {
+        dev = $1;
+        typ = $2;
+        dt = dev " " typ;
+        if (dev == "Total") {
+         dt = $1;
+        }
+        v   = $3;
+        if (!((sect,dt) in key_list)) {
+          key_list[sect,dt] = ++key_mx[sect];
+          key_lkup[sect,key_mx[sect]] = dt;
+          #printf("added key[%s]= %s %s\n", key_mx[sect], sect, dt);
+        }
+        stats[cid, cs_i[cid], sect, (dev " " typ)] = $2;
+      } else if (sect == "mem") {
+        if (substr($1, 1, 6) == "total_") { continue;}
+        if (!((sect,$1) in key_list)) {
+          key_list[sect,$1] = ++key_mx[sect];
+          key_lkup[sect,key_mx[sect]] = $1;
+          #printf("added key[%s]= %s %s\n", key_mx[sect], sect, $1);
+        }
+        stats[cid, cs_i[cid], sect, $1] = $2;
+        if ($1 == "unevictable") { 
+         # assume last one
+         next;
+        }
+      }
+      }
+   }
+  END{
+    did_hdr=0;
+    for (c=1; c <= cid_mx; c++) {
+      cid = cid_lkup[c];
+      for (r=2; r <= cs_i[cid]; r++) {
+        if (did_hdr == 0) {
+         sep = "";
+         hdr="";
+         for (i=1; i <= sect_mx; i++) {
+          sect = sect_lkup[i];
+          if (did_hdr == 0) {
+            for (k=1; k <= key_mx[sect]; k++) {
+              hdr = hdr "" sprintf("%s%s %s", sep, sect, key_lkup[sect,k]);
+              sep = "\t";
+              #key_lkup[sect,k]);
+            }
+          }
+         }
+         printf("%s\n", hdr);
+         did_hdr = 1;
+        }
+        sep = "";
+        kk=0;
+        for (i=1; i <= sect_mx; i++) {
+          sect = sect_lkup[i];
+          for (k=1; k <= key_mx[sect]; k++) {
+              ky = key_lkup[sect,k];
+              v0 = stats[cid, r-1, sect, ky];
+              v1 = stats[cid, r, sect, ky];
+              v2 = v1 - v0;
+              if (sect == "io_bytes" || sect== "mem") { v2 = v1 }
+              if (sect == "mem") {
+                fctr = 1.e-6;
+                if (index(ky, "pg") > 0) { fctr = 1.0; }
+                v2 *= fctr;
+              }
+              #printf("stats[%s, %s, %s, %s]= %s\n", cid, r, sect, ky, v1);
+              printf("%s%.3f", sep, v2);
+              kk_avg[++kk] += v2;
+              kk_n[kk]++;
+              #printf("%s%.3f", sep, v1);
+              sep = "\t";
+          }
+        }
+        printf("\n");
+        #exit(0);
+      }
+    }
+    printf("\n");
+    printf("__hdr\t%s\t%s\n","dir", hdr) >> sum_file;
+    sep = "\t";
+    printf("__det\t%s",in_dir) >> sum_file;
+    for (k=1; k <= kk; k++) {
+      printf("%s%.3f", sep, kk_avg[k]/kk_n[k]) >> sum_file;
+      sep = "\t";
+    }
+    printf("\n") >> sum_file;
+  }
+  ' $IDIR/$INF
+
+#echo "$0.$LINENO bye"
+#exit 1
+
+ echo $0.$LINENO awk -v incl_str="$X_str" -v excl_str="$x_str" -v host_str="$HOST_STR" -v max_high="$MAX_HIGH" -v file_list_in="$FILE_LIST" -v end_dir="$END_DIR" -v cpus_busy="$CPU_BSY" -v pxx="$PXX" -v outfile="$OUTFILE" -v sel_prf_str="$SEL_PRF_STR"  -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK_TOD" -v scr_dir="$fg_scr_dir" -v dir="$IDIR" -v onum=$i > /dev/stderr
+awk -v incl_str="$X_str"  -v excl_str="$x_str"  -v host_str="$HOST_STR" -v max_high="$MAX_HIGH" -v file_list_in="$FILE_LIST" -v end_dir="$END_DIR" -v cpus_busy="$CPU_BSY" -v pxx="$PXX" -v outfile="$OUTFILE" -v sel_prf_str="$SEL_PRF_STR"  -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK_TOD" -v scr_dir="$fg_scr_dir" -v dir="$IDIR" -v onum=$i '
   BEGIN{
      clk_prf += 0;
      clk_tod += 0;
@@ -128,7 +366,8 @@ awk -v host_str="$HOST_STR" -v max_high="$MAX_HIGH" -v file_list_in="$FILE_LIST"
        file_list_n = split(file_list_in, file_list, ",");
        for (i=1; i <= file_list_n; i++) { printf("file_list[%d]= %s\n", i, file_list[i]);}
      }
-      
+     excl_n = split(excl_str, excl_arr, "|");
+     incl_n = split(incl_str, incl_arr, "|");
   }
 /^__cpu.cfs_quota_us /{
    container_num = $2+0;
@@ -296,25 +535,61 @@ awk -v host_str="$HOST_STR" -v max_high="$MAX_HIGH" -v file_list_in="$FILE_LIST"
       #bkt_samples[1] = bkt_samples[2] = 0;
       cg=0;
       line_num=-1;
+      ln_n = 0;
       while ((getline < ufl) > 0) {
+        if ($0 != "") {
+          if (ln_n == 1) { str="";}
+          ln_arr[++ln_n] = $0;
+          str = str ";" $0;
+          continue;
+        }
+        ln_arr[++ln_n] = $0;
+        ln_n_end = ln_n;
+        ln_n = 0;
+        if (excl_n > 0) {
+          got_it = 0;
+          for (ei=1; ei <= excl_n; ei++) {
+            if (index(str, excl_arr[ei]) > 0) { got_it=1; break;}
+          }
+          if (got_it == 1) {
+            continue;
+          }
+        }
+        if (incl_n > 0) {
+          got_it = 0;
+          for (ei=1; ei <= incl_n; ei++) {
+            if (index(str, incl_arr[ei]) > 0) { got_it=1; break;}
+          }
+          if (got_it == 0) {
+            continue;
+          }
+        }
+        for (ln_i=1; ln_i <= ln_n_end; ln_i++) {
+          $0 = ln_arr[ln_i];
+        
         line_num++;
         # this xt-h- stuff just reduces some process name. Instead of see 60 xt-h-xx process just map them to 1 xt-h process
-        if (match($0, /^dw-.* - GET .h/) > 0) {
-          $0 = "dw-GET " substr($0, RLENGTH+1);
-          $1 = $1;
-        } else if (match($0, /^dw-.* - POST \//) > 0) {
-          $0 = "dw-POST " substr($0, RLENGTH+1);
-          $1 = $1;
-        } else if (match($0, /^dw-[0-9]+ /) > 0) {
-          $0 = "dw-x " substr($0, RLENGTH+1);
-          $1 = $1;
-        }
-        if ($1 != "" && substr($1, 1, 5) == "xt-h-") {
-          $1 = "xt-h";
+        char0 = substr($0, 1, 1);
+        if (char0 != "" && char0 != "\t" && char0 != "#") {
+          if (match($0, /^dw-.* - GET .h/) > 0) {
+            $0 = "dw-GET " substr($0, RLENGTH+1);
+            $1 = $1;
+          } else if (match($0, /^dw-.* - POST \//) > 0) {
+            $0 = "dw-POST " substr($0, RLENGTH+1);
+            $1 = $1;
+          } else if (match($0, /^dw-[0-9]+ /) > 0) {
+            $0 = "dw-x " substr($0, RLENGTH+1);
+            $1 = $1;
+          } else if (match($1, /-[0-9]+$/) > 0) {
+            $1 = substr($1, 1, RSTART) "x";;
+            $1 = $1;
+          }
+          if ($1 != "" && substr($1, 1, 5) == "xt-h-") {
+            $1 = "xt-h";
+          }
         }
         sv_lines[i,line_num] = $0;
         if ($0 == "") { continue; }
-        char0 = substr($0, 1, 1);
         if (char0 != "\t" && char0 != "#") {
           # this is not a call graph line. Look for the cpu number line [001]. The process name can have spaces (i think) so get the cpu string and work backwards.
           cg++;
@@ -385,6 +660,7 @@ awk -v host_str="$HOST_STR" -v max_high="$MAX_HIGH" -v file_list_in="$FILE_LIST"
           u = ++cg_arr[i, cg, "mx"]
           cg_arr[i, cg, "lines", u ] = $0;
         }
+        }
       }
       close(ufl)
       # so we have read the perf dat txt file and got call stacks
@@ -424,17 +700,17 @@ awk -v host_str="$HOST_STR" -v max_high="$MAX_HIGH" -v file_list_in="$FILE_LIST"
       printf("\n\ndir %d module counts for file %d, tm_beg= %f tm_end= %f tm_diff= %.3f tot_tm_diff= %.3f\n", onum, i, cg_arr[i,"tm_beg"], cg_arr[i,"tm_end"], cg_arr[i,"tm_end"] - cg_arr[i,"tm_beg"], tot_tm_diff);
       if (outfile != "") {
           outfile_lst[1] = outfile "_thr.txt";
-          outfile_lst[2] = outfile "_not.txt";
+          outfile_lst[2] = outfile "_not_thr.txt";
           outfile_sc[1] = outfile "_thr_sc.txt";
-          outfile_sc[2] = outfile "_not_sc.txt";
+          outfile_sc[2] = outfile "_not_thr_sc.txt";
           outfile_bkts[1] = outfile "_thr_bkts.txt";
-          outfile_bkts[2] = outfile "_not_bkts.txt";
+          outfile_bkts[2] = outfile "_not_thr_bkts.txt";
           outfile_smpls[1] = outfile "_thr_smpls.txt";
-          outfile_smpls[2] = outfile "_not_smpls.txt";
+          outfile_smpls[2] = outfile "_not_thr_smpls.txt";
           h_str="";
           if (host_str != "") { h_str = "_" host_str;}
           outfile_svg[1] = outfile "_thr" h_str ".svg";
-          outfile_svg[2] = outfile "_not" h_str ".svg";
+          outfile_svg[2] = outfile "_not_thr" h_str ".svg";
           outfile_str[1] = "throttled";
           outfile_str[2] = "not throttled";
           got_it = 2;
