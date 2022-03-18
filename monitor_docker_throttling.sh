@@ -188,6 +188,8 @@ ls -l /dev/block/ > $PROJ/dev_block.txt
 ls -l /dev/disk/by-id > $PROJ/dev_disk_by_id.txt
 ls -l /dev/disk/by-path > $PROJ/dev_disk_by_path.txt
 ls -l /dev/disk/by-label > $PROJ/dev_disk_by_label.txt
+lsblk > $PROJ/lsblk.txt
+lscpu > $PROJ/lscpu.txt
 
 #
 # for each container get starting cpu.stat
@@ -419,14 +421,16 @@ while [[ "$tm_cur" -lt "$tm_end" ]]; do
         echo "__$kk" >> $OFILE
         cat /sys/fs/cgroup/cpu,cpuacct/docker/$cid/$kk >> $OFILE
       done
-      for kk in blkio.throttle.io_serviced blkio.throttle.io_service_bytes; do
-        echo "__$kk" >> $OFILE
-        cat /sys/fs/cgroup/blkio/docker/$cid/$kk >> $OFILE
-      done
+      # the blkio doesn't seem to count very much
+      #for kk in blkio.throttle.io_serviced blkio.throttle.io_service_bytes; do
+      #  echo "__$kk" >> $OFILE
+      #  cat /sys/fs/cgroup/blkio/docker/$cid/$kk >> $OFILE
+      #done
       for kk in memory.stat; do
         echo "__$kk" >> $OFILE
         cat /sys/fs/cgroup/memory/docker/$cid/$kk >> $OFILE
       done
+      echo "" >> $OFILE
     fi
     dckr_i=$((dckr_i+1))
     #done
