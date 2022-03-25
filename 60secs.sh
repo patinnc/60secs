@@ -366,10 +366,10 @@ for TSKj in `seq $TB $TE`; do
      fi
      fi
   fi
-  if [[ $TSK == *"nicstat"* ]]; then
+  if [[ $TSK == *"nicstat"* ]] && [[ "$EXCLUDE" != *"nicstat"* ]]; then
      RESP=`which nicstat | wc -l | sed 's/ //g'`
      if [ "$RESP" == "0" ]; then
-        echo "nicstat not found. You need to install nicstat: sudo apt-get install nicstat" 1>&2
+        echo "nicstat not found. You need to install nicstat: sudo apt-get install nicstat or add nicstat to the exclude list -x nicstat" 1>&2
         GOT_ERR=1
      fi
   fi
