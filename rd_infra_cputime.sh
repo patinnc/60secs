@@ -666,6 +666,8 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
 #docker0:       0       0    0    0    0     0          0         0        0       0    0    0    0     0       0          0
 #  eth0: 1789224819997486 3969195799626   14    0    0    14          0  24714218 2735699337437607 4819718487079    0    0    0     0       0          0
   /^__net_eth0_stats__ /{
+    if (got___net_dev__ == 1) { next; }
+    got___net_eth0_stats__ = 1;
     i = 0;
     ts = $2 + 0;
     ts_skip = 0;
@@ -703,6 +705,8 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
   }
 
   /^__net_dev__ /{
+    if (got___net_eth0_stats__ == 1 ) { next; }
+    got___net_dev__ = 1;
     i = 0;
     ts = $2 + 0;
     ts_skip = 0;
@@ -715,7 +719,8 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
       }
     }
     if (ts_skip == 0) {
-    netdev_dt[++netdev_mx] = $2;
+    netdev_dt[++netdev_mx] = $2+0;
+    #printf("___netdev_dt[%d] = %f\n", netdev_mx, $2+0);
     netdev_lns[netdev_mx] = 0;
     rd_bytes_col = 0;
     wr_bytes_col = 0;
@@ -916,11 +921,12 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
         if (n == 4 && i == 2) {
            if (index(arr[i], "uber-usi") > 0) {
               k_serv++;
-           } else if (index(arr[i], "uber-system") > 0) {
-              k_infra++;
            } else {
-              k_other++;
+              k_infra++;
            }
+           # else {
+           #   k_other++;
+           #}
         }
       }
     }
@@ -1581,7 +1587,7 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
       printf("\n") > ofile;
       if (sum_file != "") {
          tm_diff = muttley_dt[muttley_mx]-muttley_dt[1];
-         if (1 == 20) {
+         if (1 == 1) {
          for(j=1; j <= mutt_mx; j++) {
            i = mutt_res_i[j];
            if (j == use_mutt_mx && mutt_mx > use_mutt_mx) {
@@ -2314,7 +2320,6 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
     }
     }
 
-#abcd
     for(i=1; i <= pse_proc_mx; i++) {
       pse_idx[i] = i;
     }
@@ -2612,6 +2617,11 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
       for(k=2; k <= netdev_mx; k++) {
         printf("%s\t%d", netdev_dt[k], netdev_dt[k]-netdev_dt[1]) > ofile;
         tm_diff = netdev_dt[k]-netdev_dt[k-1];
+        if (tm_diff == 0.0) {
+#abcd
+          printf("got tm_diff= 0 at script= %s, k= %d netdev_dt[k]= %f netdev_dt[k-1]= %f filename= %s cur_dir= %s\n", script_nm, k, netdev_dt[k], netdev_dt[k-1], ARGV[ARGIND], cur_dir);
+          exit(1);
+        }
         for(i=1; i <= devs; i++) {
           fld = "bytes_rd";
           diff = (netdev_data[k,i,fld]-netdev_data[k-1,i,fld])/(1024.0*1024.0);
@@ -2990,7 +3000,6 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
     printf("%%cpus\n") > ofile;
     trow++;
     }
-#abcd
     if (sum_file != "") {
       close(sum_file);
     }
