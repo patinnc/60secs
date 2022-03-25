@@ -837,7 +837,8 @@ for bmi in range(base_mx+1):
                          print("dude, idx= ", ij, ", h= ", h, ", len(data[idx])= ", len(data[ij]), " drow: ", data[ij])
                       is_num = is_number(data[ij][h])
                       if not h in fn_bs_hdr_map[fn_bs_i][hrow_beg]:
-                         print("dude, h: ", h, " not in fn_bs_hdr_map[",fn_bs_i,"][",hrow_beg,"], data[",ij,"][",h,"]=",data[ij][h]," fn_bs_hdr_map= ",fn_bs_hdr_map[fn_bs_i][hrow_beg]," error. skip", file=sys.stderr)
+                         if ch_type != "copy":
+                            print("dude, h: ", h, " not in fn_bs_hdr_map[",fn_bs_i,"][",hrow_beg,"], data[",ij,"][",h,"]=",data[ij][h]," fn_bs_hdr_map= ",fn_bs_hdr_map[fn_bs_i][hrow_beg]," error. skip, file= ", x, file=sys.stderr)
                          continue
                          #sys.exit(1)
                       use_idx = fn_bs_hdr_map[fn_bs_i][hrow_beg][h]
