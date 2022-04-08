@@ -184,6 +184,9 @@ function _ord_init(    low, high, i, t) {
         _ord_[t] = i
     }
 }
+  /val_arr all_vals|val_arr avg/ {
+    next;
+  }
   /Metric|metric/{
     n = split($0, arr, "\t");
     if (did_metric == 0) {
