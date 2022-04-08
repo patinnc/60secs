@@ -1,4 +1,5 @@
 #!/usr/bin/env bash 
+
 #SCR_DIR=`dirname $(readlink -e $0)`
 #SCR_DIR=`dirname $0`
 #SCR_DIR=`dirname "$(readlink -f "$0")"`
@@ -1042,18 +1043,21 @@ fi
 #echo "$0.$LINENO bye"
 #exit 1
 
+if [ ! -d $WORK_DIR/$JOB_ID ]; then
+  mkdir -p $WORK_DIR/$JOB_ID
+fi
 CDIR=`pwd`
 ALST=$WORK_DIR/$JOB_ID/tsv_2_xlsx_${JOB_ID}.inp
 #echo "ALST= $ALST"
 if [ -e $ALST ]; then
   rm $ALST
 fi
-OXLS=tmp.xlsx
+#OXLS=tmp.xlsx
 if [ "$AXLSX_FILE" != "" ]; then
   SFX=
-  if [ "$JOB_ID" -gt "0" ]; then
-    SFX="_$JOB_ID"
-  fi
+#  if [ "$JOB_ID" -gt "0" ]; then
+#    SFX="_$JOB_ID"
+#  fi
   OXLS=${AXLSX_FILE}${SFX}.xlsx
 fi
 
@@ -1077,7 +1081,6 @@ if [ "$INPUT_FILE_LIST" == "" ]; then
 fi
 
 echo "$0.$LINENO bef OXLS= $OXLS"
-
 shopt -s nullglob
 echo -e "-o\t$OXLS" >> $ALST
 FCTRS=
@@ -1411,7 +1414,7 @@ for i in $LST; do
  else
    RESP=${RPS_ARR[$JOB_ID]}
  fi
- printf "RPS_ARR= %s i_idx= %s DIR_NUM= %s\n" $RESP $i_idx $DIR_NUM > /dev/stderr
+ #printf "$0.$LINENO RPS_ARR= %s i_idx= %s DIR_NUM= %s\n" $RESP $i_idx $DIR_NUM > /dev/stderr
  if [ "$RESP" != "" ]; then
    OPT_P=$RESP
  fi
@@ -1552,7 +1555,7 @@ for i in $LST; do
        fi
        if [[ $flnm == *"perf_stat"* ]]; then
          FLS_PS=$SDIR/$flnm
-         echo "$0.$LINENO perf_stat file= $FLS_PS" > /dev/stderr
+         #echo "$0.$LINENO perf_stat file= $FLS_PS" > /dev/stderr
        fi
        if [[ $flnm == *"mpstat"* ]]; then
          FLS_MP=$SDIR/$flnm
@@ -2693,6 +2696,7 @@ function arr_in_compare_rev(i1, v1, i2, v2,    l, r)
        echo "$0.$LINENO: before $WPYTHON tsv_2_xlsx.py, elap_secs= $TS_DFF"
   #if [ $VERBOSE -gt 0 ]; then
     echo "$0.$LINENO $WPYTHON $SCR_DIR/tsv_2_xlsx.py $OPT_SM $OPT_a $OPT_A $OPT_TM -O "$OPTIONS" $OPT_M -f $ALST $SHEETS" > /dev/stderr
+    #echo "input file ${ALST}:"
     #cat $ALST
   #fi
         $WPYTHON $SCR_DIR/tsv_2_xlsx.py -v $OPT_SM $OPT_a $OPT_A $OPT_TM -O "$OPTIONS" $OPT_M -f $ALST $SHEETS &> $FSTDOUT
