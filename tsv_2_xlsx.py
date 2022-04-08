@@ -632,13 +632,16 @@ for bmi in range(base_mx+1):
       ch_type  = "line"
       for i in range(len(data)):
           for j in range(len(data[i])):
+              if j == 0 and data[i][j] == "sheet" and len(data[i]) >= 2:
+                 sheet_nm = data[i][1]
               if j == 0 and data[i][j] == "title":
                  #print("got title for x= %s\n" % (x))
                  chrts = chrts + 1
                  ch = []
                  co = {}
                  ch.append(["title", i, j])
-                 if len(data[i]) >= 4:
+                 # if sheet name field == "null" then use the default sheet name instead or the one set by the the 'sheet' cmd above
+                 if len(data[i]) >= 4 and data[i][3] != "null":
                     sheet_nm = data[i][3]
                  if len(data[i]) >= 6:
                     ch_type = data[i][5]
