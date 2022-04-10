@@ -463,8 +463,6 @@ wait
 # If so we have to do the 'get java map file' stuff and 'perf script' now
 #
 for ((i=0; i < ${#dckr_arr[@]}; i++)); do
-  find $PROJ -name "prf_${i}.dat*"
-  prf_dat_arr=($(find $PROJ -name "prf_${i}.dat*" | sort | grep -v dat.old | grep -v ".txt"))
         if [ "${has_java[$i]}" -gt "0" ]; then
           juser=${has_java_det[$i,"user"]} # assume all java is same user
           if [ "$juser" != "" ]; then
@@ -478,6 +476,10 @@ for ((i=0; i < ${#dckr_arr[@]}; i++)); do
           done
           fi
         fi
+done
+for ((i=0; i < ${#dckr_arr[@]}; i++)); do
+  find $PROJ -name "prf_${i}.dat*"
+  prf_dat_arr=($(find $PROJ -name "prf_${i}.dat*" | sort | grep -v dat.old | grep -v ".txt"))
   for ((j=0; j < ${#prf_dat_arr[@]}; j++)); do
     if [ ! -e ${prf_dat_arr[$j]}.txt ]; then
       echo $SCR_DIR/perf script -I --header  -i ${prf_dat_arr[$j]} --kallsyms=/proc/kallsyms  _ ${prf_dat_arr[$j]}.txt
