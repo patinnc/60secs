@@ -7,7 +7,7 @@ END_DIR=1
 EXCL_ARR=()
 INCL_ARR=()
 
-while getopts "hvc:d:e:f:H:m:p:o:s:x:X:" opt; do
+while getopts "hvc:d:e:f:H:i:m:p:o:s:x:X:" opt; do
   case ${opt} in
     c )
       CPU_BSY=$OPTARG
@@ -23,6 +23,9 @@ while getopts "hvc:d:e:f:H:m:p:o:s:x:X:" opt; do
       ;;
     H )
       HOST_STR="$OPTARG"
+      ;;
+    i )
+      INTRVL="$OPTARG"
       ;;
     m )
       MAX_HIGH=$OPTARG
@@ -58,6 +61,8 @@ while getopts "hvc:d:e:f:H:m:p:o:s:x:X:" opt; do
       echo "                        otherwise put in the non-throttled file"
       echo "   -m max_high          max number of stacks high... useful for very tall stacks"
       echo "   -H host_str          this string will be added to flamegraph title. Intended for case where you are only doing 1 host"
+      echo "   -i beg_secs,end_secs select perf data between beg_secs and end secs. This is based on the relative time (0 is the begin time)"
+      echo "                        If only 1 number is entered then it is taken as the begin number (select call stacks after 'beg_secs' into the prf.dat file)"
       echo "   -o outfile           if doing -p pxx then all 'throttle' callstacks will put in outfile_thr.txt. non-thr in outfile_not_thr.txt"
       echo "                        default is 'summary'"
       echo "   -e 0|1               This is for processing multiple host dirs. If you are doing the last host dir do -e 1 else do -e 0"
@@ -355,13 +360,21 @@ awk -v sum_file="sv/sum.tsv" -v in_dir="$IDIR" '
 #echo "$0.$LINENO bye"
 #exit 1
 
- echo $0.$LINENO awk -v incl_str="$X_str" -v excl_str="$x_str" -v host_str="$HOST_STR" -v max_high="$MAX_HIGH" -v file_list_in="$FILE_LIST" -v end_dir="$END_DIR" -v cpus_busy="$CPU_BSY" -v pxx="$PXX" -v outfile="$OUTFILE" -v sel_prf_str="$SEL_PRF_STR"  -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK_TOD" -v scr_dir="$fg_scr_dir" -v dir="$IDIR" -v onum=$i > /dev/stderr
-awk -v incl_str="$X_str"  -v excl_str="$x_str"  -v host_str="$HOST_STR" -v max_high="$MAX_HIGH" -v file_list_in="$FILE_LIST" -v end_dir="$END_DIR" -v cpus_busy="$CPU_BSY" -v pxx="$PXX" -v outfile="$OUTFILE" -v sel_prf_str="$SEL_PRF_STR"  -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK_TOD" -v scr_dir="$fg_scr_dir" -v dir="$IDIR" -v onum=$i '
+ echo $0.$LINENO awk -v select_intrvl_in_secs="$INTRVL" -v incl_str="$X_str" -v excl_str="$x_str" -v host_str="$HOST_STR" -v max_high="$MAX_HIGH" -v file_list_in="$FILE_LIST" -v end_dir="$END_DIR" -v cpus_busy="$CPU_BSY" -v pxx="$PXX" -v outfile="$OUTFILE" -v sel_prf_str="$SEL_PRF_STR"  -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK_TOD" -v scr_dir="$fg_scr_dir" -v dir="$IDIR" -v onum=$i > /dev/stderr
+awk -v select_intrvl_in_secs="$INTRVL" -v incl_str="$X_str"  -v excl_str="$x_str"  -v host_str="$HOST_STR" -v max_high="$MAX_HIGH" -v file_list_in="$FILE_LIST" -v end_dir="$END_DIR" -v cpus_busy="$CPU_BSY" -v pxx="$PXX" -v outfile="$OUTFILE" -v sel_prf_str="$SEL_PRF_STR"  -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK_TOD" -v scr_dir="$fg_scr_dir" -v dir="$IDIR" -v onum=$i '
   BEGIN{
      clk_prf += 0;
      clk_tod += 0;
      cid_mx = -1;
      max_high += 0;
+     select_intrvl_n = 0;
+     if (select_intrvl_in_secs != "" && index(select_intrvl_in_secs, ",") > 0) {
+       select_intrvl_n = split(select_intrvl_in_secs, select_intrvl_arr, ",");
+       for (i=1; i <= select_intrvl_n; i++) {
+         select_intrvl_arr[i] += 0;
+       }
+     }
+     #printf("select_intrvl_n= %s\n", select_intrvl_n);
      if (file_list_in != "") {
        file_list_n = split(file_list_in, file_list, ",");
        for (i=1; i <= file_list_n; i++) { printf("file_list[%d]= %s\n", i, file_list[i]);}
@@ -539,6 +552,9 @@ awk -v incl_str="$X_str"  -v excl_str="$x_str"  -v host_str="$HOST_STR" -v max_h
       while ((getline < ufl) > 0) {
         if ($0 != "") {
           if (ln_n == 1) { str="";}
+          if (substr($0, 1, 1) == "#") {
+            continue;
+          }
           ln_arr[++ln_n] = $0;
           str = str ";" $0;
           continue;
@@ -566,10 +582,40 @@ awk -v incl_str="$X_str"  -v excl_str="$x_str"  -v host_str="$HOST_STR" -v max_h
         }
         for (ln_i=1; ln_i <= ln_n_end; ln_i++) {
           $0 = ln_arr[ln_i];
+          char0 = substr($0, 1, 1);
+          if (1==1 && select_intrvl_n > 0 && $0 != "") {
+           #printf("got into select_intervl= %s\n", $0);
+           if (char0 != "\t" && char0 != "#") {
+            got_it=0;
+            cpu_fld = -1;
+            for (k=1; k <= NF; k++) {
+             if ($k ~ /^\[[0-9][0-9][0-9]\]$/) {
+              got_it = 1;
+              #printf("match %s\n", $k);
+              cpu_fld = k;
+              break;
+             } 
+            }
+            if (cpu_fld != -1) {
+              tm = $(cpu_fld+1)+0;
+              if (tm_first_val == "") {
+                tm_first_val = tm;
+              }
+              v = tm - tm_first_val;
+              if (select_intrvl_n == 1 && v < select_intrvl_arr[1]) {
+                # if only 1 value then use it as the starting time of the lines to use
+                break;
+              }
+              if (select_intrvl_n == 2 && (v < select_intrvl_arr[1] || v > select_intrvl_arr[2])) {
+                # if the time is before select[1] or after select[2] then drop it
+                break;
+              }
+            }
+           }
+          }
         
         line_num++;
         # this xt-h- stuff just reduces some process name. Instead of see 60 xt-h-xx process just map them to 1 xt-h process
-        char0 = substr($0, 1, 1);
         if (char0 != "" && char0 != "\t" && char0 != "#") {
           if (match($0, /^dw-.* - GET .h/) > 0) {
             $0 = "dw-GET " substr($0, RLENGTH+1);
@@ -608,6 +654,8 @@ awk -v incl_str="$X_str"  -v excl_str="$x_str"  -v host_str="$HOST_STR" -v max_h
             printf("missed cpu fld for line[%d]= %s file= %s\n", line_num, $0, ufl);
             exit(1);
           }
+          tm = $(cpu_fld+1)+0;
+         
           mod = $1;
           for (k=2; k <= cpu_fld -2; k++) {
             mod = mod " " $k;
@@ -634,7 +682,6 @@ awk -v incl_str="$X_str"  -v excl_str="$x_str"  -v host_str="$HOST_STR" -v max_h
           }
           ++mod_inst[i,mod];
           # save timestamp module name, init number of call graph lines to 0, save linenumber we are at in file (for debugging).
-          tm = $(cpu_fld+1)+0;
           sv_lines_time[i,line_num] = tm;
           cg_arr[i, cg, "tm"]  = tm;
           if (cg_arr[i, "tm_beg"] == "") {
