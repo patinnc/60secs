@@ -1202,16 +1202,20 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
       hostd_bytes += length($0);
       nw = 0;
       if ($1 == "\"id\":") {
+        nm2="";
         did_names = 0;
         gsub("\"", "", $2);
         gsub(",", "", $2);
         cntr = $2;
+        is_infra = 0;
+        added = 0;
         #printf("uhostd: got cntr id= %s, uhostd_cntr_list_mx= %d\n", cntr, uhostd_cntr_list_mx);
         if (!(cntr in uhostd_cntr_list)) {
           uhostd_cntr_list[cntr] = ++uhostd_cntr_list_mx;
           uhostd_cntr_lkup[uhostd_cntr_list_mx,"cntr"] = cntr;
           printf("uhostd: new_cntr[%d]= %s\n", uhostd_cntr_list_mx, cntr);
           nw = 1;
+          added = 1;
         }
         cntr_i = uhostd_cntr_list[cntr];
       }
@@ -1226,11 +1230,25 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
         }
         uhostd_cntr_lkup[cntr_i,"name"] = name;
       }
+      if ($1 == "\"cgroup_parent\":" && index($2, "system.slice") > 0) {
+        #"/system.slice/m3collector_default-compute.service"
+        is_infra = 1;
+        nm2 = substr($2, 16);
+        gsub(/.service\".*$/, "", nm2);
+        uhostd_cntr_lkup[cntr_i,"nm2"] = nm2;
+        uhostd_cntr_lkup[cntr_i,"is_infra"] = 1;
+        if (added == 1) {
+          printf("uhostd_cntr_lkup nm2= %s cntr_i= %d cntr= %s is_infra= %d\n", nm2, cntr_i, cntr, is_infra);
+        }
+      }
       if ($1 == "\"com.uber.supported_app_id\":" || $1 == "\"com.uber.service_name\":") {
         gsub("\"", "", $2);
         gsub(",", "", $2);
         nm   = $2;
         uhostd_cntr_lkup[cntr_i,"nm"] = nm;
+        if (added == 1) {
+          printf("uhostd_cntr_lkup nm= %s cntr_i= %d cntr= %s\n", nm, cntr_i, cntr);
+        }
       }
       #"SVC_ID": "roadrunner-proxy",
       if ($1 == "\"SVC_ID\":") {
@@ -1944,8 +1962,10 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
       #cntr_i = uhostd_cntr_list[cntr];
       svc = uhostd_cntr_lkup[cntr_i,"svc"];
       nm  = uhostd_cntr_lkup[cntr_i,"nm"];
+      nm2 = uhostd_cntr_lkup[cntr_i,"nm2"];
+      is_infra = uhostd_cntr_lkup[cntr_i,"is_infra"];
       sum += cntr_tm[i];
-      printf("cntr_tm[%d]= %5d  svc= %s, nm= %s, cntr_i= %d cntr= %s\n", i, cntr_tm[i], svc, nm, cntr_i, cntr);
+      printf("cntr_tm[%d]= %6d  svc= %s, nm= %s, cntr_i= %d cntr= %s nm2= %s, is_infra= %d,\n", i, cntr_tm[i], svc, nm, cntr_i, cntr, nm2, is_infra);
     }
     for (i=1; i <= other_tm_mx; i++) {
       printf("nm= %16s tm= %5d\n", other_tm_lkup[i,"nm"], other_tm_lkup[i,"tm"]);
