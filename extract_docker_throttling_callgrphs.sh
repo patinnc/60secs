@@ -580,6 +580,7 @@ awk -v select_intrvl_in_secs="$INTRVL" -v incl_str="$X_str"  -v excl_str="$x_str
             continue;
           }
         }
+              use_it = 1;
         for (ln_i=1; ln_i <= ln_n_end; ln_i++) {
           $0 = ln_arr[ln_i];
           char0 = substr($0, 1, 1);
@@ -601,18 +602,22 @@ awk -v select_intrvl_in_secs="$INTRVL" -v incl_str="$X_str"  -v excl_str="$x_str
               if (tm_first_val == "") {
                 tm_first_val = tm;
               }
+              use_it = 1;
               v = tm - tm_first_val;
               if (select_intrvl_n == 1 && v < select_intrvl_arr[1]) {
                 # if only 1 value then use it as the starting time of the lines to use
+                use_it = 0;
                 break;
               }
               if (select_intrvl_n == 2 && (v < select_intrvl_arr[1] || v > select_intrvl_arr[2])) {
                 # if the time is before select[1] or after select[2] then drop it
+                use_it = 0;
                 break;
               }
             }
            }
           }
+          if (use_it == 0) { continue;}
         
         line_num++;
         # this xt-h- stuff just reduces some process name. Instead of see 60 xt-h-xx process just map them to 1 xt-h process
@@ -746,6 +751,7 @@ awk -v select_intrvl_in_secs="$INTRVL" -v incl_str="$X_str"  -v excl_str="$x_str
       tot_tm_diff +=  cg_arr[i,"tm_end"] - cg_arr[i,"tm_beg"];
       printf("\n\ndir %d module counts for file %d, tm_beg= %f tm_end= %f tm_diff= %.3f tot_tm_diff= %.3f\n", onum, i, cg_arr[i,"tm_beg"], cg_arr[i,"tm_end"], cg_arr[i,"tm_end"] - cg_arr[i,"tm_beg"], tot_tm_diff);
       if (outfile != "") {
+          how_many_recs= 0;
           outfile_lst[1] = outfile "_thr.txt";
           outfile_lst[2] = outfile "_not_thr.txt";
           outfile_sc[1] = outfile "_thr_sc.txt";
@@ -763,9 +769,21 @@ awk -v select_intrvl_in_secs="$INTRVL" -v incl_str="$X_str"  -v excl_str="$x_str
           got_it = 2;
           for (j=0; j <= sv_line_num[i]; j++) {
             if (sv_lines_time[i, j] != "") {
+            ln_num_beg = j;
             tm = sv_lines_time[i, j];
-            ln_beg = j;
+                use_it = 1;
             tm_dff = tm - cg_arr[i, "tm_beg"];
+              if (select_intrvl_n == 1 && tm_dff < select_intrvl_arr[1]) {
+                # if only 1 value then use it as the starting time of the lines to use
+                use_it = 0;
+              }
+              if (select_intrvl_n == 2 && (tm_dff < select_intrvl_arr[1] || tm_dff > select_intrvl_arr[2])) {
+                # if the time is before select[1] or after select[2] then drop it
+                use_it = 0;
+              }
+            if (use_it == 1) {
+              how_many_recs++;
+            }
             tm_bkt = int(tm_dff * 100);
             tb = int(tm_bkt/10)
             if (tm_b_st[tb] == "thr") {
@@ -783,9 +801,13 @@ awk -v select_intrvl_in_secs="$INTRVL" -v incl_str="$X_str"  -v excl_str="$x_str
             if (j > 0 && sv_lines[i,j] == sv_lines[i,j-1]) {continue;}
             if (index(sv_lines[i,j], "[unknown] ([unknown])") > 0) {continue;}
             if (match(sv_lines[i,j], /\[unknown\] .*perf-.*.map/)) {continue;}
-            if (max_high > 0 && ((j-ln_beg) > max_high && sv_lines[i,j] != "")) {continue;}
+            if ((max_high > 0 && ((j-ln_num_beg) > max_high && sv_lines[i,j] != ""))) {
+              #printf("skip[%d,%d] tm_dff= %.3f use_it= %d txt= %s\n", sv_line_num[i],j-ln_num_beg, tm_dff, use_it, sv_lines[i,j]);
+              continue;
+            }
             printf("%s\n", sv_lines[i,j]) >> outfile_lst[got_it];
           }
+          printf("how_many_recs= %d\n", how_many_recs);
           for (tb = 0; tb <= tm_bkt_end/10; tb++) {
             if (tm_b_st[tb] == "thr") { bkts[1]++; } else { bkts[2]++; }
             #printf("tb_b_vals[%d]= %d\n", tb, tm_b_vals[tb]);
