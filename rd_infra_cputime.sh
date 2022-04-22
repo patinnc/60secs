@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/usr/bin/env bash
 
 #arg1 is infra_cputime.txt filename
 VERBOSE=0
@@ -1234,7 +1234,8 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
         #"/system.slice/m3collector_default-compute.service"
         is_infra = 1;
         nm2 = substr($2, 16);
-        gsub(/.service\".*$/, "", nm2);
+        #gsub(/.service\".*$/, "", nm2);
+        gsub(/.service".*$/, "", nm2);
         uhostd_cntr_lkup[cntr_i,"nm2"] = nm2;
         uhostd_cntr_lkup[cntr_i,"is_infra"] = 1;
         if (added == 1) {
@@ -1907,6 +1908,7 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
     sum = 0.0;
     other_tm_mx = 0;
     got_tm = 0.0;
+    if (cntr_mx > 0) {
       for (j=1; j <= ps_tree_mx; j++) {
         got_it = 0;
         pid2 = ps_tree_lkup[j,"pid"] + 0;
@@ -1952,6 +1954,7 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
           }
         }
       }
+    }
     for (i=1; i <= cntr_mx; i++) {
       cntr =  cntr_lkup[i,"cntr"];
       if (cntr in uhostd_cntr_list) {
@@ -1987,7 +1990,9 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
 
     printf("cg_stat_max= %d\n", cg_stat_mx);
     cg_stat_elap_tm = cg_stat_ts[cg_stat_ts_mx]-cg_stat_ts[1];
-    printf("cg_stat_tot_tm= %f elap_tm= %f %%cpu_busyTL= %f\n", cg_stat_tot_tm, cg_stat_elap_tm, 100*cg_stat_tot_tm/cg_stat_elap_tm);
+    if ( cg_stat_elap_tm > 0) {
+      printf("cg_stat_tot_tm= %f elap_tm= %f %%cpu_busyTL= %f\n", cg_stat_tot_tm, cg_stat_elap_tm, 100*cg_stat_tot_tm/cg_stat_elap_tm);
+    }
     v_tot = 0;
     v_tot1 = 0;
     v_tot2 = 0;
@@ -2022,10 +2027,12 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
       cg_stat_nm_data[cg_stat_i, "ts_cumu"] += v1;
       cg_stat_nm_data[cg_stat_i, "thr_cumu"] += v_thr;
     }
-    printf("cg_stat v_tot= %.3f v_tot1= %.3f v_tot2= %.3f v_throttle_secs= %.6f\n", v_tot, v_tot1, v_tot2, v_tot_thr);
-    cg_stat_elap_tm = cg_stat_ts[cg_stat_ts_mx]-cg_stat_ts[1];
-    printf("cg_stat %busy= %.3f%%\n", 100.0 * v_tot/(num_cpus * cg_stat_elap_tm));
-    printf("cg_stat elap_tm= %.3f\n", cg_stat_ts[cg_stat_ts_mx]-cg_stat_ts[1]);
+    if (cg_stat_elap_tm > 0) {
+      printf("cg_stat v_tot= %.3f v_tot1= %.3f v_tot2= %.3f v_throttle_secs= %.6f\n", v_tot, v_tot1, v_tot2, v_tot_thr);
+      cg_stat_elap_tm = cg_stat_ts[cg_stat_ts_mx]-cg_stat_ts[1];
+      printf("cg_stat %busy= %.3f%%\n", 100.0 * v_tot/(num_cpus * cg_stat_elap_tm));
+      printf("cg_stat elap_tm= %.3f\n", cg_stat_ts[cg_stat_ts_mx]-cg_stat_ts[1]);
+    }
     for (i=1; i <= cg_stat_nm_list_mx; i++) {
       nm = cg_stat_nm_lkup[i];
       v_rps = 0;
