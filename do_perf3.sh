@@ -426,7 +426,7 @@ echo "# started on $dtc $dte" > $FL
         if [ "$RC" != "" ]; then
           #TD_EVTS=",cpu/slots/,cpu/name='topdown-bad-spec',event=0xa4,umask=0x8/,cpu/name='topdown-be-bound',event=0xa4,umask=0x02/,cpu/name='topdown-retiring',event=0xc2,umask=0x02/,cpu/name='int_misc.uop_dropping',event=0x0d,umask=0x10/,cpu/name='int_misc.recovery_cycles',event=0x0d,umask=0x01,cmask=0x1,edge=1/"
 TD2=",{cpu/slots/,topdown-be-bound,topdown-bad-spec,topdown-fe-bound,topdown-retiring"
-          TD_EVTS="${TD2},cpu/name='int_misc.recovery_cycles',event=0x0d,umask=0x01,cmask=0x1,edge=1/,cpu/name='int_misc.uop_dropping',event=0x0d,umask=0x10/}"
+          TD_EVTS="${TD2},cpu/name='int_misc.recovery_cycles',event=0x0d,umask=0x01,cmask=0x1,edge=1/,cpu/name='int_misc.uop_dropping',event=0x0d,umask=0x10/"
           #TD_EVTS=",cpu/slots/,cpu/name='topdown-bad-spec',event=0xa4,umask=0x8/,cpu/name='topdown-be-bound',event=0xa4,umask=0x02/,cpu/name='topdown-retiring',event=0xc2,umask=0x02/,cpu/name='int_misc.uop_dropping',event=0x0d,umask=0x10/"
         fi
       else
