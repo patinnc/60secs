@@ -1,28 +1,36 @@
 #!/bin/bash
 
-#arg 1 (optional) can be "1" to enable verbose mode in output or 0 to for not verbose (the default)
-# print list of each process's affinity setting.
-# processes with ppid == 2 are skipped (this is all the kernel kworker stuff)
-# if verbose is 0 then only non-ppid==2 and processes with non-default affinity are shown
-# the default affinity is all cpus. (same a affinity for pid=1).
-# a count of processes with default affinity and not-default-affinity is printed at the end
-
+#arg 1 (optional) can be "v" to enable verbose mode in output
 VRB=${1:0}
 NON_KRN=$(ps -ae -o pid=,ppid=,comm= | awk '{ if ($2 != 2) { printf("%s\n", $0);}}')
 #echo "$0.$LINENO non_kern tasks:"
 RESP=$(echo "$NON_KRN" | awk '{printf("%s\n", $1);}' | xargs -n 1 taskset -cp)
+AFF_DEF=$(echo "$RESP" |head -1 | awk '{ aff = substr($0, index($0, ":")+2); printf("%s\n", aff); exit(0);}')
+echo "aff_def $AFF_DEF"
+RESP1=$(echo "$RESP" | awk '
+      /:/{
+       aff = substr($0, index($0, ":")+2);
+       aff_sv = aff;
+       gsub(/[,-].*/, "", aff);
+       printf("%s %s\n", aff, $0);
+     }')
+RESP2=$(echo "$RESP1" | sort -nk 1)
 #pid 1's current affinity list: 0-95
-awk -v vrb="$VRB"0 -v aff_txt="$RESP" -v pid_txt="$NON_KRN" -v sngl_qt=\' '
+awk -v vrb="$VRB"0 -v def_aff="$AFF_DEF" -v aff_txt="$RESP2" -v pid_txt="$NON_KRN" -v sngl_qt=\' '
   BEGIN{
     #printf("aff_txt:\n%s\n", aff_txt);
     na = split(aff_txt, aff_line, "\n");
     for (i=1; i <= na; i++) {
       n = split(aff_line[i], brr, " ");
-      pid = substr(brr[2], 1, index(brr[2], sngl_qt)-1);
+      pid = substr(brr[3], 1, index(brr[3], sngl_qt)-1);
       aff = substr(aff_line[i], index(aff_line[i], ":")+2);
       #printf("pid= %s, aff= %s line= %s\n", pid, aff, aff_arr[i]);
       aff_arr[i,"pid"] = pid;
       aff_arr[i,"aff"] = aff;
+      len_aff = length(aff);
+      if (aff_len_mx < len_aff) {
+        aff_len_mx = len_aff;
+      }
       if (!(pid in aff_list)) {
         aff_list[pid] = ++aff_mx;
 	aff_lkup[aff_mx,"pid"] = pid;
@@ -64,10 +72,10 @@ awk -v vrb="$VRB"0 -v aff_txt="$RESP" -v pid_txt="$NON_KRN" -v sngl_qt=\' '
 	aff_nondef_n++;
       }
       if (aff != aff_def || vrb > 0) {
-        printf("pid= %-6s ppid= %-6s aff= %-6s comm= %s\n", pid, ppid, aff_lkup[i,"aff"], comm);
+        printf("pid= %-6s ppid= %-6s aff= %-*s comm= %s\n", pid, ppid, aff_len_mx, aff_lkup[i,"aff"], comm);
       }
     }
-    printf("for processes with ppid != 2: %d have def affiinity %s and %d have non-default affinity\n", aff_def_n, aff_def, aff_nondef_n);
+    printf("for processes with ppid != 2: %d have default affinity (%s) and %d have non-default affinity\n", aff_def_n, aff_def, aff_nondef_n);
     exit(0);
   }' 
 #ps -ae -o pid= | xargs -n 1 taskset -cp
