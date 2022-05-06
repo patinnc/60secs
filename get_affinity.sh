@@ -2,7 +2,10 @@
 
 #arg 1 (optional) can be "v" to enable verbose mode in output
 VRB=${1:0}
-NON_KRN=$(ps -ae -o pid=,ppid=,comm= | awk '{ if ($2 != 2) { printf("%s\n", $0);}}')
+ps -ae -o pid=,ppid=,times=,comm= > ps_ae_0.txt
+PS_AE=$(cat ps_ae_0.txt)
+NON_KRN=$(echo "$PS_AE" | awk '{ if ($2 != 2) { printf("%s\n", $0);}}')
+#NON_KRN=$(ps -ae -o pid=,ppid=,comm= | awk '{ if ($2 != 2) { printf("%s\n", $0);}}')
 NUM_CPUS=$(grep -c processor /proc/cpuinfo)
 #echo "$0.$LINENO non_kern tasks:"
 RESP=$(echo "$NON_KRN" | awk '{printf("%s\n", $1);}' | xargs -n 1 taskset -cp)
@@ -34,58 +37,62 @@ for i in $NVME; do
   #echo "nvme dev $i, irqs= $nvme_irqs"
   NVME_CPUS="${NVME_CPUS}${SEP}${i}"
   SEP="|"
-  for j in $nvme_irqs; do
-    str=$(echo "$PROC_INTS" | awk -v irq="${j}:" '$1 == irq {for (i=2; i < NF; i++) { if ($i != 0) { printf("%s\n", i-2);exit(0);} }}')
-    NVME_CPUS="${NVME_CPUS},${str}"
-  done
+  #for j in $nvme_irqs; do
+  #done
+  str=$(echo "$PROC_INTS" | awk -v irq_list="$nvme_irqs" '
+    BEGIN{ n = split(irq_list, arr, " "); }
+    /:/{ for (k=1; k <= n; k++) { if ($1 != (arr[k]":")) { continue;} for (i=2; i < NF; i++) { if ($i != 0) { printf(",%s", i-2);break;} }}}')
+  NVME_CPUS="${NVME_CPUS}${str}"
 done
-echo "nvme_cpus= $NVME_CPUS"
+#echo "nvme_cpus= $NVME_CPUS"
+#echo "$0.$LINENO bye"
 #exit
 #ls -l /sys/class/nvme/nvme0/device/msi_irqs/
 #exit
 #pid 1's current affinity list: 0-95
 awk -v nvme_text="$NVME_CPUS" -v irq_cpus="$IRQ_CPUS" -v num_cpus="$NUM_CPUS" -v vrb="$VRB"0 -v def_aff="$AFF_DEF" -v aff_txt="$RESP2" -v pid_txt="$NON_KRN" -v sngl_qt=\' '
-function split_aff(aff_str, comm, prt,   beg, end, j, k, crr, drr, n2, n3, aff_i, nw_aff, comm_mx) {
-  nw_aff = 0;
-  if (!(aff_str in aff_sv_list)) {
-    aff_sv_list[aff_str] = ++aff_sv_list_mx;
-    aff_sv_lkup[aff_sv_list_mx,"str"] = aff_str;
-    aff_sv_lkup[aff_sv_list_mx,"max"] = 0
-    nw_aff = 1;
-  }
-  n2 = split(aff_str, crr, ",");
-  delete used_cpus;
-  used_cpus_mx = 0;
-  aff_i = aff_sv_list[aff_str];
-  if (aff_sv_lkup[aff_i,"max"] > 0) {
-    used_cpus_mx = aff_sv_lkup[aff_i,"max"];
-    for (k=1; k <= used_cpus_mx; k++) { used_cpus[k] = aff_sv_lkup[aff_i,"list", k]; }
-  } else {
-   for (j=1; j <= n2; j++) {
-    n3 = split(crr[j], drr, "-");
-    if (n3 == 2) {
-      beg = drr[1];
-      end = drr[2];
+
+  function split_aff(aff_str, comm, prt,   beg, end, j, k, crr, drr, n2, n3, aff_i, nw_aff, comm_mx) {
+    nw_aff = 0;
+    if (!(aff_str in aff_sv_list)) {
+      aff_sv_list[aff_str] = ++aff_sv_list_mx;
+      aff_sv_lkup[aff_sv_list_mx,"str"] = aff_str;
+      aff_sv_lkup[aff_sv_list_mx,"max"] = 0
+      nw_aff = 1;
+    }
+    n2 = split(aff_str, crr, ",");
+    delete used_cpus;
+    used_cpus_mx = 0;
+    aff_i = aff_sv_list[aff_str];
+    if (aff_sv_lkup[aff_i,"max"] > 0) {
+      used_cpus_mx = aff_sv_lkup[aff_i,"max"];
+      for (k=1; k <= used_cpus_mx; k++) { used_cpus[k] = aff_sv_lkup[aff_i,"list", k]; }
     } else {
-      beg = drr[1];
-      end = drr[1];
+      for (j=1; j <= n2; j++) {
+        n3 = split(crr[j], drr, "-");
+        if (n3 == 2) {
+          beg = drr[1];
+          end = drr[2];
+        } else {
+          beg = drr[1];
+          end = drr[1];
+        }
+        for (k=beg; k <= end; k++) {
+          used_cpus[++used_cpus_mx] = k;
+          aff_sv_lkup[aff_i,"list",used_cpus_mx] = k;
+        }
+        aff_sv_lkup[aff_i,"max"] = used_cpus_mx;
+      }
     }
-    for (k=beg; k <= end; k++) {
-      used_cpus[++used_cpus_mx] = k;
-      aff_sv_lkup[aff_i,"list",used_cpus_mx] = k;
+    comm_mx = ++aff_sv_lkup[aff_i,"comm_max"];
+    aff_sv_lkup[aff_i,"comm_list", comm_mx] = comm;
+    aff_sv_lkup[aff_i,"comm_str"] = aff_sv_lkup[aff_i,"comm_str"]";" comm;
+    if (prt == 1 && nw_aff == 1)  {
+      printf("input aff= %s, cpus= %s ", aff_str, used_cpus_mx);
+      for (k=1; k <= used_cpus_mx; k++) { printf(" %d", used_cpus[k]);}
+      printf("\n");
     }
-    aff_sv_lkup[aff_i,"max"] = used_cpus_mx;
-   }
   }
-  comm_mx = ++aff_sv_lkup[aff_i,"comm_max"];
-  aff_sv_lkup[aff_i,"comm_list", comm_mx] = comm;
-  aff_sv_lkup[aff_i,"comm_str"] = aff_sv_lkup[aff_i,"comm_str"]";" comm;
-  if (prt == 1 && nw_aff == 1)  {
-  printf("input aff= %s, cpus= %s ", aff_str, used_cpus_mx);
-  for (k=1; k <= used_cpus_mx; k++) { printf(" %d", used_cpus[k]);}
-  printf("\n");
-  }
-}
   BEGIN{
     #printf("aff_txt:\n%s\n", aff_txt);
     #split_aff(def_aff, "1", 1);
@@ -107,13 +114,15 @@ function split_aff(aff_str, comm, prt,   beg, end, j, k, crr, drr, n2, n3, aff_i
       n = split(pid_line[i], brr, " ");
       pid  = brr[1];
       ppid = brr[2];
-      comm = brr[3];
+      tm   = brr[3];
+      comm = brr[4];
       #printf("pid_line[%d]= pid= %s line= %s\n", i, pid, pid_line[i]);
-      if (n > 3) { for (j=4; j <= n; j++) { comm = comm " " brr[j];}}
+      if (n > 4) { for (j=5; j <= n; j++) { comm = comm " " brr[j];}}
       if (!(pid in pid_list)) {
         pid_list[pid] = ++pid_mx;
         pid_lkup[pid_mx,"pid"] = pid;
         pid_lkup[pid_mx,"ppid"] = ppid;
+        pid_lkup[pid_mx,"time"] = tm;
         pid_lkup[pid_mx,"comm"] = comm;
 	#printf("pid_lkup[%d,pid]= %s, ppid= %s comm= %s\n", i, pid, ppid, comm);
        }
