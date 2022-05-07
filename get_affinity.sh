@@ -174,21 +174,35 @@ awk -v nvme_text="$NVME_CPUS" -v irq_cpus="$IRQ_CPUS" -v num_cpus="$NUM_CPUS" -v
     }
     printf("for processes with ppid != 2: %d have default affinity (%s) and %d have non-default affinity\n", aff_def_n, aff_def, aff_nondef_n);
     for (c=0; c < num_cpus; c++) {
-      printf("cpu[%d]: ", c );
+      dev_str[c]="";
       for (i=1; i <= nvme_dev_n; i++) {
         for (j=1; j <= nvme_list_mx[i]; j++) {
-          if (nvme_cpus[i,j] == c) { printf("%s;", nvme_list[i]); break;}
+          if (nvme_cpus[i,j] == c) { dev_str[c] = dev_str[c] "" sprintf("%s;", nvme_list[i]); break;}
         }
       }
       for (i=1; i <= irq_cpus_n; i++) {
-        if (irq_cpus_arr[i] == c) { printf("NIC_IRQ;"); break;}
+        if (irq_cpus_arr[i] == c) { dev_str[c] = dev_str[c] "" sprintf("NIC_IRQ;"); break;}
       }
+      dev_str_len = length(dev_str[c]);
+      if (dev_str_len_mx < dev_str_len) {
+        dev_str_len_mx = dev_str_len;
+      }
+    }
+    for (c=0; c < num_cpus; c++) {
+      printf("cpu[%.2d]: %*s ", c , dev_str_len_mx, dev_str[c]);
       for (i=1; i <= aff_sv_list_mx; i++) {
         n2 = aff_sv_lkup[i,"max"];
         for(j=1; j <= n2; j++) {
           k = aff_sv_lkup[i,"list",j];
           if (k == c) {
-            printf("; %s", aff_sv_lkup[i,"comm_str"])
+            cm = aff_sv_lkup[i,"comm_str"];
+	    gsub(/;/, "\n", cm);
+	    cmd = "echo \""cm"\" | sort";
+	    str="";
+	    while ((cmd | getline ) > 0) { str = str ";" $0;}
+            close(cmd);
+            #printf("; %s", aff_sv_lkup[i,"comm_str"]);
+	    printf("; %s", str);
             break;
           }
         }
