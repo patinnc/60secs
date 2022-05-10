@@ -109,7 +109,13 @@ if [ -e $WORK_DIR/$MUTT_NM ]; then
   MUTT_FL=$WORK_DIR/$MUTT_NM
 fi
 
-AWK_BIN=awk  # awk is a link to gawk
+TRY_GAWK=../patrick_fay_bin/gawk
+if [ -e $TRY_GAWK ]; then
+  AWK_BIN=$TRY_GAWK
+else
+  AWK_BIN=awk  # awk is a link to gawk
+fi
+
 
 echo $0.$LINENO $AWK_BIN -v beg_ts="$BEG_TS" -v end_ts="$END_TS" -v ts_initial="$TS_INITIAL" -v script_nm="$0.$LINENO.awk" -v mutt_file="$MUTT_FL" -v mutt_ofile="$MUTT_OUT_FL" -v cur_dir="$CUR_DIR" -v options="$OPTIONS" -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofile="$OUT_FL" 
 $AWK_BIN -v beg_ts="$BEG_TS" -v end_ts="$END_TS" -v ts_initial="$TS_INITIAL" -v script_nm="$0.$LINENO.awk" -v mutt_file="$MUTT_FL" -v mutt_ofile="$MUTT_OUT_FL" -v cur_dir="$CUR_DIR" -v options="$OPTIONS" -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofile="$OUT_FL" '
