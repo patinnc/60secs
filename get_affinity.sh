@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #arg 1 (optional) can be "v" to enable verbose mode in output
-VRB=${1:0}
+VRB=${1:-0}
 ps -ae -o pid=,ppid=,times=,comm= > ps_ae_0.txt
 PS_AE=$(cat ps_ae_0.txt)
 NON_KRN=$(echo "$PS_AE" | awk '{ if ($2 != 2) { printf("%s\n", $0);}}')
@@ -19,17 +19,73 @@ RESP1=$(echo "$RESP" | awk '
        printf("%s %s\n", aff, $0);
      }')
 RESP2=$(echo "$RESP1" | sort -nk 1)
-NET_IRQS=$(ls -1 /sys/class/net/eth0/device/msi_irqs/ );
+NET_IRQS=$(ls -1 /sys/class/net/eth0/device/msi_irqs/ | sort -nk 1 );
+if [ "$VRB" != "0" ]; then
+  echo "$0.$LINENO $RESP2"
+  echo "$0.$LINENO $NET_IRQS"
+fi
 PROC_INTS=$(cat /proc/interrupts)
+RING_BUFS=$(ethtool -l eth0 |grep Combined|tail -1|awk '{printf("%s\n", $2);}')
 IRQ_CPUS=
 SEP=
+PRV_CPU=-1
+j=0
 for i in $NET_IRQS; do
   #printf "irq %s\n" $i
-  CPU=$(echo "$PROC_INTS" | awk -v irq="${i}:" '$1 == irq {for (i=2; i < NF; i++) { if ($i != 0) { printf("%s\n", i-2);exit(0);} }}')
+ if [ 1 == 1 ]; then
+   j=$((j+1))
+   if [[ "$j" -le "$RING_BUFS" ]]; then
+     CPU=$(cat /proc/irq/$i/smp_affinity_list)
+   else
+     CPU=$(cat /proc/irq/$i/smp_affinity_list)
+     echo "$0.$LINENO j($j) > ringbufs($RING_BUFS) irq= $i cpu= $CPU"
+     continue
+   fi
+ else
+  CPU=$(echo "$PROC_INTS" | awk -v num_cpus="$NUM_CPUS" -v prev_cpu="$PRV_CPU" -v irq="${i}:" '
+    BEGIN{
+      cpu = -1;
+      prev_cpu += 0;
+      num_cpus += 0;
+    }
+    $1 == irq {
+      for (i=2; i < NF; i++) {
+       if ($i != 0) {
+         if ((i-2) < num_cpus) {
+         cpu = i-2;
+         printf("%s\n", cpu);
+         exit(0);
+         }
+       }
+      }
+    }
+    END{
+      if (cpu == -1 && prev_cpu != -1) {
+        printf("%s\n", prev_cpu + 1);
+      }
+      exit(0);
+    }
+   ')
+  fi
   #echo $CPU
+  if [ "$VRB" != "0" ]; then
+    echo "$0.$LINENO irq= $i cpu= $CPU prev_cpu= $PRV_CPU vrb= $VRB"
+  fi
+  
+  PRV_CPU=$CPU
   IRQ_CPUS="${IRQ_CPUS}${SEP}${CPU}"
   SEP=" "
 done
+#echo "RING_BUFS= $RING_BUFS"
+#echo "NET_IRQS= $NET_IRQS"
+#echo "IRQ_CPUS= $IRQ_CPUS"
+#echo "$0.$LINENO bye"
+#exit 1
+lscpu |grep NUMA
+NUMA_ND=$(cat /sys/class/net/eth0/device/numa_node)
+echo "eth0 on numa node= $NUMA_ND"
+NODE_CPUS=$(cat /sys/class/net/eth0/device/local_cpulist)
+echo "numa node $NUMA_ND is on cpus= $NODE_CPUS"
 NVME=$(ls -1 /sys/class/nvme)
 SEP=
 for i in $NVME; do
@@ -39,9 +95,16 @@ for i in $NVME; do
   SEP="|"
   #for j in $nvme_irqs; do
   #done
-  str=$(echo "$PROC_INTS" | awk -v irq_list="$nvme_irqs" '
-    BEGIN{ n = split(irq_list, arr, " "); }
-    /:/{ for (k=1; k <= n; k++) { if ($1 != (arr[k]":")) { continue;} for (i=2; i < NF; i++) { if ($i != 0) { printf(",%s", i-2);break;} }}}')
+  str=
+  for j in $nvme_irqs; do
+   CPU=$(cat /proc/irq/$j/smp_affinity_list)
+   str="$str,$CPU"
+  done
+   
+  
+  #str=$(echo "$PROC_INTS" | awk -v irq_list="$nvme_irqs" '
+  #  BEGIN{ n = split(irq_list, arr, " "); }
+  #  /:/{ for (k=1; k <= n; k++) { if ($1 != (arr[k]":")) { continue;} for (i=2; i < NF; i++) { if ($i != 0) { printf(",%s", i-2);break;} }}}')
   NVME_CPUS="${NVME_CPUS}${str}"
 done
 #echo "nvme_cpus= $NVME_CPUS"
@@ -50,7 +113,7 @@ done
 #ls -l /sys/class/nvme/nvme0/device/msi_irqs/
 #exit
 #pid 1's current affinity list: 0-95
-awk -v nvme_text="$NVME_CPUS" -v irq_cpus="$IRQ_CPUS" -v num_cpus="$NUM_CPUS" -v vrb="$VRB"0 -v def_aff="$AFF_DEF" -v aff_txt="$RESP2" -v pid_txt="$NON_KRN" -v sngl_qt=\' '
+awk -v nvme_text="$NVME_CPUS" -v irq_cpus="$IRQ_CPUS" -v num_cpus="$NUM_CPUS" -v vrb="$VRB" -v def_aff="$AFF_DEF" -v aff_txt="$RESP2" -v pid_txt="$NON_KRN" -v sngl_qt=\' '
 
   function split_aff(aff_str, comm, prt,   beg, end, j, k, crr, drr, n2, n3, aff_i, nw_aff, comm_mx) {
     nw_aff = 0;
