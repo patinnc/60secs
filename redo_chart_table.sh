@@ -977,12 +977,12 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
               arr[2] = cr_arr[2];
             }
 #bbb
-            #printf("hdrs[%d,%d,\"hdrs\"]= %s, n= %d\n", fl,chrt_ref, hdrs[fl,chrt_ref,"hdrs"], n) > "/dev/stderr";
             row_end= arr[4];
             mx = ctbl[cc,"max"];
             if (row_end != -1) {
                arr[4] = trow+1 + mx;
             }
+            printf("hdrs[%d,%d,\"hdrs\"]= %s, n= %d row_end= %s mx= %s arr[4]= %s\n", fl,chrt_ref, hdrs[fl,chrt_ref,"hdrs"], n, row_end, mx, arr[4]) > "/dev/stderr";
             if (ch_typ == "column") {
               n2 = split(ctbl[cc,3], arr2, "\t");
               arr[5] = n2-1;
