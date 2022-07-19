@@ -56,6 +56,7 @@ all_charts_one_row_max = -1
 desc = None
 options_sku = None
 set_col_arr = []
+xlsx_add_line_from_file_to_charts_sheet = []
 got_sum_all = 0
 sum_all_file = ""
 sum_all_base = ""
@@ -180,6 +181,7 @@ if len(options_str) > 0:
        if verbose > 0:
           print("opt= %s, lkfor= %s, str2= %s" % (opt, lkfor, str2), file=sys.stderr)
     lkfor="xlsx_set_col_width{"
+    # xlsx_set_col_width{sum_all!C:C;30) optional sheetnm, col can be range or 1 col
     if opt.find(lkfor) >= 0:
        pos = opt.find(lkfor) + len(lkfor)
        mstr = opt[pos:]
@@ -203,8 +205,27 @@ if len(options_str) > 0:
        if len(mstr) > 0:
          set_col_width = int(mstr)
        if set_col_width > 0 and set_col_cols != "":
-         set_col_arr.append({"sheet":set_col_sheet, "cols":set_col_cols, "width":set_col_width})
+         set_col_arr.append({"sheet":set_col_sheet, "cols":set_col_cols, "width":set_col_width, "level":None})
        print("set_col_arr len= ", len(set_col_arr), set_col_arr)
+
+    lkfor="xlsx_add_line_from_file_to_charts_sheet{"
+    # xlsx_add_line_from_file_to_charts_sheet{filename} tab delimited line of text from file for row 1 of charts file
+    if opt.find(lkfor) >= 0:
+       pos = opt.find(lkfor) + len(lkfor)
+       mstr = opt[pos:]
+       pos = mstr.find("}")
+       mstr = mstr[:pos]
+       print("+++++++xlsx_add_line_from_file_to_charts_sheet file= ", mstr);
+       with open(mstr, 'rU') as tsv:
+         for line in csv.reader(tsv, dialect="excel-tab"):
+           #print("try options_file %s line %s" % (options_filename, line), file=sys.stderr)
+           if len(line) > 0 and len(line[0]) > 0 and line[0][0] == "#":
+             #print("skip options_file %s line %s" % (options_filename, line), file=sys.stderr)
+             continue
+           xlsx_add_line_from_file_to_charts_sheet.append(line)
+       #abc
+       print("xlsx_add_line_from_file_to_charts_sheet= ", xlsx_add_line_from_file_to_charts_sheet)
+
 
 if verbose > 0:
    print("sheets_limit= ", sheets_limit)
@@ -305,8 +326,8 @@ def ck_set_col_width(wrksht, nm):
       len_arr = len(nm_arr)
       print("+++ck set_column nm= %s width(%s!%s, %d), sub_nm= %s" % (nm, set_col_arr[i]["sheet"], set_col_arr[i]["cols"], set_col_arr[i]["width"], nm[:len_arr]))
       if nm_arr == nm or len_arr == 0 or (len_arr < len_in and nm[:len_arr] == nm_arr):
-        rc = wrksht.set_column(set_col_arr[i]["cols"], set_col_arr[i]["width"])
-        print("+++did set_column width(%s!%s, %d), rc= %d" % (nm, set_col_arr[i]["cols"], set_col_arr[i]["width"], rc))
+         rc = wrksht.set_column(set_col_arr[i]["cols"], set_col_arr[i]["width"])
+         print("+++did set_column width(%s!%s, %d), rc= %d" % (nm, set_col_arr[i]["cols"], set_col_arr[i]["width"], rc))
     return
 
    
@@ -535,6 +556,8 @@ for bmi in range(base_mx+1):
           worksheet_charts = workbook.add_worksheet(wrksh_nm)
           ck_set_col_width(worksheet_charts, wrksh_nm)
           worksheet_charts_nm = wrksh_nm
+          if len(xlsx_add_line_from_file_to_charts_sheet) > 0:
+             worksheet_charts.write_row(0, 0, xlsx_add_line_from_file_to_charts_sheet[0])
           ch_sh_row = -1
    
 #   if fake_file_list > 0:
