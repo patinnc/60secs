@@ -14,8 +14,9 @@ echo "TARR= ${TARR[@]}"
 HOST_IN=
 DCMI_USE=
 DELLOEM=
+ODIR="."
 
-while getopts "hvDB:H:d:i:" opt; do
+while getopts "hvDB:H:d:i:p:" opt; do
   case ${opt} in
     B )
       BMC=$OPTARG
@@ -32,6 +33,9 @@ while getopts "hvDB:H:d:i:" opt; do
     H )
       HOST_IN=$OPTARG
       ;;
+    p )
+      ODIR=$OPTARG
+      ;;
     v )
       VERBOSE=$((VERBOSE+1))
       ;;
@@ -42,21 +46,19 @@ while getopts "hvDB:H:d:i:" opt; do
       echo "usage: $0 TBD documentation collect power from bmc -i sample_interval_in_secs -d time_to_wait and more"
       echo "seconds_to_run is how long you want each task to monitor the system. Defaults is $WAIT seconds."
       echo "data collected once a second till for $WAIT seconds."
-      echo "   -b start the jobs in the backgroup not waiting for each job to finish"
-      echo "      The default is to not start the jobs the background (so start the 1st task, wait for it to finish, start the next task, etc)"
-      echo "   -w If you run background mode, this option waits for the duration after the background jobs are started."
-      echo "   -c use this option to run ${SCR_DIR}/do_curl.sh at the end"
-      echo "   -C container ID to pass to ${SCR_DIR}/do_curl.sh and/or flamegraph script"
+      echo "   -B bmc_address  if 'local' then just do ipmitool sdr locally"
       echo "   -d time_in_seconds duration of each monitoring task in seconds"
       echo "      You can append an 'm' to specify the duration in minutes (like '-d 10m' which sets the duration to 600 seconds)"
       echo "      default is $WAIT seconds"
       echo "   -D use delloem interface"
       echo "   -i interval in seconds between data collection"
       echo "      default is $INTRVL seconds"
-      echo "   -p full_path_to_perf_binary  the perf binary might not be in the path so use this option to specify it"
-      echo "      default is 'perf'"
+      echo "   -p project_path for the output file"
+      echo "   -H hostname"
       echo "   -v verbose mode. display each file after creating it."
       echo "   -z use dcmi power reading cmd"
+      echo "Example: collect power on local host for 30 secs total doing power measurement every 10 seconds and writing results into /opt/pfay/output/tpow dir"
+      echo "  ./collect_power.sh -B local -d 30 -i 10 -p /opt/pfay/output/tpow"
       exit
       ;;
     : )
@@ -80,6 +82,11 @@ catch_signal() {
 
 trap 'catch_signal' SIGINT
 
+
+if [[ "$ODIR" != "" ]] && [[ "$ODIR" != "." ]]; then
+  mkdir -p $ODIR
+fi
+if [ "$BMC" != "local" ]; then
 if [ "$HOST_IN" != "" ]; then
   HOST=$HOST_IN
 fi
@@ -144,6 +151,7 @@ if [ "$TYP" == "" ]; then
   echo "add host and/or BMD to TLST. Bye" > /dev/stderr
   exit
 fi
+fi
 
 
 if [ "$WAIT_IN" != "" ]; then
@@ -182,6 +190,7 @@ echo "using interval $INTRVL seconds"
 
 TSK=power
 DO_POWER=1
+if [ "$BMC" != "local" ]; then
 if [ "$DELLOEM" == "1" ]; then
   echo "ipmi delloem powermonitor clar cumulativepower and peakpower"
   ipmi $HOST delloem powermonitor clear cumulativepower
@@ -198,14 +207,17 @@ else
     CMD="./ipmi-${TYP} $UBMC dcmi power reading"
   fi
 fi
-FLNUM=16
+fi
+
   if [[ $TSK == *"power"* ]]; then
     if [ "$DO_POWER" == "1" ]; then
-    FL=$HOST.sys_${FLNUM}_power.txt
+    FL=$ODIR/sys_16_power.txt
     if [ -e $FL ]; then
       rm $FL
     fi
-    echo "$CMD"
+    if [ "$BMC" != "local" ]; then
+      echo "$CMD"
+    fi
     j=0
     BDT=`date +%s` 
     EDT=$((BDT+$WAIT))
@@ -213,13 +225,16 @@ FLNUM=16
       #echo "i= $i of $WAIT"
       DT=`date +%s.%N`
       echo "==beg $j date $DT" >> $FL
+      if [ "$BMC" == "local" ]; then
+      #$CMD >> $FL
+      ipmitool sdr >> $FL
+      else
       if [ "$DCMI_USE" != "1" ]; then
         ./ipmi-${TYP} $UBMC sdr >> $FL
       else
         ./ipmi-${TYP} $UBMC dcmi power reading >> $FL
       fi
-      #$CMD >> $FL
-      #ipmitool sdr >> $FL
+      fi
       DT=`date +%s.%N`
       echo "==end $j date $DT" >> $FL
       CDT=`date +%s`
