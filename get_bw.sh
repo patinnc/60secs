@@ -156,6 +156,7 @@ awk -v infile="$INFILE" -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" 
     lkup[++j] = "unc_cha_tor_occupancy.ia_miss.0x40433"; unc_cha_occ = j;
     lkup[++j] = "unc_cha_clockticks";  unc_cha_clk = j;
     lkup[++j] = "power/energy-pkg/";   pwr = j;
+    lkup[++j] = "power/energy-ram/";   pwr_ram = j;
     lkup[++j] = "ref-cycles";          ref_cycles = j;
     lkup[++j] = "cycles";              cyc = j;
     lkup[++j] = "offcore_requests.l3_miss_demand_data_rd";              offc_dmnd_data_rd = j;
@@ -540,6 +541,9 @@ awk -v infile="$INFILE" -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" 
    if (evt[pwr,1] != "") {
       h[++cats] = "pkg_watts";
    }
+   if (evt[pwr_ram,1] != "") {
+      h[++cats] = "ram_watts";
+   }
    if (evt[unc_cha_miss,1] != "" && evt[unc_cha_occ,1] != "") {
       if (evt[unc_cha_clk,1] != "") {
         h[++cats] = "LatUnc(ns)";
@@ -763,6 +767,7 @@ awk -v infile="$INFILE" -v pcg_list="$PCG_LIST" -v thr_per_core="$thr_per_core" 
       if (h[j] == "pkg_watts") { v = evt[pwr,i]/tm_dff;
         #printf("\npwr: evt[%d,%d]= %f tm_diff= %f v= %f\n", pwr,i, evt[pwr,i], tm_dff, v);
       }
+      if (h[j] == "ram_watts") { v = evt[pwr_ram,i]/tm_dff; }
       if (h[j] == "pf_rmt") { v = 64.0e-9 * evt[pfr,i]/tm_dff; }
       if (h[j] == "dmnd_lcl") { v = 64.0e-9 * evt[meml,i]/tm_dff; }
       if (h[j] == "dmnd_rmt") { v = 64.0e-9 * evt[memr,i]/tm_dff; }
