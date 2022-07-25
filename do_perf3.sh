@@ -38,6 +38,7 @@ FOREGRND=0
 PID=
 IFS_SV=$IFS
 VERBOSE=0
+ARR_ARGS=()
 
 GOT_QUIT=0
 # function called by trap
@@ -106,6 +107,11 @@ while getopts "hFvb:C:I:P:p:s:w:W:x:X:" opt; do
       echo "   -W args_to_pass_to_perf  args to be passed directly to perf stat."
       echo "      For instance '-W \" -A \" ' tells perf to show 'per cpu' event counts (don't aggregate to system)."
       echo "      The is optional."
+      echo "   -- everything after the -- is assumed to be the command line that you want to run"
+      echo "      This is an alternative to the '-x binary_path -X arg1_to_binary arg2 to binary etc' method below (and simpler)"
+      echo "      it can get tricky passing multiple args via the -X option"
+      echo "      If you use  the -- method then the 1st arg after the -- is assume to be an executable name (and it is used as the -x arg"
+      echo "      The 2nd arg (if any) after the -- and all subsequent args are used as the -X arguments."
       echo "   -x executable_or_script  exe_or_script to be run. Default is to sleep for wait_in_secs"
       echo "      if -x is not used or exe is 'sleep' then perf -a option is used (perf -a option means monitor all the system)."
       echo "      if -x is used then perf -a option is not used so perf just runs that exe and only collects stats for that process"
@@ -131,6 +137,18 @@ if [ "$VERBOSE" != "0" ]; then
 fi
 CMDLN=`printf " %q" "${@}"`
 shift $((OPTIND -1))
+echo "$0.$LINENO rem args= $*"
+j=0
+for i in $*; do
+  echo "arg $j = $i"
+  if [ "$j" == "0" ]; then
+    EXE_IN=$i
+    EXE_ARGS=
+  else
+    EXE_ARGS="$EXE_ARGS $i"
+  fi
+  j=$((j+1))
+done
 
 if [ "$PERF_BIN_IN" == "" ]; then
   PERF_BIN=$SCR_DIR/perf
@@ -576,10 +594,15 @@ TD2=",{cpu/slots/,topdown-be-bound,topdown-bad-spec,topdown-fe-bound,topdown-ret
       #fi
     fi
     #EVT="instructions,cycles,ref-cycles,LLC-load-misses${EVT}"
-    CK_PWR=`$PERF_BIN list|grep 'power/energy-pkg/'`
     PWR_EVT=
+    CK_PWR=`$PERF_BIN list|grep 'power/energy-pkg/'`
     if [ "$CK_PWR" != "" ]; then
       PWR_EVT=",power/energy-pkg/"
+    fi
+    PWR_RAM_EVT=
+    CK_PWR_RAM=`$PERF_BIN list|grep 'power/energy-ram/'`
+    if [ "$CK_PWR_RAM" != "" ]; then
+      PWR_RAM_EVT=",power/energy-ram/"
     fi
     GOT_IDQ_EVT=`echo $PERF_LIST | grep idq_uops_not_delivered.core`
     IDQ_EVT=
@@ -590,7 +613,7 @@ TD2=",{cpu/slots/,topdown-be-bound,topdown-bad-spec,topdown-fe-bound,topdown-ret
         IDQ_EVT=",cpu/name='idq_uops_not_delivered.core',event=0x9c,umask=0x01/"
       fi
     fi
-    SKT_EVT="${SKT_EVT}${PWR_EVT}${UNC_CHA}"
+    SKT_EVT="${SKT_EVT}${PWR_EVT}${PWR_RAM_EVT}${UNC_CHA}"
     if [ "$DO_SYS" == "0" ]; then
       SKT_EVT=
     fi
