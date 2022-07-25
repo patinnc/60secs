@@ -3,6 +3,16 @@
 # install, setup, config, test, run, fetch, report, combine benchmarks on a list of servers
 # use -h option to see options
 
+OSTYP=$OSTYPE
+if [[ "$OSTYP" == "linux-gnu"* ]]; then
+   DATE_CMD="date"
+elif [[ "$OSTYP" == "darwin"* ]]; then
+   # Mac OSX
+   DATE_CMD="gdate"
+fi
+#echo "os= $OSTYP"
+#echo "date_cmd= $DATE_CMD"
+
 RES=res.txt
 PROJ_DIR=
 BMARK_SUBDIR=DynoInstallFolder
@@ -16,7 +26,7 @@ declare -a HOST_ARR
 SSH_MODE="root"
 IFS_SV=$IFS
 
-tm_beg=$(date +%s.%6N)
+tm_beg=$($DATE_CMD +"%s.%6N")
 # the hard-coded lists of 5x/aws/gcp/onprem host names has been replaced with the files:
 # hosts_5x.lst
 # hosts_aws.lst
@@ -114,7 +124,7 @@ echo "cmd line: $myInvocation"
 LOGGED_INVOKE=0
 
 dyno_log() {
-  tstmp=`date "+%Y%m%d_%H%M%S"`
+  tstmp=`$DATE_CMD +"%Y%m%d_%H%M%S"`
   if [ $LOGGED_INVOKE -eq 0 ]; then
     LOGGED_INVOKE=1
     echo "$tstmp START $myInvocation"     >> $RUN_CMDS_LOG
@@ -897,8 +907,8 @@ fi
 SV_SSH_MODE=$SSH_MODE
 SV_USERNM=$USERNM
 SV_USERNM_IN=$USERNM_IN
-tm_cur=$(date +%s.%6N)
-tm_diff=$(echo "scale=6; $tm_cur - $tm_beg" | bc)
+tm_cur=$($DATE_CMD +"%s.%6N")
+tm_diff=$(awk -v tm0="$tm_beg" -v tm1="$tm_cur" 'BEGIN{printf("%f\n", tm1-tm0);exit(0);}')
 echo "==== begin tm_elap= $tm_diff ===="
 echo "==== begin tm_elap ====" > $RES
 for RN_CM in ${CMD_ARR[@]}; do
@@ -910,9 +920,9 @@ for i in $HOSTS; do
   RUN_CMDS=$RN_CM
   NUM_HOST=$((NUM_HOST+1))
   if [ "$VERBOSE" -gt "0" ]; then
-  tm_cur=$(date +%s.%6N)
-  tm_diff=$(echo "scale=6; $tm_cur - $tm_beg" | bc)
-  echo $LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ===================
+  tm_cur=$($DATE_CMD +"%s.%6N")
+  tm_diff=$(awk -v tm0="$tm_beg" -v tm1="$tm_cur" 'BEGIN{printf("%f\n", tm1-tm0);exit(0);}')
+  echo "$LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ==================="
   fi
   if [ "$HOST_NUM" != "" ]; then
     if [ "$NUM_HOST" -lt "$HOST_NUM_BEG" ]; then
@@ -942,9 +952,9 @@ for i in $HOSTS; do
     echo "quitting loop due presence of 'stop' file. You need to delete the file"
     exit 0
   fi
-  tm_cur=$(date +%s.%6N)
-  tm_diff=$(echo "scale=6; $tm_cur - $tm_beg" | bc)
-  echo $LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ===================
+  tm_cur=$($DATE_CMD +"%s.%6N")
+  tm_diff=$(awk -v tm0="$tm_beg" -v tm1="$tm_cur" 'BEGIN{printf("%f\n", tm1-tm0);exit(0);}')
+  echo "$LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ==================="
   nm=$i
   USERNM=$SV_USERNM
   USERNM_IN=$SV_USERNM_IN
@@ -1161,9 +1171,9 @@ for i in $HOSTS; do
       echo "$0.$LINENO cmd= $CMD"
     fi
   if [ "$VERBOSE" -gt "0" ]; then
-  tm_cur=$(date +%s.%6N)
-  tm_diff=$(echo "scale=6; $tm_cur - $tm_beg" | bc)
-  echo $LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ===================
+  tm_cur=$($DATE_CMD +"%s.%6N")
+  tm_diff=$(awk -v tm0="$tm_beg" -v tm1="$tm_cur" 'BEGIN{printf("%f\n", tm1-tm0);exit(0);}')
+  echo "$LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ==================="
   fi
     if [ "${#HOST_ARR[@]}" -gt 0 ]; then
       if [[ -v "HOST_ARR_LKUP[$nm]" ]]; then
@@ -1171,9 +1181,9 @@ for i in $HOSTS; do
       HOST_ARR_ARGS="${HOST_ARR[$ki]}"
       fi
   if [ "$VERBOSE" -gt "0" ]; then
-  tm_cur=$(date +%s.%6N)
-  tm_diff=$(echo "scale=6; $tm_cur - $tm_beg" | bc)
-  echo $LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ===================
+  tm_cur=$($DATE_CMD +"%s.%6N")
+  tm_diff=$(awk -v tm0="$tm_beg" -v tm1="$tm_cur" 'BEGIN{printf("%f\n", tm1-tm0);exit(0);}')
+  echo "$LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ==================="
   fi
       if [ "${#HOST_ARR_ARGS[@]}" -gt "0" ]; then
     re='(.*)(%HOST_ARR\{.\}%)(.*)'
@@ -1191,9 +1201,9 @@ for i in $HOSTS; do
       fi
     fi
   if [ "$VERBOSE" -gt "0" ]; then
-  tm_cur=$(date +%s.%6N)
-  tm_diff=$(echo "scale=6; $tm_cur - $tm_beg" | bc)
-  echo $LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ===================
+  tm_cur=$($DATE_CMD +"%s.%6N")
+  tm_diff=$(awk -v tm0="$tm_beg" -v tm1="$tm_cur" 'BEGIN{printf("%f\n", tm1-tm0);exit(0);}')
+  echo "$LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ==================="
   fi
     #echo "$0.$LINENO bye, cmd = $CMD , orig= $COMMAND"
     #exit 1
@@ -1207,9 +1217,9 @@ for i in $HOSTS; do
     done
     ssh_cmd $nm "$CMD"  "-l"
   if [ "$VERBOSE" -gt "0" ]; then
-  tm_cur=$(date +%s.%6N)
-  tm_diff=$(echo "scale=6; $tm_cur - $tm_beg" | bc)
-  echo $LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ===================
+  tm_cur=$($DATE_CMD +"%s.%6N")
+  tm_diff=$(awk -v tm0="$tm_beg" -v tm1="$tm_cur" 'BEGIN{printf("%f\n", tm1-tm0);exit(0);}')
+  echo "$LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ==================="
   fi
     if [ "$DRY_RUN" == "n" ]; then
         waitForJobs
@@ -1243,8 +1253,8 @@ for i in $HOSTS; do
             ik=$((ik+1))
             ij=$((ij+1))
           done
-          tm_cur=$(date +%s.%6N)
-          tm_diff=$(echo "scale=6; $tm_cur - $tm_beg" | bc)
+          tm_cur=$($DATE_CMD +"%s.%6N")
+          tm_diff=$(awk -v tm0="$tm_beg" -v tm1="$tm_cur" 'BEGIN{printf("%f\n", tm1-tm0);exit(0);}')
           if [ "$do_bkgrnd" == "1" ]; then
             echo do $0 ${myout[@]} -C "$CMD" -N $NUM_HOST -m 0  __ $OUT_FILE _ tm_elap= $tm_diff
             $0 ${myout[@]} -C "$CMD" -N $NUM_HOST -m 0  &> $OUT_FILE &
@@ -1254,9 +1264,9 @@ for i in $HOSTS; do
           fi
           dyno_log $SSH_HOST "$CMD"
   if [ "$VERBOSE" -gt "0" ]; then
-  tm_cur=$(date +%s.%6N)
-  tm_diff=$(echo "scale=6; $tm_cur - $tm_beg" | bc)
-  echo $LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ===================
+  tm_cur=$($DATE_CMD +"%s.%6N")
+  tm_diff=$(awk -v tm0="$tm_beg" -v tm1="$tm_cur" 'BEGIN{printf("%f\n", tm1-tm0);exit(0);}')
+  echo "$LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ==================="
   fi
         elif [ "$RUN_CMDS" == "pssh_test" ]; then
           if [ "$do_bkgrnd" == "1" ]; then
@@ -1560,14 +1570,14 @@ for i in $HOSTS; do
          dyno_log ssh $SSH_HOST "$SSH_CMD"
     fi
   fi
-  LOG_TS=`date "+%Y%m%d_%H%M%S"`
+  LOG_TS=`$DATE_CMD +"%Y%m%d_%H%M%S"`
   LOG_FL_PFX="bmark_${LOG_TS}"
   #echo "LOG_TS= $LOG_TS, LOG_FL_PFX= $LOG_FL_PFX"
 
   if [ "$VERBOSE" -gt "0" ]; then
-  tm_cur=$(date +%s.%6N)
-  tm_diff=$(echo "scale=6; $tm_cur - $tm_beg" | bc)
-  echo $LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ===================
+  tm_cur=$($DATE_CMD +"%s.%6N")
+  tm_diff=$(awk -v tm0="$tm_beg" -v tm1="$tm_cur" 'BEGIN{printf("%f\n", tm1-tm0);exit(0);}')
+  echo "$LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ==================="
   fi
   NW_PROJ=$PROJ_DIR
   re='(.*)%HOST%(.*)'
@@ -1944,9 +1954,9 @@ for i in $HOSTS; do
   fi
 
   if [ "$VERBOSE" -gt "0" ]; then
-  tm_cur=$(date +%s.%6N)
-  tm_diff=$(echo "scale=6; $tm_cur - $tm_beg" | bc)
-  echo $LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ===================
+  tm_cur=$($DATE_CMD +"%s.%6N")
+  tm_diff=$(awk -v tm0="$tm_beg" -v tm1="$tm_cur" 'BEGIN{printf("%f\n", tm1-tm0);exit(0);}')
+  echo "$LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ==================="
   fi
   if [ "$DO_FTCH" -gt "0" ]; then
     if [ $BKGRND_TASKS_MAX -gt 0 ]; then
@@ -2213,9 +2223,9 @@ for i in $HOSTS; do
     fi
   fi
   if [ "$VERBOSE" -gt "0" ]; then
-  tm_cur=$(date +%s.%6N)
-  tm_diff=$(echo "scale=6; $tm_cur - $tm_beg" | bc)
-  echo $LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ===================
+  tm_cur=$($DATE_CMD +"%s.%6N")
+  tm_diff=$(awk -v tm0="$tm_beg" -v tm1="$tm_cur" 'BEGIN{printf("%f\n", tm1-tm0);exit(0);}')
+  echo "$LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ==================="
   fi
   if [[ $RUN_CMDS == *"get_recur"* ]]; then
          if [ "$ARCHIVE_DIR" == "" ]; then
@@ -2498,9 +2508,9 @@ for i in $HOSTS; do
     fi
   fi
   if [ "$VERBOSE" -gt "0" ]; then
-  tm_cur=$(date +%s.%6N)
-  tm_diff=$(echo "scale=6; $tm_cur - $tm_beg" | bc)
-  echo $LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ===================
+  tm_cur=$($DATE_CMD +"%s.%6N")
+  tm_diff=$(awk -v tm0="$tm_beg" -v tm1="$tm_cur" 'BEGIN{printf("%f\n", tm1-tm0);exit(0);}')
+  echo "$LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ==================="
   fi
   #echo "sleep 1 sec to try and catch cntrl+c"
   #sleep 1
