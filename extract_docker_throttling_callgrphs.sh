@@ -7,6 +7,22 @@ END_DIR=1
 EXCL_ARR=()
 INCL_ARR=()
 
+RET_CD=0
+ck_last_rc() {
+   local RC=$1
+   local FROM=$2
+   if [[ $RC -gt 0 ]] || [[ "$GOT_QUIT" == "1" ]]; then
+      echo "$0: got non-zero RC=$RC at $LINENO. called from line $FROM. GOT_QUIT= $GOT_QUIT" 1>&2
+      RET_CD=1
+      #kill -term $$ # send this program a terminate signal
+      if [[ "$GOT_QUIT" == "1" ]]; then
+        exit 1
+      fi
+      exit $RC
+   fi
+}
+
+
 while getopts "hvc:d:e:f:H:i:m:p:o:s:x:X:" opt; do
   case ${opt} in
     c )
@@ -66,7 +82,7 @@ while getopts "hvc:d:e:f:H:i:m:p:o:s:x:X:" opt; do
       echo "   -o outfile           if doing -p pxx then all 'throttle' callstacks will put in outfile_thr.txt. non-thr in outfile_not_thr.txt"
       echo "                        default is 'summary'"
       echo "   -e 0|1               This is for processing multiple host dirs. If you are doing the last host dir do -e 1 else do -e 0"
-      echo "   -x exclude_str       exclude call stacks containing thse strings. can be specified more than once. This is mostly for debugging at this point"
+      echo "   -x exclude_str       exclude call stacks containing thse strings. can be specified more than once. This is mostly for debugging at this point. use more than once for multiple excludes"
       echo "   -X include_str       include only call stacks containing thse strings. can be specified more than once. This is mostly for debugging at this point"
       echo "   -v              verbose mode"
       exit
@@ -89,7 +105,28 @@ if [[ "$IDIR" == "" ]] || [[ ! -d "$IDIR" ]]; then
   exit 1
 fi
 LIST=($(find $IDIR -name docker_cpu_stats.txt))
-echo "LIST= $LIST, list mx= ${#LIST[@]}"
+
+if [ "$FILE_LIST" != "" ]; then
+  LIST=()
+  FILE_ARR=(${FILE_LIST//,/ })
+  for ((ii=0; ii < ${#FILE_ARR[@]}; ii++)); do
+    if [ ! -e "${FILE_ARR[$ii]}" ]; then
+      echo "$0.$LINENO one of the file in the comma separated \"-f $FILE_LIST\" doesn't exist"
+      echo "$0.$LINENO didn't find ${FILE_ARR[$ii]}. bye"
+      exit 1
+    else
+     IDIR=$(dirname ${FILE_ARR[$ii]})
+     LIST+=($IDIR/docker_cpu_stats.txt)
+    fi
+  done
+fi
+
+echo "$0.$LINENO LIST= ${LIST[@]}, list mx= ${#LIST[@]}"
+CK_OUTFILE=$(ls -1 $OUTFILE*.txt)
+if [ "$CK_OUTFILE" != "" ]; then
+  rm $OUTFILE*.txt
+  rm $OUTFILE*.svg
+fi
 
 for ((i=0; i < ${#LIST[@]}; i++)); do
 
@@ -99,12 +136,14 @@ RESP=$(grep sigusr2 ${LIST[$i]})
 #  continue
 #fi
 
+
 IDIR=$(dirname ${LIST[$i]})
 CLK_PRF=0
 CLK_TOD=0
 if [ -e $IDIR/spin.x.txt ]; then
   CLK_PRF=$(awk '/t_first= /{printf("%s", $2);}' $IDIR/spin.x.txt)
   CLK_TOD=$(awk '/t_gettimeofday= /{printf("%s", $2);}' $IDIR/spin.x.txt)
+  ck_last_rc $? $LINENO
 fi
 
 if [[ "$PXX" != "" ]] && [[ "$CPU_BSY" != "" ]]; then
@@ -134,15 +173,15 @@ samples_per_sec=99
 
 x_str=
 sep=
-for ((i=0; i < ${#EXCL_ARR[@]}; i++)); do
-  x_str="${x_str}${sep}${EXCL_ARR[$i]}"
+for ((ii=0; ii < ${#EXCL_ARR[@]}; ii++)); do
+  x_str="${x_str}${sep}${EXCL_ARR[$ii]}"
   sep="|"
 done
 
 X_str=
 sep=
-for ((i=0; i < ${#INCL_ARR[@]}; i++)); do
-  X_str="${X_str}${sep}${INCL_ARR[$i]}"
+for ((ii=0; ii < ${#INCL_ARR[@]}; ii++)); do
+  X_str="${X_str}${sep}${INCL_ARR[$ii]}"
   sep="|"
 done
 
@@ -205,6 +244,9 @@ done
 # total_active_file 1024000
 # total_unevictable 0
 # 
+
+mkdir sv
+
 awk -v sum_file="sv/sum.tsv" -v in_dir="$IDIR" '
   BEGIN{
     csi_mx = -1;
@@ -356,12 +398,17 @@ awk -v sum_file="sv/sum.tsv" -v in_dir="$IDIR" '
     printf("\n") >> sum_file;
   }
   ' $IDIR/$INF
+  ck_last_rc $? $LINENO
 
 #echo "$0.$LINENO bye"
 #exit 1
 
- echo $0.$LINENO awk -v select_intrvl_in_secs="$INTRVL" -v incl_str="$X_str" -v excl_str="$x_str" -v host_str="$HOST_STR" -v max_high="$MAX_HIGH" -v file_list_in="$FILE_LIST" -v end_dir="$END_DIR" -v cpus_busy="$CPU_BSY" -v pxx="$PXX" -v outfile="$OUTFILE" -v sel_prf_str="$SEL_PRF_STR"  -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK_TOD" -v scr_dir="$fg_scr_dir" -v dir="$IDIR" -v onum=$i > /dev/stderr
-awk -v select_intrvl_in_secs="$INTRVL" -v incl_str="$X_str"  -v excl_str="$x_str"  -v host_str="$HOST_STR" -v max_high="$MAX_HIGH" -v file_list_in="$FILE_LIST" -v end_dir="$END_DIR" -v cpus_busy="$CPU_BSY" -v pxx="$PXX" -v outfile="$OUTFILE" -v sel_prf_str="$SEL_PRF_STR"  -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK_TOD" -v scr_dir="$fg_scr_dir" -v dir="$IDIR" -v onum=$i '
+echo "$0.$LINENO LIST= ${LIST[@]}, list mx= ${#LIST[@]}"
+echo "$0.$LINENO i= $i bef awk ls out files"
+ls -l $OUTFILE*
+
+ echo $0.$LINENO awk -v simple_file_select=1 -v select_intrvl_in_secs="$INTRVL" -v incl_str="$X_str" -v excl_str="$x_str" -v host_str="$HOST_STR" -v max_high="$MAX_HIGH" -v file_list_in="$FILE_LIST" -v end_dir="$END_DIR" -v cpus_busy="$CPU_BSY" -v pxx="$PXX" -v outfile="$OUTFILE" -v sel_prf_str="$SEL_PRF_STR"  -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK_TOD" -v scr_dir="$fg_scr_dir" -v dir="$IDIR" -v onum=$i > /dev/stderr
+awk -v simple_file_select=1 -v select_intrvl_in_secs="$INTRVL" -v incl_str="$X_str"  -v excl_str="$x_str"  -v host_str="$HOST_STR" -v max_high="$MAX_HIGH" -v file_list_in="$FILE_LIST" -v end_dir="$END_DIR" -v cpus_busy="$CPU_BSY" -v pxx="$PXX" -v outfile="$OUTFILE" -v sel_prf_str="$SEL_PRF_STR"  -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK_TOD" -v scr_dir="$fg_scr_dir" -v dir="$IDIR" -v onum=$i '
   BEGIN{
      clk_prf += 0;
      clk_tod += 0;
@@ -380,6 +427,8 @@ awk -v select_intrvl_in_secs="$INTRVL" -v incl_str="$X_str"  -v excl_str="$x_str
        for (i=1; i <= file_list_n; i++) { printf("file_list[%d]= %s\n", i, file_list[i]);}
      }
      excl_n = split(excl_str, excl_arr, "|");
+     printf("excl_str= %s, excl_n= %s\n", excl_str, excl_n);
+     for(i=1; i <= excl_n; i++) {printf("excl[%d]= \"%s\"\n", i, excl_arr[i]);}
      incl_n = split(incl_str, incl_arr, "|");
   }
 /^__cpu.cfs_quota_us /{
@@ -459,31 +508,50 @@ awk -v select_intrvl_in_secs="$INTRVL" -v incl_str="$X_str"  -v excl_str="$x_str
     if (file_list_n >= (sv_mx+1) && outfile != "") {
       ufl = file_list[sv_mx+1];
       printf("using ufl from file_list[%d]= %s, file_list_n= %d\n", sv_mx+1, ufl, file_list_n);
+      add_file(ufl);
       got_it = 1;
     } else {
     if ($1 == "__docker_sigint") {
+      if (cid != -1) {
+      cid_beg = cid; 
+      cid_end = cid; 
+      } else {
       cid_beg = 0;
-      cid_beg = cid_mx;
+      cid_end = cid_mx;
+      }
+      printf("doing sigint %s\n", $0);
     } else {
       cid_beg = cid; 
       cid_end = cid; 
+      printf("doing sigusr %s\n", $0);
     }
     for (cid= cid_end; cid >= cid_beg; cid--) {
-    for (i=0; i < 20; i++) {
-      udt = dt2ss+i;
-      ufl = sprintf("%s/prf_%d.dat.%.0f*.txt", dir, cid, udt);
-      #ufl = sprintf("%sdir "/prf_" cid ".dat." udt "*.txt";
-      printf("ufl= %s  cid= %d udt= %d\n", ufl, cid, udt);
-      if (system("test -f " ufl)==0) {
-        got_it=1;
-        printf("got_it ufl= %s  cid= %d udt= %d\n", ufl, cid, udt);
-        break;
+      for (i=0; i < 20; i++) {
+        udt = dt2ss+i;
+        ufl = sprintf("%s/prf_%d.dat.%.0f*.txt", dir, cid, udt);
+        #ufl = sprintf("%sdir "/prf_" cid ".dat." udt "*.txt";
+        printf("ufl= %s  cid= %d udt= %d\n", ufl, cid, udt);
+        cmd = "test -f " ufl;
+        printf("try %s\n", cmd);
+        rc = system(cmd);
+        close(cmd);
+        printf("try %s , rc= %d\n", cmd, rc);
+        if (rc == 0) {
+          got_it = 1;
+          printf("got_it ufl= %s  cid= %d udt= %d\n", ufl, cid, udt);
+          add_file(ufl);
+        }
+        if (got_it == 1) { break; }
       }
+      #if (got_it == 1) { break; }
     }
-       if (got_it == 1) { break; }
     }
-    }
+    printf("got_it= %d ufl= %s  cid= %d udt= %d\n", got_it, ufl, cid, udt);
     if (got_it == 1) {
+      #if (file_list_n == 0 || sv_mx < file_list_n) {
+      #  add_file(ufl);
+      #}
+      if (1==2) {
       sv_mx++;
       if (file_list_n > 0) {
          printf("file_list[%d]= %s\n", sv_mx, file_list[sv_mx]);
@@ -499,12 +567,33 @@ awk -v select_intrvl_in_secs="$INTRVL" -v incl_str="$X_str"  -v excl_str="$x_str
       sv_ufl[sv_mx,"interval"] = ds_intrvl;
       sv_ufl[sv_mx,"ds_throttled_secs"] = ds_throttled_secs;
       sv_ufl[sv_mx,"ds_throttled_periods"] = ds_throttled_periods;
+      }
 
     } else {
       printf("missed finding match for prf file ufl= %s dt2ss= %s\n", ufl, ddt2ss);
       printf("missed finding match for prf file ufl= %s dt2ss= %s\n", ufl, ddt2ss) > "/dev/stderr";
     }
   }
+function add_file(ufl) {
+      if (file_list_n > 0) {
+         printf("file_list[%d]= %s\n", sv_mx, file_list[sv_mx+1]);
+         printf("use ufl      = %s\n", ufl);
+      }
+      cmd = "ls -1 " ufl " | head -1";
+      cmd | getline line;
+      close(cmd);
+      printf("ls %s returned string= %s\n", ufl,  line);
+      if (!(line in svd_list)) {
+      svd_list[line] = ++sv_mx;
+      svd_lkup[sv_mx] = line;
+      sv_ufl[sv_mx,"nm"] = line;
+      sv_ufl[sv_mx,"epch"] = epch;
+      sv_ufl[sv_mx,"prf_tm"] = prf_tm;
+      sv_ufl[sv_mx,"interval"] = ds_intrvl;
+      sv_ufl[sv_mx,"ds_throttled_secs"] = ds_throttled_secs;
+      sv_ufl[sv_mx,"ds_throttled_periods"] = ds_throttled_periods;
+      }
+}
   END{
 #      michelangelo-pr 374019 [005] 9233946.162347:   10101010 cpu-clock: 
 # now we have the list of call stack perf .dat.txt files.
@@ -562,13 +651,16 @@ awk -v select_intrvl_in_secs="$INTRVL" -v incl_str="$X_str"  -v excl_str="$x_str
         ln_arr[++ln_n] = $0;
         ln_n_end = ln_n;
         ln_n = 0;
+        use_it2 = 1;
+        #printf("excl_n= %d, excl1= %s str= %s\n", excl_n, excl_arr[1], str);
         if (excl_n > 0) {
           got_it = 0;
           for (ei=1; ei <= excl_n; ei++) {
             if (index(str, excl_arr[ei]) > 0) { got_it=1; break;}
           }
           if (got_it == 1) {
-            continue;
+             use_it2 = 0;
+             continue;
           }
         }
         if (incl_n > 0) {
@@ -576,11 +668,12 @@ awk -v select_intrvl_in_secs="$INTRVL" -v incl_str="$X_str"  -v excl_str="$x_str
           for (ei=1; ei <= incl_n; ei++) {
             if (index(str, incl_arr[ei]) > 0) { got_it=1; break;}
           }
-          if (got_it == 0) {
+          if (got_it == 1) {
+             use_it2 = 1;
             continue;
           }
         }
-              use_it = 1;
+        use_it = 1;
         for (ln_i=1; ln_i <= ln_n_end; ln_i++) {
           $0 = ln_arr[ln_i];
           char0 = substr($0, 1, 1);
@@ -616,6 +709,12 @@ awk -v select_intrvl_in_secs="$INTRVL" -v incl_str="$X_str"  -v excl_str="$x_str
               }
             }
            }
+          }
+          for (ei=1; ei <= excl_n; ei++) {
+            if (index(str, excl_arr[ei]) > 0 || index($0, excl_arr[ei]) > 0) { use_it=0;  break;}
+          }
+          for (ei=1; ei <= incl_n; ei++) {
+            if (index(str, incl_arr[ei]) > 0 || index($0, incl_arr[ei]) > 0) { use_it=1;  break;}
           }
           if (use_it == 0) { continue;}
         
@@ -715,6 +814,7 @@ awk -v select_intrvl_in_secs="$INTRVL" -v incl_str="$X_str"  -v excl_str="$x_str
         }
       }
       close(ufl)
+       printf("got line_num= %d for ufl[%d]= %s\n", line_num, i, ufl);
       # so we have read the perf dat txt file and got call stacks
       sv_line_num[i] = line_num;
       tm_end[i] = tm;
@@ -767,9 +867,11 @@ awk -v select_intrvl_in_secs="$INTRVL" -v incl_str="$X_str"  -v excl_str="$x_str
           outfile_str[1] = "throttled";
           outfile_str[2] = "not throttled";
           got_it = 2;
+            ln_num_beg = -1;
           for (j=0; j <= sv_line_num[i]; j++) {
             if (sv_lines_time[i, j] != "") {
             ln_num_beg = j;
+            used_lines = 0;
             tm = sv_lines_time[i, j];
                 use_it = 1;
             tm_dff = tm - cg_arr[i, "tm_beg"];
@@ -802,18 +904,25 @@ awk -v select_intrvl_in_secs="$INTRVL" -v incl_str="$X_str"  -v excl_str="$x_str
             if (index(sv_lines[i,j], "[unknown] ([unknown])") > 0) {continue;}
             if (match(sv_lines[i,j], /\[unknown\] .*perf-.*.map/)) {continue;}
             if ((max_high > 0 && ((j-ln_num_beg) > max_high && sv_lines[i,j] != ""))) {
-              #printf("skip[%d,%d] tm_dff= %.3f use_it= %d txt= %s\n", sv_line_num[i],j-ln_num_beg, tm_dff, use_it, sv_lines[i,j]);
+              #printf("max_high= %d skip[%d,%d] tm_dff= %.3f use_it= %d txt= %s\n", max_high, sv_line_num[i],j-ln_num_beg, tm_dff, use_it, sv_lines[i,j]);
               continue;
             }
+            if (first_tm_write[i,got_it] == "") {
+               printf("# below from file[%d]= %s\n", i, sv_ufl[i, "nm"]) >> outfile_lst[got_it];
+               printf("# below from file[%d]= %s to file %s\n", i, sv_ufl[i, "nm"], outfile_lst[got_it]);
+               first_tm_write[i,got_it]=0;
+            }
             printf("%s\n", sv_lines[i,j]) >> outfile_lst[got_it];
+            first_tm_write[i,got_it]++;;
           }
           printf("how_many_recs= %d\n", how_many_recs);
           for (tb = 0; tb <= tm_bkt_end/10; tb++) {
             if (tm_b_st[tb] == "thr") { bkts[1]++; } else { bkts[2]++; }
             #printf("tb_b_vals[%d]= %d\n", tb, tm_b_vals[tb]);
           }
-          printf("_______i= %d, sv_mx= %d\n", i, sv_mx);
+          printf("_______i= %d, sv_mx= %d bkts[thr]= %d bkts[non_thr]= %d\n", i, sv_mx, bkts[1], bkts[2]);
           if ((i == sv_mx || (sel_prf_str != "" && sel_prf_str == i))) {
+            printf("close bkts for i= %d, sv_mx= %d\n", i, sv_mx);
             for (fl=1; fl <= 2; fl++) {
               printf("%d\n", bkts[fl]) >> outfile_bkts[fl];
               printf("%d\n", bkt_samples[fl]) >> outfile_smpls[fl];
@@ -825,8 +934,10 @@ awk -v select_intrvl_in_secs="$INTRVL" -v incl_str="$X_str"  -v excl_str="$x_str
             for (fl=1; fl <= 2; fl++) {
               close(outfile_lst[fl]);
             }
+            printf("did close outfile_lst[1]= %s for i= %d sv_mx= %d\n", outfile_lst[1], i, sv_mx);
           }
           if (end_dir == 1 && (i == sv_mx || (sel_prf_str != "" && sel_prf_str == i))) {
+            printf("reset bkts for i= %d, sv_mx= %d\n", i, sv_mx);
             for (fl=1; fl <= 2; fl++) {
               bkts[fl] = 0;
               bkt_samples[fl]  = 0;
@@ -1018,5 +1129,9 @@ awk -v select_intrvl_in_secs="$INTRVL" -v incl_str="$X_str"  -v excl_str="$x_str
       }
     }
   }' $IDIR/$INF
+  ck_last_rc $? $LINENO
+
+echo "$0.$LINENO i= $i aft awk ls out files"
+ls -l $OUTFILE*
 
 done
