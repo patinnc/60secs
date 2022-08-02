@@ -184,7 +184,7 @@ function _ord_init(    low, high, i, t) {
         _ord_[t] = i
     }
 }
-  /val_arr all_vals|val_arr avg/ {
+  /val_arr all_vals|val_arr avg|val_arr0 all_vals|val_arr0 avg/ {
     next;
   }
   /Metric|metric/{
