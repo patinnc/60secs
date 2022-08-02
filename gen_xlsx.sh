@@ -201,6 +201,7 @@ while getopts "AhvSa:b:B:c:C:D:d:e:F:g:I:j:m:N:o:P:R:r:s:w:X:x:" opt; do
       echo "      For instance: -R infra_cputime:1,2,perf_stat:3,4  drops 1 out of 2 rows from infra_cputime.txt.tsv and 3 out of 4 rows from perf_stats txt.tsv file"
       echo "      Currently only perf_stats txt.tsv and infra_cputime txt.tsv files call the reduce_tsv.sh script"
       echo "   -r regex   regex expression to select directories"
+      echo "         for example: ' -r host-565|host-5a3 ' or ' -r host-123 -r host-555 ' (1st example uses the regex | to select host-565 or host-5a3. 2nd example shows vals or'd together"
       echo "   -S    skip creating detail xlsx file, just do the summary all spreadsheet"
       echo "   -s  sku_list  have to be able to figure host from path (or hostname.txt file) and must have lzc_info.txt info"
       echo "       sku_list  doesn't select dirs with sku at the moment."
@@ -451,7 +452,7 @@ get_dir_list() {
       RESP=$RESP2
       local ii
       for ii in ${REGEX[@]}; do
-         RESP=`echo -e "$RESP" | grep "$ii"`
+         RESP=$(echo -e "$RESP" | egrep -E "$ii")
       done
       mydir=`echo -e "$RESP" | wc -l`
       echo "$0.$LINENO mydir count= $mydir"
@@ -579,8 +580,11 @@ else
          RESP=`find $DIR -name "$CKF"|sort`
          if [ "$REGEX_LEN" != "0" ]; then
            RESP=`find $DIR -name "$CKF" | sort`
+           RESP_SV=$RESP
            for ii in ${REGEX[@]}; do
-             RESP=`echo -e "$RESP" | grep "$ii"`
+             RESP=$(echo -e "$RESP" | egrep -E "$ii")
+             #echo -e "$RESP" | egrep -E "$ii"
+             #echo $0.$LINENO regex RESP= "$RESP" ii= $ii resp_sv= "$RESP_SV"
            done
            RESP3=`echo "$RESP" | wc -l`
            if [ $VERBOSE -gt 0 ]; then
@@ -670,7 +674,9 @@ else
          DIR=$STR
          DIR_OUT_ARR[$dn]=$STR
          DIR_OUT="$DIR_OUT $STR"
+         if [ $VERBOSE -gt 0 ]; then
          echo "$0.$LINENO: -__________- using2 DIR= $DIR, orig DIR= $DIR_ORIG" > /dev/stderr
+         fi
        else
          echo "$0.$LINENO: didn't find 60secs.log nor metric_out nor sys_*_perf_stat.txt file under dir $DIR. dir_orig= $DIR_ORIG at line $LINENO Bye"
          #exit 1
@@ -689,16 +695,20 @@ else
    fi
    done
 
+   if [ $VERBOSE -gt 0 ]; then
    echo "$0.$LINENO after DIR_IN_ARR loop STR= $STR"
    echo "$0.$LINENO dir_out= $DIR_OUT"
+   fi
    DIR=$DIR_OUT
+   if [ $VERBOSE -gt 0 ]; then
    for i in $DIR; do echo "$0.$LINENO got dir $i"; done
+   fi
 fi
 
 
 LST=$DIR
-echo "$0.$LINENO DIR_ORIG= $DIR_ORIG, DIR= $DIR LST= $LST"
 if [ $VERBOSE -gt 0 ]; then
+echo "$0.$LINENO DIR_ORIG= $DIR_ORIG, DIR= $DIR LST= $LST"
   echo "$0.$LINENO DIR: $DIR"
 fi
 
@@ -1372,6 +1382,8 @@ fi
 
 TCUR_DIR=`pwd`
 
+  #echo "$0.$LINENO do cp sum.tsv ckck_sum.tsv"
+  #cp work_dir/0/0/sum.tsv ckck_sum.tsv
 
 MUTT_ARR=()
 i_idx=-1
@@ -1588,6 +1600,10 @@ for i in $LST; do
          continue
        fi
        if [[ $flnm == *"log.tsv"* ]]; then
+         echo -e "$SDIR/${flnm}" >> $ALST
+         continue
+       fi
+       if [[ $flnm == *"sys_50_tcp_netstats.tsv"* ]]; then
          echo -e "$SDIR/${flnm}" >> $ALST
          continue
        fi
@@ -1819,7 +1835,9 @@ function pre_do_pxx_compare(mtrcm1, mtrc, fld_v, arr, fls, fld_beg, n, allow_zer
   if (allow_zero0_nonzero1 == 0 || (arr[fld_v] != "" && arr[fld_v] != 0)) {
     if (index(mtrc, " val_arr") > 0) {
       for(ii=fld_beg; ii <= n; ii++) {
+        if (arr[ii] == "") {continue;}
         do_pxx_compare(fls, mtrcm1, mtrc, arr[ii]);
+        #if (mtrcm1 == "cgrps_val_arr") { printf("__aabbc fls= %s mtrcm1= %s mtrc= %s v[%d]= %s\n", fls, mtrcm1, mtrc, ii, arr[ii]);}
       }
     } else {
       do_pxx_compare(fls, mtrcm1, mtrc, arr[fld_v]);
@@ -1895,6 +1913,13 @@ function pre_do_pxx_compare(mtrcm1, mtrc, fld_v, arr, fls, fld_beg, n, allow_zer
               pre_do_pxx_compare(mtrcm1, mtrc, fld_v, arr, fls, fld_beg, n, 1);
            }
            if (mtrcm1 == "cgrps_val_arr" && index(mtrc, " val_arr") > 0) {
+              #printf("__aabb cgrps_val_arr val_arr n= %d line= %s\n", n, line);
+              pre_do_pxx_compare(mtrcm1, mtrc, fld_v, arr, fls, fld_beg, n, 1);
+           }
+           if (mtrcm1 == "netstats_val_arr" && index(mtrc, " val_arr") > 0) {
+              pre_do_pxx_compare(mtrcm1, mtrc, fld_v, arr, fls, fld_beg, n, 1);
+           }
+           if (mtrcm1 == "prc_stat_%cpuTL_val_arr" && index(mtrc, " val_arr") > 0) {
               pre_do_pxx_compare(mtrcm1, mtrc, fld_v, arr, fls, fld_beg, n, 1);
            }
 #          if (mtrcm1 == "perf_stat" && index(mtrc, "%not_halted") == 1) {
@@ -2117,6 +2142,10 @@ function arr_in_compare_rev(i1, v1, i2, v2,    l, r)
       delete idx;
       delete res_i;
       delete arr_in;
+        do_prt = "";
+        #if (lst[k,1] == "RPS_per_hst") {
+        #  do_prt = lst[k,1];
+        #}
        for (i=1; i <= mtrc_mx; i++) {
         mtrc   = mtrc_lkup[i,1];
         mtrcm1 = mtrc_lkup[i,2];
@@ -2125,10 +2154,24 @@ function arr_in_compare_rev(i1, v1, i2, v2,    l, r)
         mtrc_sum[nn] = 0.0;
         sumn= 0;
         my_n = fls;
+        if (do_prt != "") {
+          printf("do_prt %s k= %d nn= %d my_n= %d, mtrc= %s mtrcm1= %s\n", do_prt, k, nn, my_n, mtrc, mtrcm1);
+        }
+        do_prt_num = 0;
+        do_prt_blnk = 0;
         for (j=1; j <= my_n; j++) {
           if (mtrc_arr[j,i] != "") {
-          sumn += mtrc_arr[j,i];
+            sumn += mtrc_arr[j,i];
+            do_prt_num++;
+          } else {
+            do_prt_blnk++;
           }
+          if (do_prt != "") {
+            printf("do_prt %s k= %d nn= %d my_n= %d, sumn= %f do_prt_num= %d do_prt_blnk= %d mtrc_arr[%d,%d]= %s\n", do_prt, k, nn, my_n, sumn, do_prt_num, do_prt_blnk, j, i,  mtrc_arr[j,i]);
+          }
+        }
+        if (do_prt != "") {
+          printf("do_prt %s k= %d nn= %d my_n= %d, sumn= %f do_prt_num= %d do_prt_blnk= %d mtrc= %s mtrcm1= %s\n", do_prt, k, nn, my_n, sumn, do_prt_num, do_prt_blnk, mtrc, mtrcm1);
         }
         lst_2_i[k,nn] = i;
         idx[nn] = nn;
@@ -2170,12 +2213,13 @@ function arr_in_compare_rev(i1, v1, i2, v2,    l, r)
         }
         got_val_arr = 0;
         if(index(mtrc, " val_arr") > 0) {
-          #printf("+++++++++++++++++++++++++ got_avgby= %s\"%s\"\t%s\t%s \t my_n= %d\n", got_avgby, eqn_for_col_of_max_val, mcat, mtrc, my_n) > "/dev/stderr";
+          #printf("+++++++++++++++++++++++++ got_avgby= %s\"%s\"\t%s\t%s \t my_n= %d\n", got_avgby, eqn_for_col_of_max_val, mcat, mtrc, my_n);
           got_val_arr = 1;
         }
-        if (got_val_arr == 1) {
-          continue;
-        }
+        # if below is uncommented then val_arr lines are all zero
+        #if (got_val_arr == 1) {
+        #  continue;
+        #}
         rng_str = sprintf("%s%d:%s%d", ltr_beg, rw, ltr_e, rw);
         do_avg0_or_max1 = 0;
         if (mtrc == "data_sheet") {
@@ -2349,6 +2393,7 @@ function arr_in_compare_rev(i1, v1, i2, v2,    l, r)
           mystr = sprintf("\t%s\t%s\t%f", pxx_hdr[k,"grp"], str, my_n);
           for(i=1; i <= my_n; i++) {
             mystr = mystr "" sprintf("\t%f", arr_in[res_i[i]]);
+            #mystr = mystr "" sprintf("\t%f", arr_in[i]);
           }
           printf("%s\n", mystr) >> ofile;
           str = pxx_hdr[k,"mtrc"] " avg";
