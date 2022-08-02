@@ -533,6 +533,7 @@ for bmi in range(base_mx+1):
    if opened_wkbk == False:
        print("+++open workbook output_filename", output_filename)
        workbook = xlsxwriter.Workbook(output_filename)
+       workbook.formats[0].set_font_size(14)
        bold0 = workbook.add_format({'bold': 0})
        opened_wkbk = True
        if got_sum_all > 0:
