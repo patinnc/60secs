@@ -126,11 +126,7 @@ echo $0.$LINENO $AWK_BIN -v beg_ts="$BEG_TS" -v end_ts="$END_TS" -v ts_initial="
 $AWK_BIN -v beg_ts="$BEG_TS" -v end_ts="$END_TS" -v ts_initial="$TS_INITIAL" -v script_nm="$0.$LINENO.awk" -v mutt_file="$MUTT_FL" -v mutt_ofile="$MUTT_OUT_FL" -v cur_dir="$CUR_DIR" -v options="$OPTIONS" -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofile="$OUT_FL" -v ifile="$IN_FL"  '
   BEGIN {
    num_cpus += 0;
-   nm_lkfor = "edge-gateway";
-   nm_lkfor = "trident";
-   nm_lkfor = "odin-scheduler";
-   nm_lkfor = "m3collector_default-compute";
-   nm_lkfor = "xxx_odin-scheduler"; # dummy name
+   nm_lkfor = "yyy_service_name"; # dummy name
    col_pid = -1;
    col_rss = -1;
    col_vsz = -1;
