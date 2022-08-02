@@ -110,17 +110,27 @@ if [ -e $WORK_DIR/$MUTT_NM ]; then
   MUTT_FL=$WORK_DIR/$MUTT_NM
 fi
 
-AWK_BIN=awk  # awk is a link to gawk
+OSTYP=$OSTYPE
+if [[ "$OSTYP" == "linux-gnu"* ]]; then
+  AWK_BIN=awk
 if [ -e $SCR_DIR/../patrick_fay_bin/gawk ]; then
   AWK_BIN=$SCR_DIR/../patrick_fay_bin/gawk
 fi
+elif [[ "$OSTYP" == "darwin"* ]]; then
+   # Mac OSX
+  AWK_BIN=gawk # has to installed locally
+fi
+#AWK_BIN=awk  # awk is a link to gawk
 
 echo $0.$LINENO $AWK_BIN -v beg_ts="$BEG_TS" -v end_ts="$END_TS" -v ts_initial="$TS_INITIAL" -v script_nm="$0.$LINENO.awk" -v mutt_file="$MUTT_FL" -v mutt_ofile="$MUTT_OUT_FL" -v cur_dir="$CUR_DIR" -v options="$OPTIONS" -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofile="$OUT_FL" 
-$AWK_BIN -v beg_ts="$BEG_TS" -v end_ts="$END_TS" -v ts_initial="$TS_INITIAL" -v script_nm="$0.$LINENO.awk" -v mutt_file="$MUTT_FL" -v mutt_ofile="$MUTT_OUT_FL" -v cur_dir="$CUR_DIR" -v options="$OPTIONS" -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofile="$OUT_FL" '
+$AWK_BIN -v beg_ts="$BEG_TS" -v end_ts="$END_TS" -v ts_initial="$TS_INITIAL" -v script_nm="$0.$LINENO.awk" -v mutt_file="$MUTT_FL" -v mutt_ofile="$MUTT_OUT_FL" -v cur_dir="$CUR_DIR" -v options="$OPTIONS" -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofile="$OUT_FL" -v ifile="$IN_FL"  '
   BEGIN {
    num_cpus += 0;
    nm_lkfor = "edge-gateway";
    nm_lkfor = "trident";
+   nm_lkfor = "odin-scheduler";
+   nm_lkfor = "m3collector_default-compute";
+   nm_lkfor = "xxx_odin-scheduler"; # dummy name
    col_pid = -1;
    col_rss = -1;
    col_vsz = -1;
@@ -165,7 +175,45 @@ $AWK_BIN -v beg_ts="$BEG_TS" -v end_ts="$END_TS" -v ts_initial="$TS_INITIAL" -v 
         px[++px_mx] = 99;
         px[++px_mx] = 99.5;
         px[++px_mx] = 100;
+    while((getline < ifile) > 0) {
+      if ($1 == "__muttley__") {
+        v = 2;
+        if (mutt_frst_hdr == "") { v = 1;  mutt_frst_hdr = $0; }
+        while((getline < ifile) > 0) {
+          if ($0 == "" || substr($0, 1, 2) == "__") {
+            break;
+          }
+          mutt_last[v, $1] = $2;
+          if (!($1 in mutt_last_nms_list)) {
+            mutt_last_nms_list[$1] = ++mutt_last_mx;
+            mutt_last_nms_lkup[utt_last_mx] = $1;
+            mutt_last_nms[mutt_last_mx] = $1;
+          }
+        }
+      }
+    }
+    close(ifile);
+    m_drops = 0;
+    for (i=1; i <= mutt_last_mx; i++) {
+       v = mutt_last_nms[i];
+       if (mutt_last[1,v] == mutt_last[2,v]) {
+         mutt_drop[v] = 1;
+         m_drops++;
+       }
+    }
+    printf("got muttley lines to drop (due to no changes to instances) = %d out of mutt_last_mx= %d infile= %s\n", m_drops, mutt_last_mx, ifile);
   }
+function join(array, start, end, sep,    result, i)
+{
+    if (sep == "")
+       sep = " "
+    else if (sep == SUBSEP) # magic value
+       sep = ""
+    result = array[start]
+    for (i = start + 1; i <= end; i++)
+        result = result sep array[i]
+    return result
+}
 function get_max(a, b) {
   if (a > b) {
     return a;
@@ -235,9 +283,9 @@ res_i, idx, j, px, px_mx, str) {
        v = diskstats_vals[k];
        hdr = diskstats_hdrs[k];
        mtrc = hdr " " dev;
-       printf(fmt_str "\n", mtrcm1, v, hdr, dev) >> sum_file;
+       printf(fmt_str "\n", mtrcm1, v, hdr, dev) > sum_file;
        my_n     = diskstats_max[i,k,"n"];
-       #printf(fmt_str"\n", v, hdr, dev) >> sum_file;
+       #printf(fmt_str"\n", v, hdr, dev) > sum_file;
        if (my_n > 0) {
          my_avg   = diskstats_max[i,k,"sum"]/my_n;
          my_stdev = sqrt((diskstats_max[i,k,"sum_sq"]/my_n)-(my_avg*my_avg));
@@ -249,8 +297,8 @@ res_i, idx, j, px, px_mx, str) {
          my_p997  = 0.0;
          my_peak  = 0.0;
        }
-       printf(fmt_str" avg\n", mtrcm1, my_avg, hdr, dev) >> sum_file;
-       printf(fmt_str" peak\n", mtrcm1, my_peak, hdr, dev) >> sum_file;
+       printf(fmt_str" avg\n", mtrcm1, my_avg, hdr, dev) > sum_file;
+       printf(fmt_str" peak\n", mtrcm1, my_peak, hdr, dev) > sum_file;
         delete arr_in;
         delete res_i;
         delete idx;
@@ -269,7 +317,7 @@ res_i, idx, j, px, px_mx, str) {
         for(j=1; j <= n; j++) {
             str = str "" sprintf("\t%f", arr_in[res_i[j]]);
         }
-        printf("%s\n", str) >> sum_file;
+        printf("%s\n", str) > sum_file;
         #fflush();
         # https://www.dummies.com/education/math/statistics/how-to-calculate-percentiles-in-statistics/
         if (index(fmt_str, " val_arr") > 0) {
@@ -292,13 +340,13 @@ res_i, idx, j, px, px_mx, str) {
         for (kk=1; kk <= px_mx; kk++) {
           uval = compute_pxx(kk, my_n, res_i, arr_in);
           str = mtrc " p" px[kk] " ";
-          printf("%s\t%s\t%f\t%s\n", grp, mtrcm1, uval, str) >> sum_file;
+          printf("%s\t%s\t%f\t%s\n", grp, mtrcm1, uval, str) > sum_file;
           printf("%s\t%s\t%f\t%s\n", grp, mtrcm1, uval, str);
         }
         }
     }
     #v = diskstats_max[i,k];
-    #printf("infra_procs\tIO stats\t%.4f\t%s %s peak\n", v, diskstats_hdrs[k], dev) >> sum_file;
+    #printf("infra_procs\tIO stats\t%.4f\t%s %s peak\n", v, diskstats_hdrs[k], dev) > sum_file;
 }
 function arr_in_compare(i1, v1, i2, v2,    l, r, m1, m2)
 {
@@ -322,7 +370,7 @@ tm_diff, diff, v, grp, mtrc, mtrcm1, res_i, idx, j, px, px_mx, my_sum, str) {
    diff = (netdev_data[iend,i,fld]-netdev_data[ibeg,i,fld])/scl;
    v = diff / tm_diff;
    my_n     = netdev_max[i,fld,"n"];
-   printf(fmt_str"\n", v, dev) >> sum_file;
+   printf(fmt_str"\n", v, dev) > sum_file;
    if (my_n > 0) {
      my_avg   = netdev_max[i,fld,"sum"]/my_n;
      my_stdev = sqrt((netdev_max[i,fld,"sum_sq"]/my_n)-(my_avg*my_avg));
@@ -334,8 +382,8 @@ tm_diff, diff, v, grp, mtrc, mtrcm1, res_i, idx, j, px, px_mx, my_sum, str) {
      my_p997  = 0.0;
      my_peak  = 0.0;
    }
-   printf(fmt_str" avg+3stdev\n", my_p997, dev) >> sum_file;
-   printf(fmt_str" peak\n", my_peak, dev) >> sum_file;
+   printf(fmt_str" avg+3stdev\n", my_p997, dev) > sum_file;
+   printf(fmt_str" peak\n", my_peak, dev) > sum_file;
         delete arr_in;
         delete res_i;
         delete idx;
@@ -352,11 +400,11 @@ tm_diff, diff, v, grp, mtrc, mtrcm1, res_i, idx, j, px, px_mx, my_sum, str) {
         asorti(idx, res_i, "arr_in_compare");
         #fflush();
         str = sprintf("%s\t%s\t%f\t%s %s val_arr", grp, mtrcm1, my_n, mtrc, dev);
-        #printf("%s\t%s\t%f\t%s %s val_arr", grp, mtrcm1, my_n, mtrc, dev) >> sum_file;
+        #printf("%s\t%s\t%f\t%s %s val_arr", grp, mtrcm1, my_n, mtrc, dev) > sum_file;
         for(j=1; j <= n; j++) {
           str = str "" sprintf("\t%f", arr_in[res_i[j]]);
         }
-        printf("%s\n", str) >> sum_file;
+        printf("%s\n", str) > sum_file;
         #fflush();
         # https://www.dummies.com/education/math/statistics/how-to-calculate-percentiles-in-statistics/
         if (index(fmt_str, " val_arr") > 0) {
@@ -372,14 +420,14 @@ tm_diff, diff, v, grp, mtrc, mtrcm1, res_i, idx, j, px, px_mx, my_sum, str) {
             my_sum = 0.0;
           }
           str = "avg " mtrc;
-          printf("infra_procs\t%s\t%s\t%s %s\n", mtrcm1, my_sum, str, dev) >> sum_file;
+          printf("infra_procs\t%s\t%s\t%s %s\n", mtrcm1, my_sum, str, dev) > sum_file;
         }
         if (1==2) {
         printf("++++++++____________++++++++++++ io %s %s my_y= %d\n", mtrcm1, mtrc, my_n);
         for (kk=1; kk <= px_mx; kk++) {
           uval = compute_pxx(kk, my_n, res_i, arr_in);
           str = mtrc " p" px[kk] " ";
-          printf("infra_procs\t%s\t%f\t%s %s\n", mtrcm1, uval, str, dev) >> sum_file;
+          printf("infra_procs\t%s\t%f\t%s %s\n", mtrcm1, uval, str, dev) > sum_file;
           printf("infra_procs\t%s\t%f\t%s %s\n", mtrcm1, uval, str, dev);
         }
         }
@@ -933,7 +981,7 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
       docker_lines[j,docker_mx,0] = n;
       for (i=1; i <= n; i++) {
         docker_lines[docker_mx,j,i] = arr[i];
-        if (n == 4 && i == 2) {
+        if (n >= 4 && i == 2) {
            if (index(arr[i], "uber-usi") > 0) {
               k_serv++;
            } else {
@@ -971,11 +1019,13 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
     delete tmutt_data;
     delete tmutt_list;
     delete tmutt_data;
+    mutt_cur_hdr = $0;
     tmutt_mx = 0;
     while ( getline  > 0) {
       if ($0 == "" || (length($1) > 2 && substr($1, 1, 2) == "__")) {
         break;
       }
+      if (mutt_drop[$1] == 1) { continue; }
       mutt_nm = $1;
       pos = index(mutt_nm, ".");
       if (pos > 0 && mutt_nm != "host.calls") {
@@ -1402,7 +1452,7 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
         dint = 1.0;
         v1 = cg_data[cg_mx,cg_i,"tm"] - cg_data[1,cg_i,"tm"];
         if (cg_mx > 1) { v = tm - cg_data[cg_mx-1,cg_i,"tm"]; dint = cg_dt[cg_mx]-cg_dt[cg_mx-1];}
-        #printf("cg_data[%d, %s, tm]= %.3f, dtm= %.3f, dtm/intrvl= %.3f tot_diff= %.3f, tm_tot= %.3f\n", cg_mx, qklk, tm, v, v/dint, v1, cg_lkup[cg_i,"tm_tot"] );
+        printf("cg_data[%d, %s, tm]= %.3f, dtm= %.3f, dtm/intrvl= %.3f tot_diff= %.3f, tm_tot= %.3f\n", cg_mx, qklk, tm, v, v/dint, v1, cg_lkup[cg_i,"tm_tot"] );
       }
       cg_data[cg_mx,cg_i,"mem"] = $(NF-2);
       #printf("tm= %10.3f ln= %s\n", tm, cg);
@@ -1596,75 +1646,152 @@ function mutt_tot2_compare(i1, v1, i2, v2,    l, r)
 function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
     for (ii=1; ii <= cgrps_val_arr["cat_mx"]; ii++) {
         nm   = cgrps_val_arr["cat_nm",ii];
-        my_n = cgrps_val_arr["vals_mx",ii];
-        printf("got cgrps_val_arr[%d] nm= %s my_n= %s\n", ii, nm, my_n);
+        my_n = cgrps_val_arr["vals_mx",ii,nm];
+        #printf("got cgrps_val_arr[%d] nm= %s my_n= %s\n", ii, nm, my_n) >> "tmp.jnk";
+
+        if (do_this_one_time == "") {
+          do_this_one_time = 1;
+          for (k=1; k <= 2; k++) {
+               if (k == 1) { styp = 1; snm = "tot_docker_services";}
+               if (k == 2) { styp = 2; snm = "tot_infra_agent"; }
+        delete arr_in;
+        delete res_i;
+        delete idx;
+        calls = 0;
+        new_n = 0;
+        nnstr = "";
+               #cgrps_val_tarr["cat_mx"] = styp;
+               snm = cgrps_val_tarr["cat_nm",styp];
+               #cgrps_val_tarr["str",styp] = "%cpu";
+               my_vals_mx = cgrps_val_tarr["vals_mx",styp,snm];
+               for (kk=2; kk <= my_vals_mx; kk++) {
+                 v = cgrps_val_tarr["val",styp,kk,1];
+                 #cgrps_val_tarr["val",styp,kk,2] += sum;
+                 #cgrps_val_tarr["val",styp,kk,3] += calls;
+                 #cgrps_val_tarr["val",styp,kk,4] += tdff;
+                 #cgrps_val_tarr["val",styp,kk,5] = vld;
+                 if (v == "") { continue; }
+                 new_n++;
+                 nnstr = nnstr "" sprintf("\t%f", v);
+                 idx[new_n] = new_n;
+                 arr_in[new_n] = v;
+                 #printf("tot_cgrp %s kk= %d v= %f\n", snm, kk, v);
+              }
+        asorti(idx, res_i, "arr_in_compare");
+        nstr = sprintf("%s\t%s\t%f\t%s val_arr", "cgrp_val_arr", "cgrps_val_arr", new_n, "tot_%cpu "snm);
+        printf("%s%s\n", nstr, nnstr) > sum_file;
+        for (kk=1; kk <= px_mx; kk++) {
+          uval = compute_pxx(kk, new_n, res_i, arr_in);
+          strp = "tot_%cpu " snm " p" px[kk];
+          printf("%s\t%s\t%f\t%s\n", "cgrp_per_hst", "cgrp_per_hst", uval, strp) > sum_file;
+        }
+          }
+        }
         if (my_n == 0) {
           continue;
         }
         str  = cgrps_val_arr["str",ii];
         #printf("at104 cg= %d ii= %d nm= %s\n", cg, ii, nm);
         #fflush();
-        nstr = sprintf("%s\t%s\t%f\t%s val_arr", "cgrp_val_arr", "cgrps_val_arr", my_n, str " " nm);
         delete arr_in;
         delete res_i;
         delete idx;
+        calls = 0;
+        new_n = 0;
+        nnstr = "";
         for(j=1; j <= my_n; j++) {
            v = cgrps_val_arr["val",ii,j,1];
-           nstr = nstr "" sprintf("\t%f", v);
-           idx[j] = j;
-           arr_in[j] = v;
+           if (v == "") { continue; }
+           new_n++;
+           calls += cgrps_val_arr["val",ii,j,3];
+           nnstr = nnstr "" sprintf("\t%f", v);
+           idx[new_n] = new_n;
+           arr_in[new_n] = v;
         }
-        #printf("%s\n", nstr) >> sum_file;
+        nstr = sprintf("%s\t%s\t%f\t%s val_arr", "cgrp_val_arr", "cgrps_val_arr", new_n, str " " nm);
+        if (index(str, "ms_per_call") == 0 || calls > 0) {
+          printf("%s%s\n", nstr, nnstr) > sum_file;
+        }
         #fflush();
+        if (calls > 0) {
         asorti(idx, res_i, "arr_in_compare");
         for (kk=1; kk <= px_mx; kk++) {
           uval = compute_pxx(kk, my_n, res_i, arr_in);
           strp = "ms_per_call " nm " p" px[kk];
-          printf("%s\t%s\t%f\t%s\n", "cgrp_per_hst", "cgrp_per_hst", uval, strp) >> sum_file;
+          printf("%s\t%s\t%f\t%s\n", "cgrp_per_hst", "cgrp_per_hst", uval, strp) > sum_file;
+        }
         }
 
-
-        nstr = sprintf("%s\t%s\t%f\t%s val_arr", "cgrp_val_arr", "cgrps_val_arr", my_n, "%cpu " nm);
         delete arr_in;
         delete res_i;
         delete idx;
+        new_n = 0;
+        nnstr = "";
         for(j=1; j <= my_n; j++) {
            v1 = cgrps_val_arr["val",ii,j,2];
+           if (v1 == "") { continue; }
+           new_n++;
            tdff = cgrps_val_arr["val",ii,j,4];
            v2 = top_fctr * v1/tdff;
-           nstr = nstr "" sprintf("\t%f", v2);
-           idx[j] = j;
-           arr_in[j] = v2;
+           if (nm == nm_lkfor) { printf("val_arr[%d]= \"%s\" nm= %s\n", j, v2, nm); }
+           #nnstr = nnstr ""  sprintf("\t%f", v2);
+           nnarr[new_n] = v2;
+           nnstr = nnstr ""  sprintf("%f\t", v2);
+           idx[new_n] = new_n;
+           arr_in[new_n] = v2;
         }
-        #printf("%s\n", nstr) >> sum_file;
-        printf("%s\n", nstr);
-        #fflush();
+        nstr = sprintf("%s\t%s\t%f\t%s val_arr", "cgrp_val_arr", "cgrps_val_arr", new_n, "%cpu " nm);
+        #gsub(/ /, "\t", nnstr);
+        #nnstr = gensub(/ /, "\t", "g", nnstr);
+        printf("%s", nstr) > sum_file;
+        #mstr = join(nnarr, 1, new_n, "\t");
+        mstr = "";
+        for (j=1; j <= new_n; j++) {
+           mstr = mstr "\t" sprintf("%f", nnarr[j]);
+        }
+        #gsub(/\t/, ";", mstr);
+        #gsub(/;/, "\t", mstr);
+        printf("%s\n", mstr) > sum_file;
+        #printf("%s", nstr) > "tmp.jnk";
+        #printf("%s\n", mstr) > "tmp.jnk";
+
+        #printf("%s\t%s\n", nstr, nnstr) > sum_file;
+        #if (nm == nm_lkfor) { printf("__aabb val_arr= %s%s\n", nstr, nnstr);}
+        #printf("%s\n", nstr);
         asorti(idx, res_i, "arr_in_compare");
         for (kk=1; kk <= px_mx; kk++) {
           uval = compute_pxx(kk, my_n, res_i, arr_in);
           strp = "%cpu " nm " p" px[kk];
-          printf("%s\t%s\t%f\t%s\n", "cgrp_per_hst", "cgrp_per_hst", uval, strp) >> sum_file;
+          printf("%s\t%s\t%f\t%s\n", "cgrp_per_hst", "cgrp_per_hst", uval, strp) > sum_file;
         }
 
-        nstr = sprintf("%s\t%s\t%f\t%s val_arr", "cgrp_val_arr", "cgrps_val_arr", my_n, "RPS " nm);
+        if (calls > 0) {
         delete arr_in;
         delete res_i;
         delete idx;
+        new_n = 0;
+        nnstr = 0;
         for(j=1; j <= my_n; j++) {
+           vld = cgrps_val_arr["val",ii,j,5];
            v1 = cgrps_val_arr["val",ii,j,3];
+           if (v1 == "" || vld == 0) { continue; }
+           new_n++;
            tdff = cgrps_val_arr["val",ii,j,4];
            v2 = v1/tdff;
-           nstr = nstr "" sprintf("\t%f", v2);
-           idx[j] = j;
-           arr_in[j] = v2;
+           nnstr = nnstr "" sprintf("\t%f", v2);
+           idx[new_n] = new_n
+           arr_in[new_n] = v2;
         }
-        #printf("%s\n", nstr) >> sum_file;
+        nstr = sprintf("%s\t%s\t%f\t%s val_arr", "cgrp_val_arr", "cgrps_val_arr", new_n, "RPS " nm);
+        printf("%s%s\n", nstr, nnstr) > sum_file;
         #fflush();
         asorti(idx, res_i, "arr_in_compare");
         for (kk=1; kk <= px_mx; kk++) {
-          uval = compute_pxx(kk, my_n, res_i, arr_in);
+          #uval = compute_pxx(kk, my_n, res_i, arr_in);
+          uval = compute_pxx(kk, ju, res_i, arr_in);
           strp = "RPS " nm " p" px[kk];
-          printf("%s\t%s\t%f\t%s\n", "RPS_per_hst", "RPS_per_hst", uval, strp) >> sum_file;
+          printf("%s\t%s\t%f\t%s\n", "RPS_per_hst", "RPS_per_hst", uval, strp) > sum_file;
+        }
         }
     }
 }
@@ -1810,15 +1937,15 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
              } else {
                v = 0.0;
              }
-             printf("infra_procs\tmuttley calls avg\t%f\t%s\n", v, "RPS " mutt_other_str) >> sum_file;
+             printf("infra_procs\tmuttley calls avg\t%f\t%s\n", v, "RPS " mutt_other_str) > sum_file;
              break;
           }
            avg = mutt_calls_tot[i]/tm_diff;
-           printf("infra_procs\tmuttley calls avg\t%f\t%s\n", avg, "RPS " mutt_lkup[i]) >> sum_file;
+           printf("infra_procs\tmuttley calls avg\t%f\t%s\n", avg, "RPS " mutt_lkup[i]) > sum_file;
            printf("infra_procs\tmuttley calls avg\t%f\t%s\ttotal\t%.0f\ttm\t%f\n", avg, "RPS " mutt_lkup[i], mutt_calls_tot[i], tm_diff);
          }
          }
-         printf("infra_procs\tmuttley host.calls max\t%f\t%s\n", mutt_host_calls_max, "RPS host.calls max") >> sum_file;
+         printf("infra_procs\tmuttley host.calls max\t%f\t%s\n", mutt_host_calls_max, "RPS host.calls max") > sum_file;
       }
 #abc  write complete list to mutt_ofile
       for(i=1; i <= mutt_mx2; i++) {
@@ -2070,7 +2197,7 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
         for (kk=1; kk <= px_mx; kk++) {
           uval = compute_pxx(kk, my_n, res_i, arr_in);
           strp = "%cpu_util p" px[kk];
-          printf("%s\t%s\t%f\t%s\n", "cpu_util_per_hst", "cpu_util_per_hst", uval, strp) >> sum_file;
+          printf("%s\t%s\t%f\t%s\n", "cpu_util_per_hst", "cpu_util_per_hst", uval, strp) > sum_file;
         }
 
     dckr_all = "_docker_all_";
@@ -2104,9 +2231,9 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
       cg_sg = cg_lkup[i,"subgrp"];
       qklk = cg_lkup[i,"qklk"];
       v = cg_lkup[i,"tm_tot"];
-      #if (qklk == nm_lkfor) {
-      #  printf("lkfor: cg_lkup[%d,tm_tot]= %.3f nm= %s\n", i, v, nm);
-      #}
+      if (qklk == nm_lkfor) {
+        printf("lkfor: cg_lkup[%d,tm_tot]= %.3f nm= %s\n", i, v, nm);
+      }
       printf("lkfor: cg_lkup[%d,tm_tot]= %.3f is_infra= %s nm= %s\n", i, v, cg_lkup[i,"is_infra"],  nm);
       sum2 = 0.0;
       if (1==2) {
@@ -2149,9 +2276,9 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
           sv_ni_dckr = ncg_list_mx;
         }
       }
-      #if (qklk == nm_lkfor) {
-      #  printf("qklk= %s, nm= %s, v= %.3f\n", qklk, nm, v);
-      #}
+      if (qklk == nm_lkfor) {
+        printf("qklk= %s, nm= %s, v= %.3f\n", qklk, nm, v);
+      }
       ncg_i = ncg_list[nm];
       ncg_n = ++ncg_lkup[ncg_i,"mx"];
       ncg_lkup[ncg_i,"list",ncg_n] = i;
@@ -2291,7 +2418,7 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
             continue;
           }
           srvcs_i = srvcs_list[nm];
-          printf("got ms_per_call cg4 nm= %s srvcs_i= %s\n", nm, srvcs_i);
+          #printf("got ms_per_call cg4 nm= %s srvcs_i= %s\n", nm, srvcs_i);
           if (!((srvcs_i,"mutt_mx") in srvcs_lkup)) {
             continue;
           }
@@ -2306,10 +2433,10 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
             unm = nm;
             if (unm == "services") { unm = "services all";}
             if ( use_top_pct_cpu == 0) {
-              printf("cgrps_cpu\tcgrps cpus %s\t%.3f\t%s %s\n", str1, v , str1, unm) >> sum_file;
+              printf("cgrps_cpu\tcgrps cpus %s\t%.3f\t%s %s\n", str1, v , str1, unm) > sum_file;
             } else {
               v *= 100.0;
-              printf("cgrps_cpu\tcgrps %%cpu %s\t%.3f\t%s %s\n", str1, v, str1, unm) >> sum_file;
+              printf("cgrps_cpu\tcgrps %%cpu %s\t%.3f\t%s %s\n", str1, v, str1, unm) > sum_file;
             }
         }
         ++cg_cols;
@@ -2350,17 +2477,21 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
            }
            ncg_n = ncg_lkup[i,"mx"];
            sum = 0.0;
+           vld = 0;
            for(kk=1; kk <= ncg_n; kk++) {
              lkup_i = ncg_lkup[i,"list",kk];
              v1 = cg_data[k,lkup_i,"tm"];
+             if (v1 != "") { vld = 1;}
              v0 = cg_data[k-1,lkup_i,"tm"];
              v = v1 - v0;
              if (v < 0.0) { v = 0.0; }
              sum += v;
-             #if (nm == nm_lkfor) { printf("k= %d, %s v= %.3f sum= %.3f, kk= %d, lkup_I= %d, cg_nm= %s, tdff= %f\n", k, nm, v, sum, kk, lkup_i, cg_lkup[lkup_i,"qklk"], tdff); }
+             if (nm == nm_lkfor) { printf("k= %d, %s v= %.3f sum= %.3f, kk= %d, lkup_I= %d, cg_nm= %s, tdff= %f v0= %f v1= %f v/tdff= %.3f\n", k, nm, v, sum, kk, lkup_i, cg_lkup[lkup_i,"qklk"], tdff, v0, v1, v/tdff); }
            }
+           sv_sum = sum;
            if (cg == 3 && nm == dckr_all) {
              sum = 0.0;
+             if (cg_data[k,sv_i_all,"tm"] != "") { vld = 1;}
              v1 = cg_data[k,sv_i_all,"tm"] - cg_data[k,sv_i_sys_slc,"tm"]
              v0 = cg_data[k-1,sv_i_all,"tm"] - cg_data[k-1,sv_i_sys_slc,"tm"]
              v = v1 - v0;
@@ -2377,11 +2508,12 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
                cgrps_val_arr["cat_mx"] = iii;
                cgrps_val_arr["cat_nm",iii] = nm;
                cgrps_val_arr["str",iii] = "%cpu";
-               kk = ++cgrps_val_arr["vals_mx",iii];
+               kk = ++cgrps_val_arr["vals_mx",iii,nm];
                cgrps_val_arr["val",iii,kk,1] = sum;
                cgrps_val_arr["val",iii,kk,2] = sum;
                cgrps_val_arr["val",iii,kk,3] = 0;
                cgrps_val_arr["val",iii,kk,4] = tdff;
+               cgrps_val_arr["val",iii,kk,5] = vld;
            }
            if (cg == 1) {
              if (nm in srvcs_list) {
@@ -2389,7 +2521,7 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
                v1 = sum/tdff;
                srvcs_lkup[srvcs_i,"tm"] += sum;
                srvcs_lkup[srvcs_i,"tdff"] += tdff;
-               #if (nm == nm_lkfor) {sum_eats += sum; printf("k= %d srvcs_lkup[%s,tm]= %.3f tdff= %.3f sum_eats= %.3f\n", k, nm, sum, tdff, sum_eats);}
+               if (nm == nm_lkfor) {sum_eats += sum; printf("k= %d srvcs_lkup[%s,tm]= %.3f tdff= %.3f sum_eats= %.3f\n", k, nm, sum, tdff, sum_eats);}
              }
            }
            v2 = top_fctr * sum/tdff;
@@ -2418,23 +2550,50 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
                }
                tm_attributable_to_cntr_mutt += sum;
                #printf("ck_ms_call: k= %d nm= %s, calls= %d, mutt_nm= %s nn= %d\n", k, nm, calls, nmutt_lkup[ik,"nm"], nn);
-             } 
+             } else {
+               v2 = "";
+             }
+             if (cg == 2 && sgrp == "sys.srvc") {
+               v2 = top_fctr * sum/tdff;
+             }
              #printf("got to ms_per_call ck v2= %s sum= %f calls %f tdff %f nm %s\n", v2, sum, calls, tdff, nm);
         #printf("at103 cg= %d iii= %d sum= %s nm= %s\n", cg, iii, sum, nm);
-             #if (v2 != "") {
                cgrps_val_arr["cat_mx"] = iii;
                cgrps_val_arr["cat_nm",iii] = nm;
                cgrps_val_arr["str",iii] = "ms_per_call";
-               kk = ++cgrps_val_arr["vals_mx",iii];
+               ++cgrps_val_arr["vals_mx",iii,nm];
+               kk = cgrps_val_arr["vals_mx",iii,nm];
                cgrps_val_arr["val",iii,kk,1] = (cg == 4 ? v2 : v);
                cgrps_val_arr["val",iii,kk,2] = sum;
                cgrps_val_arr["val",iii,kk,3] = calls;
                cgrps_val_arr["val",iii,kk,4] = tdff;
-               #printf("got to ms_per_call v2= %f sum= %f calls %f tdff %f nm %s\n", v2, sum, calls, tdff, nm);
-             #}
+               cgrps_val_arr["val",iii,kk,5] = vld;
            }
+
+             #if (cg == 3) {
+               styp = 1;
+               snm = "tot_docker_services";
+               if (sgrp == "sys.srvc") {
+                 styp = 2;
+                 snm = "tot_infra_agent";
+               }
+               printf("got into cgrps_val_tarr stuff\n");
+               cgrps_val_tarr["cat_mx"] = styp;
+               cgrps_val_tarr["cat_nm",styp] = snm
+               cgrps_val_tarr["str",styp] = "ms_per_call";
+               cgrps_val_tarr["vals_mx",styp,snm] = k;
+               kk = cgrps_val_tarr["vals_mx",styp,snm];
+               v2 = top_fctr * sv_sum/tdff;
+               cgrps_val_tarr["val",styp,kk,1] += v2;
+               cgrps_val_tarr["val",styp,kk,2] += sv_sum;
+               cgrps_val_tarr["val",styp,kk,3] += calls;
+               cgrps_val_tarr["val",styp,kk,4] += tdff;
+               cgrps_val_tarr["val",styp,kk,5] = vld;
+             #}
+               #printf("got to ms_per_call v2= %f sum= %f calls %f tdff %f kk= %d nm %s\n", v2, sum, calls, tdff, kk, nm) >> "tmp.jnk";
+             #}
            printf("\t%.3f", v2) > ofile;
-           #if (nm == nm_lkfor) { printf("k= %d, %s v2= %.3f top_fctr= %.3f, sum= %.3f, tdff= %f\n", k, nm, v2, top_fctr, sum, tdff); }
+           if (nm == nm_lkfor) { printf("k= %d, %s v2= %.3f top_fctr= %.3f, sum= %.3f, tdff= %f\n", k, nm, v2, top_fctr, sum, tdff); }
         }
         printf("\n") > ofile;
         trow++;
@@ -2447,7 +2606,7 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
 
     }
     }
-     printf("cg= %d cgrps_val_arr["cat_mx"] = %d\n", cg, cgrps_val_arr["cat_mx"]);
+     #printf("cg= %d cgrps_val_arr["cat_mx"] = %d\n", cg, cgrps_val_arr["cat_mx"]);
     if (1==1) {
         delete arr_in;
         delete res_i;
@@ -2473,7 +2632,7 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
         for (kk=1; kk <= px_mx; kk++) {
           uval = compute_pxx(kk, my_n, res_i, arr_in);
           strp = "RPS _all_ p" px[kk];
-          printf("%s\t%s\t%f\t%s\n", "RPS_per_hst", "RPS_per_hst", uval, strp) >> sum_file;
+          printf("%s\t%s\t%f\t%s\n", "RPS_per_hst", "RPS_per_hst", uval, strp) > sum_file;
         }
         #mutt_lkup[mutt_mx] = mutt_nm;
     }
@@ -2542,19 +2701,19 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
           nsum += tm;
           #printf("cntr_nomap_to_muttley\tcntr_nomap %%tot_cntr_cpusecs %s %.3f%%, no muttley,                 %s\n", i, 100.0* tm / gsum, svc);
           if (sum_file != "") {
-            printf("cntr_nomap_to_muttley\tcntr_nomap_to_muttley_pct_of_tot_cntr_cpusecs\t%.3f\tcntr_nomap %s\n", 100.0*tm/gsum, svc) >> sum_file;
+            printf("cntr_nomap_to_muttley\tcntr_nomap_to_muttley_pct_of_tot_cntr_cpusecs\t%.3f\tcntr_nomap %s\n", 100.0*tm/gsum, svc) > sum_file;
           }
         }
       }
       total_busy_cpusecs = num_cpus * (sv_uptm[idle_mx]-sv_uptm[1]) - (sv_idle[idle_mx]-sv_idle[1]);
       total_elapsed_time = sv_uptm[idle_mx]-sv_uptm[1];
       if (sum_file != "") {
-        printf("elapsed time secs\telapsed time secs\t%.3f\telapsed_time\n", total_elapsed_time) >> sum_file;
-        printf("total busy cpusecs\ttotal_busy_cpusecs\t%.3f\ttot_cpusecs\n", total_busy_cpusecs) >> sum_file;
-        printf("total %%cpu_utilization\ttotal_%%cpu_utilization\t%.3f\t%%cpu_util\n", 100.0*total_busy_cpusecs/(num_cpus*total_elapsed_time)) >> sum_file;
-        printf("total mapped cntr cpusecs\ttot_map_cntr_cpusecs\t%.3f\ttot_map_cntr_cpusecs\n", sum) >> sum_file;
-        printf("total notmapped cntr cpusecs\ttot_notmap_cntr_cpusecs\t%.3f\ttot_notmap_cntr_cpusecs\n", nsum) >> sum_file;
-        printf("total cntr cpusecs\ttot_cntr_cpusecs\t%.3f\ttot_cntr_cpusecs\n", gsum) >> sum_file;
+        printf("elapsed time secs\telapsed time secs\t%.3f\telapsed_time\n", total_elapsed_time) > sum_file;
+        printf("total busy cpusecs\ttotal_busy_cpusecs\t%.3f\ttot_cpusecs\n", total_busy_cpusecs) > sum_file;
+        printf("total %%cpu_utilization\ttotal_%%cpu_utilization\t%.3f\t%%cpu_util\n", 100.0*total_busy_cpusecs/(num_cpus*total_elapsed_time)) > sum_file;
+        printf("total mapped cntr cpusecs\ttot_map_cntr_cpusecs\t%.3f\ttot_map_cntr_cpusecs\n", sum) > sum_file;
+        printf("total notmapped cntr cpusecs\ttot_notmap_cntr_cpusecs\t%.3f\ttot_notmap_cntr_cpusecs\n", nsum) > sum_file;
+        printf("total cntr cpusecs\ttot_cntr_cpusecs\t%.3f\ttot_cntr_cpusecs\n", gsum) > sum_file;
         for (j=1; j <= 4; j++) {
           for (i=1; i <= srvcs_mx; i++) {
             calls = srvcs_lkup[i,"mutt_calls"];
@@ -2563,16 +2722,16 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
             tm    = srvcs_lkup[i,"tm"];
             n     = srvcs_lkup[i,"mutt_mx"];
             if (j == 1) {
-              printf("cntr_map_to_muttley\tcntr_cpu_ms_per_call\t%.3f\tms/call %s\n", 1000.0*tm/calls, svc) >> sum_file;
+              printf("cntr_map_to_muttley\tcntr_cpu_ms_per_call\t%.3f\tms/call %s\n", 1000.0*tm/calls, svc) > sum_file;
             }
             if (j == 2) {
-              printf("cntr_map_to_muttley_pct\tcntr_pct_of_tot_cntr_secs\t%.3f\tcntr_%%sec %s\n", 100.0*tm/gsum, svc) >> sum_file;
+              printf("cntr_map_to_muttley_pct\tcntr_pct_of_tot_cntr_secs\t%.3f\tcntr_%%sec %s\n", 100.0*tm/gsum, svc) > sum_file;
             }
             if (j == 3) {
-              printf("cntr_map_to_muttley_tm\tcntr_secs\t%.3f\tcntr_cpusecs %s\n", tm, svc) >> sum_file;
+              printf("cntr_map_to_muttley_tm\tcntr_secs\t%.3f\tcntr_cpusecs %s\n", tm, svc) > sum_file;
             }
             if (j == 4) {
-              printf("cntr_map_to_muttley_calls\tcntr_calls\t%.3f\tcntr_calls %s\n", calls, svc) >> sum_file;
+              printf("cntr_map_to_muttley_calls\tcntr_calls\t%.3f\tcntr_calls %s\n", calls, svc) > sum_file;
             }
 #printf("cgrp[%d] cpu_usage %.3f%%, cpu_ms/call= %.3f tm= %.3f, calls= %3.f %s\n", i, 100.0*tm/gsum, 1000.0* tm / calls, tm, calls, svc);
           }
@@ -2734,10 +2893,10 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
          j = res_i[i];
          if (tot[j] == 0) { continue; }
          if ( use_top_pct_cpu == 0) {
-           printf("infra_procs\tinfra procs cpus\t%.3f\t%s\n", tot[j], proc_lkup[j]) >> sum_file;
+           printf("infra_procs\tinfra procs cpus\t%.3f\t%s\n", tot[j], proc_lkup[j]) > sum_file;
          } else {
            v = 100.0 * tot[j];
-           printf("infra_procs\tinfra procs %%cpu\t%.3f\t%s\n", v, proc_lkup[j]) >> sum_file;
+           printf("infra_procs\tinfra procs %%cpu\t%.3f\t%s\n", v, proc_lkup[j]) > sum_file;
          }
       }
       for(i=1; i <= proc_mx; i++) {
@@ -2745,19 +2904,19 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
          if (tot[j] == 0) { continue; }
          v = sv_max[j];
          if ( use_top_pct_cpu == 0) {
-           printf("infra_procs\tinfra procs max cpus\t%.3f\t%s\n", v, proc_lkup[j]) >> sum_file;
+           printf("infra_procs\tinfra procs max cpus\t%.3f\t%s\n", v, proc_lkup[j]) > sum_file;
          } else {
            # v = 100.0 * sv_max[j];
-           printf("infra_procs\tinfra procs max %%cpu\t%.3f\t%s\n", v, proc_lkup[j]) >> sum_file;
+           printf("infra_procs\tinfra procs max %%cpu\t%.3f\t%s\n", v, proc_lkup[j]) > sum_file;
          }
       }
       for (i=1; i <= busy_mx; i++) {
          str = busy_infra_str[i];
          v   = inf_max[i];
          if ( use_top_pct_cpu == 0) {
-           printf("infra_procs\tinfra procs max cpus\t%.3f\t%s\n", v, str) >> sum_file;
+           printf("infra_procs\tinfra procs max cpus\t%.3f\t%s\n", v, str) > sum_file;
          } else {
-           printf("infra_procs\tinfra procs max %%cpu\t%.3f\t%s\n", v, str) >> sum_file;
+           printf("infra_procs\tinfra procs max %%cpu\t%.3f\t%s\n", v, str) > sum_file;
          }
       }
       #close(sum_file);
@@ -2792,10 +2951,10 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
       printf("\n") > ofile;
       if (sum_file != "") {
          avg = dckr_tot/dckr_n;
-         printf("infra_procs\tcontainers avg\t%.3f\t%s\n", avg, "total") >> sum_file;
+         printf("infra_procs\tcontainers avg\t%.3f\t%s\n", avg, "total") > sum_file;
          for(i=1; i <= dckr_hdr_mx; i++) {
            avg = dckr_sum[i]/dckr_n;
-           printf("infra_procs\tcontainers avg\t%.3f\t%s\n", avg, dckr_hdr[i]) >> sum_file;
+           printf("infra_procs\tcontainers avg\t%.3f\t%s\n", avg, dckr_hdr[i]) > sum_file;
          }
       }
     }
@@ -2825,7 +2984,7 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
       if (sum_file != "") {
          dff = net_dt[net_mx]-net_dt[1];
          for(i=1; i < tcp_hdrs_mx; i++) {
-           printf("infra_procs\tinfra TCP\t%.3f\t%s/sec\n", (tcp[net_mx,i]-tcp[1,i])/dff, tcp_hdrs[i]) >> sum_file;
+           printf("infra_procs\tinfra TCP\t%.3f\t%s/sec\n", (tcp[net_mx,i]-tcp[1,i])/dff, tcp_hdrs[i]) > sum_file;
          }
       }
     }
@@ -2855,7 +3014,7 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
       if (sum_file != "") {
          dff = net_dt[net_mx]-net_dt[1];
          for(i=1; i < udp_hdrs_mx; i++) {
-           printf("infra_procs\tinfra UDP\t%.3f\t%s/sec\n", (udp[net_mx,i]-udp[1,i])/dff, udp_hdrs[i]) >> sum_file;
+           printf("infra_procs\tinfra UDP\t%.3f\t%s/sec\n", (udp[net_mx,i]-udp[1,i])/dff, udp_hdrs[i]) > sum_file;
          }
       }
     }
@@ -2938,10 +3097,10 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
           do_netdev_print("infra_procs\tnet stats\t%.3f\tMB/s read %s", i, fld, netdev_mx, 1, scl);
           fld = "packets_rd";
           do_netdev_print("infra_procs\tnet stats\t%.3f\tpackets Kpkts/s read %s", i, fld, netdev_mx, 1, scl2);
-          #printf("infra_procs\tnet stats\t%.3f\tpackets Kpkts/s read %s\n", v, netdev_data[1,i,"device"]) >> sum_file;
+          #printf("infra_procs\tnet stats\t%.3f\tpackets Kpkts/s read %s\n", v, netdev_data[1,i,"device"]) > sum_file;
           fld = "bytes_wr";
           do_netdev_print("infra_procs\tnet stats\t%.3f\tMB/s write %s", i, fld, netdev_mx, 1, scl);
-          #printf("infra_procs\tnet stats\t%.3f\tMB/s write %s\n", v, netdev_data[1,i,"device"]) >> sum_file;
+          #printf("infra_procs\tnet stats\t%.3f\tMB/s write %s\n", v, netdev_data[1,i,"device"]) > sum_file;
           fld = "packets_wr";
           do_netdev_print("infra_procs\tnet stats\t%.3f\tpackets/s Kpkts/s write %s", i, fld, netdev_mx, 1, scl2);
          }
@@ -3022,10 +3181,10 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
         dev = diskstats_data[1,i,"device"];
         for (k=2; k <= cols; k++) {
           v = diskstats_vals[k];
-          printf("infra_procs\tIO stats\t%.4f\t%s %s\n", v, diskstats_hdrs[k], dev) >> sum_file;
+          printf("infra_procs\tIO stats\t%.4f\t%s %s\n", v, diskstats_hdrs[k], dev) > sum_file;
           if (options_get_max_val == 1) {
               v = diskstats_max[i,k];
-              printf("infra_procs\tIO stats\t%.4f\t%s %s peak\n", v, diskstats_hdrs[k], dev) >> sum_file;
+              printf("infra_procs\tIO stats\t%.4f\t%s %s peak\n", v, diskstats_hdrs[k], dev) > sum_file;
           }
         }
         }
@@ -3040,7 +3199,7 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
            #if (vnum[i] > 0) {
            #  v = vsum[i]/vnum[i];
            #}
-           printf("infra_procs\tIO stats\t%.3f\tIO MBs/sec %s\n", v, diskstats_data[1,i,"device"]) >> sum_file;
+           printf("infra_procs\tIO stats\t%.3f\tIO MBs/sec %s\n", v, diskstats_data[1,i,"device"]) > sum_file;
          }
       }
 
@@ -3097,13 +3256,13 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
           tm_diff = diskstats_dt[diskstats_mx]-diskstats_dt[1];
           IOS_diff = 1.0e-6 * (diskstats_data[diskstats_mx,i,"total_ios"]-diskstats_data[1,i,"total_ios"]);
           v = IOS_diff / tm_diff;
-          printf("infra_procs\tIO stats\t%.3f\tIOPS %s\n", v, diskstats_data[1,i,"device"]) >> sum_file;
+          printf("infra_procs\tIO stats\t%.3f\tIOPS %s\n", v, diskstats_data[1,i,"device"]) > sum_file;
           IOS_diff = 1.0e-6 * (diskstats_data[diskstats_mx,i,"total_ios_rd"]-diskstats_data[1,i,"total_ios_rd"]);
           v = IOS_diff / tm_diff;
-          printf("infra_procs\tIO stats\t%.3f\tIOPS read %s\n", v, diskstats_data[1,i,"device"]) >> sum_file;
+          printf("infra_procs\tIO stats\t%.3f\tIOPS read %s\n", v, diskstats_data[1,i,"device"]) > sum_file;
           IOS_diff = 1.0e-6 * (diskstats_data[diskstats_mx,i,"total_ios_wr"]-diskstats_data[1,i,"total_ios_wr"]);
           v = IOS_diff / tm_diff;
-          printf("infra_procs\tIO stats\t%.3f\tIOPS write %s\n", v, diskstats_data[1,i,"device"]) >> sum_file;
+          printf("infra_procs\tIO stats\t%.3f\tIOPS write %s\n", v, diskstats_data[1,i,"device"]) > sum_file;
          }
       }
     }
@@ -3146,7 +3305,7 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
           if (rss_n[j] > 0) {
             avg = rss_sum[j]/rss_n[j];
           }
-          printf("infra_procs\trss avg MBs\t%.3f\t%s\n", avg/1024.0, proc_lkup[j]) >> sum_file;
+          printf("infra_procs\trss avg MBs\t%.3f\t%s\n", avg/1024.0, proc_lkup[j]) > sum_file;
          }
       }
     }
@@ -3188,7 +3347,7 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
           if (rss_n[j] > 0) {
             avg = vsz_sum[j]/vsz_n[j];
           }
-          printf("infra_procs\tvsz avg MBs\t%.3f\t%s\n", avg/1024.0, proc_lkup[j]) >> sum_file;
+          printf("infra_procs\tvsz avg MBs\t%.3f\t%s\n", avg/1024.0, proc_lkup[j]) > sum_file;
          }
       }
     }
@@ -3263,10 +3422,10 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
       printf("%.3f\t", v) > ofile;
     #  if (sum_file != "") {
     #     if ( use_top_pct_cpu == 0) {
-    #       printf("infra_procs\tinfra procs max cpus\t%.3f\t%s\n", v, proc_lkup[j]) >> sum_file;
+    #       printf("infra_procs\tinfra procs max cpus\t%.3f\t%s\n", v, proc_lkup[j]) > sum_file;
     #     } else {
     #       # v = 100.0 * sv_max[j];
-    #       printf("infra_procs\tinfra procs max %%cpu\t%.3f\t%s\n", v, proc_lkup[j]) >> sum_file;
+    #       printf("infra_procs\tinfra procs max %%cpu\t%.3f\t%s\n", v, proc_lkup[j]) > sum_file;
     #     }
     #  }
     }
