@@ -624,6 +624,7 @@ fi
 if [ "$PHASE_FILE" != "" ]; then
   EXTRA_FILES="$EXTRA_FILES $PHASE_FILE"
 fi
+
 FILES=`ls -1 $DIR/sys_*_*.txt $EXTRA_FILES`
 echo "FILES = $FILES"
 if [ "$FILES" == "" ]; then
@@ -632,6 +633,14 @@ fi
 FILES2=`ls -1 $DIR/../sys_*_*.txt`
 if [ "$FILES2" != "" ]; then
     FILES="$FILES $FILES2"
+fi
+INF=$(find $DIR -name interval_stats.txt)
+if [ "$INF" != "" ]; then
+  echo "$0.$LINENO _______ got interval_stats.txt i= $INF" >&2
+  FILES="$FILES $INF"
+else
+  INF=$(find $DIR/.. -name interval_stats.txt)
+  FILES="$FILES $INF"
 fi
 
 declare -A FS_ARR
@@ -966,8 +975,11 @@ trows++; printf("\n") > NFL;
         UEND_TM=$PH_TM_END
       fi
     fi
+    # pxx
+    echo "$0.$LINENO power.txt i= $i work_dir= $WORK_DIR"
+    BSNM=$(basename $i)
 
-    awk  -v work_dir="$WORK_DIR" -v ts_beg="$BEG" -v ts_end="$UEND_TM" -v pfx="$PFX" -v sum_file="$SUM_FILE" -v sum_flds="avg_60secs{avg_power_60sec_mvg_avg|power|%stdev},max_60secs{max_power_60sec_mvg_avg|power},min_60secs{min_power_60sec_mvg_avg|power},SysFan_Power{|power},MB_HSC_Pwr_Out{|power},Total_Power{|power},Power_CPU{|power},Power_Memory{|power},PSU0_Input{|power},PSU0_Output{|power},PSU1_Input{|power},PSU1_Output{|power},HSC_Input_Power{|power},HSC_Output_Power{|power},PDB_HSC_POUT{|power},P0_Pkg_Power{|power},P1_Pkg_Power{|power},CPU0_VR0_Pout{|power},CPU0_VR1_Pout{|power},CPU1_VR0_Pout{|power},CPU1_VR1_Pout{|power},PCH_VR_POUT{|power},CPU0_DM_VR0_POUT{|power},CPU0_DM_VR1_POUT{|power},CPU1_DM_VR0_POUT{|power},CPU1_DM_VR1_POUT{|power},PSU0_POUT{|power},PSU1_POUT{|power},PSU0_PIN{|power},PSU1_PIN{|power},power{power_inst|power|stdev}" '
+    awk  -v work_dir="$WORK_DIR" -v basename="$BSNM" -v ts_beg="$BEG" -v ts_end="$UEND_TM" -v pfx="$PFX" -v sum_file="$SUM_FILE" -v sum_flds="avg_60secs{avg_power_60sec_mvg_avg|power|%stdev},max_60secs{max_power_60sec_mvg_avg|power},min_60secs{min_power_60sec_mvg_avg|power},SysFan_Power{|power},MB_HSC_Pwr_Out{|power},Total_Power{|power},Power_CPU{|power},Power_Memory{|power},PSU0_Input{|power},PSU0_Output{|power},PSU1_Input{|power},PSU1_Output{|power},HSC_Input_Power{|power},HSC_Output_Power{|power},PDB_HSC_POUT{|power},P0_Pkg_Power{|power},P1_Pkg_Power{|power},CPU0_VR0_Pout{|power},CPU0_VR1_Pout{|power},CPU1_VR0_Pout{|power},CPU1_VR1_Pout{|power},PCH_VR_POUT{|power},CPU0_DM_VR0_POUT{|power},CPU0_DM_VR1_POUT{|power},CPU1_DM_VR0_POUT{|power},CPU1_DM_VR1_POUT{|power},PSU0_POUT{|power},PSU1_POUT{|power},PSU0_PIN{|power},PSU1_PIN{|power},power{power_inst|power|stdev}" '
     @include "get_excel_col_letter_from_number.awk"
       BEGIN{
         beg=1;
@@ -1011,7 +1023,40 @@ trows++; printf("\n") > NFL;
             }
          }
        }
+        px_mx = 0;
+        px[++px_mx] = 10;
+        px[++px_mx] = 20;
+        px[++px_mx] = 30;
+        px[++px_mx] = 40;
+        px[++px_mx] = 50;
+        px[++px_mx] = 60;
+        px[++px_mx] = 70;
+        px[++px_mx] = 80;
+        px[++px_mx] = 90;
+        px[++px_mx] = 95;
+        px[++px_mx] = 99;
+        px[++px_mx] = 99.5;
+        px[++px_mx] = 100;
       }
+function compute_pxx(kk, my_n, res_i, arr_in,     pi, pii, piu, uval, piup1) {
+    pi  = 0.01 * px[kk] * my_n; # index into array for this percentile
+    pii = int(pi);       # integer part
+    if (pii != pi) {
+      # so pi is not an integer
+      piu = pii+1;
+      if (piu > my_n) { piu = my_n; }
+      uval = arr_in[res_i[piu]]
+    } else {
+      piu = pii;
+      if (piu >= my_n) {
+        uval = arr_in[res_i[my_n]];
+      } else {
+        piup1=piu + 1;
+        uval = 0.5*(arr_in[res_i[piu]] + arr_in[res_i[piup1]]);
+      }
+    }
+    return uval;
+}
       function ltrim(s) { sub(/^[ \t\r\n]+/, "", s); return s }
       function rtrim(s) { sub(/[ \t\r\n,]+$/, "", s); return s }
       function trim(s) { return rtrim(ltrim(s)); }
@@ -1071,7 +1116,7 @@ trows++; printf("\n") > NFL;
       }
       {
 	FNM=ARGV[ARGIND];
-        NFL=work_dir "/" FNM ".tsv";
+        NFL=work_dir "/" basename ".tsv";
         if (delloem >= 1) {
           next;
         }
@@ -1138,7 +1183,7 @@ trows++; printf("\n") > NFL;
           rows[rw,typ,i] = va[1] + 0.0;
         }
 	FNM=ARGV[ARGIND];
-        NFL=work_dir "/" FNM ".tsv";
+        NFL=work_dir "/" basename ".tsv";
       }
      END{
        add_col = 1;
@@ -1299,7 +1344,8 @@ trows++; printf("\t$ power") > NFL;
    ' $i
    ck_last_rc $? $LINENO
    #mv $i.tsv $WORK_DIR
-   SHEETS="$SHEETS $i.tsv"
+   BSNM=$(basename $i)
+   SHEETS="$SHEETS ./$BSNM.tsv"
   fi
   if [[ $i == *"_vmstat.txt"* ]]; then
     echo "do vmstat"
@@ -3437,9 +3483,15 @@ row += trows;
     fi
     echo "$0.$LINENO: WORK_DIR= $WORK_DIR" 
     echo "$0.$LINENO: _____________ INCPUS= $INCPUS, LSCPU_FL= $LSCPU_FL WORK_DIR= $WORK_DIR" > /dev/stderr
-    echo "$SCR_DIR/rd_infra_cputime.sh -t "$TS_INITIAL" -b "$BEG" -e "$END_TM" -w $WORK_DIR -O \"$OPTIONS\" -f $i -n $INCPUS -S $SUM_FILE -m $WORK_DIR/$MUTTLEY_OUT_FILE"
-          $SCR_DIR/rd_infra_cputime.sh -t "$TS_INITIAL" -b "$BEG" -e "$END_TM" -w $WORK_DIR -O "$OPTIONS" -f $i -n $INCPUS -S $SUM_FILE -m $WORK_DIR/$MUTTLEY_OUT_FILE
+    TMP_SUM="$WORK_DIR/tmp_sum.txt"
+    echo "$SCR_DIR/rd_infra_cputime.sh -t "$TS_INITIAL" -b "$BEG" -e "$END_TM" -w $WORK_DIR -O \"$OPTIONS\" -f $i -n $INCPUS -S $TMP_SUM -m $WORK_DIR/$MUTTLEY_OUT_FILE"
+          $SCR_DIR/rd_infra_cputime.sh -t "$TS_INITIAL" -b "$BEG" -e "$END_TM" -w $WORK_DIR -O "$OPTIONS"   -f $i -n $INCPUS -S $TMP_SUM -m $WORK_DIR/$MUTTLEY_OUT_FILE
           ck_last_rc $? $LINENO
+  #echo "$0.$LINENO do cp sum.tsv ckck_sum.tsv"
+  #cp work_dir/0/0/sum.tsv ckck_sum.tsv
+    if [ -e $TMP_SUM ]; then
+      cat $TMP_SUM  >> $SUM_FILE
+    fi
     if [ -e $WORK_DIR/$i.tsv ]; then
       if [ "$REDUCE" != "" ]; then
         echo "$0.$LINENO $SCR_DIR/reduce_tsv.sh -f $WORK_DIR/$i.tsv -R $REDUCE"
@@ -4257,6 +4309,29 @@ function yarr_compare(i1, v1, i2, v2,    l, r, m1, m2, n1, n2)
    #mv $i.tsv $WORK_DIR
    SHEETS="$SHEETS $i.tsv"
   fi
+  echo "$0.$LINENO _______ got file $i"
+  if [[ $i == *"interval_stats.txt"* ]]; then
+    #INF=$(find $ODIR -name "interval_stats.txt")
+    INF=$(dirname $i)
+    echo "$0.$LINENO _______ got interval_stats.txt i= $i"
+    #INF=$(find $DIR -name get_new_pckts_frames_MBs_int)
+    if [ "$INF" != "" ]; then
+       OFILE="$WORK_DIR/sys_50_tcp_netstats.tsv"
+       TMP_SUM="$WORK_DIR/tmp_sum.txt"
+       echo "$0.$LINENO _______ got interval_stats.txt INF= $INF ofile= $OFILE work_dir= $WORK_DIR"
+       echo "$0.$LINENO ~/proj_net_bw_lat/get_new_pckts_frames_MBs_int.sh -a read -d $INF -f $OFILE -s "$TMP_SUM" -w $WORK_DIR"
+                        ~/proj_net_bw_lat/get_new_pckts_frames_MBs_int.sh -a read -d $INF -f $OFILE -s "$TMP_SUM" -w $WORK_DIR
+       ck_last_rc $? $LINENO
+       if [ -e $OFILE ]; then
+         #echo "$0.$LINENO _______ got interval_stats.txt INF= $INF got ofile= $OFILE"
+         if [ -e $TMP_SUM ]; then
+           cat $TMP_SUM  >> $SUM_FILE
+         fi
+         SHEETS="$SHEETS ./$(basename $OFILE)"
+       fi
+       #exit 1
+    fi
+  fi
 done
 OPT_END_TM=
 if [ "$END_TM" != "" ]; then
@@ -4773,5 +4848,6 @@ fi
     fi
   fi
 done
+#echo "$0.$LINENO exit 1"
 exit 0
 
