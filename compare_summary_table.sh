@@ -11,6 +11,15 @@ NUM_SKU=0
 SKU_IN=()
 XLS_IN=()
 
+ck_last_rc() {
+   local RC=$1
+   local FROM=$2
+   if [ $RC -gt 0 ]; then
+      echo "$0: got non-zero RC=$RC at $LINENO. called from line $FROM" > /dev/stderr
+      exit $RC
+   fi
+}
+
 while getopts "hvb:d:e:i:l:n:o:r:s:S:t:u:w:x:" opt; do
   case ${opt} in
     i )
@@ -144,7 +153,7 @@ if [ $NUM_INF -gt 1 ]; then
   LAYOUT=1
 fi
 
-awk -v xls_str="$XLS_STR" -v sku_str="$SKU_STR" -v ratio_cols="$RATIO_COLS" -v out_file="$OUT_FILE" -v layout="$LAYOUT" -v sep="$SEPARATOR" '
+awk --profile -v xls_str="$XLS_STR" -v sku_str="$SKU_STR" -v ratio_cols="$RATIO_COLS" -v out_file="$OUT_FILE" -v layout="$LAYOUT" -v sep="$SEPARATOR" '
  BEGIN{
       need_SI_ncu_combined = 0;
       did_metric = 0;
@@ -592,14 +601,22 @@ SI_arr[++SI_mx]="SI NCU score_sum_at_pct"; SI_sc_sum_at_pct= SI_mx;
      
      SI_did = 0;
      SI_cur = 0;
+     tm_beg = systime();
      for (g=1; g <= gstr_mx; g++) {
       #for (i=1; i <= lbl_mx; i++) 
       ii = 0;
+      if ((g % 1000) == 0) {
+        tm_cur = systime();
+        printf("elap_secs= %d g/s= %.3f g= %d of %d, str= %s\n", tm_cur-tm_beg, g/(tm_cur-tm_beg), g, lbl_mx, gstr_lkup2[g]) > "/dev/stderr";
+      }
       if (gstr_lkup2[g] == "SI benchmark") {
         if (++SI_did > 1) {continue; }
       }
       while (ii <= lbl_mx) {
+        #  ++ii;
         doing_SI = 0;
+        #if (did_ii[ii] == mx_fl) { continue; } # doesnt work
+        #if (ckd_ii_has_ck_gstr_g_1y_2n[ii,g] == 2) { continue; }
         if (gstr_lkup2[g] == "SI benchmark") {
           SI_cur++;
           doing_SI_sc_avg=0;
@@ -638,6 +655,7 @@ SI_arr[++SI_mx]="SI NCU score_sum_at_pct"; SI_sc_sum_at_pct= SI_mx;
           doing_SI = 1;
         } else {
           i = ++ii;
+          #i = ii;
         }
         kk = i;
         lbl=lbl_lkup[i];
@@ -651,6 +669,7 @@ SI_arr[++SI_mx]="SI NCU score_sum_at_pct"; SI_sc_sum_at_pct= SI_mx;
           ck_gstr_fl = gstr_lkup2[sv[j,fl,3]]
           #if (sv[j,fl,3] == g) 
           if (ck_gstr_g == ck_gstr_fl) {
+             ckd_ii_has_ck_gstr_g_1y_2n[i,g] = 1;
              got_gstr = 1;
              break;
           }
@@ -670,6 +689,9 @@ SI_arr[++SI_mx]="SI NCU score_sum_at_pct"; SI_sc_sum_at_pct= SI_mx;
         } else {
           got_gstr = 1;
         }
+         if (got_str == 0) {
+             ckd_ii_has_ck_gstr_g_1y_2n[i,g] = 2;
+         }
         if (got_gstr == 1) {
          if (layout == 1) {
             lstr = lbl;
@@ -831,10 +853,14 @@ SI_arr[++SI_mx]="SI NCU score_sum_at_pct"; SI_sc_sum_at_pct= SI_mx;
         }
         }
         printf("%s\n", lbl) > out_file;;
+        did_ii[i]++;
         rows++;
       }
      }
      exit;
   }
    ' $INF
+   RC=$?
+  ck_last_rc $RC $LINENO
+
   exit $?
