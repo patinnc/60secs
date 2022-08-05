@@ -6,6 +6,24 @@ METRIC="avg"
 ROWS_MAX="-1"
 VERBOSE=0
 OPTIONS=
+SCR_DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+
+OSTYP=$OSTYPE
+if [[ "$OSTYP" == "linux-gnu"* ]]; then
+   AWK_BIN=~/patrick_fay_bin/gawk
+elif [[ "$OSTYP" == "darwin"* ]]; then
+   # Mac OSX
+   AWK_BIN="gawk"
+fi
+ck_last_rc() {
+   local RC=$1
+   local FROM=$2
+   if [ $RC -gt 0 ]; then
+      echo "$0: got non-zero RC=$RC at $LINENO. called from line $FROM" >&2
+      exit $RC
+   fi
+}
+
 
 while getopts "hvc:f:g:m:n:o:O:r:S:s:t:" opt; do
   case ${opt} in
@@ -87,7 +105,8 @@ fi
 FLS=()
 RESP=0
 if [ "$GREP_STR" != "" ]; then
-  RESP=`grep $GREP_STR $FILE_LIST|wc -l|awk '{$1=$1;print($1)}'`
+  RESP=`grep $GREP_STR $FILE_LIST|wc -l|$AWK_BIN '{$1=$1;print($1)}'`
+  ck_last_rc $? $LINENO
   if [ "$VERBOSE" != "0" ]; then
   echo "got $RESP lines from grep $GREP_STR $FILE_LIST"
   fi
@@ -100,8 +119,10 @@ if [ "$GREP_STR" != "" ]; then
   fi
 fi
 if [ "$RESP" == "0" ]; then
-  FILES=`awk '{if ($0 != ""){v=substr($1, 1,1); if (v != "-" && v != "#") {print($0);}}}' $FILE_LIST`
-  RESP=`echo "$FILES" |wc -l| awk '{$1=$1;print($1);}'`
+  FILES=`$AWK_BIN '{if ($0 != ""){v=substr($1, 1,1); if (v != "-" && v != "#") {print($0);}}}' $FILE_LIST`
+  ck_last_rc $? $LINENO
+  RESP=`echo "$FILES" |wc -l| $AWK_BIN '{$1=$1;print($1);}'`
+  ck_last_rc $? $LINENO
   echo "got $RESP files"
   FLS+=(`echo $FILES`)
 fi
@@ -143,8 +164,8 @@ HOST_NUM_LIST=
 if [ "$NLIMIT" != "" ]; then
   NUM_HOST=${#FLS[@]}
   HOST_NUM=$NLIMIT
-  HOST_NUM_LIST=(`awk -v sum_file="$SUM_FILE" -v script_name="$0" -v beg="0" -v end="$NUM_HOST" -v str="$HOST_NUM" '
-     @load "time"
+  HOST_NUM_LIST=(`$AWK_BIN -v sum_file="$SUM_FILE" -v script_name="$0" -v beg="0" -v end="$NUM_HOST" -v str="$HOST_NUM" '
+     #@load "time"
      BEGIN{
         # handle 1 or 0-2 or 0,3 or 0,1-3,7
         # return array of value
@@ -210,13 +231,14 @@ if [ "$NLIMIT" != "" ]; then
      }'`)
      RC=$?
      if [ "$RC" != "0" ]; then
-        echo "$0: got error on select files awk code. RC= $RC at line= $LINENO" > /dev/stderr
+        echo "$0: got error on select files $AWK_BIN code. RC= $RC at line= $LINENO" >&2
         exit $RC
      fi
      if [ "${HOST_NUM_LIST[0]}" == "-1" ]; then
-        echo "$0: didn't find valid system numbers in cmdline option -N $HOST_NUM. Bye" > /dev/stderr
+        echo "$0: didn't find valid system numbers in cmdline option -N $HOST_NUM. Bye" >&2
         exit 1
      fi
+  ck_last_rc $RC $LINENO
   echo "entries in HOST_NUM_LIST= ${#HOST_NUM_LIST[@]}"
   if [ $VERBOSE -gt 0 ]; then
     echo "entries in HOST_NUM_LIST= ${#HOST_NUM_LIST[@]}  HOST_NUM_LIST= ${HOST_NUM_LIST[@]}"
@@ -250,12 +272,13 @@ if [ $j -lt 10 ]; then
 fi
 
 if [ "$VERBOSE" != "" -a "$VERBOSE" != "0" ]; then
-echo $0.$LINENO +++++awk -v options="$OPTIONS" -v out_file="$FL_OUT" -v verbose="$VERBOSE" -v rows_max="$ROWS_MAX" -v metric="$METRIC" -v chrt_typ="$CHRT_TYP" -v sheet="$SHEET" -v title="$TITLE" $FILE_STR
+echo $0.$LINENO +++++$AWK_BIN -v options="$OPTIONS" -v out_file="$FL_OUT" -v verbose="$VERBOSE" -v rows_max="$ROWS_MAX" -v metric="$METRIC" -v chrt_typ="$CHRT_TYP" -v sheet="$SHEET" -v title="$TITLE" $FILE_STR
 fi
-awk -v script_nm="$0.$LINENO.awk" -v options="$OPTIONS" -v out_file="$FL_OUT" -v verbose="$VERBOSE" -v rows_max="$ROWS_MAX" -v metric="$METRIC" -v chrt_typ="$CHRT_TYP" -v sheet="$SHEET" -v title="$TITLE" '
-   @load "time"
+$AWK_BIN -v script_nm="$0.$LINENO.awk" -v options="$OPTIONS" -v out_file="$FL_OUT" -v verbose="$VERBOSE" -v rows_max="$ROWS_MAX" -v metric="$METRIC" -v chrt_typ="$CHRT_TYP" -v sheet="$SHEET" -v title="$TITLE" '
+   #@load "time"
    BEGIN {
-     gtod_beg = gettimeofday() + 0.0;
+     #gtod_beg = gettimeofday() + 0.0;
+     gtod_beg = systime() + 0.0;
      search = sprintf("^title\t%s\tsheet\t%s\ttype\t%s", title, sheet, chrt_typ);
      if (title == "__all__") {
         search = "";
@@ -393,7 +416,8 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
      ftbl[ARGIND,"row_data",rw] = $0;
    }
    END {
-        gtod_end_input = gettimeofday()+0.0;
+        #gtod_end_input = gettimeofday()+0.0;
+        gtod_end_input = systime()+0.0;
        printf("time to read input files= %f secs\n", (gtod_end_input-gtod_beg)) > "/dev/stderr";
        # ---------- above all the data has been read in
 #title   pidstat average %CPU    sheet   pidstat type    column
@@ -430,13 +454,15 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
        }
        # ---------- now, for each chart, read each files data and hash the column names
        # ---------- store each files row/col data in the appropriate hash box.
-       gtod_beg_files = gettimeofday();
+       #gtod_beg_files = gettimeofday();
+       gtod_beg_files = systime();
        for(i=1; i <= mx_fls; i++) {
          ky = i","c;
          if (!(ky in tbls_list)) {
             continue;
          }
-         gtod_beg_files3 = gettimeofday()+0.0;
+         #gtod_beg_files3 = gettimeofday()+0.0;
+         gtod_beg_files3 = systime()+0.0;
          iters = 0;
          iters2 = 0;
          rws = tbl[i,c,"rows"];
@@ -641,7 +667,8 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
              }
            }
          }
-         gtod_end_files3 = gettimeofday()+0.0;
+         #gtod_end_files3 = gettimeofday()+0.0;
+         gtod_end_files3 = systime()+0.0;
          tdff3 = gtod_end_files3 - gtod_beg_files3;
          if (tdff3 > 1.0) {
            #printf("argc[%d]= %s, ch_typ= %s, title= %s, rws= %d tdff3= %f\n", i, ARGV[i], ch_typ, title, rws, tdff3) > "/dev/stderr";
@@ -649,7 +676,8 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
            printf("argc[%d]: ch_typ= %s, title= %s, rws= %d tdff3= %f, iters= %d, iters2= %d, col_diff= %d\n", i, ch_typ, title, rws, tdff3, iters, iters2, col_diff) > "/dev/stderr";
          }
        }  # end of loop over files
-       gtod_end_files = gettimeofday()+0.0;
+       #gtod_end_files = gettimeofday()+0.0;
+       gtod_end_files = systime()+0.0;
        #printf("time after c= %d loop over files, time= %f secs tdff= %f\n", c, gtod_end_files-gtod_beg_files, tdff) > "/dev/stderr";
        tdff = 0.0;
 #bbb
@@ -919,11 +947,13 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
          }
          #printf("+++did chart %d of %d max charts, file= %d\n", c, ch_mx, i) > "/dev/stderr";
        }
-       gtod_end_loopc = gettimeofday();
+       #gtod_end_loopc = gettimeofday();
+       gtod_end_loopc = systime();
        #printf("time at bot loop c= %d, time= %f secs\n", c, gtod_end_loopc-gtod_end_input) > "/dev/stderr";
        #printf("+++did chart %d of %d max charts\n", c, ch_mx) > "/dev/stderr";
      } # charts on page
-     gtod_end_loop1 = gettimeofday();
+     #gtod_end_loop1 = gettimeofday();
+     gtod_end_loop1 = systime();
      printf("time post-processing after loop1= %f secs\n", gtod_end_loop1-gtod_end_input) > "/dev/stderr";
      #ftbl[ARGIND,"file_row",rw] = got_tbl;
      #ftbl[ARGIND,"chrt_num",rw]  = chrt_num;
@@ -1030,12 +1060,13 @@ function sort_a_desc(i1, v1, i2, v2,   lhs, rhs)
      if (out_file != "") {
        close(out_file);
      }
-        gtod_end = gettimeofday();
+        #gtod_end = gettimeofday();
+        gtod_end = systime();
        printf("total awk time %f secs\n", gtod_end-gtod_beg) > "/dev/stderr";
    }
    ' $FILE_STR
    RC=$?
    if [ "$RC" != "0" ]; then
-     echo "$0: got error in awk script. RC= $RC. script line= $LINENO" > /dev/stderr
+     echo "$0: got error in $AWK_BIN script. RC= $RC. script line= $LINENO" >&2
    fi
    exit $RC
