@@ -122,11 +122,20 @@ elif [[ "$OSTYP" == "darwin"* ]]; then
 fi
 #AWK_BIN=awk  # awk is a link to gawk
 
+my_scr=$(basename $0)
+if [ "$WORK_DIR" == "" ]; then
+  WORK_DIR="."
+fi
+my_tmp_output_file="$WORK_DIR/tmp_${my_scr}.txt"
+
 echo $0.$LINENO $AWK_BIN -v beg_ts="$BEG_TS" -v end_ts="$END_TS" -v ts_initial="$TS_INITIAL" -v script_nm="$0.$LINENO.awk" -v mutt_file="$MUTT_FL" -v mutt_ofile="$MUTT_OUT_FL" -v cur_dir="$CUR_DIR" -v options="$OPTIONS" -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofile="$OUT_FL" 
-$AWK_BIN -v beg_ts="$BEG_TS" -v end_ts="$END_TS" -v ts_initial="$TS_INITIAL" -v script_nm="$0.$LINENO.awk" -v mutt_file="$MUTT_FL" -v mutt_ofile="$MUTT_OUT_FL" -v cur_dir="$CUR_DIR" -v options="$OPTIONS" -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofile="$OUT_FL" -v ifile="$IN_FL"  '
+$AWK_BIN -v work_dir="$WORK_DIR" -v beg_ts="$BEG_TS" -v end_ts="$END_TS" -v ts_initial="$TS_INITIAL" -v script_nm="$0.$LINENO.awk" -v mutt_file="$MUTT_FL" -v mutt_ofile="$MUTT_OUT_FL" -v cur_dir="$CUR_DIR" -v options="$OPTIONS" -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofile="$OUT_FL" -v ifile="$IN_FL"  '
   BEGIN {
    num_cpus += 0;
    nm_lkfor = "yyy_service_name"; # dummy name
+   mutt_host_calls_i = -100; # just some value to indicate whether we found host.calls
+   mutt_host_calls_n = 0; # number of host.calls entries
+   mutt_host_calls_str = "";
    col_pid = -1;
    col_rss = -1;
    col_vsz = -1;
@@ -1061,6 +1070,9 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
          mutt_list2[mutt_nm] = ++mutt_mx2;
          mutt_lkup2[mutt_mx2] = mutt_nm;
          mutt_calls_prev2[mutt_mx2] = mutt_num;
+         if (mutt_nm == "host.calls") {
+           mutt_host_calls_i = mutt_mx2;
+         }
       }
       mutt_i = mutt_list2[mutt_nm];
       dff = mutt_num - mutt_calls_prev2[mutt_i];
@@ -1195,6 +1207,10 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
             printf("added cg_stat_list[%s]= %d\n", cntr, cg_stat_mx);
             cg_stat_lkup[cg_stat_mx] = cntr;
             cg_stat_data[cg_stat_mx, "cumu"] = 0;
+            cg_stat_data[cg_stat_mx, "cumu_sys"] = 0;
+            cg_stat_data[cg_stat_mx, "cumu_usr"] = 0;
+            cg_stat_data[cg_stat_mx, "cumu_sys_prev"] = -1;
+            cg_stat_data[cg_stat_mx, "cumu_usr_prev"] = -1;
             cg_stat_data[cg_stat_mx, "occurs"] = 1;
             cg_stat_data[cg_stat_mx, "ts_cumu"] = 0;
             cg_stat_data[cg_stat_mx, "prev"] = -1;
@@ -1203,6 +1219,28 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
             cg_stat_data[cg_stat_mx, "thr_prev"] = -1;
           }
           cntr_i = cg_stat_list[cntr];
+          continue;
+        }
+#__cpuacct.stat
+#user 1976775
+#system 576920
+        if ($1 == "__cpuacct.stat") {
+          getline;
+          v = 0.01 * $2;
+          if (cg_stat_data[cntr_i,"cumu_usr_prev"] == -1) {
+            cg_stat_data[cntr_i,"cumu_usr_prev"] = v;
+          }
+          cg_stat_data[cntr_i,"cumu_usr"] += v - cg_stat_data[cntr_i,"cumu_usr_prev"];
+          cg_stat_tot_tm_usr += v - cg_stat_data[cntr_i,"cumu_usr_prev"]
+          cg_stat_data[cntr_i,"cumu_usr_prev"] = v;
+          getline;
+          v = 0.01 * $2;
+          if (cg_stat_data[cntr_i,"cumu_sys_prev"] == -1) {
+            cg_stat_data[cntr_i,"cumu_sys_prev"] = v;
+          }
+          cg_stat_data[cntr_i,"cumu_sys"] += v - cg_stat_data[cntr_i,"cumu_sys_prev"];
+          cg_stat_tot_tm_sys += v - cg_stat_data[cntr_i,"cumu_sys_prev"]
+          cg_stat_data[cntr_i,"cumu_sys_prev"] = v;
           continue;
         }
         if ($1 == "__cpuacct.usage") {
@@ -1878,7 +1916,6 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
 
       printf("%s", hstr) > ofile
       trow++;
-      mutt_host_calls_max = -1
       for(k=2; k <= muttley_mx; k++) {
         printf("%s\t%d", muttley_dt[k], muttley_dt[k]-muttley_dt[1]) > ofile;
         tm_diff = muttley_dt[k]-muttley_dt[k-1];
@@ -1906,6 +1943,14 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
             #v = mutt_calls[k,i];
           } else {
             v = 0.0;
+          }
+          if (i == mutt_host_calls_i) {
+             if (mutt_host_calls_n++ == 0) {
+               mutt_host_calls_str = v;
+             } else {
+               mutt_host_calls_str = mutt_host_calls_str "\t" v;
+             }
+             mutt_host_calls_arr[k] = v;
           }
           if (mutt_host_calls_max < v) {
               mutt_host_calls_max = v;
@@ -1942,6 +1987,23 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
          }
          }
          printf("infra_procs\tmuttley host.calls max\t%f\t%s\n", mutt_host_calls_max, "RPS host.calls max") > sum_file;
+      }
+      if (sum_file != "" && mutt_host_calls_n > 0) {
+        printf("mutt_RPS_host_calls_val_arr\tmutt_RPS_host_calls_val_arr\t%f\t%s\t%s\n", mutt_host_calls_n, "RPS host.calls val_arr", mutt_host_calls_str) > sum_file;
+        delete arr_in;
+        delete res_i;
+        delete idx;
+        my_n = 0;
+        for(k=2; k <= muttley_mx; k++) {
+           idx[++my_n] = k;
+           arr_in[my_n] = mutt_host_calls_arr[k];
+        }
+        asorti(idx, res_i, "arr_in_compare");
+        for (kk=1; kk <= px_mx; kk++) {
+          uval = compute_pxx(kk, my_n, res_i, arr_in);
+          strp = "mutt_RPS_host_calls_per_hst p" px[kk];
+          printf("%s\t%s\t%f\t%s\n", "cpu_util_per_hst", "mutt_RPS_host_calls_per_hst", uval, strp) > sum_file;
+        }
       }
 #abc  write complete list to mutt_ofile
       for(i=1; i <= mutt_mx2; i++) {
@@ -2119,10 +2181,16 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
     cg_stat_elap_tm = cg_stat_ts[cg_stat_ts_mx]-cg_stat_ts[1];
     if ( cg_stat_elap_tm > 0) {
       printf("cg_stat_tot_tm= %f elap_tm= %f %%cpu_busyTL= %f\n", cg_stat_tot_tm, cg_stat_elap_tm, 100*cg_stat_tot_tm/cg_stat_elap_tm);
+      printf("cg_stat_tot_tm= %f elap_tm= %f %%cpu_busyTL= %f %%cpu_usrTL= %f %%cpu_sysTL= %f\n",
+        cg_stat_tot_tm, cg_stat_elap_tm,
+        100*cg_stat_tot_tm/cg_stat_elap_tm,
+        100*cg_stat_tot_tm_usr/cg_stat_elap_tm,
+        100*cg_stat_tot_tm_sys/cg_stat_elap_tm);
     }
     v_tot = 0;
     v_tot1 = 0;
     v_tot2 = 0;
+    v_tot3 = 0;
     v_tot_thr = 0;
     for (i=1; i <= cg_stat_mx; i++) {
       v = cg_stat_lkup[i];
@@ -2142,12 +2210,24 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
       if (v1 > 0) {
         v2 = v / v1;
       }
-      v3 = 100.0* v / (num_cpus * cg_stat_elap_tm);
+      v3     = 0;
+      v3_usr = 0;
+      v3_sys = 0;
+      if (v1 > 0) {
+      v3     = 100.0* v / v1;
+      v3_usr = 100.0* cg_stat_data[i, "cumu_usr"] / v1;
+      v3_sys = 100.0* cg_stat_data[i, "cumu_sys"] / v1;
+      }
       v_tot += v;
       v_tot1 += v1;
       v_tot2 += v2;
+      v_tot3 += v3;
+      v_tot3_usr += v3_usr;
+      v_tot3_sys += v3_sys;
+      v_tot3_bsy += v3_sys + v3_usr;
       v_tot_thr += v_thr;
-      printf("cg_stat[%d] tot_cpu_secs= %10.2f thr_secs= %10.4f nm= %s tm= %3.f, %%busy= %.3f\n", i,  v, v_thr, nm, v1, v2, v3);
+      #printf("cg_stat[%d] tot_cpu_secs= %10.2f thr_secs= %10.4f nm= %s tm= %3.f, %%busy= %.3f\n", i,  v, v_thr, nm, v1, v2, v3);
+      printf("cg_stat[%d] tot_cpu_secs= %10.2f thr_secs= %10.4f %%busy= %7.2f %%usr= %7.2f %%sys= %7.2f nm= %s tm= %3.f\n", i,  v, v_thr, v3, v3_usr, v3_sys, nm, v1, v2);
       cg_stat_i = cg_stat_nm_list[nm];
       cg_stat_nm_data[cg_stat_i, "occurs"] += cg_stat_data[i, "occurs"];
       cg_stat_nm_data[cg_stat_i, "cumu"] += v;
@@ -2159,6 +2239,12 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
       cg_stat_elap_tm = cg_stat_ts[cg_stat_ts_mx]-cg_stat_ts[1];
       printf("cg_stat %busy= %.3f%%\n", 100.0 * v_tot/(num_cpus * cg_stat_elap_tm));
       printf("cg_stat elap_tm= %.3f\n", cg_stat_ts[cg_stat_ts_mx]-cg_stat_ts[1]);
+
+      printf("cg_stat v_tot= %.3f v_tot1= %.3f v_tot2= %.3f v_throttle_secs= %.6f v3_%%cpu= %.3f v_tot3_bsy= %.3f\n", v_tot, v_tot1, v_tot2, v_tot_thr, v_tot3, v_tot3_bsy);
+      #cg_stat_elap_tm = cg_stat_ts[cg_stat_ts_mx]-cg_stat_ts[1];
+      printf("cg_stat %busy= %.3f%%\n", 100.0 * v_tot/(num_cpus * cg_stat_elap_tm));
+      printf("cg_stat elap_tm= %.3f\n", cg_stat_ts[cg_stat_ts_mx]-cg_stat_ts[1]);
+      
     }
     for (i=1; i <= cg_stat_nm_list_mx; i++) {
       nm = cg_stat_nm_lkup[i];
@@ -2573,7 +2659,7 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
                  styp = 2;
                  snm = "tot_infra_agent";
                }
-               printf("got into cgrps_val_tarr stuff\n");
+               #printf("got into cgrps_val_tarr stuff\n");
                cgrps_val_tarr["cat_mx"] = styp;
                cgrps_val_tarr["cat_nm",styp] = snm
                cgrps_val_tarr["str",styp] = "ms_per_call";
@@ -3434,7 +3520,7 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
     close(ofile);
     exit(0);
   }
-  ' $IN_FL
+  ' $IN_FL > $my_tmp_output_file
   RC=$?
   ck_last_rc $? $LINENO
 exit $RC
