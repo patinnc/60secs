@@ -131,7 +131,10 @@ my_tmp_output_file="$WORK_DIR/tmp_${my_scr}.txt"
 echo $0.$LINENO $AWK_BIN -v beg_ts="$BEG_TS" -v end_ts="$END_TS" -v ts_initial="$TS_INITIAL" -v script_nm="$0.$LINENO.awk" -v mutt_file="$MUTT_FL" -v mutt_ofile="$MUTT_OUT_FL" -v cur_dir="$CUR_DIR" -v options="$OPTIONS" -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofile="$OUT_FL" 
 $AWK_BIN -v work_dir="$WORK_DIR" -v beg_ts="$BEG_TS" -v end_ts="$END_TS" -v ts_initial="$TS_INITIAL" -v script_nm="$0.$LINENO.awk" -v mutt_file="$MUTT_FL" -v mutt_ofile="$MUTT_OUT_FL" -v cur_dir="$CUR_DIR" -v options="$OPTIONS" -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofile="$OUT_FL" -v ifile="$IN_FL"  '
   BEGIN {
+   rc = 0;
    num_cpus += 0;
+   cg_cntr_typ_srvc = 1;
+   cg_cntr_typ_sys  = 2;
    nm_lkfor = "yyy_service_name"; # dummy name
    mutt_host_calls_i = -100; # just some value to indicate whether we found host.calls
    mutt_host_calls_n = 0; # number of host.calls entries
@@ -1178,8 +1181,37 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
     }
   }
 
-  /__container_ids__ / {
-    ts = $3 + 0;
+function add_cg_stat_data(cntr_i, v, area, subarea, cur_ts_idx,     ts_mx, prv, tv, cumu, tm_series, tm_series_mx)
+{
+  prv = area "_" subarea "_prev";
+  cumu = area "_" subarea "_cumu";
+  tm_series = area "_" subarea "_arr";
+  tm_series_mx = area "_" subarea "_mx";
+  tm_series_ts_idx = area "_" subarea "_arr_ts_idx";
+  
+  if (cg_stat_data[cntr_i,prv] == "") {
+      cg_stat_data[cntr_i,prv] = v;
+  }
+  tv = v;
+  if (v >= cg_stat_data[cntr_i,prv]) {
+    tv = v - cg_stat_data[cntr_i,prv];
+  }
+  cg_stat_data[cntr_i,cumu] += tv;
+  tm_cg_stat_data[cntr_i,cumu] += tv;
+  cg_stat_data[cntr_i,prv] = v;
+  ts_mx = ++tm_cg_stat_data[cntr_i,tm_series_mx];
+  tm_cg_stat_data[cntr_i,tm_series, ts_mx] = tv;
+  tm_cg_stat_data[cntr_i,tm_series_ts_idx, ts_mx] = cur_ts_idx;
+}
+  /__container_ids__ |__sys_container_ids__/ {
+    cg_cntr_typ = -1;
+    if ($1 == "__container_ids__") {
+      ts = $3 + 0;
+      cg_cntr_typ = cg_cntr_typ_srvc;
+    }
+    if ($1 == "__sys_container_ids__") {
+      cg_cntr_typ = cg_cntr_typ_sys;
+    }
     #printf("got cg_stat 0 %s, beg_ts= %.2f end_ts= %.2f ts-beg_ts= %.2f\n", $0, beg_ts, end_ts, ts - beg_ts);
     ts_skip = 0;
     if ((beg_ts > 0.0 && ts < beg_ts) || (end_ts > 0.0 && ts > end_ts)) {
@@ -1193,19 +1225,30 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
     }
     #printf("got cg_stat 1 %s ts_skip= %s\n", $0, ts_skip);
     if (ts_skip == 0) {
-      cg_stat_ts[++cg_stat_ts_mx] = ts;
+      if (cg_cntr_typ == cg_cntr_typ_srvc) {
+        cg_stat_ts[++cg_stat_ts_mx] = ts;
+      }
       #getline;
       while ( getline  > 0) {
         if ($0 == "") {
            next;
         }
-        if ($1 == "__container_id__") {
+        if ($1 == "__container_id__" || $1 == "__sys_container_id__") {
           cntr = $3;
+          if (cg_cntr_typ == cg_cntr_typ_sys && cntr == "__none__") {
+            # some system slice cgroups dont have a container... Im not sure how or why
+            cntr = $3 " " $4;
+          }
           #printf("got cg_stat cntr= %s\n", cntr);
           if (!(cntr in cg_stat_list)) {
             cg_stat_list[cntr] = ++cg_stat_mx;
             printf("added cg_stat_list[%s]= %d\n", cntr, cg_stat_mx);
             cg_stat_lkup[cg_stat_mx] = cntr;
+            cg_stat_lkup[cg_stat_mx, "cntr_typ"] = cg_cntr_typ;
+            if (cg_cntr_typ == cg_cntr_typ_sys) {
+              cg_stat_lkup[cg_stat_mx, "cntr_typ_sys_cntr_id"] = $3;
+              cg_stat_lkup[cg_stat_mx, "cntr_typ_sys_srvc"] = $4;
+            }
             cg_stat_data[cg_stat_mx, "cumu"] = 0;
             cg_stat_data[cg_stat_mx, "cumu_sys"] = 0;
             cg_stat_data[cg_stat_mx, "cumu_usr"] = 0;
@@ -1217,6 +1260,10 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
             cg_stat_data[cg_stat_mx, "ts_prev"] = -1;
             cg_stat_data[cg_stat_mx, "thr_cumu"] = 0;
             cg_stat_data[cg_stat_mx, "thr_prev"] = -1;
+            cg_stat_data[cg_stat_mx, "nr_per_cumu"] = 0;
+            cg_stat_data[cg_stat_mx, "nr_per_prev"] = -1;
+            cg_stat_data[cg_stat_mx, "nr_thr_cumu"] = 0;
+            cg_stat_data[cg_stat_mx, "nr_thr_prev"] = -1;
           }
           cntr_i = cg_stat_list[cntr];
           continue;
@@ -1224,46 +1271,104 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
 #__cpuacct.stat
 #user 1976775
 #system 576920
+#__cpu.stat
+#nr_periods 1191
+#nr_throttled 117
+#throttled_time 20591095843
+        if ($1 == "__cpu.stat") {
+          area = "cpu_stat";
+          getline;
+          if ($1 == "nr_periods") {
+            subarea = $1;
+            v = 1e-6 * $2;
+            add_cg_stat_data(cntr_i, v, area, $1, cg_stat_ts_mx);
+            if (cg_stat_data[cntr_i,"nr_per_prev"] == -1) {
+              cg_stat_data[cntr_i,"nr_per_prev"] = v;
+            }
+            tv = v;
+            if (v >= cg_stat_data[cntr_i,"nr_per_prev"]) {
+              tv = v - cg_stat_data[cntr_i,"nr_per_prev"];
+            }
+            cg_stat_data[cntr_i,"nr_per_cumu"] += tv;
+            cg_stat_data[cntr_i,"nr_per_prev"] = v;
+            getline;
+          }
+          if ($1 == "nr_throttled") {
+            v = 1e-6 * $2;
+            add_cg_stat_data(cntr_i, v, area, $1, cg_stat_ts_mx);
+            if (cg_stat_data[cntr_i,"nr_thr_prev"] == -1) {
+              cg_stat_data[cntr_i,"nr_thr_prev"] = v;
+            }
+            cg_stat_data[cntr_i,"nr_thr_cumu"] += v - cg_stat_data[cntr_i,"nr_thr_prev"];
+            cg_stat_data[cntr_i,"nr_thr_prev"] = v;
+            getline;
+          }
+          if ($1 == "throttled_time") {
+            v = 1e-9 * $2;
+            add_cg_stat_data(cntr_i, v, area, $1, cg_stat_ts_mx);
+            if (cg_stat_data[cntr_i,"thr_prev"] == -1) {
+              cg_stat_data[cntr_i,"thr_prev"] = v;
+            }
+            cg_stat_data[cntr_i,"thr_cumu"] += v - cg_stat_data[cntr_i,"thr_prev"];
+            cg_stat_data[cntr_i,"thr_prev"] = v;
+          }
+          continue;
+        }
         if ($1 == "__cpuacct.stat") {
+          area = "cpuacct_stat";
           getline;
           v = 0.01 * $2;
+          add_cg_stat_data(cntr_i, v, area, $1, cg_stat_ts_mx);
           if (cg_stat_data[cntr_i,"cumu_usr_prev"] == -1) {
             cg_stat_data[cntr_i,"cumu_usr_prev"] = v;
           }
-          cg_stat_data[cntr_i,"cumu_usr"] += v - cg_stat_data[cntr_i,"cumu_usr_prev"];
-          cg_stat_tot_tm_usr += v - cg_stat_data[cntr_i,"cumu_usr_prev"]
+          tv = v;
+          if (tv >= cg_stat_data[cntr_i,"cumu_usr_prev"]) {
+            tv = v - cg_stat_data[cntr_i,"cumu_usr_prev"]
+          }
+          cg_stat_tot_tm_usr += tv;
+          cg_stat_data[cntr_i,"cumu_usr"] += tv;
+          cg_stat_data[cntr_i,"stat",stat_mx] = tv;
           cg_stat_data[cntr_i,"cumu_usr_prev"] = v;
           getline;
           v = 0.01 * $2;
+          add_cg_stat_data(cntr_i, v, area, $1, cg_stat_ts_mx);
           if (cg_stat_data[cntr_i,"cumu_sys_prev"] == -1) {
             cg_stat_data[cntr_i,"cumu_sys_prev"] = v;
           }
-          cg_stat_data[cntr_i,"cumu_sys"] += v - cg_stat_data[cntr_i,"cumu_sys_prev"];
-          cg_stat_tot_tm_sys += v - cg_stat_data[cntr_i,"cumu_sys_prev"]
+          if (v < cg_stat_data[cntr_i,"cumu_sys_prev"]) {
+            cg_stat_tot_tm_sys += v;
+            cg_stat_data[cntr_i,"cumu_sys"] += v;
+          } else {
+            cg_stat_tot_tm_sys += v - cg_stat_data[cntr_i,"cumu_sys_prev"]
+            cg_stat_data[cntr_i,"cumu_sys"] += v - cg_stat_data[cntr_i,"cumu_sys_prev"];
+          }
+          #cg_stat_data[cntr_i,"cumu_sys"] += v - cg_stat_data[cntr_i,"cumu_sys_prev"];
+          #cg_stat_tot_tm_sys += v - cg_stat_data[cntr_i,"cumu_sys_prev"]
           cg_stat_data[cntr_i,"cumu_sys_prev"] = v;
           continue;
         }
         if ($1 == "__cpuacct.usage") {
+          area = "cpuacct_usage";
           getline;
           v = 1e-9 * $1;
+          add_cg_stat_data(cntr_i, v, area, "usage", cg_stat_ts_mx);
           if (cg_stat_data[cntr_i,"prev"] == -1) {
             cg_stat_data[cntr_i,"prev"] = v;
             cg_stat_data[cntr_i,"ts_prev"] = ts;
           }
-          cg_stat_data[cntr_i,"cumu"] += v - cg_stat_data[cntr_i,"prev"];
-          cg_stat_tot_tm += v - cg_stat_data[cntr_i,"prev"]
+          #cg_stat_data[cntr_i,"cumu"] += v - cg_stat_data[cntr_i,"prev"];
+          #cg_stat_tot_tm += v - cg_stat_data[cntr_i,"prev"]
+          if (v < cg_stat_data[cntr_i,"prev"]) {
+            cg_stat_tot_tm += v;
+            cg_stat_data[cntr_i,"cumu"] += v;
+          } else {
+            cg_stat_tot_tm += v - cg_stat_data[cntr_i,"prev"]
+            cg_stat_data[cntr_i,"cumu"] += v - cg_stat_data[cntr_i,"prev"];
+          }
           cg_stat_data[cntr_i,"ts_cumu"] += ts - cg_stat_data[cntr_i,"ts_prev"];
           cg_stat_data[cntr_i,"prev"] = v;
           cg_stat_data[cntr_i,"ts_prev"] = ts;
-          continue;
-        }
-        if ($1 == "throttled_time") {
-          v = 1e-9 * $2;
-          if (cg_stat_data[cntr_i,"thr_prev"] == -1) {
-            cg_stat_data[cntr_i,"thr_prev"] = v;
-          }
-          cg_stat_data[cntr_i,"thr_cumu"] += v - cg_stat_data[cntr_i,"thr_prev"];
-          cg_stat_data[cntr_i,"thr_prev"] = v;
           continue;
         }
       }
@@ -1832,6 +1937,9 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
 
   END {
     #ofile="tmp.tsv";
+    if (rc != 0) {
+      exit(rc);
+    }
     if (idle_mx > 0) {
       elap_tm = sv_uptm[idle_mx]-sv_uptm[1];
       sum = 0.0;
@@ -2178,7 +2286,7 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
     printf(" sv_uptm dff %.2f secs\n", (sv_uptm[idle_mx]-sv_uptm[1]));
 
     printf("cg_stat_max= %d\n", cg_stat_mx);
-    cg_stat_elap_tm = cg_stat_ts[cg_stat_ts_mx]-cg_stat_ts[1];
+    cg_stat_elap_tm = cg_stat_ts[cg_stat_ts_mx]-cg_stat_ts[2]; # start from 2 since the 1st interval is used as 'prev'
     if ( cg_stat_elap_tm > 0) {
       printf("cg_stat_tot_tm= %f elap_tm= %f %%cpu_busyTL= %f\n", cg_stat_tot_tm, cg_stat_elap_tm, 100*cg_stat_tot_tm/cg_stat_elap_tm);
       printf("cg_stat_tot_tm= %f elap_tm= %f %%cpu_busyTL= %f %%cpu_usrTL= %f %%cpu_sysTL= %f\n",
@@ -2199,12 +2307,17 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
         v_i = uhostd_cntr_list[v];
         nm = uhostd_cntr_lkup[v_i, "nm"];
       }
+      cg_cntr_typ = cg_stat_lkup[i, "cntr_typ"];
+      if (nm  == "" && cg_cntr_typ == cg_cntr_typ_sys) {
+        nm = cg_stat_lkup[i, "cntr_typ_sys_srvc"];
+      }
       if (!(nm in cg_stat_nm_list)) {
         cg_stat_nm_list[nm] = ++cg_stat_nm_list_mx;
         cg_stat_nm_lkup[cg_stat_nm_list_mx] = nm;
       }
       v  = cg_stat_data[i, "cumu"];
-      v1 = cg_stat_data[i, "ts_cumu"];
+      #v1 = cg_stat_data[i, "ts_cumu"];
+      v1 = cg_stat_elap_tm;
       v_thr = cg_stat_data[i, "thr_cumu"];
       v2 = 0.0;
       if (v1 > 0) {
@@ -2222,13 +2335,19 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
       v_tot1 += v1;
       v_tot2 += v2;
       v_tot3 += v3;
+      cntr_typ_cumu[cg_cntr_typ] += v3;
+      if (v3 > 0) {
+        cntr_typ_gt0[cg_cntr_typ]++;
+      }
+      cntr_typ_got[cg_cntr_typ]++;
       v_tot3_usr += v3_usr;
       v_tot3_sys += v3_sys;
       v_tot3_bsy += v3_sys + v3_usr;
       v_tot_thr += v_thr;
-      #printf("cg_stat[%d] tot_cpu_secs= %10.2f thr_secs= %10.4f nm= %s tm= %3.f, %%busy= %.3f\n", i,  v, v_thr, nm, v1, v2, v3);
-      printf("cg_stat[%d] tot_cpu_secs= %10.2f thr_secs= %10.4f %%busy= %7.2f %%usr= %7.2f %%sys= %7.2f nm= %s tm= %3.f\n", i,  v, v_thr, v3, v3_usr, v3_sys, nm, v1, v2);
       cg_stat_i = cg_stat_nm_list[nm];
+      #printf("cg_stat[%d] tot_cpu_secs= %10.2f thr_secs= %10.4f nm= %s tm= %3.f, %%busy= %.3f\n", i,  v, v_thr, nm, v1, v2, v3);
+      printf("cg_stat[%d] tot_cpu_secs= %10.2f thr_secs= %10.4f %%busy= %7.2f %%usr= %7.2f %%sys= %7.2f srvc1_sys2= %d nm= %s tm= %3.f\n",
+         i,  v, v_thr, v3, v3_usr, v3_sys, cg_cntr_typ, nm, v1, v2);
       cg_stat_nm_data[cg_stat_i, "occurs"] += cg_stat_data[i, "occurs"];
       cg_stat_nm_data[cg_stat_i, "cumu"] += v;
       cg_stat_nm_data[cg_stat_i, "ts_cumu"] += v1;
@@ -2236,16 +2355,141 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
     }
     if (cg_stat_elap_tm > 0) {
       printf("cg_stat v_tot= %.3f v_tot1= %.3f v_tot2= %.3f v_throttle_secs= %.6f\n", v_tot, v_tot1, v_tot2, v_tot_thr);
-      cg_stat_elap_tm = cg_stat_ts[cg_stat_ts_mx]-cg_stat_ts[1];
+      cg_stat_elap_tm = cg_stat_ts[cg_stat_ts_mx]-cg_stat_ts[2];
       printf("cg_stat %busy= %.3f%%\n", 100.0 * v_tot/(num_cpus * cg_stat_elap_tm));
       printf("cg_stat elap_tm= %.3f\n", cg_stat_ts[cg_stat_ts_mx]-cg_stat_ts[1]);
 
       printf("cg_stat v_tot= %.3f v_tot1= %.3f v_tot2= %.3f v_throttle_secs= %.6f v3_%%cpu= %.3f v_tot3_bsy= %.3f\n", v_tot, v_tot1, v_tot2, v_tot_thr, v_tot3, v_tot3_bsy);
       #cg_stat_elap_tm = cg_stat_ts[cg_stat_ts_mx]-cg_stat_ts[1];
-      printf("cg_stat %busy= %.3f%%\n", 100.0 * v_tot/(num_cpus * cg_stat_elap_tm));
-      printf("cg_stat elap_tm= %.3f\n", cg_stat_ts[cg_stat_ts_mx]-cg_stat_ts[1]);
-      
+      for (i=1; i <= 2; i++) {
+        printf("cntr_typ: srvc1_sys2= %d tot_%%busyTL= %8.2f non_zero_cntrs= %d, tot_cpu_cntrs= %d\n", i, cntr_typ_cumu[i], cntr_typ_gt0[i], cntr_typ_got[i]);
+      }
     }
+  area = "cpu_stat";
+  subarea = "throttled_time";
+  cumu = area "_" subarea "_cumu";
+  tm_series = area "_" subarea "_arr";
+  tm_series_mx = area "_" subarea "_mx";
+  tm_series_ts_idx = area "_" subarea "_arr_ts_idx";
+  area2 = "cpuacct_usage";
+  subarea2 = "usage"
+  cumu2 = area2 "_" subarea2 "_cumu";
+  tm_series2 = area2 "_" subarea2 "_arr";
+  tm_series_mx2 = area2 "_" subarea2 "_mx";
+  tm_series_ts_idx2 = area2 "_" subarea2 "_arr_ts_idx";
+  tm_seriesu = "cpuacct_stat" "_" "user" "_arr";
+  tm_seriess = "cpuacct_stat" "_" "system" "_arr";
+    for (i=1; i <= cg_stat_mx; i++) {
+      v = cg_stat_lkup[i];
+      nm = "";
+      if (v in uhostd_cntr_list) {
+        v_i = uhostd_cntr_list[v];
+        nm = uhostd_cntr_lkup[v_i, "nm"];
+      }
+      cg_cntr_typ = cg_stat_lkup[i, "cntr_typ"];
+      if (nm  == "" && cg_cntr_typ == cg_cntr_typ_sys) {
+        nm = cg_stat_lkup[i, "cntr_typ_sys_srvc"];
+      }
+      #if (index(nm, "spire-agent") > 0 || index(nm, "auditbeat") > 0) {;} else {continue;}
+      #printf("got nm[%d]= %s\n", i, nm);
+  #ts_mx = ++tm_cg_stat_data[cntr_i,tm_series_mx];
+  #tm_cg_stat_data[cntr_i,tm_series, ts_mx] = tv;
+  #tm_cg_stat_data[cntr_i,tm_series_ts_idx, ts_mx] = cur_ts_idx;
+      ck_tot= 0;
+      ts_mx = tm_cg_stat_data[i, tm_series_mx];
+      for (j=2; j <= ts_mx; j++) {
+        vt = tm_cg_stat_data[i, tm_series, j];
+        ts = tm_cg_stat_data[i, tm_series_ts_idx, j];
+        vc = tm_cg_stat_data[i, tm_series2, j];
+        vu = tm_cg_stat_data[i, tm_seriesu, j];
+        vs = tm_cg_stat_data[i, tm_seriess, j];
+        ck_tot += v;
+        cg_tot[i,1] += vc;
+        cg_tot[i,2] += vt;
+        cg_tot[i,3] += vu;
+        cg_tot[i,4] += vs;
+      }
+        cg_ttot[1] += cg_tot[i,1];
+        cg_ttot[2] += cg_tot[i,2];
+        cg_ttot[3] += cg_tot[i,3];
+        cg_ttot[4] += cg_tot[i,4];
+      printf("cg_tot[%d] vc= %10.2f vt = %10.2f vu= %10.2f vs= %10.2f nm= %s\n", i, cg_tot[i,1], cg_tot[i,2], cg_tot[i,3], cg_tot[i,4], nm);
+      if (cg_tot[i,1] > 0.0) {
+      if (!(nm in cg_stat2_nm_list)) {
+        cg_stat2_nm_list[nm] = ++cg_stat2_nm_list_mx;
+        cg_stat2_nm_lkup[cg_stat2_nm_list_mx] = nm;
+      }
+      cg_stat2_i = cg_stat2_nm_list[nm];
+      cg_stat2_nm_data[cg_stat2_i, "occurs"]++;
+      cg_stat2_nm_data[cg_stat2_i, 1] += cg_tot[i,1];
+      cg_stat2_nm_data[cg_stat2_i, 2] += cg_tot[i,2];
+      cg_stat2_nm_data[cg_stat2_i, 3] += cg_tot[i,3];
+      cg_stat2_nm_data[cg_stat2_i, 4] += cg_tot[i,4];
+      }
+      #break;
+    }
+    do_kk[1] = 1; do_kk[2] = 2; do_kk[3] = 4;
+    do_ks[1] = "tot"; do_ks[2] = "%throttled"; do_ks[3] = "system";
+    for (bk=1; bk <= 2; bk++) {
+    for (kk=1; kk <= 3; kk++) {
+       mk = do_kk[kk];
+       ms = do_ks[kk];
+        delete arr_in;
+        delete res_i;
+        delete idx;
+    ck_tot = 0;
+    new_n = 0;
+    for (i=1; i <= cg_stat2_nm_list_mx; i++) {
+      nm = cg_stat2_nm_lkup[i];
+      v = cg_stat2_nm_data[i, mk];
+      if (mk == 2) {
+        v = v / cg_stat2_nm_data[i,1];
+      }
+      if (bk == 2) {
+        v = v / cg_stat2_nm_data[i,"occurs"];
+      }
+      idx[i] = i;
+      arr_in[i] = -v;
+      ck_tot += v;
+    }
+    asorti(idx, res_i, "arr_in_compare");
+    for (j=1; j <= cg_stat2_nm_list_mx; j++) {
+      i = res_i[j];
+      fctr = 100.0/cg_stat_elap_tm;
+      nm = cg_stat2_nm_lkup[i];
+      v = cg_stat2_nm_data[i,mk];
+      ck_v = v / cg_ttot[mk];
+      hdr = "cpuTL_per_cgrp_nm_" ms;
+      if (((mk == 1 || mk == 4) && ck_v < 0.01) || (mk == 2 && (v/cg_stat2_nm_data[i,1]) < 0.05)) { continue; }
+      if (mk == 2) {
+        v = 100* cg_stat2_nm_data[i,2] /cg_stat2_nm_data[i,1];
+        fctr = 1.0;
+        hdr = "cpu_per_cgrp_nm_" ms;
+        hdr2 = "cgrp_nm_cpu_" ms " " nm;
+      } else {
+        hdr = "cpuTL_per_cgrp_nm_" ms;
+        hdr2 = "cgrp_nm_cpuTL_" ms " " nm;
+      }
+      if (bk == 2) {
+      if (mk == 2) {
+        #v = 100*v/cg_stat2_nm_data[i,1];
+        fctr = 1.0;
+        hdr = "cpu_per_cgrp_nm_per_cntr_" ms;
+        hdr2 = "cgrp_nm_cpu_" ms " " nm;
+      } else {
+        hdr = "cpuTL_per_cgrp_nm_per_cntr_" ms;
+        hdr2 = "cgrp_nm_cpuTL_" ms " " nm;
+        fctr = fctr / cg_stat2_nm_data[i,"occurs"];
+      }
+      }
+      printf("cg_stat2_nm_data[%d] vc= %10.2f vt = %10.2f vu= %10.2f vs= %10.2f nm= %s\n", j,
+         fctr*cg_stat2_nm_data[i,1], fctr*cg_stat2_nm_data[i,2], fctr*cg_stat2_nm_data[i,3], fctr*cg_stat2_nm_data[i,4], nm);
+      printf("%s\t%s\t%f\t%s\n", hdr, hdr, fctr*v, hdr2) > sum_file;
+    }
+    printf("above cg_stat2_nm_data table is total cpu_usageTL %s for that service. Doesnt take into account you might have > 1 container for service. tot cpuTL= %.3f\n", ms, fctr*ck_tot);
+    }
+    }
+     
     for (i=1; i <= cg_stat_nm_list_mx; i++) {
       nm = cg_stat_nm_lkup[i];
       v_rps = 0;
@@ -2459,6 +2703,10 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
         str1 = "docker all";
         str = "cgrps "str1" ms/call";
       }
+      if (cg == 5) {
+        str1 = "services & docker";
+        str = "cgrps "str1" %cpu throttled usage (100=1cpu_busy)";
+      }
       printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", str, "infra procs") > ofile;
       hstr = sprintf("epoch\tts");
       cg_cols=0;
@@ -2506,6 +2754,13 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
           }
           nn = srvcs_lkup[srvcs_i,"mutt_mx"];
           if (nn == "" || nn == 0) { continue; }
+          k = ++bycg_list[cg,"mx"];
+          bycg_list[cg,"list",k] = i;
+        }
+        if (cg == 5) {
+          sgrp = ncg_lkup[i,"subgrp"];
+          #if (nm == "system.slice" || sgrp == "sys.srvc") {;} else { continue; }
+          #if (sgrp == "sys.srvc") {;} else { continue; }
           k = ++bycg_list[cg,"mx"];
           bycg_list[cg,"list",k] = i;
         }
