@@ -161,13 +161,20 @@ else
 #
 # given service name, find container name for it.
 #
+  CTYP="docker"
   RESP=$(echo "$docker_long"  | grep "${SERVICE}")
   if [ "$RESP" == "" ]; then
-    echo "$0.$LINENO no containers with the service \"$SERVICE\" found"
-    exit 1
+    RESP=$(find /sys/fs/cgroup/cpu,cpuacct/system.slice -name "${SERVICE}*")
+    if [ "$RESP" == "" ]; then
+      echo "$0.$LINENO no containers with the service \"$SERVICE\" found"
+      exit 1
+    fi
+    dckr_arr=("${SERVICE}")
+    CTYP="system.slice"
+  else
+    dckr_arr=($(echo "$RESP" | awk '{if ($1 == "NAME") {next;} printf("%s\n", $1);}'))
   fi
   #echo "$0.$LINENO resp= $RESP"
-  dckr_arr=($(echo "$RESP" | awk '{if ($1 == "NAME") {next;} printf("%s\n", $1);}'))
 fi
 echo "dckr_arr= ${dckr_arr[@]}"
 # cat /sys/fs/cgroup/cpu,cpuacct/docker/b6715b80b4b5a00918b72d0e7afd4280cd27af5b1ad7d1a04768dbb5741c867d/cpu.stat
@@ -210,7 +217,7 @@ declare -A dckr_stat_cur
 prf_dat_lst=()
 for ((i=0; i < ${#dckr_arr[@]}; i++)); do
   echo "__container $i ${dckr_arr[$i]}" >> $OFILE
-  ARR=($(cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cpu.stat | awk '{print $2;}'))
+  ARR=($(cat /sys/fs/cgroup/cpu,cpuacct/$CTYP/${dckr_arr[$i]}/cpu.stat | awk '{print $2;}'))
   for ((j=0; j < ${#ARR[@]}; j++)); do
     dckr_stat_prv[$i,$j]=${ARR[$j]}
   done
@@ -244,20 +251,20 @@ declare -A has_java_det
 for ((i=0; i < ${#dckr_arr[@]}; i++)); do
   got_trigger[$i]=0
   did_sigusr2[$i]=0
-  RESP=$(cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cpu.cfs_quota_us)
+  RESP=$(cat /sys/fs/cgroup/cpu,cpuacct/$CTYP/${dckr_arr[$i]}/cpu.cfs_quota_us)
   echo "__cpu.cfs_quota_us $i $RESP" >> $OFILE
-  RESP=$(cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cpu.cfs_period_us)
+  RESP=$(cat /sys/fs/cgroup/cpu,cpuacct/$CTYP/${dckr_arr[$i]}/cpu.cfs_period_us)
   echo "__cpu.cfs_period_us $i $RESP" >> $OFILE
-  ARR=($(cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cpu.stat | awk '{print $2;}'))
+  ARR=($(cat /sys/fs/cgroup/cpu,cpuacct/$CTYP/${dckr_arr[$i]}/cpu.stat | awk '{print $2;}'))
   for ((j=0; j < ${#ARR[@]}; j++)); do
      dckr_stat_prv[$i,$j]=${ARR[$j]}
   done
-  ARR=($(cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cpuacct.stat | awk '{print $2;}'))
+  ARR=($(cat /sys/fs/cgroup/cpu,cpuacct/$CTYP/${dckr_arr[$i]}/cpuacct.stat | awk '{print $2;}'))
   for ((j=0; j < ${#ARR[@]}; j++)); do
      dckr_acctstat_prv[$i,$j]=${ARR[$j]}
   done
-  cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cgroup.procs | xargs -I '{}' ps  -p {} -o pid,comm > $PROJ/cgroup.procs_short.txt
-  cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cgroup.procs | xargs -I '{}' ps  -p {} -f > $PROJ/cgroup.procs_long.txt
+  cat /sys/fs/cgroup/cpu,cpuacct/$CTYP/${dckr_arr[$i]}/cgroup.procs | xargs -I '{}' ps  -p {} -o pid,comm > $PROJ/cgroup.procs_short.txt
+  cat /sys/fs/cgroup/cpu,cpuacct/$CTYP/${dckr_arr[$i]}/cgroup.procs | xargs -I '{}' ps  -p {} -f > $PROJ/cgroup.procs_long.txt
   has_java[$i]=$(grep java $PROJ/cgroup.procs_short.txt | wc -l)
   if [ "${has_java[$i]}" -gt "0" ]; then
     ARR=($(grep java $PROJ/cgroup.procs_short.txt | awk '{printf("%s\n", $1);}'))
@@ -276,7 +283,7 @@ for ((i=0; i < ${#dckr_arr[@]}; i++)); do
   fi
   # ps -ef |grep java |grep deepeta
   # grep NSpid /proc/335930/status
-  cpuacct_usage_prv[$i]=$(cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cpuacct.usage)
+  cpuacct_usage_prv[$i]=$(cat /sys/fs/cgroup/cpu,cpuacct/$CTYP/${dckr_arr[$i]}/cpuacct.usage)
 done
 
 
@@ -324,7 +331,7 @@ while [[ "$tm_cur" -lt "$tm_end" ]]; do
   thr_ck=()
   thr_dff=()
   for ((i=0; i < ${#dckr_arr[@]}; i++)); do
-    if [ ! -e /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cpu.stat ]; then
+    if [ ! -e /sys/fs/cgroup/cpu,cpuacct/$CTYP/${dckr_arr[$i]}/cpu.stat ]; then
       if [ "${PID_ARR[$i]}" != "" ]; then
 	       # the container is gone, kill the perf process
          echo "__docker_sigint $i $tm_dff $EPCH $TM_STR" >> $OFILE
@@ -366,9 +373,9 @@ while [[ "$tm_cur" -lt "$tm_end" ]]; do
     fi
     if [ "$VERBOSE" -gt "0" ]; then
       echo "$0.$LINENO stats for container $i"
-      cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cpu.stat
+      cat /sys/fs/cgroup/cpu,cpuacct/$CTYP/${dckr_arr[$i]}/cpu.stat
     fi
-    ARR=($(cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cpu.stat | awk '{print $2;}'))
+    ARR=($(cat /sys/fs/cgroup/cpu,cpuacct/$CTYP/${dckr_arr[$i]}/cpu.stat | awk '{print $2;}'))
     str=""
     for ((j=0; j < ${#ARR[@]}; j++)); do
        dckr_stat_cur[$i,$j]=${ARR[$j]}
@@ -396,7 +403,7 @@ while [[ "$tm_cur" -lt "$tm_end" ]]; do
         got_trigger[$i]="$EPCHSECS"
       fi
     fi
-    ARR=($(cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cpuacct.stat | awk '{print $2;}'))
+    ARR=($(cat /sys/fs/cgroup/cpu,cpuacct/$CTYP/${dckr_arr[$i]}/cpuacct.stat | awk '{print $2;}'))
     str=""
     for ((j=0; j < ${#ARR[@]}; j++)); do
        dckr_acctstat_cur[$i,$j]=${ARR[$j]}
@@ -405,7 +412,7 @@ while [[ "$tm_cur" -lt "$tm_end" ]]; do
        dckr_acctstat_prv[$i,$j]=${dckr_acctstat_cur[$i,$j]}
     done
     echo "__docker_cpuacct_stat $EPCH $i $str" >> $OFILE
-    RESP=$(cat /sys/fs/cgroup/cpu,cpuacct/docker/${dckr_arr[$i]}/cpuacct.usage)
+    RESP=$(cat /sys/fs/cgroup/cpu,cpuacct/$CTYP/${dckr_arr[$i]}/cpuacct.usage)
     v=$((RESP-cpuacct_usage_prv[$i]))
     echo "__docker_cpuacct_usage $EPCH $i $v" >> $OFILE
     cpuacct_usage_prv[$i]="$RESP"
@@ -419,16 +426,16 @@ while [[ "$tm_cur" -lt "$tm_end" ]]; do
       echo "__container_stats $EPCH $i $cid" >> $OFILE
       for kk in cpu.stat cpuacct.stat cpuacct.usage; do
         echo "__$kk" >> $OFILE
-        cat /sys/fs/cgroup/cpu,cpuacct/docker/$cid/$kk >> $OFILE
+        cat /sys/fs/cgroup/cpu,cpuacct/$CTYP/$cid/$kk >> $OFILE
       done
       # the blkio doesn't seem to count very much
       #for kk in blkio.throttle.io_serviced blkio.throttle.io_service_bytes; do
       #  echo "__$kk" >> $OFILE
-      #  cat /sys/fs/cgroup/blkio/docker/$cid/$kk >> $OFILE
+      #  cat /sys/fs/cgroup/blkio/$CTYP/$cid/$kk >> $OFILE
       #done
       for kk in memory.stat; do
         echo "__$kk" >> $OFILE
-        cat /sys/fs/cgroup/memory/docker/$cid/$kk >> $OFILE
+        cat /sys/fs/cgroup/memory/$CTYP/$cid/$kk >> $OFILE
       done
       echo "" >> $OFILE
     fi
