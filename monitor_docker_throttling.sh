@@ -222,7 +222,7 @@ for ((i=0; i < ${#dckr_arr[@]}; i++)); do
     dckr_stat_prv[$i,$j]=${ARR[$j]}
   done
   prf_dat_lst[$i]="$PROJ/prf_${i}.dat"
-  nohup $SCR_DIR/perf record -k CLOCK_MONOTONIC $OPT_F -e $PERF_EVT --cgroup=docker/${dckr_arr[$i]} -g -a -o "${prf_dat_lst[$i]}" --switch-output --overwrite  -- sleep $TIME_MX &> $PROJ/prf_${i}.log  &
+  nohup $SCR_DIR/perf record -k CLOCK_MONOTONIC $OPT_F -e $PERF_EVT --cgroup=$CTYP/${dckr_arr[$i]} -g -a -o "${prf_dat_lst[$i]}" --switch-output --overwrite  -- sleep $TIME_MX &> $PROJ/prf_${i}.log  &
   PID_ARR[$i]=$!
 done
 
