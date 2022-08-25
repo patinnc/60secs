@@ -1230,6 +1230,8 @@ for bmi in range(base_mx+1):
                          'name':       [wrksh_nm, hrow_beg, h+ph_add],
                          'values':     [wrksh_nm, drow_beg, h+ph_add, use_drow_end, h+ph_add],
                     }
+                    if (data[hrow_beg][h+ph_add].find("_RHS") >= 0):
+                       a_s['y2_axis'] = 1
                     if use_cats:
                        if 'set_x_axis_date_axis' in ch_opts[c]:
                            a_s['categories'] = [wrksh_nm, drow_beg, dcol_cat+ph_add, use_drow_end, dcol_cat+ph_add]
