@@ -128,7 +128,7 @@ if [ "$WORK_DIR" == "" ]; then
 fi
 my_tmp_output_file="$WORK_DIR/tmp_${my_scr}.txt"
 
-echo $0.$LINENO $AWK_BIN -v beg_ts="$BEG_TS" -v end_ts="$END_TS" -v ts_initial="$TS_INITIAL" -v script_nm="$0.$LINENO.awk" -v mutt_file="$MUTT_FL" -v mutt_ofile="$MUTT_OUT_FL" -v cur_dir="$CUR_DIR" -v options="$OPTIONS" -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofile="$OUT_FL" 
+echo $0.$LINENO $AWK_BIN -v beg_ts="$BEG_TS" -v end_ts="$END_TS" -v ts_initial="$TS_INITIAL" -v script_nm="$0.$LINENO.awk" -v mutt_file="$MUTT_FL" -v mutt_ofile="$MUTT_OUT_FL" -v cur_dir="$CUR_DIR" -v options="$OPTIONS" -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofile="$OUT_FL"
 $AWK_BIN -v work_dir="$WORK_DIR" -v beg_ts="$BEG_TS" -v end_ts="$END_TS" -v ts_initial="$TS_INITIAL" -v script_nm="$0.$LINENO.awk" -v mutt_file="$MUTT_FL" -v mutt_ofile="$MUTT_OUT_FL" -v cur_dir="$CUR_DIR" -v options="$OPTIONS" -v num_cpus="$NUM_CPUS" -v sum_file="$SUM_FILE" -v ofile="$OUT_FL" -v ifile="$IN_FL"  '
   BEGIN {
    rc = 0;
@@ -876,9 +876,9 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
       }
       dev = $3;
       dev_len = length(dev);
-     
 
-#		if (NF >= 14) 
+
+#		if (NF >= 14)
 #			sdev.rd_ios     = rd_ios;
 #			sdev.rd_merges  = rd_merges_or_rd_sec;
 #			sdev.rd_sectors = rd_sec_or_wr_ios;
@@ -891,18 +891,18 @@ function rd_ps_tm(rec, beg0_end1,   i, dt_diff, pid, tmi, proc, rss, vsz, pid_i,
 #			sdev.tot_ticks  = tot_ticks;
 #			sdev.rq_ticks   = rq_ticks;
 #
-#			if (NF >= 18) 
+#			if (NF >= 18)
 #				#/* Discard I/O */
 #				sdev.dc_ios     = dc_ios;
 #				sdev.dc_merges  = dc_merges;
 #				sdev.dc_sectors = dc_sec;
 #				sdev.dc_ticks   = dc_ticks;
 #
-#			if (NF >= 20) 
-#				# Flush I/O 
+#			if (NF >= 20)
+#				# Flush I/O
 #				sdev.fl_ios     = fl_ios;
 #				sdev.fl_ticks   = fl_ticks;
-#		else if (NF == 7) 
+#		else if (NF == 7)
 #			#/* Partition without extended statistics */
 #			#if (DISPLAY_EXTENDED(flags))
 #		#		continue;
@@ -1188,7 +1188,7 @@ function add_cg_stat_data(cntr_i, v, area, subarea, cur_ts_idx,     ts_mx, prv, 
   tm_series = area "_" subarea "_arr";
   tm_series_mx = area "_" subarea "_mx";
   tm_series_ts_idx = area "_" subarea "_arr_ts_idx";
-  
+
   if (cg_stat_data[cntr_i,prv] == "") {
       cg_stat_data[cntr_i,prv] = v;
   }
@@ -1578,7 +1578,6 @@ function add_cg_stat_data(cntr_i, v, area, subarea, cur_ts_idx,     ts_mx, prv, 
           }
           printf("got docker = %s, c_i= %s, qklk= %s, cntr= %s\n", cg, c_i, qklk, cntr);
         }
-        
       }
       cg_i = cg_list[cg];
       cg_data[cg_mx,cg_i,"tm"] = tm;
@@ -2489,7 +2488,7 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
     printf("above cg_stat2_nm_data table is total cpu_usageTL %s for that service. Doesnt take into account you might have > 1 container for service. tot cpuTL= %.3f\n", ms, fctr*ck_tot);
     }
     }
-     
+
     for (i=1; i <= cg_stat_nm_list_mx; i++) {
       nm = cg_stat_nm_lkup[i];
       v_rps = 0;
@@ -2504,7 +2503,7 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
       }
       v3 = 100.0* v1 / (cg_stat_elap_tm);
       v4 = cg_stat_nm_data[i, "occurs"];
-      printf("cg_stat_nm[%d] cpu_secs= %10.2f thr_secs= %8.4f  rps= %8d ms_per_req= %8.2f %%busy= %8.2f ms/req/cntr= %8.2f %%busy/cntr= %8.2f cntr_occurs= %4d nm= %s\n", i, 
+      printf("cg_stat_nm[%d] cpu_secs= %10.2f thr_secs= %8.4f  rps= %8d ms_per_req= %8.2f %%busy= %8.2f ms/req/cntr= %8.2f %%busy/cntr= %8.2f cntr_occurs= %4d nm= %s\n", i,
         cg_stat_nm_data[i, "cumu"], cg_stat_nm_data[i, "thr_cumu"],  v_rps, ms_per_req, v3, ms_per_req/v4, v3/v4,  v4, nm);
     }
 
@@ -2670,7 +2669,7 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
           nml = length(nm);
           str = "";
           for (j=3; j <= nmutt_mx; j++) {
-            #if(substr(nmutt_lkup[j,"nm"], 1, nml) == nm) 
+            #if(substr(nmutt_lkup[j,"nm"], 1, nml) == nm)
             if(nmutt_lkup[j,"nm"] == nm) {
               n = ++srvcs_lkup[i,"mutt_mx"];
               srvcs_lkup[i,"mutt_list",n] = j;
@@ -3142,7 +3141,7 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
     if ( use_top_pct_cpu == 1) {
       fctr = 100.0;
     }
-    
+
     # if we are doing max values and if there are multiple values that make up the max
     # then we have to careful to make sure all the values come from the same interval.
     # Othewise we can have max values that sum to more than # of cpus.
