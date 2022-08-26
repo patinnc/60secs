@@ -96,6 +96,25 @@ while getopts "hvb:d:e:i:l:n:o:r:s:S:t:u:w:x:" opt; do
 done
 shift $((OPTIND -1))
 
+CK_LST="$SCR_DIR $SCR_DIR/../repos $SCR_DIR/.."
+CK_GAWK=$(which gawk)
+if [ "$CK_GAWK" == "" ]; then
+  for i in $CK_LST; do
+    if [ -d "$i/patrick_fay_bin" ]; then
+      SCR_BIN_DIR=$i/patrick_fay_bin
+      export PATH=$($SCR_BIN_DIR):$PATH
+      break
+    fi
+  done
+fi
+export LC_ALL=C
+CK_GAWK=$(which gawk)
+echo "$0.$LINENO got gawk path $CK_GAWK"
+AWK="awk"
+if [ "$CK_GAWK" != "" ]; then
+  AWK=$CK_GAWK
+fi
+
 SKU_STR=
 for ((i=0; i < ${#SKU_IN[@]}; i++)); do
   SKU_STR="$SKU_STR;${SKU_IN[$i]}"
@@ -128,7 +147,7 @@ fi
 LAYOUT=0
 DIR_LST=()
 if [ "$DIR_IN" != "" ]; then
-  RESP=`find $DIR_IN -name $LOOKFOR | wc -l | awk '{$1=$1;print $1}'`
+  RESP=`find $DIR_IN -name $LOOKFOR | wc -l | $AWK '{$1=$1;print $1}'`
   echo "RESP= $RESP"
   if [ "$RESP" != "0" ]; then
     DIR_LST=(`find $DIR_IN -name $LOOKFOR | sort`)
@@ -152,8 +171,10 @@ echo "INF= $INF"
 if [ $NUM_INF -gt 1 ]; then
   LAYOUT=1
 fi
+PROFILE=" --profile "
+PROFILE=
 
-awk --profile -v xls_str="$XLS_STR" -v sku_str="$SKU_STR" -v ratio_cols="$RATIO_COLS" -v out_file="$OUT_FILE" -v layout="$LAYOUT" -v sep="$SEPARATOR" '
+$AWK $PROFILE -v xls_str="$XLS_STR" -v sku_str="$SKU_STR" -v ratio_cols="$RATIO_COLS" -v out_file="$OUT_FILE" -v layout="$LAYOUT" -v sep="$SEPARATOR" '
  BEGIN{
       need_SI_ncu_combined = 0;
       did_metric = 0;
