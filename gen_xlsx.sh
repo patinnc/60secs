@@ -95,7 +95,7 @@ AVERAGE=0
 CLIPX=()
 REDUCE=
 
-while getopts "AhvSa:b:B:c:C:D:d:e:F:g:I:j:m:N:o:P:R:r:s:w:X:x:" opt; do
+while getopts "AhvSa:b:B:c:C:D:d:e:F:g:I:j:m:N:O:o:P:R:r:s:w:X:x:" opt; do
   case ${opt} in
     A )
       AVERAGE=1
@@ -151,6 +151,9 @@ while getopts "AhvSa:b:B:c:C:D:d:e:F:g:I:j:m:N:o:P:R:r:s:w:X:x:" opt; do
       ;;
     o )
       OPTIONS=$OPTARG
+      ;;
+    O )
+      ORDER_DIRS=$OPTARG
       ;;
     P )
       PHASE_FILE=$OPTARG
@@ -216,6 +219,7 @@ while getopts "AhvSa:b:B:c:C:D:d:e:F:g:I:j:m:N:o:P:R:r:s:w:X:x:" opt; do
       echo "         'do_perlbench_subphase{1}'  this is a rarely used option. It tells sys_2_tsv.sh, when it is selecting a phase of the data,"
       echo "            to look for cpu2017 perlbench and look for the the 3 subphase workloads in cpu2017.001.log file."
       echo "            Need '-C perlaaaa' or '-C perlbbbb' or '-C perlcccc' and -P phase_file (-P phase_cpu2017.txt)."
+      echo "   -O order_dirs  ':' seperated list of dir under the -d dir list. This lets you set a certain dir order."
       echo "   -P phase_file"
       echo "      should be in data dir. fmt='phase_name epoch_time_begin epoch_time_end'"
       echo "      if there are more than 3 fields, the extra fields are concatenated together (with ','s) and shown above each chart"
@@ -527,18 +531,27 @@ if [ "$DESC_FILE" != "" ]; then
    fi
 fi
 
+ORDER_DIRS_IN_ARR=()
 if [ "$INPUT_FILE_LIST" != "" ]; then
   if [ -e $INPUT_FILE_LIST ]; then
     echo "$0.$LINENO got input_file_list= $INPUT_FILE_LIST"
   fi
 else
    DIR_ORIG=$DIR_IN
+   if [ "$ORDER_DIRS" != "" ]; then
+     IFS=':' read -ra ORDER_DIRS_IN_ARR <<< "$ORDER_DIRS"
+     IFS=$IFS_SV
+   fi
    IFS=':' read -ra DIR_IN_ARR <<< "$DIR_IN"
    IFS=$IFS_SV
    STR=
    echo "$0.$LINENO DIR_IN_ARR= ${DIR_IN_ARR[@]}"
    for ((dn=0; dn < ${#DIR_IN_ARR[@]}; dn++)); do
      DIR=${DIR_IN_ARR[$dn]}
+     if [ "$DIR" == "" ]; then
+       echo "$0.$LINENO got dir= '' for dn= $dn. fix yer code. bye"
+       exit 1
+     fi
    CKF=60secs.log
    GOT_DIR=0
    RESP=`find $DIR -name $CKF | wc -l | awk '{$1=$1;print}'`
@@ -734,10 +747,16 @@ fi
 
 
 LST=$DIR
+if [ "${#ORDER_DIRS_IN_ARR[@]}" != "0" ]; then
+  LST="${ORDER_DIRS_IN_ARR[@]}"
+  DIR="${ORDER_DIRS_IN_ARR[@]}"
+  echo "$0.$LINENO reset to ORDER_DIRS LST= $LST and ORDER_DIS_IN_ARR= ${ORDER_DIRS_IN_ARR[@]}"
+fi
 if [ $VERBOSE -gt 0 ]; then
 echo "$0.$LINENO DIR_ORIG= $DIR_ORIG, DIR= $DIR LST= $LST"
   echo "$0.$LINENO DIR: $DIR"
 fi
+echo "$0.$LINENO DIR_ORIG= $DIR_ORIG, DIR= $DIR LST= $LST"
 
 
 #pwd >&2
@@ -938,7 +957,7 @@ if [ "$SKU_LEN" != "0" ]; then
         fi
                   LZC_OUT=$(awk -v infile="$LZC_FL" -v host="$GOT_HST" -v sku_in="${SKU[@]}" -v cpu_fam="$GOT_CPU" -v cpu2017_thrds="$CPU2017_THRDS" '
           BEGIN{
-            printf("host= %s, sku= %s, cpu_fam= %s\n", host, sku_in, cpu_fam) > "/dev/stderr";
+            #printf("host= %s, sku= %s, cpu_fam= %s\n", host, sku_in, cpu_fam) > "/dev/stderr";
             str = tolower(cpu_fam);
             if (index(str, "sky") > 0) { cpu = "skx"; }
             if (index(str, "cascade") > 0) { cpu = "csx"; }
@@ -947,17 +966,65 @@ if [ "$SKU_LEN" != "0" ]; then
             if (index(str, "haswell") > 0) { cpu = "hsw"; }
             if (index(infile, "lzc_info") > 0) {
               mode="lzc";
+              lzc_got_hdr = 0;
             } else {
               mode="clusto"
             }
 
             got_match=0;
           }
-          $1 == "Hostname" || $1 == "Name:" {
+          {
+            if (mode == "lzc") {
+              if (lzc_got_hdr == 0 && index($0, ";") > 0) {
+                n_hdr_lzc = split($0, hdr_lzc, ";");
+                for (i=1; i <= n_hdr_lzc; i++) {
+                 lzc_lkup[hdr_lzc[i]] = i;
+                 #printf("lzc_lkup[%s]= %d\n", hdr_lzc[i], lzc_lkup[hdr_lzc[i]]);
+                }
+                lzc_got_hdr = 1;
+              }
+              if (lzc_got_hdr == 0 && index($0, ";") == 0) {
+                n_hdr_lzc = split($0, hdr_lzc, " ");
+                for (i=1; i <= n_hdr_lzc; i++) {
+                 lzc_lkup[hdr_lzc[i]] = i;
+                 #printf("lzc_lkup[%s]= %d\n", hdr_lzc[i], lzc_lkup[hdr_lzc[i]]);
+                }
+                lzc_got_hdr = 1;
+              }
+              if (n_hdr_lzc > 0 && index($0,";") > 0) {
+                n_lzc = split($0, ln_lzc, ";");
+                for (i=1; i <= n_lzc; i++) { $i = ln_lzc[i];}
+                $1 = $1;
+                $0 = $0;
+              }
+              if (n_hdr_lzc > 0 && index($0,";") == 0) {
+                n_lzc = split($0, ln_lzc, " ");
+                for (i=1; i <= n_lzc; i++) { $i = ln_lzc[i];}
+                $1 = $1;
+                $0 = $0;
+              }
+           }
+          }
+          mode == "lzc" && n_hdr_lzc > 0 {
+             n_lzc = split($0, ln_lzc, ";");
+             if (ln_lzc[1] == hdr_lzc[1]) { next; }
+             #if (n_lzc < n_hdr_lzc) { next;}
+             hst = $(lzc_lkup["Hostname"]);
+             if (!(hst in host_list)) {
+              host_list[hst] = ++host_mx;
+              host_lkup[host_mx] = hst;
+             }
+             host_i = host_list[hst];
+             if (hst == host) {
+               got_match = 1;
+             }
+          }
+#Hostname;ServerType;Manufacturer;Model;Zone;Group;UUID;ProviderType;Layout;Type;Status;DrainDueDate;IsCrane;ProviderZone;ProviderID
+          1 == 2 && ($1 == "Hostname" || $1 == "Name:") {
             got_match = 0;
             #  printf("______got lzc host= %s, lkfor host= %s\n", $2, host) > "/dev/stderr";
             if (NF == 2 && $2 == host) {
-              printf("______got lzc host= %s\n", host);
+              #printf("______got lzc host= %s\n", host);
               host_list[host] = ++host_mx;
               host_lkup[host_mx] = host;
               host_i = host_list[host];
@@ -966,17 +1033,27 @@ if [ "$SKU_LEN" != "0" ]; then
           }
           got_match == 1 {
             #printf("lzc line= %s\n", $0);
-            if (mode == "lzc") {
+            if (mode == "lzc" && n_hdr_lzc > 0 && $1 != hdr_lzc[1]) {
               #printf("++++++++got_lzc line= %s\n", $0) > "/dev/stderr";
-              if ($1 == "Provider" && $2 == "Type") {
-                prov_typ = $3;
+              if (lzc_lkup["Provider"] != "") {
+                prov_typ = $(lzc_lkup["Provider"]);
               }
-              if ($1 == "Is" && $2 == "Crane") {
-                is_crane = $3;
+              if (lzc_lkup["IsCrane"] != "") {
+                is_crane = $(lzc_lkup["IsCrane"]);
               }
-              if ($1 == "SKU:") {
-                sv[host_i,"sku"] = $2;
+              if (lzc_lkup["ServerType"] != "") {
+                sv[host_i,"sku"] = $(lzc_lkup["ServerType"]);
               }
+              if (lzc_lkup["Manufacturer"] != "") {
+                sv[host_i,"maker"] = $(lzc_lkup["Manufacturer"]);
+              }
+              if (lzc_lkup["ProviderType"] != "") {
+                sv[host_i,"ptyp"] = $(lzc_lkup["ProviderType"]);
+              }
+              if (lzc_lkup["Type"] != "") {
+                sv[host_i,"typ"] = $(lzc_lkup["Type"]);
+              }
+              if (1==2) {
               if ($1 == "Type") {
                 typ = $2;
               }
@@ -989,11 +1066,13 @@ if [ "$SKU_LEN" != "0" ]; then
                 #got_match = 0;
                 #exit(0);
               }
+              }
             } else {
               #printf("++++++++got_clusto line= %s\n", $0) > "/dev/stderr";
               if (index($0, "Sku:") == 1) {
                sv[host_i,"is_crane"] = "no";
                sv[host_i,"services"] = "n/a";
+               sv[host_i,"maker"] = $3;
                sv[host_i,"sku"] = $2;
                sv[host_i,"ptyp"] = $2;
                #printf("++++++++got_clusto sku= %s\n", $2) > "/dev/stderr";
@@ -1005,9 +1084,13 @@ if [ "$SKU_LEN" != "0" ]; then
             }
           }
           END{
+            #printf("lzc host_mx= %d\n", host_mx);
             for (i=1; i <= host_mx; i++) {
+              if (host != host_lkup[i]) { continue; }
               printf("host;%s\n", host_lkup[i]);
+              printf("lzc_sku;%s\n", sv[i,"sku"]);
               printf("ptyp;%s\n", sv[i,"ptyp"]);
+              printf("maker;%s\n", sv[i,"maker"]);
               printf("typ;%s\n", sv[i,"typ"]);
               printf("crane;%s\n", sv[i,"is_crane"]);
               printf("cpu_long;%s\n", cpu_fam);
@@ -1024,7 +1107,12 @@ if [ "$SKU_LEN" != "0" ]; then
                   sku = sv[i,"typ"];
                 }
               }
+              maker = "unk";
+              if ((i,"maker") in sv) {
+                maker = sv[i,"maker"];
+              }
               gsub("%sku%", sku, sku_in);
+              gsub("%maker%", maker, sku_in);
               gsub("%cpu_long%", cpu, sku_in);
               gsub("%cpu2017_threads%", cpu2017_thrds, sku_in);
               printf("sku;%s\n", sku_in);
@@ -1177,7 +1265,7 @@ for i in $LST; do
      else
        RPS_ARR[$JOB_ID]=$RC
      fi
-     printf "RPS_ARR[%s]= %s, NUM_DIRS= %d DIR_NUM= %d\n" $JOB_ID $RC $NUM_DIRS $DIR_NUM >&2
+     #printf "RPS_ARR[%s]= %s, NUM_DIRS= %d DIR_NUM= %d\n" $JOB_ID $RC $NUM_DIRS $DIR_NUM >&2
      if [ "$OPT_DESC_FILE" == "" ]; then
        if [ "$AVERAGE" != "0" ]; then
        printf "$0.$LINENO opt_desc_file RC= %s i= %s\n"  $RC $i_abs_dir/desc.txt >&2
@@ -1291,6 +1379,7 @@ for i in $LST; do
      rm $JOB_WORK_DIR/*
    fi
    SYS_2_TSV_STDOUT_FILE=$JOB_WORK_DIR/sys_2_tsv_stdout.txt
+   SYS_2_TSV_STDERR_FILE=$JOB_WORK_DIR/sys_2_tsv_stderr.txt
  if [ "$SKIP_SYS_2_TSV" == "0" ]; then
    if [ $VERBOSE -gt 0 ]; then
      OPT_P=$RPS
@@ -1315,11 +1404,11 @@ for i in $LST; do
 
    echo "$0.$LINENO: $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p \"$OPT_P\" $OPT_DEBUG $OPT_REDUCE $OPT_SKIP $OPT_M -d . $OPT_BEG_TM $OPT_END_TM -i \"*.png\" -s $SUM_FILE -x $XLS.xlsx -o \"$OPT_OPT\" $OPT_PH -w $JOB_WORK_DIR -t $DIR" > $SYS_2_TSV_STDOUT_FILE
    if [ "$BACKGROUND" -le "0" ]; then
-          $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$OPT_P" $OPT_DEBUG $OPT_REDUCE $OPT_SKIP $OPT_M -d . $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o "$OPT_OPT" $OPT_PH -w $JOB_WORK_DIR -t $DIR &>> $SYS_2_TSV_STDOUT_FILE
+          $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$OPT_P" $OPT_DEBUG $OPT_REDUCE $OPT_SKIP $OPT_M -d . $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o "$OPT_OPT" $OPT_PH -w $JOB_WORK_DIR -t $DIR >> $SYS_2_TSV_STDOUT_FILE 2> SYS_2_TSV_STDERR_FILE
           RC=$?
           ck_last_rc $RC $LINENO
    else
-          $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$OPT_P" $OPT_DEBUG $OPT_REDUCE $OPT_SKIP $OPT_M -d . $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o "$OPT_OPT" $OPT_PH -w $JOB_WORK_DIR -t $DIR &>> $SYS_2_TSV_STDOUT_FILE &
+          $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$OPT_P" $OPT_DEBUG $OPT_REDUCE $OPT_SKIP $OPT_M -d . $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o "$OPT_OPT" $OPT_PH -w $JOB_WORK_DIR -t $DIR >> $SYS_2_TSV_STDOUT_FILE 2> SYS_2_TSV_STDERR_FILE &
           LPID=$!
           RC=$?
           BK_DIR[$LPID]=$i
