@@ -305,7 +305,10 @@ for ((dirs_i=${#dirs[@]}-1; dirs_i>=0; dirs_i--)); do
       lkfor="SPECrate2017_int_base"
     fi
     if [ -e $file1 -a -e $file2 ]; then
-      arg1=`grep 'copies.*=' $file1 | head -1 | sed 's/.*=//;s/ //g'`
+      arg1=`grep ' --copies ' $file1 | head -1 | sed 's/.*--copies //;' | awk '{print $1}'`
+      if [ "$arg1" == "" ]; then
+        arg1=`grep 'copies.*=' $file1 | head -1 | sed 's/.*=//;s/ //g'`
+      fi
       arg2=`grep "$lkfor" $file2 | sed 's/.*int_base//; s/ //g'`
           #/ Success 557.xz_r base refrate ratio=136.27, runtime=507.220031, copies=64, threads=1, power=0.00W, temp=0.00 degC, humidity=0.00%
           #/ Success 557.xz_r base refrate ratio=/ {
