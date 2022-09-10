@@ -351,18 +351,25 @@ fi
 
 LZC_FL=$WORK_DIR/lzc_info.txt
 if [ -e $LZC_FL ]; then
-  STR=`$AWK_BIN -F";" '/^ptyp/ { printf("%s\n", $2);exit;}' $LZC_FL`
+  echo "$0.$LINENO got to lzc_fl  $LZC_FL"
+  STR=`$AWK_BIN '/^ptyp/ { str=substr($0,index($0,";")+1);printf("%s\n", str);exit;}' $LZC_FL`
   printf "host\tlzc_ptype\t\"%s\"\tptype\n"  "$STR" >> $SUM_FILE;
-  STR=`$AWK_BIN -F";" '/^typ/ { printf("%s\n", $2);exit;}' $LZC_FL`
+  STR=`$AWK_BIN '/^typ/ { str=substr($0,index($0,";")+1);printf("%s\n", str);exit;}' $LZC_FL`
   printf "host\tlzc_type\t\"%s\"\ttype\n"  "$STR" >> $SUM_FILE;
-  STR=`$AWK_BIN -F";" '/^cpu_long/ { $1=""; printf("%s\n", $0);exit;}' $LZC_FL`
+  STR=`$AWK_BIN '/^cpu_long/ { str=substr($0,index($0,";")+1); printf("%s\n", str);exit;}' $LZC_FL`
   printf "host\tcpu_long\t\"%s\"\tcpu_long\n"  "$STR" >> $SUM_FILE;
-  STR=`$AWK_BIN -F";" '/^cpu_shrt/ { $1=""; printf("%s\n", $0);exit;}' $LZC_FL`
-  printf "host\tcpu_long\t\"%s\"\tcpu_shrt\n"  "$STR" >> $SUM_FILE;
-  STR=`$AWK_BIN -F";" '/^services/ { $1=""; printf("%s\n", $0);exit;}' $LZC_FL`
+  STR=`$AWK_BIN '/^cpu_shrt/ { str=substr($0,index($0,";")+1); printf("%s\n", str);exit;}' $LZC_FL`
+  printf "host\tcpu_shrt\t\"%s\"\tcpu_shrt\n"  "$STR" >> $SUM_FILE;
+  STR=`$AWK_BIN '/^maker/ { str=substr($0,index($0,";")+1); printf("%s\n", str);exit;}' $LZC_FL`
+  printf "host\tmaker\t\"%s\"\tmaker\n"  "$STR" >> $SUM_FILE;
+  STR=`$AWK_BIN '/^services/ { str=substr($0,index($0,";")+1); printf("%s\n", str);exit;}' $LZC_FL`
   printf "host\tservices\t\"%s\"\tservices\n"  "$STR" >> $SUM_FILE;
-  STR=`$AWK_BIN -F";" '/^sku/ { $1=""; printf("%s\n", $0);exit;}' $LZC_FL`
+  STR=$($AWK_BIN  '/^lzc_sku/ { str=substr($0,index($0,";")+1); printf("%s\n", str);exit;}' $LZC_FL)
+  printf "host\tlzc_sku\t\"%s\"\tlzc_sku\n"  "$STR" >> $SUM_FILE;
+  STR=$($AWK_BIN  '/^sku/ { str=substr($0,index($0,";")+1); printf("%s\n", str);exit;}' $LZC_FL)
   printf "host\tsku\t\"%s\"\tsku\n"  "$STR" >> $SUM_FILE;
+  cat $LZC_FL
+  echo "$0.$LINENO got to lzc_fl  $LZC_FL last str= $STR"
 else
   get_grail_info_for_hostname $HOSTNM $SUM_FILE
 fi
