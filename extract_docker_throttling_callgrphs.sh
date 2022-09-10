@@ -128,6 +128,21 @@ if [ "$CK_OUTFILE" != "" ]; then
   rm $OUTFILE*.svg
 fi
 
+if [[ "$CPU_BSY" != "" ]] && [[ "$OUTFILE" == "" ]]; then
+  OUTFILE="summary"
+fi
+if [[ "$PXX" != "" ]] && [[ "$OUTFILE" == "" ]]; then
+  OUTFILE="summary"
+fi
+
+rm ${OUTFILE}_thr_all.txt
+rm ${OUTFILE}_not_thr_all.txt
+SV_DIR=tmp_extract_docker_throttling_callgrphs
+mkdir $SV_DIR
+rm $SV_DIR/files_not_found.txt
+
+
+echo "$0.$LINENO hi"
 for ((i=0; i < ${#LIST[@]}; i++)); do
 
 #echo "$0.$LINENO RESP=$(grep sigusr2 ${LIST[$i]})"
@@ -138,6 +153,8 @@ RESP=$(grep sigusr2 ${LIST[$i]})
 
 
 IDIR=$(dirname ${LIST[$i]})
+#echo "$0.$LINENO i= $i i_mx= ${#LIST[@]} LISTi= ${LIST[$i]}"
+
 CLK_PRF=0
 CLK_TOD=0
 if [ -e $IDIR/spin.x.txt ]; then
@@ -149,13 +166,6 @@ fi
 if [[ "$PXX" != "" ]] && [[ "$CPU_BSY" != "" ]]; then
   PXX=
 fi
-if [[ "$CPU_BSY" != "" ]] && [[ "$OUTFILE" == "" ]]; then
-  OUTFILE="summary"
-fi
-if [[ "$PXX" != "" ]] && [[ "$OUTFILE" == "" ]]; then
-  OUTFILE="summary"
-fi
-
 FG_STKCOL="FlameGraph/stackcollapse-perf.pl"
 LKFOR_FG_DIRS=($SCR_DIR/../  $HOME  $HOME/repos)
 for ((ii=0; ii < ${#LKFOR_FG_DIRS[@]}; ii++)); do
@@ -245,9 +255,8 @@ done
 # total_unevictable 0
 # 
 
-mkdir sv
 
-awk -v sum_file="sv/sum.tsv" -v in_dir="$IDIR" '
+awk -v sum_file="$SV_DIR/sum.tsv" -v in_dir="$IDIR" '
   BEGIN{
     csi_mx = -1;
   }
@@ -407,9 +416,10 @@ echo "$0.$LINENO LIST= ${LIST[@]}, list mx= ${#LIST[@]}"
 echo "$0.$LINENO i= $i bef awk ls out files"
 ls -l $OUTFILE*
 
- echo $0.$LINENO awk -v simple_file_select=1 -v select_intrvl_in_secs="$INTRVL" -v incl_str="$X_str" -v excl_str="$x_str" -v host_str="$HOST_STR" -v max_high="$MAX_HIGH" -v file_list_in="$FILE_LIST" -v end_dir="$END_DIR" -v cpus_busy="$CPU_BSY" -v pxx="$PXX" -v outfile="$OUTFILE" -v sel_prf_str="$SEL_PRF_STR"  -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK_TOD" -v scr_dir="$fg_scr_dir" -v dir="$IDIR" -v onum=$i > /dev/stderr
-awk -v simple_file_select=1 -v select_intrvl_in_secs="$INTRVL" -v incl_str="$X_str"  -v excl_str="$x_str"  -v host_str="$HOST_STR" -v max_high="$MAX_HIGH" -v file_list_in="$FILE_LIST" -v end_dir="$END_DIR" -v cpus_busy="$CPU_BSY" -v pxx="$PXX" -v outfile="$OUTFILE" -v sel_prf_str="$SEL_PRF_STR"  -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK_TOD" -v scr_dir="$fg_scr_dir" -v dir="$IDIR" -v onum=$i '
+ echo $0.$LINENO awk -v simple_file_select=1 -v select_intrvl_in_secs="$INTRVL" -v incl_str="$X_str" -v excl_str="$x_str" -v host_str="$HOST_STR" -v max_high="$MAX_HIGH" -v file_list_in="$FILE_LIST" -v end_dir="$END_DIR" -v cpus_busy="$CPU_BSY" -v pxx="$PXX" -v outfile="$OUTFILE" -v sel_prf_str="$SEL_PRF_STR"  -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK_TOD" -v scr_dir="$fg_scr_dir" -v dir="$IDIR" -v onum=$i
+awk -v sv_dir="$SV_DIR" -v simple_file_select=1 -v select_intrvl_in_secs="$INTRVL" -v incl_str="$X_str"  -v excl_str="$x_str"  -v host_str="$HOST_STR" -v max_high="$MAX_HIGH" -v file_list_in="$FILE_LIST" -v end_dir="$END_DIR" -v cpus_busy="$CPU_BSY" -v pxx="$PXX" -v outfile="$OUTFILE" -v sel_prf_str="$SEL_PRF_STR"  -v samples_per_sec="$samples_per_sec" -v clk_prf="$CLK_PRF" -v clk_tod="$CLK_TOD" -v scr_dir="$fg_scr_dir" -v dir="$IDIR" -v onum=$i '
   BEGIN{
+     err_cd = 0;
      clk_prf += 0;
      clk_tod += 0;
      cid_mx = -1;
@@ -526,22 +536,55 @@ awk -v simple_file_select=1 -v select_intrvl_in_secs="$INTRVL" -v incl_str="$X_s
       printf("doing sigusr %s\n", $0);
     }
     for (cid= cid_end; cid >= cid_beg; cid--) {
-      for (i=0; i < 20; i++) {
-        udt = dt2ss+i;
+      for (i=-1; i < 20; i++) {
+        # YYYY MM DD HH MM SS
+        ndtstr = substr(dtstr, 1, 4) " " substr(dtstr, 5, 2) " " substr(dtstr, 7, 2) " " substr(dtstr, 9, 2) " " substr(dtstr, 11, 2) " " substr(dtstr, 13, 2);
+        ep_tm = mktime(ndtstr);
+#       %d     day of month (e.g., 01)
+#       %H     hour (00..23)
+#       %m     month (01..12)
+#       %M     minute (00..59)
+#       %Y     year
+#       %S     sec 
+
+        nep_tm = ep_tm + i;
+        # strftime([format [, timestamp [, utc-flag] ] ])
+        udt = strftime("%Y%m%d%H%M%S", nep_tm);
+        #if (((dt2ss % 60) + i) > 59) { dt2ss = dt2mm "" dt_
+        if (i == 0 && udt != dtstr) {
+          printf("err, udt(%s) != dtstr(%s). ndtstr= %s bye\n", udt, dtstr, ndtstr);
+          err_cd = 2;
+          exit(1);
+        }
+        #udt = dt2ss+i;
         ufl = sprintf("%s/prf_%d.dat.%.0f*.txt", dir, cid, udt);
         #ufl = sprintf("%sdir "/prf_" cid ".dat." udt "*.txt";
         printf("ufl= %s  cid= %d udt= %d\n", ufl, cid, udt);
-        cmd = "test -f " ufl;
-        printf("try %s\n", cmd);
-        rc = system(cmd);
+        #cmd = "test -f " ufl;
+        #cmd = sprintf("find %s -name \"prf_%d.dat.%.0f*.txt\" | sort | grep .", dir, cid, udt);
+        cmd = sprintf("find %s -name \"prf_%d.dat.%.0f*.txt\" | sort | head -1", dir, cid, udt);
+        found_match = "";
+        while (((cmd) | getline fnd_txt) > 0) {
+          found_match = fnd_txt;
+          break;
+        }
         close(cmd);
-        printf("try %s , rc= %d\n", cmd, rc);
-        if (rc == 0) {
+        printf("try[%d] %s\n", i, cmd);
+        if (found_match != "") {
+          printf("found_match= %s\n", found_match);
           got_it = 1;
+          ufl = found_match;
           printf("got_it ufl= %s  cid= %d udt= %d\n", ufl, cid, udt);
           add_file(ufl);
         }
         if (got_it == 1) { break; }
+        #rc = system(cmd);
+        #printf("try %s , rc= %d\n", cmd, rc);
+        #if (rc == 0) {
+        #  got_it = 1;
+        #  printf("got_it ufl= %s  cid= %d udt= %d\n", ufl, cid, udt);
+        #  add_file(ufl);
+        #}
       }
       #if (got_it == 1) { break; }
     }
@@ -570,8 +613,11 @@ awk -v simple_file_select=1 -v select_intrvl_in_secs="$INTRVL" -v incl_str="$X_s
       }
 
     } else {
-      printf("missed finding match for prf file ufl= %s dt2ss= %s\n", ufl, ddt2ss);
-      printf("missed finding match for prf file ufl= %s dt2ss= %s\n", ufl, ddt2ss) > "/dev/stderr";
+      printf("missed finding match for prf file ufl= %s dt2ss= %s udt= %s dtstr= %s\n", ufl, ddt2ss, udt, dtstr);
+      printf("missed finding match for prf file ufl= %s dt2ss= %s udt= %s dtstr= %s\n", ufl, ddt2ss, udt, dtstr) > sv_dir"/files_not_found.txt";
+      #printf("missed finding match for prf file ufl= %s dt2ss= %s\n", ufl, ddt2ss) > "/dev/stderr";
+     # err_cd = 1;
+     # exit(1);
     }
   }
 function add_file(ufl) {
@@ -595,6 +641,10 @@ function add_file(ufl) {
       }
 }
   END{
+   if (err_cd != 0) {
+    printf("got err_cd= %d above. bye\n", err_cd);
+    exit(1);
+   }
 #      michelangelo-pr 374019 [005] 9233946.162347:   10101010 cpu-clock: 
 # now we have the list of call stack perf .dat.txt files.
 # Read each .dat.txt file.
@@ -820,7 +870,11 @@ function add_file(ufl) {
       tm_end[i] = tm;
       pxx += 0;
       cpus_busy += 0;
+      if (dckr[container_num, "period_secs"] == "") { dckr[container_num, "period_secs"] = 100000; }
       cpu_quota_per_period = dckr[container_num, "cpu_quota_secs"] / dckr[container_num, "period_secs"];
+      if (cpu_quota_per_period == 0 && cpus_busy > 0) {
+        cpu_quota_per_period = cpus_busy;
+      }
       printf("cpu quota= %.3f, pxx_cpus= %.3f, cpus_busy= %.3f\n", cpu_quota_per_period, (0.01*pxx*cpu_quota_per_period), cpus_busy);
       cg_mx[i] = cg;
       tm_bkt_beg = 0;
@@ -955,19 +1009,21 @@ function add_file(ufl) {
           for (fl=1; fl <= 2; fl++) {
            if (bkts[fl] == 0) { continue;}
           cmd = "perl " scr_dir "/FlameGraph/stackcollapse-perf.pl " outfile_lst[fl] " > " outfile_sc[fl];
-          printf("cmd= %s\n", cmd);
-          system(cmd);
-          close(cmd);
-          close(outfile_sc[fl]);
+          printf("cmd end_dir= %d= %s\n", end_dir, cmd);
+          last_cmd[fl,1] = cmd;
+          #system(cmd);
+          #close(cmd);
+          #close(outfile_sc[fl]);
           h_str = "";
           if (host_str != "") { h_str = ", " host_str;}
           ttl = sprintf("%s elapsed time covers %.3f secs of tot %.3f secs%s", outfile_str[fl], bkts[fl]*0.1, 0.1*(bkts[1]+bkts[2]), h_str);
           sttl = sprintf("avg cpus/period= %.3f vs cpu quota of %.3f cpus/period",
              bkt_samples[fl]/samples_per_sec / (bkts[fl]*0.1),cpu_quota_per_period);
           cmd = "perl " scr_dir "/FlameGraph/flamegraph.pl --title \"" ttl "\" --subtitle \"" sttl "\" "  outfile_sc[fl] " > " outfile_svg[fl];
-          printf("cmd= %s\n", cmd);
-          system(cmd);
-          close(cmd);
+          printf("cmd at end= %s\n", cmd);
+          last_cmd[fl,2] = cmd;
+          #system(cmd);
+          #close(cmd);
           }
           }
         #printf("bye ___here\n");
@@ -1038,7 +1094,7 @@ function add_file(ufl) {
           }
           close(fl);
           cmd = "perl " scr_dir "/FlameGraph/stackcollapse-perf.pl " fl " > " flsc;
-          printf("cmd= %s\n", cmd);
+          printf("cmd not_end_dir= %s\n", cmd);
           system(cmd);
           close(cmd);
           close(flsc);
@@ -1055,7 +1111,7 @@ function add_file(ufl) {
             printf("\n") > flsc1;
           }
           close(flsc1);
-#          if (1==2) {
+#          if (1==2) 
 #          while ((getline < flsc) > 0) {
 #            #if (substr($1, 1, 5) == "time_") {
 #            if (match($0, /^time_[0-9]+_/) > 0) {
@@ -1078,9 +1134,9 @@ function add_file(ufl) {
             #bef_line /(tm_bef[1] - tm_bef[0]), 
           #cmd = "perl " scr_dir "/FlameGraph/flamegraph.pl --title \"" ttl "\" " flsc1 " > " flsvg;
           cmd = "perl " scr_dir "/FlameGraph/flamegraph.pl --title \"" ttl "\" --subtitle \"" sttl "\" "  flsc1 " > " flsvg;
-          printf("cmd= %s\n", cmd);
-          system(cmd);
-          close(cmd);
+          printf("cmd at end = %s\n", cmd);
+          #system(cmd);
+          #close(cmd);
         }
         if (k==1 && doing_sigint == 0) {
           # The call stacks for the interval with cpu throttling.
@@ -1097,7 +1153,7 @@ function add_file(ufl) {
           }
           close(fl);
           cmd = "perl " scr_dir "/FlameGraph/stackcollapse-perf.pl " fl " > " flsc;
-          printf("cmd= %s\n", cmd);
+          printf("cmd ck2= %s\n", cmd);
           system(cmd);
           close(cmd);
           # read back in the collapsed stack list and break the time_xx_{moduleName} into time_xx;ModuleName so that flamegraph groups everything by time_xx bucket
@@ -1122,15 +1178,30 @@ function add_file(ufl) {
           sttl = sprintf("throttled periods= %d throttled_secs= %.3f. max= %.3f cpus/period in interval %s",
             sv_ufl[i,"ds_throttled_periods"], sv_ufl[i,"ds_throttled_secs"], (mx_val/samples_per_sec)/dckr[container_num, "period_secs"], mx_ky);
           cmd = "perl " scr_dir "/FlameGraph/flamegraph.pl --title \"" ttl "\" --subtitle \"" sttl "\" "  flsc1 " > " flsvg;
-          printf("cmd= %s\n", cmd);
+          printf("cmd at end2= %s\n", cmd);
           system(cmd);
           close(cmd);
         }
       }
     }
+    if (1==1) {
+          printf("do the below cmds\n");
+    for (fl=1; fl <= 2; fl++) {
+      for (gl=1; gl <= 2; gl++) {
+        if (last_cmd[fl,gl] != "") {
+          cmd = last_cmd[fl, gl];
+          printf("%s\n", cmd);
+          #system(cmd);
+          #close(cmd);
+        }
+      }
+    }
+    }
   }' $IDIR/$INF
   ck_last_rc $? $LINENO
 
+#cp ${OUTFILE}_thr.txt sv/${OUTFILE}_thr_$i.txt
+#cp ${OUTFILE}_not_thr.txt sv/${OUTFILE}_not_thr_$i.txt
 echo "$0.$LINENO i= $i aft awk ls out files"
 ls -l $OUTFILE*
 
