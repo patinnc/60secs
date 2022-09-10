@@ -302,7 +302,7 @@ QUIT_IN=
 
 myargs=()
 
-while getopts "dgGhqva:b:B:c:C:D:I:l:m:M:n:N:o:O:p:r:R:s:t:T:u:w:W:z:Z:" opt; do
+while getopts "dgGhqva:b:B:c:C:D:I:k:l:m:M:n:N:o:O:p:r:R:s:t:T:u:w:W:z:Z:" opt; do
   case ${opt} in
     h )
       echo "$0.$LINENO got -h help option"
@@ -369,6 +369,11 @@ while getopts "dgGhqva:b:B:c:C:D:I:l:m:M:n:N:o:O:p:r:R:s:t:T:u:w:W:z:Z:" opt; do
     v )
       VERBOSE=$((VERBOSE+1))
       myargs+=("-${opt}")
+      ;;
+    k )
+      KEYS_IN=$OPTARG
+      myargs+=("-${opt}")
+      myargs+=("${OPTARG}")
       ;;
     l )
       USE_LIST_IN=$OPTARG
@@ -735,11 +740,14 @@ SSH_HOST=
 SSH_CMD=
 SSH_PFX=
 
+if [ "$KEYS_IN" != "" ]; then
+  OPT_KEYS=" -i $KEYS_IN "
+fi
 
 ssh_cmd()
 {
   if [ "$SSH_MODE" == "sudo" ]; then
-    SSH_PFX="ssh -o StrictHostKeyChecking=no -t -A "
+    SSH_PFX="ssh $OPT_KEYS -o StrictHostKeyChecking=no -tt -A $OPT_KEYS "
     if [ "$USERNM" == "none" ]; then
       SSH_HOST=$1
     else
@@ -749,9 +757,9 @@ ssh_cmd()
     if [ "$3" != "" ]; then
        load_env="-l"
     fi
-    SSH_CMD="sudo su $load_env -c \"$2\""
+    SSH_CMD="sudo su $load_env root -c \"$2\""
   else
-    SSH_PFX="ssh -o StrictHostKeyChecking=no -t -A "
+    SSH_PFX="ssh $OPT_KEYS -o StrictHostKeyChecking=no -tt -A $OPT_KEYS "
     if [ "$1" == "127.0.0.1" ]; then
       SSH_CMD=$2
       SSH_PFX=
@@ -776,10 +784,16 @@ ssh_cmd()
 }
 
 function waitForJobs() {
-    while [[ "$(jobs | wc -l)" -gt "${BKGRND_TASKS_MAX}" ]]; do
+    runningJobs=$(jobs | wc -l)
+    local cntr=0
+    while [[ "${runningJobs}" -gt "${BKGRND_TASKS_MAX}" ]]; do
       runningJobs=$(jobs | wc -l)
-      echo "Waiting for ${runningJobs} background jobs to < $BKGRND_TASKS_MAX"
+      echo "Waiting while ${runningJobs} background jobs to > $BKGRND_TASKS_MAX"
       sleep 1
+      #if [ "$cntr" == "0" ]; then
+        jobs
+      #fi
+      cntr=$((cntr+1))
       if [ "$GOT_QUIT" == "1" ]; then
         break
       fi
@@ -1021,11 +1035,17 @@ for i in $HOSTS; do
     #ssh_cmd $nm "uname -a;lsblk;fdisk -l" "-l"
     SSH_TIMEOUT=" -o ConnectTimeout=10 -o BatchMode=yes "
     ssh_cmd $nm "uname -a" "-l"
-    echo ssh $SSH_HOST "$SSH_CMD"
+    echo ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
     if [ "$DRY_RUN" == "n" ]; then
-         ssh $SSH_TIMEOUT $SSH_HOST "$SSH_CMD"
-         dyno_log ssh $SSH_TIMEOUT $SSH_HOST "$SSH_CMD"
-         RESP=`ssh $SSH_HOST "$SSH_CMD"`
+      if [ $VERBOSE -gt 0 ]; then
+        echo "$0.$LINENO got $RUN_CMDS"
+      fi
+         ssh $OPT_KEYS $SSH_TIMEOUT $SSH_HOST "$SSH_CMD"
+      if [ $VERBOSE -gt 0 ]; then
+        echo "$0.$LINENO did $RUN_CMDS"
+      fi
+         dyno_log ssh $OPT_KEYS $SSH_TIMEOUT $SSH_HOST "$SSH_CMD"
+         RESP=`ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"`
          if [[ $RESP == *"Linux"* ]]; then
             echo ssh worked
             SSH_WORK="$SSH_WORK $nm"
@@ -1073,11 +1093,11 @@ for i in $HOSTS; do
   fi
   if [[ $RUN_CMDS == *"nameserver_test"* ]]; then
     ssh_cmd $nm "ping -c 1 -W 2 google.com"  "-l"
-    echo ssh $SSH_HOST "$SSH_CMD"
+    echo ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
     if [ "$DRY_RUN" == "n" ]; then
-         ssh $SSH_HOST "$SSH_CMD"
-         dyno_log ssh $SSH_HOST "$SSH_CMD"
-         RESP=`ssh $SSH_HOST "$SSH_CMD"`
+         ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
+         dyno_log ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
+         RESP=`ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"`
          if [[ $RESP == *" 0% packet loss"* ]]; then
             echo ping worked
             PING_WORK="$PING_WORK $nm"
@@ -1215,7 +1235,14 @@ for i in $HOSTS; do
     while [[ $CMD =~ $re ]]; do
       CMD=${BASH_REMATCH[1]}$NUM_HOST${BASH_REMATCH[2]}
     done
+    
+    if [ "$VERBOSE" -gt "0" ]; then
+      echo "$0.$LINENO rdy to do ssh_cmd $nm \"$CMD\" -l"
+    fi
     ssh_cmd $nm "$CMD"  "-l"
+    if [ "$VERBOSE" -gt "0" ]; then
+      echo "$0.$LINENO did ssh_cmd $nm \"$CMD\" -l"
+    fi
   if [ "$VERBOSE" -gt "0" ]; then
   tm_cur=$($DATE_CMD +"%s.%6N")
   tm_diff=$(awk -v tm0="$tm_beg" -v tm1="$tm_cur" 'BEGIN{printf("%f\n", tm1-tm0);exit(0);}')
@@ -1227,6 +1254,9 @@ for i in $HOSTS; do
           if [[ "$got_pcmd_or_pfetch" == "1" ]] && [[ -e "$OUT_FILE" ]]; then
             rm "$OUT_FILE"
           fi
+    if [ "$VERBOSE" -gt "0" ]; then
+      echo "$0.$LINENO rdy to do ssh \"$CMD\""
+    fi
         if [ "$RUN_CMDS" == "pfetch_untar" ]; then
           if [ "$do_bkgrnd" == "1" ]; then
             $CMD &> $OUT_FILE &
@@ -1235,6 +1265,9 @@ for i in $HOSTS; do
           fi
           dyno_log $SSH_HOST "$CMD"
         elif [ "$RUN_CMDS" == "pcmd" ]; then
+    if [ "$VERBOSE" -gt "0" ]; then
+      echo "$0.$LINENO rdy to do ssh \"$CMD\""
+    fi
           myout=()
           ik=0
           ij=0
@@ -1253,13 +1286,16 @@ for i in $HOSTS; do
             ik=$((ik+1))
             ij=$((ij+1))
           done
+         if [ "$VERBOSE" -gt "0" ]; then
+            echo "$0.$LINENO do ssh $SSH_PFX $SSH_HOST \"$SSH_CMD\""
+         fi
           tm_cur=$($DATE_CMD +"%s.%6N")
           tm_diff=$(awk -v tm0="$tm_beg" -v tm1="$tm_cur" 'BEGIN{printf("%f\n", tm1-tm0);exit(0);}')
           if [ "$do_bkgrnd" == "1" ]; then
-            echo do $0 ${myout[@]} -C "$CMD" -N $NUM_HOST -m 0  __ $OUT_FILE _ tm_elap= $tm_diff
+            echo $0.$LINENO do $0 ${myout[@]} -C "$CMD" -N $NUM_HOST -m 0  __ $OUT_FILE _ tm_elap= $tm_diff
             $0 ${myout[@]} -C "$CMD" -N $NUM_HOST -m 0  &> $OUT_FILE &
           else
-            echo do $0 ${myout[@]} -C "$CMD" -N $NUM_HOST -m 0  __ $OUT_FILE tm_elap= $tm_diff
+            echo $0.$LINENO do $0 ${myout[@]} -C \"$CMD\" -N $NUM_HOST -m 0  __ $OUT_FILE tm_elap= $tm_diff
             $0 ${myout[@]} -C "$CMD" -N $NUM_HOST -m 0  &> $OUT_FILE
           fi
           dyno_log $SSH_HOST "$CMD"
@@ -1269,6 +1305,9 @@ for i in $HOSTS; do
   echo "$LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ==================="
   fi
         elif [ "$RUN_CMDS" == "pssh_test" ]; then
+    if [ "$VERBOSE" -gt "0" ]; then
+      echo "$0.$LINENO ck ssh \"$CMD\""
+    fi
           if [ "$do_bkgrnd" == "1" ]; then
             $CMD &> $OUT_FILE &
           else
@@ -1292,25 +1331,66 @@ for i in $HOSTS; do
           fi
           dyno_log $SSH_HOST "$CMD"
         else
+         ADD_T="$ADD_T $SSH_TIMEOUT "
          echo $SSH_PFX $SSH_HOST "$SSH_CMD"
          if [[ "$SSH_CMD" == *"nohup "* ]]; then
+          echo "$0.$LINENO ssh_pfx= $SSH_PFX"
           ADD_T=" -n "
          fi
          ADD_T="$ADD_T $SSH_TIMEOUT "
+         if [ "$VERBOSE" -gt "0" ]; then
+            echo "$0.$LINENO do ssh $SSH_PFX $ADD_T $SSH_HOST \"$SSH_CMD\""
+         fi
+         if [ "$VERBOSE" -gt "0" ]; then
+            echo "$0.$LINENO do ssh $SSH_PFX $SSH_HOST \"$SSH_CMD\""
+            if [[ "$SSH_CMD" == *"\""* ]]; then
+              echo "$0.$LINENO ssh_cmd has embedded dbl quotes" 
+              NCMD=$(echo "$SSH_CMD" | sed 's/"/\\"/g')
+              TSTR=$(awk -v cmd="$SSH_CMD" '
+                  BEGIN{ qt=index(cmd,"\"");bef= substr(cmd, 1, qt-1); mid=substr(cmd, qt+1); qt=index(mid,"\"");aft=substr(mid, qt+1);mid=substr(mid,1,qt-1); 
+                  printf("%s\n%s\n%s\n", bef, mid, aft);
+                  exit(0);
+                 }')
+              readarray -t TARR < <( echo "$TSTR")
+              echo "$0.$LINENO arr= ${#TARR[@]} ${TARR[@]}"
+              echo "$0.$LINENO old ssh_cmd \"$SSH_CMD\""
+              echo "$0.$LINENO new ssh_cmd \"$NCMD\""
+              TESCCMD="$(printf ' %q' "${TARR[1]}")"
+              SSH_CMD="${TARR[0]} ${TESCCMD}${TARR[2]}"
+              echo "$0.$LINENO do ssh $SSH_PFX $SSH_HOST \"$SSH_CMD\""
+            fi
+            #TCMD="$SSH_PFX $SSH_HOST \"$SSH_CMD\""
+            #TESCCMD="$(printf ' %q' "$TCMD")"
+            #echo "$0.$LINENO esc ssh= $TESCCMD"
+#abcd
+         fi
          if [ "$do_bkgrnd" == "1" ]; then
           if [ "$GOT_DO_CMD" == "2" ]; then
+            if [ "$VERBOSE" -gt "0" ]; then
+              echo "$0.$LINENO do ssh here"
+            fi
             OUT_FILE=`printf "$WORK_DIR/$WORK_TMP" $NUM_HOST`
-            $SSH_PFX $ADD_T $SSH_HOST "$SSH_CMD" &> $OUT_FILE &
+            $SSH_PFX $ADD_T -n $SSH_HOST "$SSH_CMD" &> $OUT_FILE &
           else
-            $SSH_PFX $ADD_T $SSH_HOST "$SSH_CMD" &
+            if [ "$VERBOSE" -gt "0" ]; then
+              echo "$0.$LINENO do ssh here"
+            fi
+            $SSH_PFX $ADD_T -n $SSH_HOST "$SSH_CMD" &
           fi
          else
           #$SSH_PFX $SSH_HOST "$SSH_CMD"
           if [ "$nm" == "127.0.0.1" ]; then
             $SSH_CMD
           else
-            $SSH_PFX $ADD_T $SSH_HOST "$SSH_CMD"
+            if [ "$VERBOSE" -gt "0" ]; then
+              echo "$0.$LINENO do ssh here"
+              echo "$SSH_PFX $ADD_T $SSH_HOST \"$SSH_CMD\""
+            fi
+            $SSH_PFX $ADD_T -tt $SSH_HOST "$SSH_CMD"
           fi
+         fi
+         if [ "$VERBOSE" -gt "0" ]; then
+            echo "$0.$LINENO do ssh $SSH_PFX $SSH_HOST \"$SSH_CMD\""
          fi
          dyno_log $SSH_PFX $ADD_T $SSH_HOST "$SSH_CMD"
         fi
@@ -1372,32 +1452,32 @@ for i in $HOSTS; do
            cp $TAR_GZ $BMARK_ROOT/
          else
          if [ "$SSH_MODE" == "sudo" ]; then
-           echo $0.$LINENO  scp $TAR_GZ ${SSH_HOST}:
+           echo $0.$LINENO  scp $OPT_KEYS $TAR_GZ ${SSH_HOST}:
                 if [ "$do_bkgrnd" == "1" ]; then
-                  scp $TAR_GZ ${SSH_HOST}:${BMARK_ROOT} &
+                  scp $OPT_KEYS $TAR_GZ ${SSH_HOST}:${BMARK_ROOT} &
                 else
-                  scp $TAR_GZ ${SSH_HOST}:${BMARK_ROOT}
+                  scp $OPT_KEYS $TAR_GZ ${SSH_HOST}:${BMARK_ROOT}
                 fi
-           dyno_log scp $TAR_GZ ${SSH_HOST}:$BMARK_ROOT
+           dyno_log scp $OPT_KEYS $TAR_GZ ${SSH_HOST}:$BMARK_ROOT
            filenm=$(basename $TAR_GZ)
            echo "filenm= $filenm"
            #ssh_cmd $nm "mv $filenm $BMARK_ROOT/"
-           #echo ssh $SSH_HOST "$SSH_CMD"
-           #     ssh $SSH_HOST "$SSH_CMD"
-           dyno_log ssh $SSH_HOST "$SSH_CMD"
+           #echo ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
+           #     ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
+           dyno_log ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
          else
            if [ "$do_bkgrnd" == "1" ]; then
-             echo $0.$LINENO scp $TAR_GZ ${SCP_USERNM}${nm}:$BMARK_ROOT/
-             scp $TAR_GZ ${SCP_USERNM}${nm}:$BMARK_ROOT/ &
+             echo $0.$LINENO scp $OPT_KEYS $TAR_GZ ${SCP_USERNM}${nm}:$BMARK_ROOT/
+             scp $OPT_KEYS $TAR_GZ ${SCP_USERNM}${nm}:$BMARK_ROOT/ &
            else
              if [ "$nm" == "127.0.0.1" ]; then
-               scp $TAR_GZ $BMARK_ROOT/
+               scp $OPT_KEYS $TAR_GZ $BMARK_ROOT/
              else
-               echo $0.$LINENO scp $TAR_GZ ${SCP_USERNM}${nm}:$BMARK_ROOT/
-               scp $TAR_GZ ${SCP_USERNM}${nm}:$BMARK_ROOT/
+               echo $0.$LINENO scp $OPT_KEYS $TAR_GZ ${SCP_USERNM}${nm}:$BMARK_ROOT/
+               scp $OPT_KEYS $TAR_GZ ${SCP_USERNM}${nm}:$BMARK_ROOT/
              fi
            fi
-           dyno_log scp $TAR_GZ ${SCP_USERNM}${nm}:$BMARK_ROOT/
+           dyno_log scp $OPT_KEYS $TAR_GZ ${SCP_USERNM}${nm}:$BMARK_ROOT/
          fi
          fi
     fi
@@ -1427,20 +1507,20 @@ for i in $HOSTS; do
     do_bkgrnd=0
   fi
   if [ "$do_untar" == "1" ]; then
-    #echo ssh root@${nm} "cd $BMARK_ROOT/; tar xzvf $TAR_GZ"
+    #echo ssh $OPT_KEYS root@${nm} "cd $BMARK_ROOT/; tar xzvf $TAR_GZ"
     filenm=$(basename $TAR_GZ)
     TAR_RT=
     if [ "$USERNM" == "none" ]; then
       TAR_RT=$BMARK_ROOT/
     fi
     ssh_cmd $nm "tar xzf ${TAR_RT}$filenm -C $BMARK_ROOT"  "-l"
-    echo $0.$LINENO ssh $SSH_HOST "$SSH_CMD"
+    echo $0.$LINENO ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
     if [ "$DRY_RUN" == "n" ]; then
          waitForJobs
          if [ "$do_bkgrnd" == "1" ]; then
-           ssh $SSH_HOST "$SSH_CMD" &
+           ssh $OPT_KEYS $SSH_HOST "$SSH_CMD" &
          else
-          # ssh $SSH_HOST "$SSH_CMD"
+          # ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
           echo "note that prev ver of untar \"$SSH_CMD\" cmd didn't have ssh -t" > /dev/stderr
           if [ "$nm" == "127.0.0.1" ]; then
             echo "untar cmd: $SSH_CMD"
@@ -1449,29 +1529,29 @@ for i in $HOSTS; do
             $SSH_PFX $SSH_HOST "$SSH_CMD"
           fi
          fi
-         dyno_log ssh $SSH_HOST "$SSH_CMD"
-         #ssh root@${nm} "cd $BMARK_ROOT/; tar xzvf $TAR_GZ"
+         dyno_log ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
+         #ssh $OPT_KEYS root@${nm} "cd $BMARK_ROOT/; tar xzvf $TAR_GZ"
     fi
   fi
   if [[ $RUN_CMDS == *"opt_install_jdk8"* ]]; then
     ssh_cmd $nm "cd /opt; tar xzvf $BMARK_ROOT/${BMARK_SUBDIR}/extras/OpenJDK8U-jdk_x64_linux_hotspot_8u232b09.tar.gz; cp $BMARK_ROOT/${BMARK_SUBDIR}/extras/jdk8.sh /etc/profile.d/; rm /etc/profile.d/jdk11.sh"  "-l"
-    echo ssh $SSH_HOST "$SSH_CMD"
+    echo ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
     if [ "$DRY_RUN" == "n" ]; then
-         #ssh $SSH_HOST "$SSH_CMD"
+         #ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
           echo "note that prev ver of cmd at $LINENO didn't have ssh -t" > /dev/stderr
           if [ "$nm" == "127.0.0.1" ]; then
             cd /opt; tar xzvf $BMARK_ROOT/${BMARK_SUBDIR}/extras/OpenJDK8U-jdk_x64_linux_hotspot_8u232b09.tar.gz; cp $BMARK_ROOT/${BMARK_SUBDIR}/extras/jdk8.sh /etc/profile.d/; rm /etc/profile.d/jdk11.sh
           else
             $SSH_PFX $SSH_HOST "$SSH_CMD"
           fi
-         dyno_log ssh $SSH_HOST "$SSH_CMD"
+         dyno_log ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
     fi
   fi
   if [[ $RUN_CMDS == *"opt_install_jdk11"* ]]; then
     ssh_cmd $nm "cd /opt; tar xzvf $BMARK_ROOT/${BMARK_SUBDIR}/extras/OpenJDK11U-jdk_x64_linux_hotspot_11.0.5_10.tar.gz; cp $BMARK_ROOT/${BMARK_SUBDIR}/extras/jdk11.sh /etc/profile.d/; rm /etc/profile.d/jdk8.sh"  "-l"
-    echo ssh $SSH_HOST "$SSH_CMD"
+    echo ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
     if [ "$DRY_RUN" == "n" ]; then
-         #ssh $SSH_HOST "$SSH_CMD"
+         #ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
           echo "note that prev ver of cmd at $LINENO didn't have ssh -t" > /dev/stderr
           if [ "$nm" == "127.0.0.1" ]; then
             #$SSH_CMD
@@ -1479,11 +1559,11 @@ for i in $HOSTS; do
           else
             $SSH_PFX $SSH_HOST "$SSH_CMD"
           fi
-         dyno_log ssh $SSH_HOST "$SSH_CMD"
+         dyno_log ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
     fi
   fi
   if [[ $RUN_CMDS == *"setup"* ]]; then
-    #echo ssh root@${nm} "cd $BMARK_ROOT/${BMARK_SUBDIR}; ./setup.sh"
+    #echo ssh $OPT_KEYS root@${nm} "cd $BMARK_ROOT/${BMARK_SUBDIR}; ./setup.sh"
     SET_BM=
     if [ $DID_bmark_root -eq 1 ]; then
       SET_BM="export DYNO_ROOT=$BMARK_ROOT; "
@@ -1507,15 +1587,15 @@ for i in $HOSTS; do
                 fi
           fi
             dyno_log $SSH_PFX $SSH_HOST "$SSH_CMD"
-         #ssh root@${nm} "cd $BMARK_ROOT/${BMARK_SUBDIR}; ./setup.sh"
+         #ssh $OPT_KEYS root@${nm} "cd $BMARK_ROOT/${BMARK_SUBDIR}; ./setup.sh"
     fi
   fi
   if [ "$CFG_DIR" == "" ]; then
     CFG_DIR="$BMARK_ROOT/AUTOGEN_config_UNDEFINED"
   fi
   if [[ $RUN_CMDS == *"config"* ]]; then
-    #echo ssh root@${nm} "cd $BMARK_ROOT/; ./${BMARK_SUBDIR}/pre_DynoConfig_rm_cfg_files.sh -c $CFG_DIR"
-    #echo ssh root@${nm} "cd $BMARK_ROOT/; lsblk; ./${BMARK_SUBDIR}/DynoConfig -user -fiobs 4k,1m"
+    #echo ssh $OPT_KEYS root@${nm} "cd $BMARK_ROOT/; ./${BMARK_SUBDIR}/pre_DynoConfig_rm_cfg_files.sh -c $CFG_DIR"
+    #echo ssh $OPT_KEYS root@${nm} "cd $BMARK_ROOT/; lsblk; ./${BMARK_SUBDIR}/DynoConfig -user -fiobs 4k,1m"
     #MYCMD="cd \"$BMARK_ROOT\"; ./${BMARK_SUBDIR}/pre_DynoConfig_rm_cfg_files.sh -c $CFG_DIR"
     ssh_cmd $nm "cd $BMARK_ROOT; ./${BMARK_SUBDIR}/pre_DynoConfig_rm_cfg_files.sh -c $CFG_DIR"  "-l"
     echo $SSH_PFX $SSH_HOST "$SSH_CMD"
@@ -1531,7 +1611,7 @@ for i in $HOSTS; do
     fi
     #ssh_cmd $nm "cd $BMARK_ROOT/; lsblk; ./${BMARK_SUBDIR}/DynoConfig -user -fiobs 4k,1m -drivemin $DISK_MIN_SZ_BYTES"  "-l"
     ssh_cmd $nm "cd $BMARK_ROOT; lsblk; ./${BMARK_SUBDIR}/DynoConfig -user -fiobs 4k,1m "  "-l"
-    echo ssh $SSH_HOST "$SSH_CMD"
+    echo ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
     if [ "$DRY_RUN" == "n" ]; then
          echo "=========== run config on $nm ==============="
           # $SSH_PFX $SSH_HOST "$SSH_CMD"
@@ -1545,29 +1625,29 @@ for i in $HOSTS; do
     fi
   fi
   if [[ $RUN_CMDS == *"post"* ]]; then
-    #echo ssh root@${nm} "cd $BMARK_ROOT/; ${BMARK_SUBDIR}/post_DynoConfig_fixup.sh -c ./AUTOGEN_config_UNDEFINED"
+    #echo ssh $OPT_KEYS root@${nm} "cd $BMARK_ROOT/; ${BMARK_SUBDIR}/post_DynoConfig_fixup.sh -c ./AUTOGEN_config_UNDEFINED"
     ssh_cmd $nm "cd $BMARK_ROOT/; ${BMARK_SUBDIR}/post_DynoConfig_fixup.sh -c $CFG_DIR"  "-l"
-    echo ssh $SSH_HOST "$SSH_CMD"
+    echo ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
     if [ "$DRY_RUN" == "n" ]; then
-         #ssh root@${nm} "cd $BMARK_ROOT/; ${BMARK_SUBDIR}/post_DynoConfig_fixup.sh -c ./AUTOGEN_config_UNDEFINED"
+         #ssh $OPT_KEYS root@${nm} "cd $BMARK_ROOT/; ${BMARK_SUBDIR}/post_DynoConfig_fixup.sh -c ./AUTOGEN_config_UNDEFINED"
           echo "note that prev ver of cmd at $LINENO didn't have ssh -t" > /dev/stderr
-          #ssh $SSH_HOST "$SSH_CMD"
+          #ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
           if [ "$nm" == "127.0.0.1" ]; then
             #$SSH_CMD
             cd $BMARK_ROOT/; ${BMARK_SUBDIR}/post_DynoConfig_fixup.sh -c $CFG_DIR
           else
             $SSH_PFX $SSH_HOST "$SSH_CMD"
           fi
-         dyno_log ssh $SSH_HOST "$SSH_CMD"
+         dyno_log ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
     fi
   fi
   if [[ $RUN_CMDS == *"free_up_disk"* ]]; then
-    #echo ssh root@${nm} "cd $BMARK_ROOT/; ${BMARK_SUBDIR}/post_DynoConfig_fixup.sh -c ./AUTOGEN_config_UNDEFINED"
+    #echo ssh $OPT_KEYS root@${nm} "cd $BMARK_ROOT/; ${BMARK_SUBDIR}/post_DynoConfig_fixup.sh -c ./AUTOGEN_config_UNDEFINED"
     ssh_cmd $nm "cd $BMARK_ROOT/; rm ${BMARK_SUBDIR}*.tar.gz; rm uber*.deb; rm ${BMARK_SUBDIR}/specint/cpu2017.tar.gz"  "-l"
-    echo ssh $SSH_HOST "$SSH_CMD"
+    echo ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
     if [ "$DRY_RUN" == "n" ]; then
-                  ssh $SSH_HOST "$SSH_CMD"
-         dyno_log ssh $SSH_HOST "$SSH_CMD"
+                  ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
+         dyno_log ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
     fi
   fi
   LOG_TS=`$DATE_CMD +"%Y%m%d_%H%M%S"`
@@ -1615,9 +1695,9 @@ for i in $HOSTS; do
     mk_run_fl "$RUN_FL" "$LOG_FL_PFX"
 
     ssh_cmd $nm "cd $BMARK_ROOT; nohup $RUN_FL -c $CFG_DIR -p $NW_PROJ $QUIT_STR &> ${LOG_FL} &"  "-l"
-    echo ssh $SSH_HOST "$SSH_CMD"
+    echo ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
     if [ "$DRY_RUN" == "n" ]; then
-          # ssh $SSH_HOST "$SSH_CMD"
+          # ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
           echo "note that prev ver of cmd at $LINENO didn't have ssh -t" > /dev/stderr
           if [ "$nm" == "127.0.0.1" ]; then
             #$SSH_CMD
@@ -1625,10 +1705,10 @@ for i in $HOSTS; do
           else
             $SSH_PFX $ADD_T $SSH_HOST "$SSH_CMD"
           fi
-         dyno_log RUN ssh $SSH_HOST "$SSH_CMD"
+         dyno_log RUN ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
     fi
   else
-    ADD_T=" -t "
+    ADD_T=" -tt "
     if [[ "$RUN_CMDS" == *"run_"* ]]; then
        ADD_T=" -n "
     fi
@@ -1643,9 +1723,9 @@ for i in $HOSTS; do
       RUN_FL="./${BMARK_SUBDIR}/run_multi.sh"
       mk_run_fl "$RUN_FL" "$LOG_FL_PFX"
       ssh_cmd $nm "cd $BMARK_ROOT; nohup $RUN_FL -c $CFG_DIR -p $NW_PROJ $DR_O $QUIT_STR &> ${LOG_FL} &"  "-l"
-      echo ssh $SSH_HOST "$SSH_CMD"
+      echo ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
       if [ "$DRY_RUN" == "n" ]; then
-          # ssh $SSH_HOST "$SSH_CMD"
+          # ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
           echo "note that prev ver of cmd at $LINENO didn't have ssh -t" > /dev/stderr
           if [ "$nm" == "127.0.0.1" ]; then
             #$SSH_CMD
@@ -1653,16 +1733,16 @@ for i in $HOSTS; do
           else
             $SSH_PFX $ADD_T $SSH_HOST "$SSH_CMD"
           fi
-         dyno_log RUN ssh $SSH_HOST "$SSH_CMD"
+         dyno_log RUN ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
       fi
     fi
     if [[ $RUN_CMDS == *"run_cpu"* ]]; then
       RUN_FL="./${BMARK_SUBDIR}/run_compute.sh"
       mk_run_fl "$RUN_FL" "$LOG_FL_PFX"
       ssh_cmd $nm "cd $BMARK_ROOT; nohup $RUN_FL -c $CFG_DIR -p $NW_PROJ $DR_O $QUIT_STR &> ${LOG_FL} &"  "-l"
-      echo ssh $SSH_HOST "$SSH_CMD"
+      echo ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
       if [ "$DRY_RUN" == "n" ]; then
-          # ssh $SSH_HOST "$SSH_CMD"
+          # ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
           echo "note that prev ver of cmd at $LINENO didn't have ssh -t" > /dev/stderr
           if [ "$nm" == "127.0.0.1" ]; then
             #$SSH_CMD
@@ -1670,16 +1750,16 @@ for i in $HOSTS; do
           else
             $SSH_PFX  $ADD_T $SSH_HOST "$SSH_CMD"
           fi
-         dyno_log RUN ssh $SSH_HOST "$SSH_CMD"
+         dyno_log RUN ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
       fi
     else
       if [[ $RUN_CMDS == *"run_fio"* ]]; then
         RUN_FL="./${BMARK_SUBDIR}/run_fio.sh"
         mk_run_fl "$RUN_FL" "$LOG_FL_PFX"
         ssh_cmd $nm "cd $BMARK_ROOT; nohup $RUN_FL -c $CFG_DIR -p $NW_PROJ $QUIT_STR &> ${LOG_FL} &"  "-l"
-        echo ssh $SSH_HOST "$SSH_CMD"
+        echo ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
         if [ "$DRY_RUN" == "n" ]; then
-          # ssh $SSH_HOST "$SSH_CMD"
+          # ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
           echo "note that prev ver of cmd at $LINENO didn't have ssh -t" > /dev/stderr
           if [ "$nm" == "127.0.0.1" ]; then
             # $SSH_CMD
@@ -1687,17 +1767,17 @@ for i in $HOSTS; do
           else
             $SSH_PFX  $ADD_T $SSH_HOST "$SSH_CMD"
           fi
-         dyno_log RUN ssh $SSH_HOST "$SSH_CMD"
+         dyno_log RUN ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
         fi
       fi
       if [[ $RUN_CMDS == *"run_disk"* ]]; then
         RUN_FL="./${BMARK_SUBDIR}/run_disk.sh"
         mk_run_fl "$RUN_FL" "$LOG_FL_PFX"
         ssh_cmd $nm "cd $BMARK_ROOT; nohup $RUN_FL -c $CFG_DIR -p $NW_PROJ  $QUIT_STR &> ${LOG_FL} &"  "-l"
-        echo ssh $SSH_HOST "$SSH_CMD"
+        echo ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
         if [ "$DRY_RUN" == "n" ]; then
-             #ssh root@${nm} "cd $BMARK_ROOT; nohup ./${BMARK_SUBDIR}/run_disk.sh -c $CFG_DIR -p $NW_PROJ &> ${LOG_FL} &"
-          # ssh $SSH_HOST "$SSH_CMD"
+             #ssh $OPT_KEYS root@${nm} "cd $BMARK_ROOT; nohup ./${BMARK_SUBDIR}/run_disk.sh -c $CFG_DIR -p $NW_PROJ &> ${LOG_FL} &"
+          # ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
           echo "note that prev ver of cmd at $LINENO didn't have ssh -t" > /dev/stderr
           if [ "$nm" == "127.0.0.1" ]; then
             #$SSH_CMD
@@ -1705,7 +1785,7 @@ for i in $HOSTS; do
           else
             $SSH_PFX  $ADD_T $SSH_HOST "$SSH_CMD"
           fi
-         dyno_log RUN ssh $SSH_HOST "$SSH_CMD"
+         dyno_log RUN ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
         fi
       else
         if [[ $RUN_CMDS == *"run_custom"* ]]; then
@@ -1716,9 +1796,9 @@ for i in $HOSTS; do
           RUN_FL="./${BMARK_SUBDIR}/run_custom.sh"
           mk_run_fl "$RUN_FL" "$LOG_FL_PFX"
           ssh_cmd $nm "cd $BMARK_ROOT; nohup $RUN_FL -c $CFG_DIR -p $NW_PROJ $DR_O $QUIT_STR $SCRIPT_OPT &> ${LOG_FL} &"  "-l"
-          echo ssh $SSH_HOST "$SSH_CMD"
+          echo ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
           if [ "$DRY_RUN" == "n" ]; then
-          #              ssh $SSH_HOST "$SSH_CMD"
+          #              ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
           echo "note that prev ver of cmd at $LINENO didn't have ssh -t" > /dev/stderr
           if [ "$nm" == "127.0.0.1" ]; then
             # $SSH_CMD
@@ -1726,7 +1806,7 @@ for i in $HOSTS; do
           else
             $SSH_PFX  $ADD_T $SSH_HOST "$SSH_CMD"
           fi
-          dyno_log RUN ssh $SSH_HOST "$SSH_CMD"
+          dyno_log RUN ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
           fi
         fi
         if [[ $RUN_CMDS == *"run_cmd"* ]]; then
@@ -1743,13 +1823,13 @@ for i in $HOSTS; do
           RUN_FL="./${BMARK_SUBDIR}/$COMMAND"
           mk_run_fl "run_cmd" "$LOG_FL_PFX"
           ssh_cmd $nm "cd $BMARK_ROOT; nohup $RUN_FL -c $CFG_DIR -p $NW_PROJ $QUIT_STR -W $WATCH_IN &> ${LOG_FL} &"  "-l"
-          echo ssh $SSH_HOST "$SSH_CMD"
+          echo ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
           if [ "$DRY_RUN" == "n" ]; then
               if [ "$do_bkgrnd" == "1" ]; then
                 waitForJobs
-                ssh $SSH_HOST "$SSH_CMD" &
+                ssh $OPT_KEYS $SSH_HOST "$SSH_CMD" &
               else
-                #      ssh $SSH_HOST "$SSH_CMD"
+                #      ssh  $OPT_KEYS $SSH_HOST "$SSH_CMD"
                 echo "note that prev ver of cmd at $LINENO didn't have ssh -t" > /dev/stderr
                 if [ "$nm" == "127.0.0.1" ]; then
                   #$SSH_CMD
@@ -1758,8 +1838,8 @@ for i in $HOSTS; do
                   $SSH_PFX  $ADD_T $SSH_HOST "$SSH_CMD"
                 fi
               fi
-              #          ssh $SSH_HOST "$SSH_CMD"
-               dyno_log RUN ssh $SSH_HOST "$SSH_CMD"
+              #          ssh  $OPT_KEYS $SSH_HOST "$SSH_CMD"
+               dyno_log RUN ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
           fi
         fi
         if [[ $RUN_CMDS == *"run_sysinfo"* ]]; then
@@ -1768,9 +1848,9 @@ for i in $HOSTS; do
           #ssh_cmd $nm "cd $BMARK_ROOT; nohup $RUN_FL -c $CFG_DIR -p $NW_PROJ $QUIT_STR &> ${LOG_FL} &" "-l"
           #( ( command ) & )
           ssh_cmd $nm "cd $BMARK_ROOT; nohup $RUN_FL -c $CFG_DIR -p $NW_PROJ $QUIT_STR &> ${LOG_FL} &" "-l"
-          echo ssh $SSH_HOST "$SSH_CMD"
+          echo ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
           if [ "$DRY_RUN" == "n" ]; then
-             # ssh $SSH_HOST "$SSH_CMD"
+             # ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
              echo "note that prev ver of cmd at $LINENO didn't have ssh -t" > /dev/stderr
              if [ "$nm" == "127.0.0.1" ]; then
                #$SSH_CMD
@@ -1778,7 +1858,7 @@ for i in $HOSTS; do
              else
                $SSH_PFX  $ADD_T $SSH_HOST "$SSH_CMD"
              fi
-             dyno_log RUN ssh $SSH_HOST "$SSH_CMD"
+             dyno_log RUN ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
           fi
         fi
         if [[ $RUN_CMDS == *"run_specjbb"* ]]; then
@@ -1792,9 +1872,9 @@ for i in $HOSTS; do
             OPT_S=" $OPT_S -n $ITERS "
           fi
           ssh_cmd $nm "cd $BMARK_ROOT; nohup $RUN_FL -c $CFG_DIR -p $NW_PROJ $QUIT_STR $OPT_S &> ${LOG_FL} &"  "-l"
-          echo ssh $SSH_HOST "$SSH_CMD"
+          echo ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
           if [ "$DRY_RUN" == "n" ]; then
-             #           ssh $SSH_HOST "$SSH_CMD"
+             #           ssh  $OPT_KEYS $SSH_HOST "$SSH_CMD"
              echo "note that prev ver of cmd at $LINENO didn't have ssh -t" > /dev/stderr
              if [ "$nm" == "127.0.0.1" ]; then
                #$SSH_CMD
@@ -1802,16 +1882,16 @@ for i in $HOSTS; do
              else
                $SSH_PFX  $ADD_T $SSH_HOST "$SSH_CMD"
              fi
-             dyno_log RUN ssh $SSH_HOST "$SSH_CMD"
+             dyno_log RUN ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
           fi
         fi
         if [[ $RUN_CMDS == *"run_specint"* ]]; then
           RUN_FL="./${BMARK_SUBDIR}/run_specint.sh"
           mk_run_fl "$RUN_FL" "$LOG_FL_PFX"
           ssh_cmd $nm "cd $BMARK_ROOT; nohup $RUN_FL -c $CFG_DIR -p $NW_PROJ $QUIT_STR &> ${LOG_FL} &"  "-l"
-          echo ssh $SSH_HOST "$SSH_CMD"
+          echo ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
           if [ "$DRY_RUN" == "n" ]; then
-             # ssh $SSH_HOST "$SSH_CMD"
+             # ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
              echo "note that prev ver of cmd at $LINENO didn't have ssh -t" > /dev/stderr
              if [ "$nm" == "127.0.0.1" ]; then
                #$SSH_CMD
@@ -1819,16 +1899,16 @@ for i in $HOSTS; do
              else
                $SSH_PFX  $ADD_T $SSH_HOST "$SSH_CMD"
              fi
-             dyno_log RUN ssh $SSH_HOST "$SSH_CMD"
+             dyno_log RUN ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
           fi
         fi
         if [[ $RUN_CMDS == *"run_stream"* ]]; then
           RUN_FL="./${BMARK_SUBDIR}/run_stream.sh"
           mk_run_fl "$RUN_FL" "$LOG_FL_PFX"
           ssh_cmd $nm "cd $BMARK_ROOT; nohup $RUN_FL -c $CFG_DIR -p $NW_PROJ $QUIT_STR &> ${LOG_FL} &"  "-l"
-          echo ssh $SSH_HOST "$SSH_CMD"
+          echo ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
           if [ "$DRY_RUN" == "n" ]; then
-             # ssh $SSH_HOST "$SSH_CMD"
+             # ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
              echo "note that prev ver of cmd at $LINENO didn't have ssh -t" > /dev/stderr
              if [ "$nm" == "127.0.0.1" ]; then
                #$SSH_CMD
@@ -1836,16 +1916,16 @@ for i in $HOSTS; do
              else
                $SSH_PFX  $ADD_T $SSH_HOST "$SSH_CMD"
              fi
-             dyno_log RUN ssh $SSH_HOST "$SSH_CMD"
+             dyno_log RUN ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
           fi
         fi
         if [[ $RUN_CMDS == *"run_ncu"* ]]; then
           RUN_FL="./${BMARK_SUBDIR}/run_ncu.sh"
           mk_run_fl "$RUN_FL" "$LOG_FL_PFX"
           ssh_cmd $nm "cd $BMARK_ROOT; nohup $RUN_FL -p $NW_PROJ/ncu_run &> ${LOG_FL} &"  "-l"
-          echo ssh $SSH_HOST "$SSH_CMD"
+          echo ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
           if [ "$DRY_RUN" == "n" ]; then
-             # ssh $SSH_HOST "$SSH_CMD"
+             # ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
              echo "note that prev ver of cmd at $LINENO didn't have ssh -t" > /dev/stderr
              if [ "$nm" == "127.0.0.1" ]; then
                #$SSH_CMD
@@ -1853,7 +1933,7 @@ for i in $HOSTS; do
              else
                $SSH_PFX  $ADD_T $SSH_HOST "$SSH_CMD"
              fi
-             dyno_log RUN ssh $SSH_HOST "$SSH_CMD"
+             dyno_log RUN ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
           fi
         fi
         DO_GB=0
@@ -1867,9 +1947,9 @@ for i in $HOSTS; do
           RUN_FL="./${BMARK_SUBDIR}/run_geekbench.sh"
           mk_run_fl "$RUN_FL" "$LOG_FL_PFX"
           ssh_cmd $nm "cd $BMARK_ROOT; nohup $RUN_FL -c $CFG_DIR -p $NW_PROJ $QUIT_STR &> ${LOG_FL} &"  "-l"
-          echo ssh $SSH_HOST "$SSH_CMD"
+          echo ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
           if [ "$DRY_RUN" == "n" ]; then
-             # ssh $SSH_HOST "$SSH_CMD"
+             # ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
              echo "note that prev ver of cmd at $LINENO didn't have ssh -t" > /dev/stderr
              if [ "$nm" == "127.0.0.1" ]; then
                #$SSH_CMD
@@ -1877,7 +1957,7 @@ for i in $HOSTS; do
              else
                $SSH_PFX  $ADD_T $SSH_HOST "$SSH_CMD"
              fi
-             dyno_log RUN ssh $SSH_HOST "$SSH_CMD"
+             dyno_log RUN ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
           fi
         fi
       fi
@@ -1986,28 +2066,28 @@ for i in $HOSTS; do
          dyno_log FETCH cp $FTCH_OUTPUT $BMARK_ROOT/${BMARK_SUBDIR}/
       else
        if [ "$SSH_MODE" == "sudo" ]; then
-         echo scp $FTCH_OUTPUT ${SSH_HOST}:$BMARK_ROOT/${BMARK_SUBDIR}/
+         echo scp $OPT_KEYS $FTCH_OUTPUT ${SSH_HOST}:$BMARK_ROOT/${BMARK_SUBDIR}/
          if [ "$DRY_RUN" == "n" ]; then
-              scp $FTCH_OUTPUT ${SSH_HOST}:$BMARK_ROOT/${BMARK_SUBDIR}
-              dyno_log FETCH scp $FTCH_OUTPUT ${SSH_HOST}:
+              scp $OPT_KEYS $FTCH_OUTPUT ${SSH_HOST}:$BMARK_ROOT/${BMARK_SUBDIR}
+              dyno_log FETCH scp $OPT_KEYS $FTCH_OUTPUT ${SSH_HOST}:
          fi
          #ssh_cmd $nm "mv $FTCH_OUTPUT $BMARK_ROOT/${BMARK_SUBDIR}/"
-         #echo     ssh $SSH_HOST "$SSH_CMD"
-         #         ssh $SSH_HOST "$SSH_CMD"
-         dyno_log FETCH ssh $SSH_HOST "$SSH_CMD"
+         #echo     ssh  $OPT_KEYS $SSH_HOST "$SSH_CMD"
+         #         ssh  $OPT_KEYS $SSH_HOST "$SSH_CMD"
+         dyno_log FETCH ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
        else
          pwd
-         echo    "scp $FTCH_OUTPUT ${SSH_HOST}:$BMARK_ROOT/${BMARK_SUBDIR}/fetch_output.sh"
+         echo    "scp $OPT_KEYS $FTCH_OUTPUT ${SSH_HOST}:$BMARK_ROOT/${BMARK_SUBDIR}/fetch_output.sh"
          if [ "$DRY_RUN" == "n" ]; then
            if [ "$do_bkgrnd" == "1" ]; then
              FTCH_ARR[$NUM_HOST,1,0]=$SSH_HOST
-             echo scp $FTCH_OUTPUT ${FTCH_ARR[$NUM_HOST,1,0]}:$BMARK_ROOT/${BMARK_SUBDIR}/fetch_output.sh
-                  scp $FTCH_OUTPUT ${FTCH_ARR[$NUM_HOST,1,0]}:$BMARK_ROOT/${BMARK_SUBDIR}/fetch_output.sh  &
+             echo scp $OPT_KEYS $FTCH_OUTPUT ${FTCH_ARR[$NUM_HOST,1,0]}:$BMARK_ROOT/${BMARK_SUBDIR}/fetch_output.sh
+                  scp $OPT_KEYS  $FTCH_OUTPUT ${FTCH_ARR[$NUM_HOST,1,0]}:$BMARK_ROOT/${BMARK_SUBDIR}/fetch_output.sh  &
              #scp $FTCH_OUTPUT ${FCSSH_HOST}:$BMARK_ROOT/${BMARK_SUBDIR}/ &
            else
-             scp $FTCH_OUTPUT ${SSH_HOST}:$BMARK_ROOT/${BMARK_SUBDIR}/fetch_output.sh
+             scp $OPT_KEYS $FTCH_OUTPUT ${SSH_HOST}:$BMARK_ROOT/${BMARK_SUBDIR}/fetch_output.sh
            fi
-           dyno_log FETCH scp $FTCH_OUTPUT ${SSH_HOST}:$BMARK_ROOT/${BMARK_SUBDIR}/fetch_output.sh
+           dyno_log FETCH scp $OPT_KEYS $FTCH_OUTPUT ${SSH_HOST}:$BMARK_ROOT/${BMARK_SUBDIR}/fetch_output.sh
          fi
        fi
       fi
@@ -2024,7 +2104,7 @@ for i in $HOSTS; do
          FTCH_ARR[$NUM_HOST,2,0]=$SSH_HOST
          FTCH_ARR[$NUM_HOST,2,1]=$SSH_CMD
       #fi
-      echo sv_cmd ssh $SSH_HOST "$SSH_CMD"
+      echo sv_cmd ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
       FTCH_SVH[$NUM_HOST]=$SSH_HOST
       FTCH_SV[$NUM_HOST]=$SSH_CMD
       continue
@@ -2042,11 +2122,11 @@ for i in $HOSTS; do
            RESP=`bash -c "$SSH_CMD"`
          else
            if [ "$do_bkgrnd" == "1" ]; then
-             echo ssh -n ${SSH_HOST} "$SSH_CMD" __ $OUT_FILE
-             ssh -n ${SSH_HOST} "$SSH_CMD" &> $OUT_FILE &
-             #ssh -n ${FTCH_ARR[$NUM_HOST,2,0]} "${FTCH_ARR[$NUM_HOST,2,1]}" &> $OUT_FILE &
+             echo ssh $OPT_KEYS -n ${SSH_HOST} "$SSH_CMD" __ $OUT_FILE
+             ssh  $OPT_KEYS -n ${SSH_HOST} "$SSH_CMD" &> $OUT_FILE &
+             #ssh $OPT_KEYS -n ${FTCH_ARR[$NUM_HOST,2,0]} "${FTCH_ARR[$NUM_HOST,2,1]}" &> $OUT_FILE &
            else
-             FTCH_RSP1[$NUM_HOST]=`ssh ${SSH_HOST} "$SSH_CMD"`
+             FTCH_RSP1[$NUM_HOST]=`ssh $OPT_KEYS ${SSH_HOST} "$SSH_CMD"`
            fi
          fi
          #FTCH_RSP[$NUM_HOST]=$RESP
@@ -2113,12 +2193,12 @@ for i in $HOSTS; do
          if [ "$nm" == "127.0.0.1" ]; then
            RESP=`bash -c "$SSH_CMD"`
          else
-           #RESP=`ssh ${SSH_HOST} "$SSH_CMD"`
+           #RESP=`ssh $OPT_KEYS ${SSH_HOST} "$SSH_CMD"`
            if [ "$do_bkgrnd" == "1" ]; then
-              echo ssh -n ${SSH_HOST} "$SSH_CMD" __ $OUT_FILE
-              ssh -n ${SSH_HOST} "$SSH_CMD" &> $OUT_FILE &
+              echo ssh $OPT_KEYS -n ${SSH_HOST} "$SSH_CMD" __ $OUT_FILE
+              ssh  $OPT_KEYS -n ${SSH_HOST} "$SSH_CMD" &> $OUT_FILE &
            else
-              FTCH_RSP2[$NUM_HOST]=`ssh ${SSH_HOST} "$SSH_CMD"`
+              FTCH_RSP2[$NUM_HOST]=`ssh $OPT_KEYS ${SSH_HOST} "$SSH_CMD"`
            fi
          fi
          continue
@@ -2160,17 +2240,17 @@ for i in $HOSTS; do
               dyno_log FETCH cp $NW_PROJ/../$TAR_GZ $USE_DIR
            else
              if [ "$SSH_MODE" == "sudo" ]; then
-                echo    "scp ${SSH_HOST}:$NW_PROJ/../$TAR_GZ $USE_DIR"
-                         scp ${SSH_HOST}:$NW_PROJ/../$TAR_GZ $USE_DIR
-                dyno_log FETCH scp ${SSH_HOST}:$NW_PROJ/../$TAR_GZ $USE_DIR
+                echo    "scp $OPT_KEYS ${SSH_HOST}:$NW_PROJ/../$TAR_GZ $USE_DIR"
+                         scp $OPT_KEYS ${SSH_HOST}:$NW_PROJ/../$TAR_GZ $USE_DIR
+                dyno_log FETCH scp $OPT_KEYS ${SSH_HOST}:$NW_PROJ/../$TAR_GZ $USE_DIR
              else
-                echo    "scp ${SSH_HOST}:$NW_PROJ/../$TAR_GZ $USE_DIR"
+                echo    "scp $OPT_KEYS ${SSH_HOST}:$NW_PROJ/../$TAR_GZ $USE_DIR"
                 if [ "$do_bkgrnd" == "1" ]; then
-                         scp ${SSH_HOST}:$NW_PROJ/../$TAR_GZ $USE_DIR &
+                         scp $OPT_KEYS ${SSH_HOST}:$NW_PROJ/../$TAR_GZ $USE_DIR &
                 else
-                         scp ${SSH_HOST}:$NW_PROJ/../$TAR_GZ $USE_DIR
+                         scp $OPT_KEYS ${SSH_HOST}:$NW_PROJ/../$TAR_GZ $USE_DIR
                 fi
-                dyno_log FETCH scp ${SSH_HOST}:$NW_PROJ/../$TAR_GZ $USE_DIR
+                dyno_log FETCH scp $OPT_KEYS ${SSH_HOST}:$NW_PROJ/../$TAR_GZ $USE_DIR
              fi
            fi
            continue
@@ -2181,7 +2261,6 @@ for i in $HOSTS; do
            TAR_GZ=${FTCH_TAR_GZ[$NUM_HOST]}
            NW_PROJ=${FTCH_NW_PROJ[$NUM_HOST]}
            SSH_HOST=${FTCH_SVH[$NUM_HOST]}
-#abcd
            WXY_LST="$wxy_flds"
            WXY_CMA=";"
            WXY_DLM=
@@ -2240,7 +2319,7 @@ for i in $HOSTS; do
          #if [ "$nm" == "127.0.0.1" ]; then
          #  RESP=`bash -c "$SSH_CMD"`
          #else
-         #  RESP=`ssh ${SSH_HOST} "$SSH_CMD"`
+         #  RESP=`ssh $OPT_KEYS ${SSH_HOST} "$SSH_CMD"`
          #fi
          #if [ "$RESP" != "got it" ]; then
          #  FETCH_MSG="{$nm, $NUM_HOST, $TAR_GZ}"
@@ -2258,13 +2337,13 @@ for i in $HOSTS; do
               dyno_log FETCH cp $NW_PROJ $USE_DIR
            else
              if [ "$SSH_MODE" == "sudo" ]; then
-                echo    "scp -rp ${SSH_HOST}:$NW_PROJ $USE_DIR"
-                         scp -rp  ${SSH_HOST}:$NW_PROJ $USE_DIR
-                dyno_log FETCH scp ${SSH_HOST}:$NW_PROJ $USE_DIR
+                echo    "scp $OPT_KEYS -rp ${SSH_HOST}:$NW_PROJ $USE_DIR"
+                         scp $OPT_KEYS -rp  ${SSH_HOST}:$NW_PROJ $USE_DIR
+                dyno_log FETCH scp $OPT_KEYS ${SSH_HOST}:$NW_PROJ $USE_DIR
              else
-                echo    "scp -rp ${SSH_HOST}:$NW_PROJ $USE_DIR"
-                         scp -rp ${SSH_HOST}:$NW_PROJ $USE_DIR
-                dyno_log FETCH scp -rp ${SSH_HOST}:$NW_PROJ $USE_DIR
+                echo    "scp $OPT_KEYS -rp ${SSH_HOST}:$NW_PROJ $USE_DIR"
+                         scp $OPT_KEYS -rp ${SSH_HOST}:$NW_PROJ $USE_DIR
+                dyno_log FETCH scp $OPT_KEYS -rp ${SSH_HOST}:$NW_PROJ $USE_DIR
              fi
            fi
            RESP=$(basename $NW_PROJ)
@@ -2296,8 +2375,8 @@ for i in $HOSTS; do
            if [ "$nm" == "127.0.0.1" ]; then
              RESP=`bash -c "$SSH_CMD"`
            else
-             echo ssh ${SSH_HOST} "$SSH_CMD"
-             RESP=`ssh ${SSH_HOST} "$SSH_CMD"`
+             echo ssh $OPT_KEYS ${SSH_HOST} "$SSH_CMD"
+             RESP=`ssh $OPT_KEYS ${SSH_HOST} "$SSH_CMD"`
            fi
          else
            RESP="got it"
@@ -2317,17 +2396,17 @@ for i in $HOSTS; do
               dyno_log FETCH cp $TAR_GZ $USE_DIR
            else
              if [ "$SSH_MODE" == "sudo" ]; then
-                echo    "scp ${SSH_HOST}:$TAR_GZ $USE_DIR"
-                         scp ${SSH_HOST}:$TAR_GZ $USE_DIR
-                dyno_log FETCH scp ${SSH_HOST}:$TAR_GZ $USE_DIR
+                echo    "scp $OPT_KEYS ${SSH_HOST}:$TAR_GZ $USE_DIR"
+                         scp $OPT_KEYS ${SSH_HOST}:$TAR_GZ $USE_DIR
+                dyno_log FETCH scp $OPT_KEYS ${SSH_HOST}:$TAR_GZ $USE_DIR
              else
-                echo    "scp ${SSH_HOST}:$TAR_GZ $USE_DIR"
+                echo    "scp $OPT_KEYS ${SSH_HOST}:$TAR_GZ $USE_DIR"
                 if [ "$do_bkgrnd" == "1" ]; then
-                   scp ${SSH_HOST}:$TAR_GZ $USE_DIR &
+                   scp $OPT_KEYS ${SSH_HOST}:$TAR_GZ $USE_DIR &
                 else
-                   scp ${SSH_HOST}:$TAR_GZ $USE_DIR
+                   scp $OPT_KEYS ${SSH_HOST}:$TAR_GZ $USE_DIR
                 fi
-                dyno_log FETCH scp ${SSH_HOST}:$TAR_GZ $USE_DIR
+                dyno_log FETCH scp $OPT_KEYS ${SSH_HOST}:$TAR_GZ $USE_DIR
              fi
            fi
            RESP=$(basename $TAR_GZ)
@@ -2363,17 +2442,17 @@ for i in $HOSTS; do
          dyno_log cp $GEN_RPT $BMARK_ROOT/${BMARK_SUBDIR}/
       else
         if [ "$SSH_MODE" == "sudo" ]; then
-           echo     scp $GEN_RPT ${SSH_HOST}:
-                    scp $GEN_RPT ${SSH_HOST}:
-           dyno_log scp $GEN_RPT ${SSH_HOST}:
+           echo     scp $OPT_KEYS $GEN_RPT ${SSH_HOST}:
+                    scp $OPT_KEYS $GEN_RPT ${SSH_HOST}:
+           dyno_log scp $OPT_KEYS $GEN_RPT ${SSH_HOST}:
            ssh_cmd $nm "mv $GEN_RPT $BMARK_ROOT/${BMARK_SUBDIR}/"
-           echo     ssh $SSH_HOST "$SSH_CMD"
-                    ssh $SSH_HOST "$SSH_CMD"
-           dyno_log ssh $SSH_HOST "$SSH_CMD"
+           echo     ssh  $OPT_KEYS $SSH_HOST "$SSH_CMD"
+                    ssh  $OPT_KEYS $SSH_HOST "$SSH_CMD"
+           dyno_log ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
         else
-           echo    "scp $GEN_RPT ${SSH_HOST}:$BMARK_ROOT/${BMARK_SUBDIR}/"
-                    scp $GEN_RPT ${SSH_HOST}:$BMARK_ROOT/${BMARK_SUBDIR}/
-           dyno_log scp $GEN_RPT ${SSH_HOST}:$BMARK_ROOT/${BMARK_SUBDIR}/
+           echo    "scp $OPT_KEYS $GEN_RPT ${SSH_HOST}:$BMARK_ROOT/${BMARK_SUBDIR}/"
+                    scp $OPT_KEYS $GEN_RPT ${SSH_HOST}:$BMARK_ROOT/${BMARK_SUBDIR}/
+           dyno_log scp $OPT_KEYS $GEN_RPT ${SSH_HOST}:$BMARK_ROOT/${BMARK_SUBDIR}/
         fi
       fi
     fi
@@ -2443,8 +2522,8 @@ for i in $HOSTS; do
                     bash -c "$SSH_CMD" >> $USE_FILE
            dyno_log bash -c "$SSH_CMD" ">>" $USE_FILE
            else
-                    ssh $SSH_HOST "$SSH_CMD" >> $USE_FILE
-           dyno_log ssh $SSH_HOST "$SSH_CMD" ">>" $USE_FILE
+                    ssh  $OPT_KEYS $SSH_HOST "$SSH_CMD" >> $USE_FILE
+           dyno_log ssh $OPT_KEYS $SSH_HOST "$SSH_CMD" ">>" $USE_FILE
            fi
            echo "============= end   $nm =========================" >> $USE_FILE
       fi
@@ -2520,10 +2599,15 @@ for i in $HOSTS; do
   fi
 done
 
+echo "%0.$LINENO waitForJobs now"
 SV_BKGRND_TASKS_MAX=$BKGRND_TASKS_MAX
-BKGRND_TASKS_MAX=1
+BKGRND_TASKS_MAX=0
 waitForJobs
 BKGRND_TASKS_MAX=$SV_BKGRND_TASKS_MAX
+echo "$0.$LINENO waitForJobs done "
+runningJobs=$(jobs | wc -l)
+jobs
+echo "$0.$LINENO jobs running  $runningJobs"
 done
 
   if [[ $RUN_CMDS == *"combine"* ]]; then
