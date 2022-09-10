@@ -174,7 +174,8 @@ fi
 PROFILE=" --profile "
 PROFILE=
 
-$AWK $PROFILE -v xls_str="$XLS_STR" -v sku_str="$SKU_STR" -v ratio_cols="$RATIO_COLS" -v out_file="$OUT_FILE" -v layout="$LAYOUT" -v sep="$SEPARATOR" '
+echo $0.$LINENO $AWK $PROFILE -v xls_str="$XLS_STR" -v sku_str="$SKU_STR" -v ratio_cols="$RATIO_COLS" -v out_file="$OUT_FILE" -v layout="$LAYOUT" -v sep="$SEPARATOR" 
+$AWK $PROFILE -v script="$0.$LINENO.awk" -v xls_str="$XLS_STR" -v sku_str="$SKU_STR" -v ratio_cols="$RATIO_COLS" -v out_file="$OUT_FILE" -v layout="$LAYOUT" -v sep="$SEPARATOR" '
  BEGIN{
       need_SI_ncu_combined = 0;
       did_metric = 0;
@@ -217,6 +218,7 @@ function _ord_init(    low, high, i, t) {
   /val_arr all_vals|val_arr avg|val_arr0 all_vals|val_arr0 avg/ {
     next;
   }
+#Resource    Tool    Metric  average 0#
   /Metric|metric/{
     n = split($0, arr, "\t");
     if (did_metric == 0) {
@@ -255,7 +257,7 @@ function _ord_init(    low, high, i, t) {
       next;
     }
     if (layout == 1) {
-       if (ARGIND != prev_ARGIND) {
+       if (FILENAME != prev_ARGIND) {
           mx_fl++;
           if (sku_str != "") {
             sku[mx_fl]=sku_arr[mx_fl];
@@ -264,7 +266,7 @@ function _ord_init(    low, high, i, t) {
             got_xlsx = 1;
             xls[mx_fl]=xls_arr[mx_fl];
           }
-          prev_ARGIND = ARGIND;
+          prev_ARGIND = FILENAME;
        }
     }
     if ($0 == "key0") {
@@ -276,6 +278,7 @@ function _ord_init(    low, high, i, t) {
        next;
     }
     n = split($0, arr, "\t");
+    #if (mx_fl == 1) { printf("n= %d, ln= %s\n", n, $0) > "/dev/stderr";}
     if (n > 1 && (arr[1] == "hdrs" || arr[1] == "title")) {
        next;
     }
@@ -286,7 +289,8 @@ function _ord_init(    low, high, i, t) {
       xls[mx_fl]=arr[vl];
     }
     if (arr[ky] == "sku") {
-      mx_fl++;
+      # note that below is proabaly needed if you arent doing sum_all2.tsv
+      #mx_fl++;
       sku[mx_fl]=arr[vl];
       printf("sku[%d]= %s, mx_fl= %d\n", mx_fl, arr[vl], mx_fl) > "/dev/stderr";
       next;
@@ -633,6 +637,7 @@ SI_arr[++SI_mx]="SI NCU score_sum_at_pct"; SI_sc_sum_at_pct= SI_mx;
       if (gstr_lkup2[g] == "SI benchmark") {
         if (++SI_did > 1) {continue; }
       }
+      printf("script= %s   mx_fl= %d\n", script, ml_fl) > "/dev/stderr";
       while (ii <= lbl_mx) {
         #  ++ii;
         doing_SI = 0;
