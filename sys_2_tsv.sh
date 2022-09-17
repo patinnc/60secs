@@ -366,6 +366,10 @@ if [ -e $LZC_FL ]; then
   printf "host\tservices\t\"%s\"\tservices\n"  "$STR" >> $SUM_FILE;
   STR=$($AWK_BIN  '/^lzc_sku/ { str=substr($0,index($0,";")+1); printf("%s\n", str);exit;}' $LZC_FL)
   printf "host\tlzc_sku\t\"%s\"\tlzc_sku\n"  "$STR" >> $SUM_FILE;
+  STR=$($AWK_BIN  '/^chassis/ { str=substr($0,index($0,";")+1); printf("%s\n", str);exit;}' $LZC_FL)
+  printf "host\tchassis\t\"%s\"\tchassis\n"  "$STR" >> $SUM_FILE;
+  STR=$($AWK_BIN  '/^layout/ { str=substr($0,index($0,";")+1); printf("%s\n", str);exit;}' $LZC_FL)
+  printf "host\tlayout\t\"%s\"\tlayout\n"  "$STR" >> $SUM_FILE;
   STR=$($AWK_BIN  '/^sku/ { str=substr($0,index($0,";")+1); printf("%s\n", str);exit;}' $LZC_FL)
   printf "host\tsku\t\"%s\"\tsku\n"  "$STR" >> $SUM_FILE;
   cat $LZC_FL
