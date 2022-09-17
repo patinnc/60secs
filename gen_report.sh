@@ -1223,8 +1223,12 @@ echo -e "$specint_val\t$stream_val\t$fio_val\t$specjbb_val\t$gb_val\t$sysinfo_va
 if [ "$SKU" == "\"N/A\"" -a "$HOST" != "" ]; then
   SKU=$HOST
 fi
-echo "__key__;SKU;SKU_MAKER;SKU_MODEL;$k2"
-echo "__val__;$SKU;$SKU_MAKE;$SKU_MODEL;$v2"
+if [ "$NUM_HOST" != "" ]; then
+  kk2=";NUM_HOST"
+  vv2=";$NUM_HOST"
+fi
+echo "__key__;SKU;SKU_MAKER;SKU_MODEL${kk2};$k2"
+echo "__val__;$SKU;$SKU_MAKE;$SKU_MODEL${vv2};$v2"
 
 #echo "dirs= ${#dirs[@]}"
 
