@@ -76,7 +76,7 @@ fi
 CFG_DIR=./AUTOGEN_config_UNDEFINED
 TAR_GZ=
 DRY_RUN=n
-RUN_CMDS="ping,screen,shell,command,pcmd,lcl_cmd,pssh_test,ssh_test,opt_reboot,popt_${wxy_str}_info,opt_${wxy_str}_info,nameserver_test,scp_tar,untar,opt_install_jdk8,opt_install_jdk11,setup,opt_free_up_disk,config,post,run_cpu,run_ncu,run_cmd,run_disk,run_fio,run_both,run_custom,run_multi,run_specjbb,run_specint,run_sysinfo,run_stream,run_geekbench,peek,pfetch_untar,fetch_untar,get,get_untar,get_recur,report,combine"
+RUN_CMDS="ping,screen,shell,command,show_host_list,show_host_line,pcmd,lcl_cmd,pssh_test,ssh_test,opt_reboot,popt_${wxy_str}_info,opt_${wxy_str}_info,nameserver_test,scp_tar,untar,opt_install_jdk8,opt_install_jdk11,setup,opt_free_up_disk,config,post,run_cpu,run_ncu,run_cmd,run_disk,run_fio,run_both,run_custom,run_multi,run_specjbb,run_specint,run_sysinfo,run_stream,run_geekbench,peek,pfetch_untar,fetch_untar,get,get_untar,get_recur,report,combine"
 SV_CMDS=$RUN_CMDS  # save them off because they get updated in getopts and if the user does -h they won't see the list
 VERBOSE=0
 BMARK_ROOT=/root
@@ -216,6 +216,8 @@ function print_help() {
       echo "     Below is more detail on each '-r cmd'"
       echo "     'ping' run ping host to see if we can find the server. Note that GCP boxes don't respond to ping. This cmd is optional"
       echo "     'shell' ssh's to the box and opens a bash shell so you can do something not done by this script. This cmd is optional."
+      echo "     'show_host_list' just prints the host list separated by spaces"
+      echo "     'show_host_line' just prints the line from the host list for each host"
       echo "     'screen' ssh's to the box and opens a bash, can does 'screen -r' to reconnect to detached screen session. This cmd is optional. (ctrl-a ctrl-d to detach (close screen but leave running, ctrl-a [ starts copy mode then ctrl-f ctlr-b to scroll fwd/bck, q exits copy mode)"
       echo "     'command' ssh's to the box and opens a bash shell and runs the command from '-C command_to_be_run'."
       echo "     'pcmd' ssh's to the box and opens a bash shell and runs the command from '-C command_to_be_run', sends output to work_dir/cmd_xxxx.txt"
@@ -872,7 +874,9 @@ if [ "$HOST_NUM" != "" ]; then
         echo "didn't find valid system numbers in cmdline option -N $HOST_NUM. Bye" > /dev/stderr
         exit 1
      fi
-  #echo "HOST_NUM_LIST= ${HOST_NUM_LIST[@]}"
+  if [ "$VERBOSE" -gt "0" ]; then
+  echo "$0.$LINENO HOST_NUM_LIST= ${HOST_NUM_LIST[@]}"
+  fi
   HOST_NUM_BEG=${HOST_NUM_LIST[0]}
   HOST_NUM_END=${HOST_NUM_LIST[${#HOST_NUM_LIST[@]}-1]}
   for ((i=0; i < ${#HOST_NUM_LIST[@]}; i++)); do
@@ -930,6 +934,7 @@ for RN_CM in ${CMD_ARR[@]}; do
     break
   fi
 NUM_HOST=-1
+STR_HOST_LIST=
 for i in $HOSTS; do
   RUN_CMDS=$RN_CM
   NUM_HOST=$((NUM_HOST+1))
@@ -969,6 +974,9 @@ for i in $HOSTS; do
   tm_cur=$($DATE_CMD +"%s.%6N")
   tm_diff=$(awk -v tm0="$tm_beg" -v tm1="$tm_cur" 'BEGIN{printf("%f\n", tm1-tm0);exit(0);}')
   echo "$LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ==================="
+  if [ "$RUN_CMDS" == "show_host_list" ]; then
+    STR_HOST_LIST="$STR_HOST_LIST $i"
+  fi
   nm=$i
   USERNM=$SV_USERNM
   USERNM_IN=$SV_USERNM_IN
@@ -1362,7 +1370,6 @@ for i in $HOSTS; do
             #TCMD="$SSH_PFX $SSH_HOST \"$SSH_CMD\""
             #TESCCMD="$(printf ' %q' "$TCMD")"
             #echo "$0.$LINENO esc ssh= $TESCCMD"
-#abcd
          fi
          if [ "$do_bkgrnd" == "1" ]; then
           if [ "$GOT_DO_CMD" == "2" ]; then
@@ -2472,6 +2479,32 @@ for i in $HOSTS; do
         SKU=`echo $SKU | sed 's/benchmark-//;'`
       fi
     else
+      clsto_file=$ARCHIVE_DIR/do_${wxy_str}_info.lst
+      if [ ! -e "$clsto_file" ]; then
+        clsto_file=$ARCHIVE_DIR/do_${wxy_str}_info.txt
+      fi
+      echo "$0.$LINENO clsto_file= $clsto_file"
+      if [ -e "$clsto_file" ]; then
+       HDR=$(grep Hostname $clsto_file |head -1)
+       DETL=$(grep "$nm;" $clsto_file |head -1)
+       echo "$0.$LINENO clsto_file= $clsto_file $HDR $DETL"
+       IFS=";"
+       read -a harr <<< "$HDR"
+       read -a darr <<< "$DETL"
+       IFS=$IFS_SV
+       for ((ik=0; ik < ${#harr[@]}; ik++)); do
+         if [ "${harr[$ik]}" == "ServerType" ]; then
+          SKU="${darr[$ik]}"
+         fi
+         if [ "${harr[$ik]}" == "Manufacturer" ]; then
+          SKU_MAKE="${darr[$ik]}"
+         fi
+         if [ "${harr[$ik]}" == "Model" ]; then
+          SKU_MODEL="${darr[$ik]}"
+         fi
+       done
+       echo "$0.$LINENO hst= $nm sku= $SKU sku_make= $SKU_MAKE sku_model= $SKU_MODEL"
+      else
       clsto_file=$ARCHIVE_DIR/${wxy_str}_info.lst
       WXY_OUT=`${wxy_str} ${wxy_hs} $nm`
       if [ "$WXY_OUT" != "" ]; then
@@ -2484,15 +2517,22 @@ for i in $HOSTS; do
         fi
         if [ -e $clsto_file ];then
           CLUSTO=`awk -v nm="$nm" 'BEG{doit=0;str=""}/^----/{if (doit==1) {printf("%s\n", str);exit;}}{if (index($0, nm) > 0) { doit=1;};if (doit==1) {str=str ""$0"\n";}}' $clsto_file`
-          echo "from $clsto_file ${wxy_str}= $CLUSTO"
+          echo "$0.$LINENO from $clsto_file ${wxy_str}= $CLUSTO"
         else
           CLUSTO=`${wxy_str} ${wxy_hs} $nm`
         fi
       fi
+      fi
       echo did ${wxy_str} ${wxy_hs} $nm
+      if [ "$SKU" == "" ]; then
       SKU=`echo "$CLUSTO" | awk '/^Sku/{printf("%s\n", $2);}'`
+      fi
+      if [ "$SKU_MAKE" == "" ]; then
       SKU_MAKE=`echo "$CLUSTO" | awk '/^Make/{printf("%s\n", $2);}'`
+      fi
+      if [ "$SKU_MODEL" == "" ]; then
       SKU_MODEL=`echo "$CLUSTO" | awk '/^Model/{printf("%s\n", $2);}'`
+      fi
       if [ "$SKU" == "" ]; then
         SKU="N/A"
       fi
@@ -2566,7 +2606,8 @@ for i in $HOSTS; do
         echo "aft CMD= $CMD, arcd= $ARCD" > /dev/stderr
         CMB_O=$CMD
       fi
-      SSH_CMD="$GEN_RPT -p $USE_DIR -s \"$SKU\" -m \"$SKU_MAKE\" -t \"$SKU_MODEL\" -H $nm  $VRB $CMB_O $DIR_60"
+#abcd
+      SSH_CMD="$GEN_RPT -p $USE_DIR -N $NUM_HOST -s \"$SKU\" -m \"$SKU_MAKE\" -t \"$SKU_MODEL\" -H $nm  $VRB $CMB_O $DIR_60"
       if [ "$RPT_FILE" != "" ]; then
         echo "$SSH_CMD >> $RPT_FILE"
       else
@@ -2599,7 +2640,7 @@ for i in $HOSTS; do
   fi
 done
 
-echo "%0.$LINENO waitForJobs now"
+echo "$0.$LINENO waitForJobs now"
 SV_BKGRND_TASKS_MAX=$BKGRND_TASKS_MAX
 BKGRND_TASKS_MAX=0
 waitForJobs
@@ -2669,6 +2710,9 @@ done
   if [ "$FETCH_WORKED" != "" -o "$FETCH_FAILED" != "" ]; then
     echo "fetch_worked: $FETCH_WORKED"
     echo "fetch_failed: $FETCH_FAILED"
+  fi
+  if [ "$RUN_CMDS" == "show_host_list" ]; then
+    echo "$0.$LINENO show_host_list= $STR_HOST_LIST"
   fi
 
 exit 0
