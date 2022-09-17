@@ -34,6 +34,7 @@ fi
 export LC_ALL=C
 declare -a REGEX
 declare -a SKU
+declare -a NUM_HOST
 declare -a LST_DIR_2_WORK_DIR
 DIR=
 PHASE_FILE=
@@ -95,7 +96,7 @@ AVERAGE=0
 CLIPX=()
 REDUCE=
 
-while getopts "AhvSa:b:B:c:C:D:d:e:F:g:I:j:m:N:O:o:P:R:r:s:w:X:x:" opt; do
+while getopts "AhvSa:b:B:c:C:D:d:e:F:g:H:I:j:m:N:O:o:P:R:r:s:w:X:x:" opt; do
   case ${opt} in
     A )
       AVERAGE=1
@@ -136,6 +137,9 @@ while getopts "AhvSa:b:B:c:C:D:d:e:F:g:I:j:m:N:O:o:P:R:r:s:w:X:x:" opt; do
       ;;
     g )
       G_SUM+=("$OPTARG")
+      ;;
+    H )
+      NUM_HOST+=($OPTARG)
       ;;
     I )
       INPUT_FILE_LIST=$OPTARG
@@ -193,6 +197,7 @@ while getopts "AhvSa:b:B:c:C:D:d:e:F:g:I:j:m:N:O:o:P:R:r:s:w:X:x:" opt; do
       echo "   -F desc_file  file containing 1 line of text describing the results dir. Currently this is just the gen_xls.sh cmdline."
       echo "      this file can be used to identify breaks in the chart_sheet rows of charts. All charts with the same desc_file will be put be put on the same line"
       echo "   -g key=val    key value pairs to be added to summary sheet. use multiple -g k=v options to specify multiple key value pairs"
+      echo "   -H host_number  key value for possilbe sorting. host_number is the number of host in the hostlist"
       echo "   -I file_with_list_of_input_files   used for getting a specify list of file proccessed"
       echo "   -j job_id   if you are doing more than 1 dir and running jobs in background then this id is used to create unique input filenames for tsv_2_xlsx.py"
       echo "   -m max_val    any value in chart > this value will be replaced by 0.0"
@@ -648,7 +653,7 @@ else
                if [ "$TS_INIT" != "" ]; then
                  GOT_TS_INIT=1
                fi
-               #echo "$0.$LINENO: ck $NM/run.log got TS_INIT= $TS_INIT"
+               echo "$0.$LINENO: ck $NM/run.log got TS_INIT= $TS_INIT"
              fi
              if [ "$GOT_TS_INIT" != "1" ]; then
               if [ $VERBOSE -gt 0 ]; then
@@ -840,6 +845,7 @@ declare -A LZC_ARR_BY_DIR
 declare -A LZC_ARR_BY_DIR_NUM
 declare -A LSS_ARR_BY_HOST
 
+#echo "$0.$LINENO dir= $DIR"
 if [ "$SKU_LEN" != "0" ]; then
   echo "$0.$LINENO SKU= ${SKU[@]}"
    if [ "$SKU_LEN" != "0" ]; then
@@ -878,9 +884,35 @@ if [ "$SKU_LEN" != "0" ]; then
         CLS="clusto_info.lst"
         LLS="lab_info.lst"
         STR=$idir
+        TRY_DIR=$idir
+        LZC_FL=
         for ((jj=${#PATH_ARR[@]}-1; jj >= 0; jj--)); do
-          LZC_FL=`find $STR  -maxdepth 1 \( -name "$LZC" -o -name "$CLS" -o -name "lzc_info.lst" -o -name "clusto_info.txt" -o -name "do_lzc_info.txt" -o -name "$LLS" \)`
+          #echo "$0.$LINENO try_dir= $TRY_DIR"
+          if [[ $TRY_DIR != "" ]] && [[ -e $TRY_DIR/do_lzc_info.txt ]]; then
+            LZC_FL=$TRY_DIR/do_lzc_info.txt
+            break
+          fi
+          TRY_DIR=$(dirname $TRY_DIR)
+        done
+        if [[ $LZC_FL != "" ]] && [[ -e $LZC_FL ]]; then
+          STR=$(dirname $LZC_FL)
+          if [[ -e $TRY_DIR/lzc_info.lst ]]; then
+             LZC_FL2=$TRY_DIR/lzc_info.lst
+             echo "$0.$LINENO lzc_fl2= $LZC_FL2"
+          fi
+        fi
+        if [ 1 == 2 ]; then
+        for ((jj=${#PATH_ARR[@]}-1; jj >= 0; jj--)); do
+          #LZC_FL=`find $STR  -maxdepth 1 \( -name do_lzc_info.txt -o -name "$LZC" -o -name "$CLS" -o -name "lzc_info.lst" -o -name "clusto_info.txt" -o -name "$LLS" \)`
+          LZC_FL=`find $STR  -maxdepth 1 -name do_lzc_info.txt`
           STR=`dirname $STR`
+          if [ "$LZC_FL" != "" ]; then
+            echo "$0.$LINENO got lzc_fl= $LZC_FL" >&2
+            break
+          else
+            LZC_FL=`find $STR  -maxdepth 1 \( name "$LZC" -o -name "$LLS" \)`
+            STR=`dirname $STR`
+          fi
           if [ "$LZC_FL" != "" ]; then
             break
           fi
@@ -888,13 +920,19 @@ if [ "$SKU_LEN" != "0" ]; then
             break
           fi
         done
+        fi
         if [ $VERBOSE -gt 1 ]; then
           echo "$0.$LINENO PATH_ARR0= ${PATH_ARR[0]}"
           echo "$0.$LINENO LZC_FL= $LZC_FL"
         fi
 
+#echo "$0.$LINENO str= $STR idir= $idir jj= $jj.  bye"
+#echo "$0.$LINENO LZC_FL= $LZC_FL bye"
+#exit 1
         CK_HST_NM=`find $idir -name hostname.txt`
         CK_LSC_NM=`find $idir -name lscpu.txt`
+#echo "$0.$LINENO bye"
+#exit 1
         if [ "$CK_HST_NM" == "" ]; then
           CK_HST_NM=`find $idir/.. -name hostname.txt`
           CK_LSC_NM=`find $idir/.. -name lscpu.txt`
@@ -955,7 +993,7 @@ if [ "$SKU_LEN" != "0" ]; then
           echo "$0.$LINENO got LZC_FL= $LZC_FL"
            echo $0.$LINENO awk -v infile="$LZC_FL" -v host="$GOT_HST" -v sku_in="${SKU[@]}" -v cpu_fam="$GOT_CPU" -v cpu2017_thrds="$CPU2017_THRDS"
         fi
-                  LZC_OUT=$(awk -v infile="$LZC_FL" -v host="$GOT_HST" -v sku_in="${SKU[@]}" -v cpu_fam="$GOT_CPU" -v cpu2017_thrds="$CPU2017_THRDS" '
+        LZC_OUT=$(awk -v infile="$LZC_FL" -v host="$GOT_HST" -v sku_in="${SKU[@]}" -v cpu_fam="$GOT_CPU" -v cpu2017_thrds="$CPU2017_THRDS" '
           BEGIN{
             #printf("host= %s, sku= %s, cpu_fam= %s\n", host, sku_in, cpu_fam) > "/dev/stderr";
             str = tolower(cpu_fam);
@@ -964,7 +1002,7 @@ if [ "$SKU_LEN" != "0" ]; then
             if (index(str, "broad") > 0) { cpu = "bdw"; }
             if (index(str, "milan") > 0) { cpu = "mln"; }
             if (index(str, "haswell") > 0) { cpu = "hsw"; }
-            if (index(infile, "lzc_info") > 0) {
+            if (index(infile, "lzc_info.txt") > 0) {
               mode="lzc";
               lzc_got_hdr = 0;
             } else {
@@ -974,6 +1012,15 @@ if [ "$SKU_LEN" != "0" ]; then
             got_match=0;
           }
           {
+            if (index(FILENAME, "lzc_info.lst") > 0) {
+              mode="lzc2";
+              if ($1=="Hostname" && $2 == host) { got_match = 1; chassis = "";}
+              if ( got_match == 1 &&  $1 == "Failure" && $2 == "domains" && index($NF, "uber-chassis:") == 1) {
+                chassis = substr($NF, index($NF,":")+1);
+                chassis = substr(chassis, 1, length(chassis)-1);
+              }
+              if ($1=="Services") { got_match = 0;}
+            }
             if (mode == "lzc") {
               if (lzc_got_hdr == 0 && index($0, ";") > 0) {
                 n_hdr_lzc = split($0, hdr_lzc, ";");
@@ -1050,6 +1097,9 @@ if [ "$SKU_LEN" != "0" ]; then
               if (lzc_lkup["ProviderType"] != "") {
                 sv[host_i,"ptyp"] = $(lzc_lkup["ProviderType"]);
               }
+              if (lzc_lkup["Layout"] != "") {
+                sv[host_i,"layout"] = $(lzc_lkup["Layout"]);
+              }
               if (lzc_lkup["Type"] != "") {
                 sv[host_i,"typ"] = $(lzc_lkup["Type"]);
               }
@@ -1097,6 +1147,8 @@ if [ "$SKU_LEN" != "0" ]; then
               printf("cpu_shrt;%s\n", cpu);
               printf("services;%s\n", sv[i,"services"]);
               printf("cpu2017_threads;%s\n", cpu2017_thrds);
+              printf("chassis;%s\n", chassis);
+              printf("layout;%s\n", sv[i,"layout"]);
               gsub("%cpu_shrt%", cpu, sku_in);
               gsub("%host%", host, sku_in);
               if ((i,"sku") in sv) {
@@ -1118,7 +1170,7 @@ if [ "$SKU_LEN" != "0" ]; then
               printf("sku;%s\n", sku_in);
             }
             exit(0);
-          } ' $LZC_FL)
+          } ' $LZC_FL $LZC_FL2)
           RC=$?
            echo $0.$LINENO awk -v infile="$LZC_FL" -v host="$GOT_HST" -v sku_in="${SKU[@]}" -v cpu_fam="$GOT_CPU" -v cpu2017_thrds="$CPU2017_THRDS"
           ck_last_rc $RC $LINENO
@@ -1304,9 +1356,14 @@ for i in $LST; do
     OPT_PH=" -P $PHASE_FILE "
  fi
  OPT_BEG_TM=
- if [ "$TS_INIT" != "" ]; then
-    OPT_BEG_TM=" -b $TS_INIT "
- fi
+ # The (now commented out) lines below make everything (all the data in all the dirs) relative to one epoch timestamp.
+ # This is good if all the jobs started at the same time and you want to align all the charts to a common timeline.
+ # But if some runs are started later (say the next day) then this causes silently getting most data skipped (because it ended before TS_INIT).
+ # so I commented it out for now.
+ #if [ "$TS_INIT" != "" ]; then
+ #   OPT_BEG_TM=" -b $TS_INIT "
+ # echo "$0.$LINENO ____got ts_init OPT_BEG_TM=\"$TS_INIT\"" >&2
+ #fi
  if [ "$BEG_TM_IN" != "" ]; then
     OPT_BEG_TM=" -b $BEG_TM_IN "
     echo "$0.$LINENO: BEG_TM= $BEG_TM_IN"
