@@ -6,9 +6,12 @@
 OSTYP=$OSTYPE
 if [[ "$OSTYP" == "linux-gnu"* ]]; then
    DATE_CMD="date"
+   PS_PPID="ps -fl --ppid "
 elif [[ "$OSTYP" == "darwin"* ]]; then
    # Mac OSX
    DATE_CMD="gdate"
+   # have to do brew install pstree
+   PS_PPID="pstree -p "
 fi
 #echo "os= $OSTYP"
 #echo "date_cmd= $DATE_CMD"
@@ -794,7 +797,7 @@ function waitForJobs() {
     #local new_mxJobs=$(ps --ppid $$ | awk -v mxJobs=$mxJobs '{ if (NF==4 && $NF == "bash") { mxJobs++;}}END{print mxJobs;}')
     if [ "$VERBOSE" -gt "0" ]; then
     echo "$0.$LINENO got background jobs= $runningJobs. Initially wait till <= $mxJobs but add in just bash sessions so wait till <= $new_mxJobs"
-        ps -fl --ppid $$
+        $PS_PPID $$
     fi
 
     while [[ "${runningJobs}" -gt "$mxJobs" ]]; do
@@ -808,9 +811,12 @@ function waitForJobs() {
       if [ "$GOT_QUIT" == "1" ]; then
         echo "jobs: debug info for seeing which job is still running"
         jobs
-        echo "ps  --ppid $$ > tmp44a.jnk"
-        ps -fl --ppid $$
-        ps -fl --ppid $$ > tmp44a.jnk
+        echo "$PS_PPID $$ > tmp44a.jnk"
+        $PS_PPID $$
+        $PS_PPID $$ > tmp44a.jnk
+        if [[ "$OSTYP" == "darwin"* ]]; then
+          ps -axwwo user,pid,ppid,pgid,command |awk -v ppid=$$ '{if( $3 == ppid && index($0, "axwwo") ==0 && index($0," grep "ppid) == 0){print $0;}}'
+        fi
         echo "jobs -p"
         jobs -p
         echo "jobs -l"
