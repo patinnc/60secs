@@ -788,15 +788,33 @@ ssh_cmd()
 function waitForJobs() {
     runningJobs=$(jobs | wc -l)
     local cntr=0
-    while [[ "${runningJobs}" -gt "${BKGRND_TASKS_MAX}" ]]; do
+    local fromLine=$1
+    local mxJobs=$BKGRND_TASKS_MAX
+    #local new_mxJobs=$(jobs -l | awk -v mxJobs=$mxJobs '{ if (NF==4 && $NF == "bash") { mxJobs++;}}END{print mxJobs;}')
+    #local new_mxJobs=$(ps --ppid $$ | awk -v mxJobs=$mxJobs '{ if (NF==4 && $NF == "bash") { mxJobs++;}}END{print mxJobs;}')
+    if [ "$VERBOSE" -gt "0" ]; then
+    echo "$0.$LINENO got background jobs= $runningJobs. Initially wait till <= $mxJobs but add in just bash sessions so wait till <= $new_mxJobs"
+        ps -fl --ppid $$
+    fi
+
+    while [[ "${runningJobs}" -gt "$mxJobs" ]]; do
       runningJobs=$(jobs | wc -l)
-      echo "Waiting while ${runningJobs} background jobs to > $BKGRND_TASKS_MAX"
+      echo "Waiting while ${runningJobs} background jobs to > $BKGRND_TASKS_MAX from line $fromLine"
       sleep 1
       #if [ "$cntr" == "0" ]; then
         jobs
       #fi
       cntr=$((cntr+1))
       if [ "$GOT_QUIT" == "1" ]; then
+        echo "jobs: debug info for seeing which job is still running"
+        jobs
+        echo "ps  --ppid $$ > tmp44a.jnk"
+        ps -fl --ppid $$
+        ps -fl --ppid $$ > tmp44a.jnk
+        echo "jobs -p"
+        jobs -p
+        echo "jobs -l"
+        jobs -l
         break
       fi
     done
@@ -1257,7 +1275,7 @@ for i in $HOSTS; do
   echo "$LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ==================="
   fi
     if [ "$DRY_RUN" == "n" ]; then
-        waitForJobs
+        waitForJobs $LINENO
           OUT_FILE=`printf "$WORK_DIR/$WORK_TMP" $NUM_HOST`
           if [[ "$got_pcmd_or_pfetch" == "1" ]] && [[ -e "$OUT_FILE" ]]; then
             rm "$OUT_FILE"
@@ -1454,7 +1472,7 @@ for i in $HOSTS; do
     echo $0.$LINENO scp $nm  $SSH_HOST "$SSH_CMD"
     if [ "$DRY_RUN" == "n" ]; then
          #scp $SSH_HOST "$SSH_CMD"
-         waitForJobs
+         waitForJobs $LINENO
          if [ "$nm" == "127.0.0.1" ]; then
            cp $TAR_GZ $BMARK_ROOT/
          else
@@ -1523,7 +1541,7 @@ for i in $HOSTS; do
     ssh_cmd $nm "tar xzf ${TAR_RT}$filenm -C $BMARK_ROOT"  "-l"
     echo $0.$LINENO ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
     if [ "$DRY_RUN" == "n" ]; then
-         waitForJobs
+         waitForJobs $LINENO
          if [ "$do_bkgrnd" == "1" ]; then
            ssh $OPT_KEYS $SSH_HOST "$SSH_CMD" &
          else
@@ -1833,7 +1851,7 @@ for i in $HOSTS; do
           echo ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
           if [ "$DRY_RUN" == "n" ]; then
               if [ "$do_bkgrnd" == "1" ]; then
-                waitForJobs
+                waitForJobs $LINENO
                 ssh $OPT_KEYS $SSH_HOST "$SSH_CMD" &
               else
                 #      ssh  $OPT_KEYS $SSH_HOST "$SSH_CMD"
@@ -2053,7 +2071,7 @@ for i in $HOSTS; do
               if [ "$do_bkgrnd" == "1" ]; then
                 if [ "$NUM_HOST" == "0" ]; then
                   wait
-                  waitForJobs
+                  waitForJobs $LINENO
                 fi
               fi
               if [ 1 -eq 2 ]; then
@@ -2643,7 +2661,7 @@ done
 echo "$0.$LINENO waitForJobs now"
 SV_BKGRND_TASKS_MAX=$BKGRND_TASKS_MAX
 BKGRND_TASKS_MAX=0
-waitForJobs
+waitForJobs $LINENO
 BKGRND_TASKS_MAX=$SV_BKGRND_TASKS_MAX
 echo "$0.$LINENO waitForJobs done "
 runningJobs=$(jobs | wc -l)
