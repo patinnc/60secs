@@ -1011,6 +1011,7 @@ if [ "$SKU_LEN" != "0" ]; then
 
             got_match=0;
           }
+          #{ printf("lzc ln= %s\n", $0); }
           {
             if (index(FILENAME, "lzc_info.lst") > 0) {
               mode="lzc2";
@@ -1040,9 +1041,9 @@ if [ "$SKU_LEN" != "0" ]; then
               }
               if (n_hdr_lzc > 0 && index($0,";") > 0) {
                 n_lzc = split($0, ln_lzc, ";");
-                for (i=1; i <= n_lzc; i++) { $i = ln_lzc[i];}
-                $1 = $1;
-                $0 = $0;
+                #for (i=1; i <= n_lzc; i++) { $i = ln_lzc[i];}
+                #$1 = $1;
+                #$0 = $0;
               }
               if (n_hdr_lzc > 0 && index($0,";") == 0) {
                 n_lzc = split($0, ln_lzc, " ");
@@ -1056,7 +1057,8 @@ if [ "$SKU_LEN" != "0" ]; then
              n_lzc = split($0, ln_lzc, ";");
              if (ln_lzc[1] == hdr_lzc[1]) { next; }
              #if (n_lzc < n_hdr_lzc) { next;}
-             hst = $(lzc_lkup["Hostname"]);
+             hst = ln_lzc[lzc_lkup["Hostname"]];
+             printf("got lzc hst= %s\n", hst) > "/dev/stderr";
              if (!(hst in host_list)) {
               host_list[hst] = ++host_mx;
               host_lkup[host_mx] = hst;
@@ -1066,7 +1068,6 @@ if [ "$SKU_LEN" != "0" ]; then
                got_match = 1;
              }
           }
-#Hostname;ServerType;Manufacturer;Model;Zone;Group;UUID;ProviderType;Layout;Type;Status;DrainDueDate;IsCrane;ProviderZone;ProviderID
           1 == 2 && ($1 == "Hostname" || $1 == "Name:") {
             got_match = 0;
             #  printf("______got lzc host= %s, lkfor host= %s\n", $2, host) > "/dev/stderr";
@@ -1083,25 +1084,36 @@ if [ "$SKU_LEN" != "0" ]; then
             if (mode == "lzc" && n_hdr_lzc > 0 && $1 != hdr_lzc[1]) {
               #printf("++++++++got_lzc line= %s\n", $0) > "/dev/stderr";
               if (lzc_lkup["Provider"] != "") {
-                prov_typ = $(lzc_lkup["Provider"]);
+                prov_typ = ln_lzc[lzc_lkup["Provider"]];
               }
               if (lzc_lkup["IsCrane"] != "") {
-                is_crane = $(lzc_lkup["IsCrane"]);
+                is_crane = ln_lzc[lzc_lkup["IsCrane"]];
               }
               if (lzc_lkup["ServerType"] != "") {
-                sv[host_i,"sku"] = $(lzc_lkup["ServerType"]);
+                sv[host_i,"sku"] = ln_lzc[lzc_lkup["ServerType"]];
               }
               if (lzc_lkup["Manufacturer"] != "") {
-                sv[host_i,"maker"] = $(lzc_lkup["Manufacturer"]);
+                sv[host_i,"maker"] = ln_lzc[lzc_lkup["Manufacturer"]];
               }
               if (lzc_lkup["ProviderType"] != "") {
-                sv[host_i,"ptyp"] = $(lzc_lkup["ProviderType"]);
+                sv[host_i,"ptyp"] = ln_lzc[lzc_lkup["ProviderType"]];
               }
               if (lzc_lkup["Layout"] != "") {
-                sv[host_i,"layout"] = $(lzc_lkup["Layout"]);
+                sv[host_i,"layout"] = ln_lzc[lzc_lkup["Layout"]];
+              }
+              if (lzc_lkup["FailureDomains"] != "") {
+                sv[host_i,"failuredomains"] = ln_lzc[lzc_lkup["FailureDomains"]];
+                v = sv[host_i,"failuredomains"];
+                v1 = "uber-chassis:"
+                pos = index(v, v1);
+                if (pos > 0) {
+                  v = substr(v, pos+length(v1));
+                  v = substr(v, 1, length(v)-1);
+                  sv[host_i,"chassis"] = v;
+                }
               }
               if (lzc_lkup["Type"] != "") {
-                sv[host_i,"typ"] = $(lzc_lkup["Type"]);
+                sv[host_i,"typ"] = ln_lzc[lzc_lkup["Type"]];
               }
               if (1==2) {
               if ($1 == "Type") {
@@ -1147,8 +1159,9 @@ if [ "$SKU_LEN" != "0" ]; then
               printf("cpu_shrt;%s\n", cpu);
               printf("services;%s\n", sv[i,"services"]);
               printf("cpu2017_threads;%s\n", cpu2017_thrds);
-              printf("chassis;%s\n", chassis);
+              printf("chassis;%s\n", sv[i,"chassis"]);
               printf("layout;%s\n", sv[i,"layout"]);
+              printf("failuredomains;%s\n", sv[i,"failuredomains"]);
               gsub("%cpu_shrt%", cpu, sku_in);
               gsub("%host%", host, sku_in);
               if ((i,"sku") in sv) {
@@ -1461,11 +1474,11 @@ for i in $LST; do
 
    echo "$0.$LINENO: $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p \"$OPT_P\" $OPT_DEBUG $OPT_REDUCE $OPT_SKIP $OPT_M -d . $OPT_BEG_TM $OPT_END_TM -i \"*.png\" -s $SUM_FILE -x $XLS.xlsx -o \"$OPT_OPT\" $OPT_PH -w $JOB_WORK_DIR -t $DIR" > $SYS_2_TSV_STDOUT_FILE
    if [ "$BACKGROUND" -le "0" ]; then
-          $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$OPT_P" $OPT_DEBUG $OPT_REDUCE $OPT_SKIP $OPT_M -d . $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o "$OPT_OPT" $OPT_PH -w $JOB_WORK_DIR -t $DIR >> $SYS_2_TSV_STDOUT_FILE 2> SYS_2_TSV_STDERR_FILE
+          $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$OPT_P" $OPT_DEBUG $OPT_REDUCE $OPT_SKIP $OPT_M -d . $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o "$OPT_OPT" $OPT_PH -w $JOB_WORK_DIR -t $DIR >> $SYS_2_TSV_STDOUT_FILE 2> $SYS_2_TSV_STDERR_FILE
           RC=$?
           ck_last_rc $RC $LINENO
    else
-          $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$OPT_P" $OPT_DEBUG $OPT_REDUCE $OPT_SKIP $OPT_M -d . $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o "$OPT_OPT" $OPT_PH -w $JOB_WORK_DIR -t $DIR >> $SYS_2_TSV_STDOUT_FILE 2> SYS_2_TSV_STDERR_FILE &
+          $SCR_DIR/sys_2_tsv.sh -B $CDIR $OPT_a $OPT_A $OPT_G -j $JOB_ID -p "$OPT_P" $OPT_DEBUG $OPT_REDUCE $OPT_SKIP $OPT_M -d . $OPT_BEG_TM $OPT_END_TM -i "*.png" -s $SUM_FILE -x $XLS.xlsx -o "$OPT_OPT" $OPT_PH -w $JOB_WORK_DIR -t $DIR >> $SYS_2_TSV_STDOUT_FILE 2> $SYS_2_TSV_STDERR_FILE &
           LPID=$!
           RC=$?
           BK_DIR[$LPID]=$i
