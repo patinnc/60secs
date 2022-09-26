@@ -483,6 +483,14 @@ if [ -e $DIR/../run.log ]; then
 fi
 BEG=`cat $DIR/60secs.log | $AWK_BIN '{printf("%s\n", $(NF));exit;}'`
 TS_INITIAL=$BEG
+if [ "$BEG" == "" ]; then
+if [ -e $DIR/run.log ]; then
+  TS_INITIAL=`cat $DIR/run.log | $AWK_BIN '/ start /{printf("%d\n", $2);exit;}'`
+  BEG=`cat $DIR/run.log | $AWK_BIN '/ start /{printf("%d\n", $2);exit;}'`
+  TST_END_TM=`cat $DIR/run.log | $AWK_BIN '/ end /{printf("%d\n", $2);exit;}'`
+fi
+echo "$0.$LINENO got dir= $DIR for run.log ts_initial= $TS_INITIAL  pwd= $(pwd)"
+fi
 BEG_ADJ=`cat $DIR/60secs.log | $AWK_BIN -v script="$0.$LINENO.awk" '
    function dt_to_epoch(date_str, offset) {
    # started on Tue Dec 10 23:23:30 2019
@@ -3518,7 +3526,9 @@ row += trows;
     TMP_SUM="$WORK_DIR/tmp_sum.txt"
     echo "$SCR_DIR/rd_infra_cputime.sh -t "$TS_INITIAL" -b "$BEG" -e "$END_TM" -w $WORK_DIR -O \"$OPTIONS\" -f $i -n $INCPUS -S $TMP_SUM -m $WORK_DIR/$MUTTLEY_OUT_FILE"
           $SCR_DIR/rd_infra_cputime.sh -t "$TS_INITIAL" -b "$BEG" -e "$END_TM" -w $WORK_DIR -O "$OPTIONS"   -f $i -n $INCPUS -S $TMP_SUM -m $WORK_DIR/$MUTTLEY_OUT_FILE
-          ck_last_rc $? $LINENO
+          RC=$?
+          echo $0.$LINENO got rc= $RC after $SCR_DIR/rd_infra_cputime.sh
+          ck_last_rc $RC $LINENO
   #echo "$0.$LINENO do cp sum.tsv ckck_sum.tsv"
   #cp work_dir/0/0/sum.tsv ckck_sum.tsv
     if [ -e $TMP_SUM ]; then
