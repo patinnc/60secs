@@ -1937,6 +1937,7 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
   END {
     #ofile="tmp.tsv";
     if (rc != 0) {
+      printf("got rc= %s for script_nm= %s. bye\n", rc, script_nm) > "/dev/stderr";
       exit(rc);
     }
     if (idle_mx > 0) {
@@ -1944,7 +1945,7 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
       sum = 0.0;
       if (elap_tm == 0.0) {
          printf("skipping infra_file do to idle_mx= %s, arg[1]= %s, cur_dir= %s\n", idle_mx, ARGV[1], cur_dir);
-         exit;
+         exit 3;
       }
       for (i=1; i <= proc_mx; i++) {
          if (elap_tm > 0.0) {
@@ -2285,7 +2286,7 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
     printf(" sv_uptm dff %.2f secs\n", (sv_uptm[idle_mx]-sv_uptm[1]));
 
     printf("cg_stat_max= %d\n", cg_stat_mx);
-    cg_stat_elap_tm = cg_stat_ts[cg_stat_ts_mx]-cg_stat_ts[2]; # start from 2 since the 1st interval is used as 'prev'
+    cg_stat_elap_tm = cg_stat_ts[cg_stat_ts_mx]-cg_stat_ts[2]; # start from 2 since the 1st interval is used as prev
     if ( cg_stat_elap_tm > 0) {
       printf("cg_stat_tot_tm= %f elap_tm= %f %%cpu_busyTL= %f\n", cg_stat_tot_tm, cg_stat_elap_tm, 100*cg_stat_tot_tm/cg_stat_elap_tm);
       printf("cg_stat_tot_tm= %f elap_tm= %f %%cpu_busyTL= %f %%cpu_usrTL= %f %%cpu_sysTL= %f\n",
@@ -2293,6 +2294,10 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
         100*cg_stat_tot_tm/cg_stat_elap_tm,
         100*cg_stat_tot_tm_usr/cg_stat_elap_tm,
         100*cg_stat_tot_tm_sys/cg_stat_elap_tm);
+    } else {
+     printf("problem: cg_stat_elap_tm= %s cg_stat_ts[%s]= %s cg_stat_ts[2]= %s, elap_tmc= %s\n",
+       cg_stat_elap_tm, cg_stat_ts_mx, cg_stat_ts[cg_stat_ts_mx], cg_stat_ts[2], elap_tm);
+     #cg_stat_elap_tm = elap_tm;
     }
     v_tot = 0;
     v_tot1 = 0;
@@ -2326,7 +2331,7 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
       v3_usr = 0;
       v3_sys = 0;
       if (v1 > 0) {
-      v3     = 100.0* v / v1;
+      v3     = 100.0* v / v1
       v3_usr = 100.0* cg_stat_data[i, "cumu_usr"] / v1;
       v3_sys = 100.0* cg_stat_data[i, "cumu_sys"] / v1;
       }
@@ -2452,9 +2457,14 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
       ck_tot += v;
     }
     asorti(idx, res_i, "arr_in_compare");
+    if (cg_stat_elap_tm > 0) {
     for (j=1; j <= cg_stat2_nm_list_mx; j++) {
       i = res_i[j];
-      fctr = 100.0/cg_stat_elap_tm;
+      if (cg_stat_elap_tm > 0) {
+        fctr = 100.0/cg_stat_elap_tm;
+      } else {
+        fctr = 0;
+      }
       nm = cg_stat2_nm_lkup[i];
       v = cg_stat2_nm_data[i,mk];
       ck_v = v / cg_ttot[mk];
@@ -2485,10 +2495,12 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
          fctr*cg_stat2_nm_data[i,1], fctr*cg_stat2_nm_data[i,2], fctr*cg_stat2_nm_data[i,3], fctr*cg_stat2_nm_data[i,4], nm);
       printf("%s\t%s\t%f\t%s\n", hdr, hdr, fctr*v, hdr2) > sum_file;
     }
+    }
     printf("above cg_stat2_nm_data table is total cpu_usageTL %s for that service. Doesnt take into account you might have > 1 container for service. tot cpuTL= %.3f\n", ms, fctr*ck_tot);
     }
     }
 
+    if (cg_stat_elap_tm > 0) {
     for (i=1; i <= cg_stat_nm_list_mx; i++) {
       nm = cg_stat_nm_lkup[i];
       v_rps = 0;
@@ -2505,6 +2517,7 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
       v4 = cg_stat_nm_data[i, "occurs"];
       printf("cg_stat_nm[%d] cpu_secs= %10.2f thr_secs= %8.4f  rps= %8d ms_per_req= %8.2f %%busy= %8.2f ms/req/cntr= %8.2f %%busy/cntr= %8.2f cntr_occurs= %4d nm= %s\n", i,
         cg_stat_nm_data[i, "cumu"], cg_stat_nm_data[i, "thr_cumu"],  v_rps, ms_per_req, v3, ms_per_req/v4, v3/v4,  v4, nm);
+    }
     }
 
         delete arr_in;
@@ -2689,7 +2702,6 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
     #srvcs_mx = 0;
     if (ncg_list_mx > 0) {
     for (cg=1; cg <= 4; cg++) {
-      trow++;
       if (cg == 1) { str1 = "docker all"; }
       if (cg == 2) { str1 = "services"; }
       if (cg == 3) { str1 = "services & docker"; }
@@ -2706,7 +2718,7 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
         str1 = "services & docker";
         str = "cgrps "str1" %cpu throttled usage (100=1cpu_busy)";
       }
-      printf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", str, "infra procs") > ofile;
+      title_text = sprintf("title\t%s\tsheet\t%s\ttype\tscatter_straight\n", str, "infra procs");
       hstr = sprintf("epoch\tts");
       cg_cols=0;
       for(j=1; j <= ncg_list_mx; j++) {
@@ -2779,6 +2791,9 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
         #printf("ch hdr[%d] cg= %d, nm= %s title= %s\n", cg_cols, cg, nm, str);
         hstr = hstr sprintf("\t%s", nm);
       }
+      if (cg_cols == 0) { continue; }
+      trow++;
+      printf("%s", title_text) > ofile;
       if ( use_top_pct_cpu == 0) {
         top_fctr = 1.0;
       } else {
@@ -3771,11 +3786,13 @@ function do_cgrps_val_arr(cg,      ii, nm, my_n, str, nstr, j, kk, strp) {
     if (sum_file != "") {
       close(sum_file);
     }
+    printf("%s got to end rc= %s\n", script_nm, rc);
+    printf("%s got to end rc= %s\n", script_nm, rc) > "/dev/stderr";
     close(ofile);
     exit(0);
   }
   ' $IN_FL > $my_tmp_output_file
   RC=$?
-  ck_last_rc $? $LINENO
+  ck_last_rc $RC $LINENO
 exit $RC
 
