@@ -1779,7 +1779,7 @@ for i in $HOSTS; do
       RUN_FL="./${BMARK_SUBDIR}/run_compute.sh"
       mk_run_fl "$RUN_FL" "$LOG_FL_PFX"
       ssh_cmd $nm "cd $BMARK_ROOT; nohup $RUN_FL -c $CFG_DIR -p $NW_PROJ $DR_O $QUIT_STR &> ${LOG_FL} &"  "-l"
-      echo ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
+      echo ssh -n -t $OPT_KEYS $SSH_HOST "$SSH_CMD"
       if [ "$DRY_RUN" == "n" ]; then
           # ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
           echo "note that prev ver of cmd at $LINENO didn't have ssh -t" > /dev/stderr
@@ -1787,9 +1787,9 @@ for i in $HOSTS; do
             #$SSH_CMD
             cd $BMARK_ROOT; nohup $RUN_FL -c $CFG_DIR -p $NW_PROJ $DR_O $QUIT_STR &> ${LOG_FL} &
           else
-            $SSH_PFX  $ADD_T $SSH_HOST "$SSH_CMD"
+            $SSH_PFX -n -t $ADD_T $SSH_HOST "$SSH_CMD"
           fi
-         dyno_log RUN ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
+         dyno_log RUN ssh -n -t $OPT_KEYS $SSH_HOST "$SSH_CMD"
       fi
     else
       if [[ $RUN_CMDS == *"run_fio"* ]]; then
@@ -1804,9 +1804,9 @@ for i in $HOSTS; do
             # $SSH_CMD
             cd $BMARK_ROOT; nohup $RUN_FL -c $CFG_DIR -p $NW_PROJ $QUIT_STR &> ${LOG_FL} &
           else
-            $SSH_PFX  $ADD_T $SSH_HOST "$SSH_CMD"
+            $SSH_PFX -n -t  $ADD_T $SSH_HOST "$SSH_CMD"
           fi
-         dyno_log RUN ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
+         dyno_log RUN ssh -n -t $OPT_KEYS $SSH_HOST "$SSH_CMD"
         fi
       fi
       if [[ $RUN_CMDS == *"run_disk"* ]]; then
@@ -1822,9 +1822,9 @@ for i in $HOSTS; do
             #$SSH_CMD
             cd $BMARK_ROOT; nohup $RUN_FL -c $CFG_DIR -p $NW_PROJ  $QUIT_STR &> ${LOG_FL} &
           else
-            $SSH_PFX  $ADD_T $SSH_HOST "$SSH_CMD"
+            $SSH_PFX -n -t $ADD_T $SSH_HOST "$SSH_CMD"
           fi
-         dyno_log RUN ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
+         dyno_log RUN ssh -n -t $OPT_KEYS $SSH_HOST "$SSH_CMD"
         fi
       else
         if [[ $RUN_CMDS == *"run_custom"* ]]; then
@@ -1843,9 +1843,9 @@ for i in $HOSTS; do
             # $SSH_CMD
             cd $BMARK_ROOT; nohup $RUN_FL -c $CFG_DIR -p $NW_PROJ $DR_O $QUIT_STR $SCRIPT_OPT &> ${LOG_FL} &
           else
-            $SSH_PFX  $ADD_T $SSH_HOST "$SSH_CMD"
+            $SSH_PFX -n -t $ADD_T $SSH_HOST "$SSH_CMD"
           fi
-          dyno_log RUN ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
+          dyno_log RUN ssh -n -t $OPT_KEYS $SSH_HOST "$SSH_CMD"
           fi
         fi
         if [[ $RUN_CMDS == *"run_cmd"* ]]; then
@@ -1874,11 +1874,11 @@ for i in $HOSTS; do
                   #$SSH_CMD
                   cd $BMARK_ROOT; nohup $RUN_FL -c $CFG_DIR -p $NW_PROJ $QUIT_STR -W $WATCH_IN &> ${LOG_FL} &
                 else
-                  $SSH_PFX  $ADD_T $SSH_HOST "$SSH_CMD"
+                  $SSH_PFX -n -t $ADD_T $SSH_HOST "$SSH_CMD"
                 fi
               fi
               #          ssh  $OPT_KEYS $SSH_HOST "$SSH_CMD"
-               dyno_log RUN ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
+               dyno_log RUN ssh -n -t $OPT_KEYS $SSH_HOST "$SSH_CMD"
           fi
         fi
         if [[ $RUN_CMDS == *"run_sysinfo"* ]]; then
@@ -1895,9 +1895,9 @@ for i in $HOSTS; do
                #$SSH_CMD
                cd $BMARK_ROOT; nohup $RUN_FL -c $CFG_DIR -p $NW_PROJ $QUIT_STR &> ${LOG_FL} &
              else
-               $SSH_PFX  $ADD_T $SSH_HOST "$SSH_CMD"
+               $SSH_PFX -n -t $ADD_T $SSH_HOST "$SSH_CMD"
              fi
-             dyno_log RUN ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
+             dyno_log RUN ssh -n -t $OPT_KEYS $SSH_HOST "$SSH_CMD"
           fi
         fi
         if [[ $RUN_CMDS == *"run_specjbb"* ]]; then
@@ -1908,7 +1908,7 @@ for i in $HOSTS; do
             OPT_S=" -s $SCRIPT"
           fi
           if [ "$ITERS" != "" ]; then
-            OPT_S=" $OPT_S -n $ITERS "
+            OPT_S=" $OPT_S -n -t $ITERS "
           fi
           ssh_cmd $nm "cd $BMARK_ROOT; nohup $RUN_FL -c $CFG_DIR -p $NW_PROJ $QUIT_STR $OPT_S &> ${LOG_FL} &"  "-l"
           echo ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
@@ -1919,9 +1919,9 @@ for i in $HOSTS; do
                #$SSH_CMD
                cd $BMARK_ROOT; nohup $RUN_FL -c $CFG_DIR -p $NW_PROJ $QUIT_STR $OPT_S &> ${LOG_FL} &
              else
-               $SSH_PFX  $ADD_T $SSH_HOST "$SSH_CMD"
+               $SSH_PFX -n -t $ADD_T $SSH_HOST "$SSH_CMD"
              fi
-             dyno_log RUN ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
+             dyno_log RUN ssh -n -t $OPT_KEYS $SSH_HOST "$SSH_CMD"
           fi
         fi
         if [[ $RUN_CMDS == *"run_specint"* ]]; then
@@ -1936,9 +1936,9 @@ for i in $HOSTS; do
                #$SSH_CMD
                cd $BMARK_ROOT; nohup $RUN_FL -c $CFG_DIR -p $NW_PROJ $QUIT_STR &> ${LOG_FL} &
              else
-               $SSH_PFX  $ADD_T $SSH_HOST "$SSH_CMD"
+               $SSH_PFX -n -t $ADD_T $SSH_HOST "$SSH_CMD"
              fi
-             dyno_log RUN ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
+             dyno_log RUN ssh -n -t $OPT_KEYS $SSH_HOST "$SSH_CMD"
           fi
         fi
         if [[ $RUN_CMDS == *"run_stream"* ]]; then
@@ -1953,9 +1953,9 @@ for i in $HOSTS; do
                #$SSH_CMD
                cd $BMARK_ROOT; nohup $RUN_FL -c $CFG_DIR -p $NW_PROJ $QUIT_STR &> ${LOG_FL} &
              else
-               $SSH_PFX  $ADD_T $SSH_HOST "$SSH_CMD"
+               $SSH_PFX -n -t $ADD_T $SSH_HOST "$SSH_CMD"
              fi
-             dyno_log RUN ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
+             dyno_log RUN ssh -n -t $OPT_KEYS $SSH_HOST "$SSH_CMD"
           fi
         fi
         if [[ $RUN_CMDS == *"run_ncu"* ]]; then
@@ -1970,9 +1970,9 @@ for i in $HOSTS; do
                #$SSH_CMD
                cd $BMARK_ROOT; nohup $RUN_FL -p $NW_PROJ/run &> ${LOG_FL} &
              else
-               $SSH_PFX  $ADD_T $SSH_HOST "$SSH_CMD"
+               $SSH_PFX -n -t $ADD_T $SSH_HOST "$SSH_CMD"
              fi
-             dyno_log RUN ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
+             dyno_log RUN ssh -n -t $OPT_KEYS $SSH_HOST "$SSH_CMD"
           fi
         fi
         DO_GB=0
@@ -1994,9 +1994,9 @@ for i in $HOSTS; do
                #$SSH_CMD
                cd $BMARK_ROOT; nohup $RUN_FL -c $CFG_DIR -p $NW_PROJ $QUIT_STR &> ${LOG_FL} &
              else
-               $SSH_PFX  $ADD_T $SSH_HOST "$SSH_CMD"
+               $SSH_PFX -n -t  $ADD_T $SSH_HOST "$SSH_CMD"
              fi
-             dyno_log RUN ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
+             dyno_log RUN ssh -n -t $OPT_KEYS $SSH_HOST "$SSH_CMD"
           fi
         fi
       fi
@@ -2161,9 +2161,9 @@ for i in $HOSTS; do
            RESP=`bash -c "$SSH_CMD"`
          else
            if [ "$do_bkgrnd" == "1" ]; then
-             echo ssh $OPT_KEYS -n ${SSH_HOST} "$SSH_CMD" __ $OUT_FILE
-             ssh  $OPT_KEYS -n ${SSH_HOST} "$SSH_CMD" &> $OUT_FILE &
-             #ssh $OPT_KEYS -n ${FTCH_ARR[$NUM_HOST,2,0]} "${FTCH_ARR[$NUM_HOST,2,1]}" &> $OUT_FILE &
+             echo ssh $OPT_KEYS -n -t ${SSH_HOST} "$SSH_CMD" __ $OUT_FILE
+             ssh  $OPT_KEYS -n -t ${SSH_HOST} "$SSH_CMD" &> $OUT_FILE &
+             #ssh $OPT_KEYS -n -t ${FTCH_ARR[$NUM_HOST,2,0]} "${FTCH_ARR[$NUM_HOST,2,1]}" &> $OUT_FILE &
            else
              FTCH_RSP1[$NUM_HOST]=`ssh $OPT_KEYS ${SSH_HOST} "$SSH_CMD"`
            fi
@@ -2201,8 +2201,8 @@ for i in $HOSTS; do
          else
             if [ "$do_bkgrnd" == "1" ]; then
               OUT_FILE=`printf "$WORK_DIR/a$WORK_TMP" $NUM_HOST`
-              echo $SSH_PFX -n $SSH_HOST "$SSH_CMD" __ $OUT_FILE
-              $SSH_PFX -n $SSH_HOST "$SSH_CMD" &> $OUT_FILE &
+              echo $SSH_PFX -n -t $SSH_HOST "$SSH_CMD" __ $OUT_FILE
+              $SSH_PFX -n -t $SSH_HOST "$SSH_CMD" &> $OUT_FILE &
             else
               $SSH_PFX $SSH_HOST "$SSH_CMD"
             fi
@@ -2234,8 +2234,8 @@ for i in $HOSTS; do
          else
            #RESP=`ssh $OPT_KEYS ${SSH_HOST} "$SSH_CMD"`
            if [ "$do_bkgrnd" == "1" ]; then
-              echo ssh $OPT_KEYS -n ${SSH_HOST} "$SSH_CMD" __ $OUT_FILE
-              ssh  $OPT_KEYS -n ${SSH_HOST} "$SSH_CMD" &> $OUT_FILE &
+              echo ssh $OPT_KEYS -n -t ${SSH_HOST} "$SSH_CMD" __ $OUT_FILE
+              ssh  $OPT_KEYS -n -t ${SSH_HOST} "$SSH_CMD" &> $OUT_FILE &
            else
               FTCH_RSP2[$NUM_HOST]=`ssh $OPT_KEYS ${SSH_HOST} "$SSH_CMD"`
            fi
@@ -2310,9 +2310,9 @@ for i in $HOSTS; do
               WXY_HDR="${WXY_HDR}${WXY_DLM}${WXY_i}"
               WXY_DLM=$WXY_CMA
            done
-           echo ${wxy_str} ${wxy_hl} -n $nm -f "$WXY_STR" > /dev/stderr
+           echo ${wxy_str} ${wxy_hl} -n -t $nm -f "$WXY_STR" > /dev/stderr
            echo "$WXY_HDR" >> $ARCHIVE_DIR/do_${wxy_str}_info.txt
-           ${wxy_str} ${wxy_hl} -n $nm -f "$WXY_STR" >> $ARCHIVE_DIR/do_${wxy_str}_info.txt
+           ${wxy_str} ${wxy_hl} -n -t $nm -f "$WXY_STR" >> $ARCHIVE_DIR/do_${wxy_str}_info.txt
            FETCH_MSG="{$nm, $NUM_HOST, $USE_DIR/$TAR_GZ}"
            if [ ! -e "$USE_DIR/$TAR_GZ" ]; then
              FETCH_FAILED="$FETCH_FAILED, $FETCH_MSG"
