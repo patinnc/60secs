@@ -647,11 +647,13 @@ function tot_compare(i1, v1, i2, v2,    l, r)
            NM=$(awk -v str="${HOST_ARR[$ik]}" 'BEGIN{ n = split(str, arr, " "); printf("%s\n", arr[1]); exit;}')
            if [ "$NM" != "" ]; then
              HOST_ARR_LKUP[$NM]=$ik
+             #echo "$0.$LINENO HOST_ARR_LKUP[$NM]= $ik"
            fi
         done
+      echo "$0.$LINENO HOST_ARR= ${#HOST_ARR[@]}"
+      #echo "$0.$LINENO HOST_ARR= ${HOST_ARR[0]}"
         #echo "$0.$LINENO bye"
         #exit 
-      echo "$0.$LINENO HOST_ARR= ${#HOST_ARR[@]}"
     fi
 fi
 if [[ "$RUN_CMDS" == *"report"* ]]; then
@@ -959,6 +961,7 @@ for RN_CM in ${CMD_ARR[@]}; do
   fi
 NUM_HOST=-1
 STR_HOST_LIST=
+SHOW_HOST_LINE=
 for i in $HOSTS; do
   RUN_CMDS=$RN_CM
   NUM_HOST=$((NUM_HOST+1))
@@ -1204,6 +1207,15 @@ for i in $HOSTS; do
     fi
     GOT_DO_CMD=2
   fi
+    if [[ "${#HOST_ARR[@]}" -gt "0" ]]; then
+      if [[ -v "HOST_ARR_LKUP[$nm]" ]]; then
+      ki=${HOST_ARR_LKUP[$nm]}
+      HOST_ARR_ARGS="${HOST_ARR[$ki]}"
+      if [ "$RUN_CMDS" == "show_host_line" ]; then
+        SHOW_HOST_LINE="$SHOW_HOST_LINE ${HOST_ARR_ARGS}"
+      fi
+      fi
+    fi
   if [ "$GOT_DO_CMD" == "1" -o "$GOT_DO_CMD" == "2" ]; then
     if [ $VERBOSE -gt 0 ]; then
      echo "$0.$LINENO got pcmd"
@@ -1222,21 +1234,17 @@ for i in $HOSTS; do
     if [ $VERBOSE -gt 0 ]; then
       echo "$0.$LINENO cmd= $CMD"
     fi
-  if [ "$VERBOSE" -gt "0" ]; then
-  tm_cur=$($DATE_CMD +"%s.%6N")
-  tm_diff=$(awk -v tm0="$tm_beg" -v tm1="$tm_cur" 'BEGIN{printf("%f\n", tm1-tm0);exit(0);}')
-  echo "$LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ==================="
-  fi
-    if [ "${#HOST_ARR[@]}" -gt 0 ]; then
-      if [[ -v "HOST_ARR_LKUP[$nm]" ]]; then
-      ki=${HOST_ARR_LKUP[$nm]}
-      HOST_ARR_ARGS="${HOST_ARR[$ki]}"
+    if [ "$VERBOSE" -gt "0" ]; then
+      tm_cur=$($DATE_CMD +"%s.%6N")
+      tm_diff=$(awk -v tm0="$tm_beg" -v tm1="$tm_cur" 'BEGIN{printf("%f\n", tm1-tm0);exit(0);}')
+      echo "$LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ==================="
+    fi
+    if [[ "${#HOST_ARR[@]}" -gt "0" ]]; then
+      if [ "$VERBOSE" -gt "0" ]; then
+      tm_cur=$($DATE_CMD +"%s.%6N")
+      tm_diff=$(awk -v tm0="$tm_beg" -v tm1="$tm_cur" 'BEGIN{printf("%f\n", tm1-tm0);exit(0);}')
+      echo "$LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ==================="
       fi
-  if [ "$VERBOSE" -gt "0" ]; then
-  tm_cur=$($DATE_CMD +"%s.%6N")
-  tm_diff=$(awk -v tm0="$tm_beg" -v tm1="$tm_cur" 'BEGIN{printf("%f\n", tm1-tm0);exit(0);}')
-  echo "$LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ==================="
-  fi
       if [ "${#HOST_ARR_ARGS[@]}" -gt "0" ]; then
     re='(.*)(%HOST_ARR\{.\}%)(.*)'
     while [[ $CMD =~ $re ]]; do
@@ -2737,6 +2745,9 @@ done
   fi
   if [ "$RUN_CMDS" == "show_host_list" ]; then
     echo "$0.$LINENO show_host_list= $STR_HOST_LIST"
+  fi
+  if [ "$RUN_CMDS" == "show_host_line" ]; then
+    echo "$0.$LINENO show_host_line= $SHOW_HOST_LINE"
   fi
 
 exit 0
