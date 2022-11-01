@@ -2226,7 +2226,8 @@ for i in $HOSTS; do
                            mv $USE_DIR/$TAR_GZ $USE_DIR/$TAR_GZ.old
             dyno_log FETCH mv $USE_DIR/$TAR_GZ $USE_DIR/$TAR_GZ.old
          fi
-         ssh_cmd $nm "cd $BMARK_ROOT; if [ -e $NW_PROJ/../$TAR_GZ ]; then echo got it; else echo not found; fi"
+         #ssh_cmd $nm "cd $BMARK_ROOT; if [ -e $NW_PROJ/../$TAR_GZ ]; then echo got it; else echo not found; fi"
+         ssh_cmd $nm "cd $BMARK_ROOT; if [ -e /tmp/$TAR_GZ ]; then echo got it; else echo not found; fi"
          OUT_FILE=`printf "$WORK_DIR/$WORK_TMP" $NUM_HOST`
          echo "$0.$LINENO ssh_cmd= $SSH_CMD"
          if [ "$nm" == "127.0.0.1" ]; then
@@ -2278,6 +2279,7 @@ for i in $HOSTS; do
                        cp $NW_PROJ/../$TAR_GZ $USE_DIR
               dyno_log FETCH cp $NW_PROJ/../$TAR_GZ $USE_DIR
            else
+             if [ 1 == 2 ]; then
              if [ "$SSH_MODE" == "sudo" ]; then
                 echo    "scp $OPT_KEYS ${SSH_HOST}:$NW_PROJ/../$TAR_GZ $USE_DIR"
                          scp $OPT_KEYS ${SSH_HOST}:$NW_PROJ/../$TAR_GZ $USE_DIR
@@ -2290,6 +2292,20 @@ for i in $HOSTS; do
                          scp $OPT_KEYS ${SSH_HOST}:$NW_PROJ/../$TAR_GZ $USE_DIR
                 fi
                 dyno_log FETCH scp $OPT_KEYS ${SSH_HOST}:$NW_PROJ/../$TAR_GZ $USE_DIR
+             fi
+             fi
+             if [ "$SSH_MODE" == "sudo" ]; then
+                echo    "scp $OPT_KEYS ${SSH_HOST}:/tmp/$TAR_GZ $USE_DIR"
+                         scp $OPT_KEYS ${SSH_HOST}:/tmp/$TAR_GZ $USE_DIR
+                dyno_log FETCH scp $OPT_KEYS ${SSH_HOST}:/tmp/$TAR_GZ $USE_DIR
+             else
+                echo    "scp $OPT_KEYS ${SSH_HOST}:/tmp/$TAR_GZ $USE_DIR"
+                if [ "$do_bkgrnd" == "1" ]; then
+                         scp $OPT_KEYS ${SSH_HOST}:/tmp/$TAR_GZ $USE_DIR &
+                else
+                         scp $OPT_KEYS ${SSH_HOST}:/tmp/$TAR_GZ $USE_DIR
+                fi
+                dyno_log FETCH scp $OPT_KEYS ${SSH_HOST}:/tmp/$TAR_GZ $USE_DIR
              fi
            fi
            continue
