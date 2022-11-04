@@ -67,7 +67,7 @@ else
 fi
 cd ..
 echo "DIRNM= $DIRNM"
-TAR_FILE=${DIRNM}.tar.gz
+TAR_FILE=/tmp/${DIRNM}.tar.gz
 echo "got TAR_FILE= $TAR_FILE excl_file= $excl_file"
 if [ "$excl_file" == "" ]; then
   echo "do tar -czvf $TAR_FILE $DIRNM"
