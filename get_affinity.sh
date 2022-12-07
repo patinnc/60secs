@@ -2,8 +2,36 @@
 
 #arg 1 (optional) can be "v" to enable verbose mode in output
 VRB=${1:-0}
-ps -ae -o pid=,ppid=,times=,comm= > ps_ae_0.txt
+IP_ADDR=$(hostname -I)
+NET_DEV="$(ifconfig | awk -v ip="$IP_ADDR" '
+  /^[^ ]/ {
+   dev= substr($1, 1, length($1)-1);
+   #printf("dev= %s ip= %s\n", dev, ip) > "/dev/stderr";
+  }
+  {
+    #if (index($0, ip) > 0) {
+    #  printf("2nd word= %s\n", $2) > "/dev/stderr";
+    #}
+    #if ($2 == ip)
+    if (index($0, ip) > 0) {
+      printf("got ip= %s with dev= %s\n", ip, dev) > "/dev/stderr";
+      printf("%s\n", dev); exit(0);
+    }
+  }
+  ')"
+echo "NET_DEV= $NET_DEV"
+UBU="$(uname -a | grep -i ubuntu|wc -l)"
+TM_STR="times"
+if [ "$UBU" == "1" ]; then
+  TM_STR="time"
+fi
+  TM_STR="cputime"
+
+ps -ae -o pid=,ppid=,${TM_STR}=,comm= > ps_ae_0.txt
 PS_AE=$(cat ps_ae_0.txt)
+#echo "$0.$LINENO bye"
+#exit 1
+
 NON_KRN=$(echo "$PS_AE" | awk '{ if ($2 != 2) { printf("%s\n", $0);}}')
 #NON_KRN=$(ps -ae -o pid=,ppid=,comm= | awk '{ if ($2 != 2) { printf("%s\n", $0);}}')
 NUM_CPUS=$(grep -c processor /proc/cpuinfo)
@@ -18,14 +46,16 @@ RESP1=$(echo "$RESP" | awk '
        gsub(/[,-].*/, "", aff);
        printf("%s %s\n", aff, $0);
      }')
+NETDEV=eth0
+NETDEV=$NET_DEV
 RESP2=$(echo "$RESP1" | sort -nk 1)
-NET_IRQS=$(ls -1 /sys/class/net/eth0/device/msi_irqs/ | sort -nk 1 );
+NET_IRQS=$(ls -1 /sys/class/net/$NETDEV/device/msi_irqs/ | sort -nk 1 );
 if [ "$VRB" != "0" ]; then
   echo "$0.$LINENO $RESP2"
   echo "$0.$LINENO $NET_IRQS"
 fi
 PROC_INTS=$(cat /proc/interrupts)
-RING_BUFS=$(ethtool -l eth0 |grep Combined|tail -1|awk '{printf("%s\n", $2);}')
+RING_BUFS=$(ethtool -l $NETDEV |grep Combined|tail -1|awk '{printf("%s\n", $2);}')
 IRQ_CPUS=
 SEP=
 PRV_CPU=-1
@@ -82,9 +112,9 @@ done
 #echo "$0.$LINENO bye"
 #exit 1
 lscpu |grep NUMA
-NUMA_ND=$(cat /sys/class/net/eth0/device/numa_node)
-echo "eth0 on numa node= $NUMA_ND"
-NODE_CPUS=$(cat /sys/class/net/eth0/device/local_cpulist)
+NUMA_ND=$(cat /sys/class/net/$NETDEV/device/numa_node)
+echo "$NETDEV on numa node= $NUMA_ND"
+NODE_CPUS=$(cat /sys/class/net/$NETDEV/device/local_cpulist)
 echo "numa node $NUMA_ND is on cpus= $NODE_CPUS"
 NVME=$(ls -1 /sys/class/nvme)
 SEP=
