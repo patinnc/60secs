@@ -307,7 +307,7 @@ QUIT_IN=
 
 myargs=()
 
-while getopts "dgGhqva:b:B:c:C:D:I:k:l:m:M:n:N:o:O:p:r:R:s:t:T:u:w:W:z:Z:" opt; do
+while getopts "dgGhqva:b:B:c:C:D:I:k:l:m:M:n:N:o:O:p:r:R:s:S:t:T:u:w:W:z:Z:" opt; do
   case ${opt} in
     h )
       echo "$0.$LINENO got -h help option"
@@ -446,6 +446,11 @@ while getopts "dgGhqva:b:B:c:C:D:I:k:l:m:M:n:N:o:O:p:r:R:s:t:T:u:w:W:z:Z:" opt; 
       ;;
     s )
       SCRIPT=$OPTARG
+      myargs+=("-${opt}")
+      myargs+=("${OPTARG}")
+      ;;
+    S )
+      SSH_XOPTIONS="$OPTARG"
       myargs+=("-${opt}")
       myargs+=("${OPTARG}")
       ;;
@@ -754,7 +759,7 @@ fi
 ssh_cmd()
 {
   if [ "$SSH_MODE" == "sudo" ]; then
-    SSH_PFX="ssh $OPT_KEYS -o StrictHostKeyChecking=no -tt -A $OPT_KEYS "
+    SSH_PFX="ssh $OPT_KEYS $SSH_XOPTIONS -o StrictHostKeyChecking=no -A $OPT_KEYS "
     if [ "$USERNM" == "none" ]; then
       SSH_HOST=$1
     else
@@ -764,9 +769,11 @@ ssh_cmd()
     if [ "$3" != "" ]; then
        load_env="-l"
     fi
-    SSH_CMD="sudo su $load_env root -c \"$2\""
+    #SSH_CMD="sudo su $load_env root -c \"$2\""
+    SSH_CMD="sudo -u root -i bash -c \"$2\""
+    #SSH_CMD="sudo -u root -i $2"
   else
-    SSH_PFX="ssh $OPT_KEYS -o StrictHostKeyChecking=no -tt -A $OPT_KEYS "
+    SSH_PFX="ssh $OPT_KEYS $SSH_XOPTIONS -o StrictHostKeyChecking=no -A $OPT_KEYS "
     if [ "$1" == "127.0.0.1" ]; then
       SSH_CMD=$2
       SSH_PFX=
@@ -1144,12 +1151,19 @@ for i in $HOSTS; do
   fi
   if [[ $RUN_CMDS == *"shell"* ]]; then
     ssh_cmd $nm "bash"  "-l"
+         ADD_n=
+         if [[ "$SSH_CMD" == *"nohup"* ]]; then
+          ADD_n=" -n "
+          echo "$0.$LINENO ssh_pfx= $SSH_PFX $ADD_n"
+         else
+          ADD_n=" -tt "
+         fi
     echo $SSH_PFX $SSH_HOST "$SSH_CMD"
     if [ "$DRY_RUN" == "n" ]; then
           if [ "$nm" == "127.0.0.1" ]; then
             $SSH_CMD
           else
-            $SSH_PFX $SSH_HOST "$SSH_CMD"
+            $SSH_PFX $ADD_n  $SSH_HOST "$SSH_CMD"
           fi
         dyno_log $SSH_PFX $SSH_HOST "$SSH_CMD"
     fi
@@ -1288,6 +1302,13 @@ for i in $HOSTS; do
   tm_diff=$(awk -v tm0="$tm_beg" -v tm1="$tm_cur" 'BEGIN{printf("%f\n", tm1-tm0);exit(0);}')
   echo "$LINENO ============== $i , host_num $NUM_HOST of $TOT_HOSTS, beg= $HOST_NUM_BEG end= $HOST_NUM_END , host_list= $USE_LIST  tm_elap= $tm_diff ==================="
   fi
+         ADD_n=
+         if [[ "$SSH_CMD" == *"nohup"* ]]; then
+          ADD_n=" -n "
+          echo "$0.$LINENO ssh_pfx= $SSH_PFX $ADD_n"
+         else
+          ADD_n=" -tt "
+         fi
     if [ "$DRY_RUN" == "n" ]; then
         waitForJobs $LINENO
           OUT_FILE=`printf "$WORK_DIR/$WORK_TMP" $NUM_HOST`
@@ -1379,7 +1400,7 @@ for i in $HOSTS; do
          fi
          ADD_T="$ADD_T $SSH_TIMEOUT "
          if [ "$VERBOSE" -gt "0" ]; then
-            echo "$0.$LINENO do ssh $SSH_PFX $ADD_T $SSH_HOST \"$SSH_CMD\""
+            echo "$0.$LINENO do ssh $SSH_PFX $ADD_n $ADD_T $SSH_HOST \"$SSH_CMD\""
          fi
          if [ "$VERBOSE" -gt "0" ]; then
             echo "$0.$LINENO do ssh $SSH_PFX $SSH_HOST \"$SSH_CMD\""
@@ -1403,18 +1424,25 @@ for i in $HOSTS; do
             #TESCCMD="$(printf ' %q' "$TCMD")"
             #echo "$0.$LINENO esc ssh= $TESCCMD"
          fi
+         ADD_n=
+         if [[ "$SSH_CMD" == *"nohup"* ]]; then
+          ADD_n=" -n "
+          echo "$0.$LINENO ssh_pfx= $SSH_PFX $ADD_n"
+         else
+          ADD_n=" -tt "
+         fi
          if [ "$do_bkgrnd" == "1" ]; then
           if [ "$GOT_DO_CMD" == "2" ]; then
             if [ "$VERBOSE" -gt "0" ]; then
               echo "$0.$LINENO do ssh here"
             fi
             OUT_FILE=`printf "$WORK_DIR/$WORK_TMP" $NUM_HOST`
-            $SSH_PFX $ADD_T -n $SSH_HOST "$SSH_CMD" &> $OUT_FILE &
+            $SSH_PFX $ADD_n $ADD_T -n $SSH_HOST "$SSH_CMD" &> $OUT_FILE &
           else
             if [ "$VERBOSE" -gt "0" ]; then
               echo "$0.$LINENO do ssh here"
             fi
-            $SSH_PFX $ADD_T -n $SSH_HOST "$SSH_CMD" &
+            $SSH_PFX $ADD_n $ADD_T -n $SSH_HOST "$SSH_CMD" &
           fi
          else
           #$SSH_PFX $SSH_HOST "$SSH_CMD"
@@ -1423,15 +1451,15 @@ for i in $HOSTS; do
           else
             if [ "$VERBOSE" -gt "0" ]; then
               echo "$0.$LINENO do ssh here"
-              echo "$SSH_PFX $ADD_T $SSH_HOST \"$SSH_CMD\""
+              echo "$SSH_PFX $ADD_n $ADD_T $SSH_HOST \"$SSH_CMD\""
             fi
-            $SSH_PFX $ADD_T -tt $SSH_HOST "$SSH_CMD"
+            $SSH_PFX $ADD_n $ADD_T $ADD_n $SSH_HOST "$SSH_CMD"
           fi
          fi
          if [ "$VERBOSE" -gt "0" ]; then
-            echo "$0.$LINENO do ssh $SSH_PFX $SSH_HOST \"$SSH_CMD\""
+            echo "$0.$LINENO do ssh $ADD_n $SSH_PFX $SSH_HOST \"$SSH_CMD\""
          fi
-         dyno_log $SSH_PFX $ADD_T $SSH_HOST "$SSH_CMD"
+         dyno_log $SSH_PFX $ADD_n $ADD_T $SSH_HOST "$SSH_CMD"
         fi
     fi
   fi
