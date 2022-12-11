@@ -759,7 +759,7 @@ fi
 ssh_cmd()
 {
   if [ "$SSH_MODE" == "sudo" ]; then
-    SSH_PFX="ssh $OPT_KEYS $SSH_XOPTIONS -o StrictHostKeyChecking=no -A $OPT_KEYS "
+    SSH_PFX="ssh $SSH_XOPTIONS -o StrictHostKeyChecking=no -A $OPT_KEYS "
     if [ "$USERNM" == "none" ]; then
       SSH_HOST=$1
     else
@@ -773,7 +773,7 @@ ssh_cmd()
     SSH_CMD="sudo -u root -i bash -c \"$2\""
     #SSH_CMD="sudo -u root -i $2"
   else
-    SSH_PFX="ssh $OPT_KEYS $SSH_XOPTIONS -o StrictHostKeyChecking=no -A $OPT_KEYS "
+    SSH_PFX="ssh  $SSH_XOPTIONS -o StrictHostKeyChecking=no -A $OPT_KEYS "
     if [ "$1" == "127.0.0.1" ]; then
       SSH_CMD=$2
       SSH_PFX=
@@ -1075,25 +1075,32 @@ for i in $HOSTS; do
   fi
   if [ $RUN_CMDS == "ssh_test" ]; then
     #ssh_cmd $nm "uname -a;lsblk;fdisk -l" "-l"
-    SSH_TIMEOUT=" -o ConnectTimeout=10 -o BatchMode=yes "
+    SSH_TIMEOUT=" -o ConnectTimeout=10 -o BatchMode=yes -o StrictHostKeyChecking=no"
     ssh_cmd $nm "uname -a" "-l"
-    echo ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"
+    echo ssh $OPT_KEYS $SSH_TIMEOUT  $SSH_HOST "$SSH_CMD"
     if [ "$DRY_RUN" == "n" ]; then
       if [ $VERBOSE -gt 0 ]; then
         echo "$0.$LINENO got $RUN_CMDS"
       fi
-         ssh $OPT_KEYS $SSH_TIMEOUT $SSH_HOST "$SSH_CMD"
+         ssh $OPT_KEYS $SSH_TIMEOUT $SSH_XOPTIONS $SSH_HOST "$SSH_CMD"
+         RC=$?
+         echo "$0.$LINENO ssh rc= $RC"
       if [ $VERBOSE -gt 0 ]; then
         echo "$0.$LINENO did $RUN_CMDS"
       fi
          dyno_log ssh $OPT_KEYS $SSH_TIMEOUT $SSH_HOST "$SSH_CMD"
-         RESP=`ssh $OPT_KEYS $SSH_HOST "$SSH_CMD"`
+         if [ "$RC" != "0" ]; then
+            echo ssh failed
+            SSH_FAIL="$SSH_FAIL $nm"
+         else
+         RESP=`ssh $OPT_KEYS $SSH_TIMEOUT $SSH_XOPTIONS $SSH_HOST "$SSH_CMD"`
          if [[ $RESP == *"Linux"* ]]; then
             echo ssh worked
             SSH_WORK="$SSH_WORK $nm"
          else
             echo ssh failed
             SSH_FAIL="$SSH_FAIL $nm"
+         fi
          fi
     fi
   fi
