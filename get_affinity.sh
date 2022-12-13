@@ -2,7 +2,7 @@
 
 #arg 1 (optional) can be "v" to enable verbose mode in output
 VRB=${1:-0}
-IP_ADDR=$(hostname -I)
+IP_ADDR=$(hostname -I | awk '{print $1;}') # assumes that the ip we want is the 1st addr (if there is more than 1)
 NET_DEV="$(ifconfig | awk -v ip="$IP_ADDR" '
   /^[^ ]/ {
    dev= substr($1, 1, length($1)-1);
