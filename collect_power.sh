@@ -212,6 +212,9 @@ fi
   if [[ $TSK == *"power"* ]]; then
     if [ "$DO_POWER" == "1" ]; then
     FL=$ODIR/sys_16_power.txt
+    if [ "$BMC" == "local" ]; then
+      ipmitool sdr dump $ODIR/impitool_dump.dat
+    fi
     if [ -e $FL ]; then
       rm $FL
     fi
@@ -226,8 +229,8 @@ fi
       DT=`date +%s.%N`
       echo "==beg $j date $DT" >> $FL
       if [ "$BMC" == "local" ]; then
-      #$CMD >> $FL
-      ipmitool sdr >> $FL
+        #$CMD >> $FL
+        ipmitool -S ${ODIR}/impitool_dump.dat sdr >> $FL
       else
       if [ "$DCMI_USE" != "1" ]; then
         ./ipmi-${TYP} $UBMC sdr >> $FL
