@@ -2361,9 +2361,10 @@ for i in $HOSTS; do
               WXY_HDR="${WXY_HDR}${WXY_DLM}${WXY_i}"
               WXY_DLM=$WXY_CMA
            done
-           echo ${wxy_str} ${wxy_hl} -n -t $nm -f "$WXY_STR" > /dev/stderr
+           echo ${wxy_str} ${wxy_hl} -n $nm -f "$WXY_STR" > /dev/stderr
            echo "$WXY_HDR" >> $ARCHIVE_DIR/do_${wxy_str}_info.txt
-           ${wxy_str} ${wxy_hl} -n -t $nm -f "$WXY_STR" >> $ARCHIVE_DIR/do_${wxy_str}_info.txt
+           echo "$0.$LINENO ${wxy_str} ${wxy_hl} -n $nm -f \"$WXY_STR\" >> $ARCHIVE_DIR/do_${wxy_str}_info.txt"
+                            ${wxy_str} ${wxy_hl} -n $nm -f "$WXY_STR" >> $ARCHIVE_DIR/do_${wxy_str}_info.txt
            FETCH_MSG="{$nm, $NUM_HOST, $USE_DIR/$TAR_GZ}"
            if [ ! -e "$USE_DIR/$TAR_GZ" ]; then
              FETCH_FAILED="$FETCH_FAILED, $FETCH_MSG"
